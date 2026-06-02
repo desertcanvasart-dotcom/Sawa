@@ -12,8 +12,13 @@
     "db:seed": "node server/db/seed.js",
     "db:seed-users": "node server/db/seed-users.js",
     "db:reset": "node server/db/migrate.js && node server/db/seed.js && node server/db/seed-users.js",
+    "test": "node --test server/",
     "build": "vite build",
+    "start": "node server/app.js",
     "preview": "vite preview --host 0.0.0.0"
+  },
+  "engines": {
+    "node": ">=20"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.106.2",

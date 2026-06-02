@@ -20,10 +20,18 @@ import {
   sendEmail, emailMode,
   inviteEmail, bookingConfirmationEmail, goAheadEmail, cancellationEmail,
 } from "./email.js";
+import { existsSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const distDir = join(__dirname, "..", "dist");
 
 const app = express();
 app.disable("x-powered-by");
-app.use(helmet());
+// In production we serve the SPA from the same origin, so relax CSP/CORP that
+// would otherwise block the bundled assets. API security is unaffected.
+app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
 app.use(express.json());
 
 // --- CORS: restrict to known origins (configurable via CORS_ORIGINS) ---
@@ -886,10 +894,19 @@ app.post("/api/admin/uploads", requireAuth, requireRole("super_admin", "ops_staf
   res.status(201).json({ url: data.publicUrl, key });
 }));
 
-// ============================ 404 + ERRORS ============================
-app.use((_req, res) => res.status(404).json({ error: "Not found." }));
+// Unknown /api/* path -> JSON 404.
+app.use("/api", (_req, res) => res.status(404).json({ error: "Not found." }));
+
+// ============================ STATIC SPA (production) ============================
+// Serve the built frontend from /dist and fall back to index.html for client routes.
+if (existsSync(distDir)) {
+  app.use(express.static(distDir));
+  // Express 5 needs a named splat ("/*all") instead of the bare "*".
+  app.get("/*all", (_req, res) => res.sendFile(join(distDir, "index.html")));
+}
+
+// ============================ ERRORS ============================
 app.use((err, _req, res, _next) => {
-  // Zod validation errors -> 422 with a readable message.
   if (err?.issues?.length) {
     return res.status(422).json({ error: err.issues[0]?.message || "Invalid request." });
   }
@@ -898,5 +915,6 @@ app.use((err, _req, res, _next) => {
   res.status(status || 500).json({ error: err.message || "Server error." });
 });
 
-const port = Number(process.env.API_PORT || 8787);
-app.listen(port, () => console.log(`Sawa API (Postgres + Auth) listening on http://localhost:${port}`));
+// Railway provides PORT; fall back to API_PORT for local dev.
+const port = Number(process.env.PORT || process.env.API_PORT || 8787);
+app.listen(port, "0.0.0.0", () => console.log(`Sawa listening on :${port}`));

@@ -7,7 +7,10 @@ export const supabase = createClient(url, anonKey, {
   auth: { persistSession: true, autoRefreshToken: true },
 });
 
-export const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:8787/api";
+// In dev, point at the standalone API. In production the SPA is served by the
+// same Express process, so default to a same-origin relative path.
+export const API_BASE =
+  import.meta.env.VITE_API_BASE || (import.meta.env.DEV ? "http://localhost:8787/api" : "/api");
 
 // Fetch wrapper that attaches the current Supabase access token.
 export async function apiFetch(path, options = {}) {
