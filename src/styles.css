@@ -4476,3 +4476,44 @@ button:disabled {
 .drawer-money strong { font-family: var(--font-display); font-weight: 600; font-size: 16px; }
 
 @media (max-width: 520px) { .drawer { width: 100%; } }
+
+/* ============================================================
+   AGENCY BOOKING — full tour details panel
+   ============================================================ */
+.agency-tour {
+  margin-top: 16px;
+  display: grid;
+  gap: 18px;
+}
+.agency-tour-head {
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+  gap: 20px;
+  align-items: stretch;
+}
+.agency-tour-cover {
+  min-height: 170px;
+  border-radius: var(--radius, 14px);
+  background-size: cover;
+  background-position: center;
+  background-color: var(--sand-200, #e7dcc6);
+}
+.agency-tour-intro { display: flex; flex-direction: column; gap: 10px; justify-content: center; }
+.agency-tour-title { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.agency-tour-title h2 { margin: 0; font-family: var(--font-display); font-weight: 600; font-size: 22px; letter-spacing: -0.01em; }
+.agency-tour-meta { margin: 0; color: var(--ink-soft, #56524a); font-size: 14px; display: flex; align-items: center; gap: 6px; }
+.agency-tour-facts { display: flex; flex-wrap: wrap; gap: 8px; }
+.agency-tour-facts span {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--sand-100, #f2ebdc); color: var(--ink-soft, #56524a);
+  font-size: 12.5px; font-weight: 600; padding: 6px 11px; border-radius: 999px;
+}
+.agency-tour-facts svg { color: var(--accent, #1f5f7a); }
+
+/* Tighten the included grid inside the agency panel */
+.agency-incl { margin-top: 4px; }
+
+@media (max-width: 720px) {
+  .agency-tour-head { grid-template-columns: 1fr; }
+  .agency-tour-cover { min-height: 150px; }
+}

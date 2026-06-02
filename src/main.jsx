@@ -1937,6 +1937,76 @@ function LiveDepartureTimeline({ departure }) {
   );
 }
 
+// Full tour details shown to the agency while booking, so they know exactly
+// what they're selling: images, overview, what's in/out, itinerary, policies.
+function AgencyTourPreview({ info, departure, isPackage: pkg }) {
+  const cities = info.cities || [info.city];
+  const included = info.included || [];
+  const notIncluded = info.notIncluded || [];
+  const itinerary = info.itinerary || [];
+  const cover = coverImage(info);
+  return (
+    <section className="panel agency-tour" id="tour-details">
+      <div className="agency-tour-head">
+        <div className="agency-tour-cover" style={{ backgroundImage: `url(${cover})` }} />
+        <div className="agency-tour-intro">
+          <div className="agency-tour-title">
+            <h2>{info.title || departure.route}</h2>
+            {pkg && <span className="type-badge"><Package size={11} />Package</span>}
+          </div>
+          <p className="agency-tour-meta">
+            <MapPin size={14} />{pkg ? cities.join(" → ") : info.city}
+            {info.duration ? ` · ${info.duration}` : ""}
+            {info.guide ? ` · ${info.guide}` : ""}
+          </p>
+          <div className="agency-tour-facts">
+            <span><CalendarDays size={14} />{pkg
+              ? formatRange(departure.startDate || departure.date, departure.endDate)
+              : `${formatDate(departure.date)}${departure.time ? ` · ${departure.time}` : ""}`}</span>
+            <span><Car size={14} />{info.vehicle || "Shared vehicle"}</span>
+            {info.bookingCutoffHours != null && <span><Clock3 size={14} />Cutoff {info.bookingCutoffHours}h before</span>}
+          </div>
+        </div>
+      </div>
+
+      <RichBlock html={info.overviewHtml} fallback={info.description || departure.notes} />
+
+      <div className="included-grid agency-incl">
+        <div>
+          <h3>What's included</h3>
+          {included.length ? included.map((x) => <p key={x}><Check size={15} />{x}</p>)
+            : <p className="muted-line">Not specified.</p>}
+        </div>
+        <div>
+          <h3>Not included</h3>
+          {notIncluded.length ? notIncluded.map((x) => <p key={x}><ChevronDown size={15} />{x}</p>)
+            : <p className="muted-line">—</p>}
+        </div>
+      </div>
+
+      {pkg && itinerary.length > 0 && (
+        <div className="itinerary-block">
+          <h3>Day-by-day itinerary</h3>
+          <ol className="itinerary-list">
+            {itinerary.map((day, i) => (
+              <li key={day.day || i}>
+                <div className="itinerary-day">Day {day.day || i + 1} · {day.city}</div>
+                <strong>{day.title}</strong>
+                {day.description && /<\w+/.test(day.description)
+                  ? <div className="rich" dangerouslySetInnerHTML={{ __html: day.description }} />
+                  : day.description ? <p>{day.description}</p> : null}
+                <small>Meals: {day.meals || "—"}</small>
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
+
+      <TourExtras product={info} />
+    </section>
+  );
+}
+
 function AgencyDesk(props) {
   const {
     agencyId, agencies, cancelPledge, createDeparture, customerName, filtered, isConfirmed, isSaving, newRoute, newSeats,
@@ -1946,6 +2016,9 @@ function AgencyDesk(props) {
   } = props;
   const selectedIsPackage = isPackage(selected);
   const tiers = selectedProduct?.accommodationTiers || [];
+  // Full tour info the agency is selling — prefer the rich product record,
+  // fall back to the departure's own fields for ad-hoc pooling requests.
+  const info = selectedProduct || selected;
 
   return (
     <>
@@ -2068,6 +2141,8 @@ function AgencyDesk(props) {
           </div>
         </aside>
       </section>
+
+      <AgencyTourPreview info={info} departure={selected} isPackage={selectedIsPackage} />
 
       <section className="bottom-grid">
         <div className="panel" id="manifest">
