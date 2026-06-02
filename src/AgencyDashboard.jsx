@@ -1,17 +1,32 @@
 import React, { useMemo, useState } from "react";
 import {
   LayoutDashboard, Ticket, ClipboardList, Users as UsersIcon, ShieldCheck, ArrowUpRight,
-  Check, AlertTriangle, CalendarDays,
+  Check, ChevronDown, AlertTriangle, CalendarDays, MapPin, Package, Hotel, ArrowLeft, Search, Clock3,
 } from "lucide-react";
 import { DashSidebar } from "./DashSidebar";
+import { apiFetch } from "./supabaseClient";
 
 const money = (n) => (n == null ? "—" : "$" + Number(n).toLocaleString());
 const fmtDate = (d) => (d ? new Intl.DateTimeFormat("en", { month: "short", day: "numeric", year: "numeric" }).format(new Date(d)) : "—");
 const seatsOf = (d) => (d.pledges || []).reduce((s, p) => s + Number(p.seats || 0), 0);
+const isPkg = (x) => x?.type === "package";
+const STOCK = {
+  Cairo: "https://images.unsplash.com/photo-1539650116574-75c0c6d73f6e?auto=format&fit=crop&w=900&q=80",
+  Luxor: "https://images.unsplash.com/photo-1601581875309-fafbf2d3ed3a?auto=format&fit=crop&w=900&q=80",
+  Aswan: "https://images.unsplash.com/photo-1568322445389-f64ac2515020?auto=format&fit=crop&w=900&q=80",
+};
+const coverOf = (p) => (p.images && p.images[0]?.url) || STOCK[p.city] || STOCK.Cairo;
+const goAheadOf = (x) => Math.max(1, Number(x?.minSeats || 4));
+function livePrice(item, seats) {
+  const start = Number(item.publishedRate) || 80;
+  const brk = Math.min(start, Number(item.breakPrice) || Math.round(start * 0.8));
+  const ga = goAheadOf(item), max = Math.max(Number(item.maxSeats || ga), ga);
+  const eff = Math.min(max, Math.max(ga, Number(seats || 0)));
+  const steps = Math.max(1, max - ga);
+  return Math.round(start - (start - brk) * Math.min(1, Math.max(0, eff - ga) / steps));
+}
 
-// Receives the existing AgencyDesk + StaffPanel as render components so it can
-// reuse all the booking logic already wired in main.jsx without duplicating it.
-export function AgencyDashboard({ user, agency, signOut, navigate, departures, agencyDeskProps, AgencyDesk, StaffPanel }) {
+export function AgencyDashboard({ user, agency, signOut, navigate, departures, tourProducts = [], onReload, agencyDeskProps, AgencyDesk, StaffPanel }) {
   const [section, setSection] = useState("overview");
   const agencyId = agency?.id;
   const isOwner = user.role === "agency_owner";
@@ -97,12 +112,7 @@ export function AgencyDashboard({ user, agency, signOut, navigate, departures, a
         )}
 
         {section === "book" && (
-          <>
-            <div className="dash-head"><div><h1>Book seats</h1><p>Find a forming date and add your travellers.</p></div></div>
-            <div className="agency-embed">
-              {agencyDeskProps.selected && <AgencyDesk {...agencyDeskProps} />}
-            </div>
-          </>
+          <BookTours tourProducts={tourProducts} departures={departures} agencyId={agencyId} onReload={onReload} />
         )}
 
         {section === "bookings" && (
@@ -144,6 +154,239 @@ export function AgencyDashboard({ user, agency, signOut, navigate, departures, a
     </div>
   );
 }
+
+/* ---------------- Book seats: catalog -> tour detail -> book ---------------- */
+function BookTours({ tourProducts, departures, agencyId, onReload }) {
+  const [openId, setOpenId] = useState(null);
+  const [q, setQ] = useState("");
+  const [type, setType] = useState("all");
+
+  // Attach each product's live (non-cancelled) departures.
+  const catalog = useMemo(() => {
+    return (tourProducts || [])
+      .filter((p) => p.active !== false)
+      .map((p) => ({
+        ...p,
+        dates: departures
+          .filter((d) => d.tourProductId === p.id && d.status !== "cancelled")
+          .sort((a, b) => `${a.startDate || a.date}`.localeCompare(`${b.startDate || b.date}`)),
+      }));
+  }, [tourProducts, departures]);
+
+  const shown = catalog.filter((p) => {
+    if (type === "day" && isPkg(p)) return false;
+    if (type === "pkg" && !isPkg(p)) return false;
+    if (q && !`${p.title} ${p.city} ${(p.cities || []).join(" ")}`.toLowerCase().includes(q.toLowerCase())) return false;
+    return true;
+  });
+
+  const open = openId ? catalog.find((p) => p.id === openId) : null;
+  if (open) return <TourBooking product={open} agencyId={agencyId} onBack={() => setOpenId(null)} onReload={onReload} />;
+
+  return (
+    <>
+      <div className="dash-head">
+        <div><h1>Book seats</h1><p>Browse tours and packages, open one to see full details, then add your travellers.</p></div>
+        <div className="head-actions">
+          <div className="seg">
+            {["all", "day", "pkg"].map((k) => (
+              <button key={k} className={type === k ? "active" : ""} onClick={() => setType(k)}>{k === "all" ? "All" : k === "day" ? "Day tours" : "Packages"}</button>
+            ))}
+          </div>
+          <div className="search-box"><Search size={16} /><input placeholder="Search tours…" value={q} onChange={(e) => setQ(e.target.value)} /></div>
+        </div>
+      </div>
+
+      <div className="catalog-grid">
+        {shown.map((p) => {
+          const open = p.dates.filter((d) => seatsOf(d) < d.maxSeats);
+          const full = p.dates.length > 0 && open.length === 0;
+          const from = p.breakPrice || p.publishedRate;
+          return (
+            <button key={p.id} className="cat-card" onClick={() => setOpenId(p.id)} disabled={!p.dates.length}>
+              <div className="cat-media" style={{ backgroundImage: `url(${coverOf(p)})` }}>
+                {isPkg(p) && <span className="cat-flag pkg"><Package size={11} />Package</span>}
+                {full && <span className="cat-flag full">Fully booked</span>}
+              </div>
+              <div className="cat-body">
+                <strong>{p.title}</strong>
+                <span className="cat-meta"><MapPin size={13} />{isPkg(p) ? (p.cities || [p.city]).join(" → ") : p.city}{p.duration ? ` · ${p.duration}` : ""}</span>
+                <div className="cat-foot">
+                  <span className="cat-price">from ${from}{isPkg(p) ? "/pp" : ""}</span>
+                  <span className="cat-dates">{p.dates.length ? `${p.dates.length} date${p.dates.length > 1 ? "s" : ""}` : "No dates yet"}</span>
+                </div>
+              </div>
+            </button>
+          );
+        })}
+        {shown.length === 0 && <div className="dash-empty">No tours match. Try a different filter.</div>}
+      </div>
+    </>
+  );
+}
+
+function TourBooking({ product, agencyId, onBack, onReload }) {
+  const pkg = isPkg(product);
+  const tiers = product.accommodationTiers || [];
+  const bookable = product.dates.filter((d) => seatsOf(d) < d.maxSeats);
+  const [depId, setDepId] = useState(bookable[0]?.id || product.dates[0]?.id || "");
+  const [seats, setSeats] = useState(1);
+  const [tierId, setTierId] = useState(tiers[0]?.id || "");
+  const [rooming, setRooming] = useState("double");
+  const [customers, setCustomers] = useState("");
+  const [phone, setPhone] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState("");
+  const [err, setErr] = useState("");
+  const [gi, setGi] = useState(0);
+
+  const dep = product.dates.find((d) => Number(d.id) === Number(depId));
+  const booked = dep ? seatsOf(dep) : 0;
+  const remaining = dep ? Math.max(0, dep.maxSeats - booked) : 0;
+  const tier = tiers.find((t) => t.id === tierId) || tiers[0];
+  const projected = dep ? Math.min(dep.maxSeats, booked + Number(seats || 1)) : Number(seats || 1);
+  let pp = dep ? livePrice({ ...product, ...dep }, projected) : product.publishedRate;
+  if (pkg && tier) pp += (Number(tier.perPersonSupplement) || 0) + (rooming === "single" ? Number(tier.singleSupplement) || 0 : 0);
+  const total = pp * Number(seats || 1);
+  const depositPct = Number(dep?.depositPercent || product.depositPercent || (pkg ? 20 : 10));
+  const deposit = Math.ceil(total * depositPct / 100);
+
+  const imgs = (product.images || []).filter((i) => i?.url);
+  const heroImg = imgs.length ? imgs[Math.min(gi, imgs.length - 1)].url : coverOf(product);
+
+  async function book(e) {
+    e.preventDefault();
+    setErr(""); setMsg("");
+    if (!dep) return setErr("Pick a date.");
+    if (!customers.trim()) return setErr("Add a customer reference (name or party).");
+    if (Number(seats) > remaining) return setErr(`Only ${remaining} seat${remaining === 1 ? "" : "s"} left on this date.`);
+    setBusy(true);
+    try {
+      const body = { seats: Number(seats), customers: customers.trim(), customerPhone: phone.trim() };
+      if (pkg) { body.roomingType = rooming; body.accommodationTier = tierId; }
+      const r = await apiFetch(`/departures/${dep.id}/pledges`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || "Could not book.");
+      setMsg(`Booked ${seats} seat${seats > 1 ? "s" : ""} for ${customers.trim()}.`);
+      setCustomers(""); setPhone(""); setSeats(1);
+      onReload && onReload();
+    } catch (e2) { setErr(e2.message); } finally { setBusy(false); }
+  }
+
+  return (
+    <>
+      <button className="btn-ghost" onClick={onBack} style={{ marginBottom: 16 }}><ArrowLeft size={16} />All tours</button>
+      <div className="tb-grid">
+        <div className="tb-main">
+          <div className="tb-hero" style={{ backgroundImage: `url(${heroImg})` }} />
+          {imgs.length > 1 && (
+            <div className="tb-thumbs">
+              {imgs.map((im, i) => <button key={i} className={i === gi ? "active" : ""} style={{ backgroundImage: `url(${im.url})` }} onClick={() => setGi(i)} />)}
+            </div>
+          )}
+          <h1 className="tb-title">{product.title} {pkg && <span className="tag tag-pkg">Package</span>}</h1>
+          <p className="tb-meta"><MapPin size={14} />{pkg ? (product.cities || [product.city]).join(" → ") : product.city}{product.duration ? ` · ${product.duration}` : ""}{product.guide ? ` · ${product.guide}` : ""}</p>
+
+          {hasHtml(product.overviewHtml)
+            ? <div className="rich" dangerouslySetInnerHTML={{ __html: product.overviewHtml }} />
+            : product.description ? <p className="tb-desc">{product.description}</p> : null}
+
+          <div className="tb-incl">
+            <div>
+              <h3>What's included</h3>
+              {(product.included || []).length ? product.included.map((x) => <p key={x}><Check size={15} />{x}</p>) : <p className="muted-line">Not specified.</p>}
+            </div>
+            <div>
+              <h3>Not included</h3>
+              {(product.notIncluded || []).length ? product.notIncluded.map((x) => <p key={x}><ChevronDown size={15} />{x}</p>) : <p className="muted-line">—</p>}
+            </div>
+          </div>
+
+          {pkg && (product.itinerary || []).length > 0 && (
+            <div className="tb-itin">
+              <h3>Day-by-day itinerary</h3>
+              <ol>
+                {product.itinerary.map((d, i) => (
+                  <li key={d.day || i}>
+                    <div className="tb-day">Day {d.day || i + 1} · {d.city}</div>
+                    <strong>{d.title}</strong>
+                    {hasHtml(d.description) ? <div className="rich" dangerouslySetInnerHTML={{ __html: d.description }} /> : d.description ? <p>{d.description}</p> : null}
+                    <small>Meals: {d.meals || "—"}</small>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          )}
+
+          {(product.meetingPoint || (product.whatToBring || []).length || hasHtml(product.policiesHtml)) && (
+            <div className="tb-extras">
+              {product.meetingPoint && <div><h3><MapPin size={15} />Meeting & pickup</h3><p>{product.meetingPoint}</p>{product.pickupNote && <p className="muted-line">{product.pickupNote}</p>}</div>}
+              {(product.whatToBring || []).length > 0 && <div><h3><Check size={15} />What to bring</h3><div className="chip-row">{product.whatToBring.map((b) => <span key={b}>{b}</span>)}</div></div>}
+              {hasHtml(product.policiesHtml) && <div><h3><ShieldCheck size={15} />Cancellation & policies</h3><div className="rich" dangerouslySetInnerHTML={{ __html: product.policiesHtml }} /></div>}
+            </div>
+          )}
+        </div>
+
+        <aside className="tb-book">
+          <div className="tb-book-head">
+            <span>From</span>
+            <strong>${pp}{pkg ? " /person" : ""}</strong>
+          </div>
+          {!product.dates.length ? (
+            <div className="dash-empty">No dates published yet. Ask the admin to publish a departure.</div>
+          ) : (
+            <form className="tb-form" onSubmit={book}>
+              <label>{pkg ? "Start date" : "Date"}
+                <select value={depId} onChange={(e) => setDepId(e.target.value)}>
+                  {product.dates.map((d) => {
+                    const left = d.maxSeats - seatsOf(d);
+                    return <option key={d.id} value={d.id} disabled={left <= 0}>
+                      {pkg ? fmtDate(d.startDate || d.date) : `${fmtDate(d.date)}${d.time ? ` · ${d.time}` : ""}`} — {left > 0 ? `${left} left` : "full"}
+                    </option>;
+                  })}
+                </select>
+              </label>
+              <label>Seats
+                <input type="number" min="1" max={Math.max(1, remaining)} value={seats} onChange={(e) => setSeats(e.target.value)} />
+              </label>
+              {pkg && (
+                <>
+                  <label>Hotel tier
+                    <select value={tierId} onChange={(e) => setTierId(e.target.value)}>
+                      {tiers.map((t) => <option key={t.id} value={t.id}>{t.name}{t.perPersonSupplement ? ` (+$${t.perPersonSupplement}/pp)` : ""}</option>)}
+                    </select>
+                  </label>
+                  <label>Room type
+                    <select value={rooming} onChange={(e) => setRooming(e.target.value)}>
+                      <option value="single">Single</option><option value="double">Double / twin</option><option value="triple">Triple</option>
+                    </select>
+                  </label>
+                </>
+              )}
+              <label>Customer reference
+                <input value={customers} onChange={(e) => setCustomers(e.target.value)} placeholder="Name, party, voucher ID" />
+              </label>
+              <label>Customer phone <span className="field-opt">(optional)</span>
+                <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+20 1XX XXX XXXX" />
+              </label>
+
+              <div className="tb-summary">
+                <div><span>{booked}/{dep?.maxSeats} booked · GoAhead at {goAheadOf(dep || product)}</span></div>
+                <div className="tb-money"><span>Total</span><strong>${total}</strong></div>
+                <div className="tb-money"><span>Deposit ({depositPct}%)</span><strong>${deposit}</strong></div>
+              </div>
+
+              {err && <div className="auth-error">{err}</div>}
+              {msg && <div className="temp-pass" style={{ margin: 0 }}><strong>{msg}</strong></div>}
+              <button className="btn-primary" type="submit" disabled={busy || remaining <= 0}><Check size={17} />{busy ? "Booking…" : remaining <= 0 ? "Date full" : "Book seats"}</button>
+            </form>
+          )}
+        </aside>
+      </div>
+    </>
+  );
+}
+function hasHtml(s) { return s && s.replace(/<[^>]*>/g, "").trim().length > 0; }
 
 function Kpi({ icon: Icon, label, value, foot, accent }) {
   return (

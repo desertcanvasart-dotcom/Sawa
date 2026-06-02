@@ -651,7 +651,7 @@ function App() {
             newRoute, newSeats, selected, selectedProduct, selectedRate, selectedSeats,
             goAheadSelected, roomingType, setRoomingType, tierId, setTierId, setCustomerName,
             setNewRoute, setNewSeats, setQuery, setSeatCount, setSelectedId, seatCount, query,
-            addPledge, agencyId: agency?.id,
+            addPledge, agencyId: agency?.id, tourProducts, onReload: loadBootstrap,
           }}
           adminDeskProps={{
             confirmDeparture, isSaving, scheduleAdminDeparture, scheduleDate, scheduleProductId,
@@ -686,6 +686,8 @@ function Portal({ user, agency, signOut, navigate, notice, cityStats, departures
       signOut={signOut}
       navigate={navigate}
       departures={departures}
+      tourProducts={agencyDeskProps.tourProducts}
+      onReload={agencyDeskProps.onReload}
       agencyDeskProps={agencyDeskProps}
       AgencyDesk={AgencyDesk}
       StaffPanel={StaffPanel}
