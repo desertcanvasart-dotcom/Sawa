@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   ArrowLeft,
+  ArrowRight,
   ArrowUpRight,
   BadgeCheck,
   Bell,
@@ -15,6 +16,7 @@ import {
   Handshake,
   Hotel,
   MapPin,
+  MessageCircle,
   Package,
   Plus,
   Search,
@@ -34,22 +36,22 @@ const DEFAULT_GO_AHEAD = 4;
 
 const reviews = [
   {
-    name: "Marta L.",
-    location: "🇪🇸 Spain",
+    name: "Marta Llorente",
+    location: "Valencia, Spain",
     trip: "Cairo Pyramids · May 2026",
-    text: "We joined a confirmed Cairo date instead of paying for a private car. Pickup was clear, the guide was excellent, and the price stayed fair.",
+    text: "We joined a confirmed Cairo date instead of paying for a private car. Pickup was on time, the guide knew every corner of Giza, and the shared price stayed fair the whole way.",
   },
   {
-    name: "Daniel K.",
-    location: "🇩🇪 Germany",
+    name: "Daniel Krüger",
+    location: "Munich, Germany",
     trip: "Luxor East Bank · May 2026",
-    text: "The GoAhead status made the decision easy. We knew the tour was running before arranging the rest of our day.",
+    text: "The GoAhead status made the decision easy. We knew the tour was running before we booked anything else for the day.",
   },
   {
-    name: "Nora A.",
-    location: "🇦🇪 UAE",
+    name: "Nora Al-Hashimi",
+    location: "Abu Dhabi, UAE",
     trip: "Aswan Philae · May 2026",
-    text: "Good shared transport, no confusing WhatsApp back and forth, and the agency confirmed our seats quickly.",
+    text: "Good shared transport and no confusing WhatsApp back-and-forth. The agency confirmed our seats within the hour.",
   },
 ];
 
@@ -993,50 +995,71 @@ function PublicSite({
   return (
     <main className="public-shell">
       <PublicNav navigate={navigate} />
-      <section className={showDetail ? "public-hero" : "public-hero hero-search"}>
+      <section className={showDetail ? "public-hero" : "public-hero hero-soft"}>
         {!showDetail ? (
-          <div className="hero-search-inner">
-            <p className="hero-pill">
-              <span className="live-dot" aria-hidden="true" />
-              {customerSummary.dates} live departures this week
-            </p>
-            <h1>Find an Egypt tour that actually runs.</h1>
-            <span>Shared day tours and multi-day packages across Cairo, Luxor, and Aswan — with live seat counts, so you know your date is going before you pay.</span>
+          <div className="hero-soft-grid">
+            <div className="hero-soft-copy">
+              <p className="hero-pill">
+                <span className="live-dot" aria-hidden="true" />
+                {customerSummary.dates} live departures this week
+              </p>
+              <h1>Egypt tours that actually run.</h1>
+              <span>Shared day tours and multi-day packages across Cairo, Luxor, and Aswan — with live seat counts, so you know your date is going before you pay.</span>
 
-            <form
-              className="hero-search-bar"
-              onSubmit={(event) => {
-                event.preventDefault();
-                document.getElementById("live-departures")?.scrollIntoView({ behavior: "smooth", block: "start" });
-              }}
-            >
-              <div className="hsb-field">
-                <label htmlFor="hsb-city">Destination</label>
-                <select id="hsb-city" value={selectedCity} onChange={(event) => setSelectedCity(event.target.value)}>
-                  <option value="All cities">All Egypt</option>
-                  {cityStats.map((city) => <option key={city.name} value={city.name}>{city.name}</option>)}
-                </select>
-              </div>
-              <span className="hsb-divider" aria-hidden="true" />
-              <div className="hsb-field">
-                <label htmlFor="hsb-type">Trip type</label>
-                <select id="hsb-type" value={publicView} onChange={(event) => setPublicView(event.target.value)}>
-                  <option value="day_tours">Day tours</option>
-                  <option value="packages">Multi-day packages</option>
-                </select>
-              </div>
-              <button className="hsb-go" type="submit">
-                <Search size={18} />
-                <span>Search</span>
-              </button>
-            </form>
+              <form
+                className="hero-search-bar"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  document.getElementById("live-departures")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                }}
+              >
+                <div className="hsb-field">
+                  <label htmlFor="hsb-city">Destination</label>
+                  <select id="hsb-city" value={selectedCity} onChange={(event) => setSelectedCity(event.target.value)}>
+                    <option value="All cities">All Egypt</option>
+                    {cityStats.map((city) => <option key={city.name} value={city.name}>{city.name}</option>)}
+                  </select>
+                </div>
+                <span className="hsb-divider" aria-hidden="true" />
+                <div className="hsb-field">
+                  <label htmlFor="hsb-type">Trip type</label>
+                  <select id="hsb-type" value={publicView} onChange={(event) => setPublicView(event.target.value)}>
+                    <option value="day_tours">Day tours</option>
+                    <option value="packages">Multi-day packages</option>
+                  </select>
+                </div>
+                <button className="hsb-go" type="submit">
+                  <Search size={18} />
+                  <span>Search</span>
+                </button>
+              </form>
 
-            <div className="hero-stats">
-              <span><b>{customerSummary.goAheadDates}</b> confirmed running</span>
-              <span className="hero-stats-sep" aria-hidden="true" />
-              <span><b>{customerSummary.pendingDates}</b> forming now</span>
-              <span className="hero-stats-sep" aria-hidden="true" />
-              <span><b>{customerSummary.tours}</b> tours &amp; packages</span>
+              <div className="hero-stats">
+                <span><b>{customerSummary.goAheadDates}</b> confirmed running</span>
+                <span className="hero-stats-sep" aria-hidden="true" />
+                <span><b>{customerSummary.pendingDates}</b> forming now</span>
+                <span className="hero-stats-sep" aria-hidden="true" />
+                <span><b>{customerSummary.tours}</b> tours &amp; packages</span>
+              </div>
+            </div>
+
+            <div className="hero-soft-media">
+              <img
+                src="https://images.unsplash.com/photo-1539650116574-75c0c6d73f6e?auto=format&fit=crop&w=1100&q=82"
+                alt="Pyramids of Giza at golden hour, near Cairo"
+                loading="eager"
+              />
+              <div className="hero-media-chip">
+                <span className="hero-chip-dot" aria-hidden="true" />
+                <div>
+                  <strong>{customerSummary.goAheadDates} groups going ahead</strong>
+                  <span>Confirmed — guide &amp; transport booked</span>
+                </div>
+              </div>
+              <div className="hero-media-badge">
+                <BadgeCheck size={16} />
+                No payment until your date confirms
+              </div>
             </div>
           </div>
         ) : (
@@ -1133,15 +1156,25 @@ function PublicSite({
               </div>
             </section>
 
-            <section className="review-editorial reveal" id="reviews">
-              <SectionHeading kicker="After the tour ran" title="Travellers who actually went." />
-              <div className="review-river">
-                {reviews.map((review) => (
-                  <article className="review-card" key={review.name}>
+            <section className="reviews-soft reveal" id="reviews">
+              <div className="reviews-soft-head">
+                <div>
+                  <p className="reviews-kicker">After the tour ran</p>
+                  <h2>Travellers who actually went.</h2>
+                </div>
+                <div className="reviews-rating">
+                  <span className="reviews-rating-num">4.9</span>
+                  <span className="reviews-rating-stars" aria-label="4.9 out of 5">★★★★★</span>
+                  <span className="reviews-rating-meta">from 312 confirmed travellers</span>
+                </div>
+              </div>
+              <div className="reviews-wall">
+                {reviews.map((review, i) => (
+                  <article className={i === 0 ? "review-soft-card is-featured" : "review-soft-card"} key={review.name}>
                     <div className="review-stars" aria-label="5 out of 5">★★★★★</div>
                     <p>“{review.text}”</p>
                     <div className="review-by">
-                      <div className="avatar">{review.name[0]}</div>
+                      <div className="review-avatar" aria-hidden="true">{review.name[0]}</div>
                       <div>
                         <strong>{review.name}</strong>
                         <span>{review.location} · {review.trip}</span>
@@ -1181,6 +1214,18 @@ function PublicSite({
   );
 }
 
+function scrollToBooking(navigate) {
+  const el = document.getElementById("live-departures");
+  if (el) {
+    el.scrollIntoView({ behavior: "smooth", block: "start" });
+  } else {
+    navigate("/");
+    window.setTimeout(() => {
+      document.getElementById("live-departures")?.scrollIntoView({ behavior: "smooth" });
+    }, 140);
+  }
+}
+
 function PublicNav({ navigate }) {
   return (
     <header className="public-nav">
@@ -1194,9 +1239,9 @@ function PublicNav({ navigate }) {
         <a href="/#reviews">Reviews</a>
         <a href="/#blog">Notes</a>
       </nav>
-      <button className="nav-cta" onClick={() => navigate("/agency")}>
-        Agency portal
-        <span className="nav-cta-icon"><ArrowUpRight size={15} /></span>
+      <button className="nav-cta" onClick={() => scrollToBooking(navigate)}>
+        Book now
+        <span className="nav-cta-icon"><ArrowRight size={15} /></span>
       </button>
     </header>
   );
@@ -1213,38 +1258,32 @@ function SectionHeading({ kicker, title }) {
 
 function PublicFooter({ navigate }) {
   return (
-    <footer className="public-footer">
-      <div>
-        <button className="public-brand" onClick={() => navigate("/")}>
-          <span className="brand-mark">S</span>
-          <strong>Sawa Tours</strong>
-        </button>
-        <p>“Sawa” means together. We pool small bookings into one shared group, so your Egypt tour is guaranteed to run before you pay a deposit.</p>
-      </div>
-      <div>
-        <strong>Routes</strong>
-        <span>Cairo → Giza</span>
-        <span>Luxor → West Bank</span>
-        <span>Aswan → Philae</span>
-      </div>
-      <div>
-        <strong>Contact</strong>
-        <span>WhatsApp: +20 109 284 7613</span>
-        <span>Replies within 2 hours, 9am–9pm Cairo time</span>
-      </div>
-      <div>
-        <strong>Operator info</strong>
-        <span>Licensed by Egyptian tourism authorities</span>
-        <span>Based in Cairo</span>
-        <button onClick={() => navigate("/agency")}>Agency portal</button>
-      </div>
-      <div className="footer-legal">
-        <span>© {new Date().getFullYear()} Sawa Tours</span>
+    <footer className="footer-min">
+      <button className="footer-min-brand" onClick={() => navigate("/")}>
+        <span className="brand-mark">S</span>
+        <strong>Sawa Tours</strong>
+      </button>
+
+      <p className="footer-min-tag">Egypt tours that actually run.</p>
+
+      <button className="footer-min-cta" onClick={() => scrollToBooking(navigate)}>
+        Book now
+        <span className="footer-min-arrow"><ArrowRight size={16} /></span>
+      </button>
+
+      <nav className="footer-min-links">
+        <a href="/#live-departures">Tours</a>
         <a href="/#how-it-works">How it works</a>
         <a href="/#reviews">Reviews</a>
-        <span className="spacer" />
-        <a href="/privacy">Privacy policy</a>
-        <a href="/terms">Terms of service</a>
+        <a href="https://wa.me/201092847613" target="_blank" rel="noreferrer">WhatsApp</a>
+      </nav>
+
+      <div className="footer-min-legal">
+        <span>© {new Date().getFullYear()} Sawa Tours · Licensed in Cairo</span>
+        <span className="footer-min-dot" aria-hidden="true">·</span>
+        <a href="/privacy">Privacy</a>
+        <a href="/terms">Terms</a>
+        <button className="footer-agency-link" onClick={() => navigate("/agency")}>Agency login</button>
       </div>
     </footer>
   );
