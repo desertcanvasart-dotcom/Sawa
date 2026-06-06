@@ -11,9 +11,9 @@ const fmtDate = (d) => (d ? new Intl.DateTimeFormat("en", { month: "short", day:
 const seatsOf = (d) => (d.pledges || []).reduce((s, p) => s + Number(p.seats || 0), 0);
 const isPkg = (x) => x?.type === "package";
 const STOCK = {
-  Cairo: "https://images.unsplash.com/photo-1539650116574-75c0c6d73f6e?auto=format&fit=crop&w=900&q=80",
-  Luxor: "https://images.unsplash.com/photo-1601581875309-fafbf2d3ed3a?auto=format&fit=crop&w=900&q=80",
-  Aswan: "https://images.unsplash.com/photo-1568322445389-f64ac2515020?auto=format&fit=crop&w=900&q=80",
+  Cairo: "/images/cairo.jpg",
+  Luxor: "/images/luxor.jpg",
+  Aswan: "/images/aswan.jpg",
 };
 const coverOf = (p) => (p.images && p.images[0]?.url) || STOCK[p.city] || STOCK.Cairo;
 const goAheadOf = (x) => Math.max(1, Number(x?.minSeats || 4));

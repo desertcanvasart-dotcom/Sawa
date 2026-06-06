@@ -76,15 +76,15 @@ const articles = [
 const destinationCopy = {
   Cairo: {
     tags: "Pyramids · Museums · Khan el-Khalili",
-    image: "https://images.unsplash.com/photo-1539650116574-75c0c6d73f6e?auto=format&fit=crop&w=900&q=80",
+    image: "/images/cairo.jpg",
   },
   Luxor: {
     tags: "Temples · Tombs · Nile",
-    image: "https://images.unsplash.com/photo-1601581875309-fafbf2d3ed3a?auto=format&fit=crop&w=900&q=80",
+    image: "/images/luxor.jpg",
   },
   Aswan: {
     tags: "Islands · Nubian culture · Philae",
-    image: "https://images.unsplash.com/photo-1568322445389-f64ac2515020?auto=format&fit=crop&w=900&q=80",
+    image: "/images/aswan.jpg",
   },
 };
 
@@ -1045,8 +1045,8 @@ function PublicSite({
 
             <div className="hero-soft-media">
               <img
-                src="https://images.unsplash.com/photo-1539650116574-75c0c6d73f6e?auto=format&fit=crop&w=1100&q=82"
-                alt="Pyramids of Giza at golden hour, near Cairo"
+                src="/images/hero.jpg"
+                alt="Pyramid of Giza at golden hour"
                 loading="eager"
               />
               <div className="hero-media-chip">

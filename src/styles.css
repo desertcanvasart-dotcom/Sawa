@@ -155,7 +155,7 @@ button:disabled {
   background:
     radial-gradient(circle at 78% 14%, rgba(244, 201, 93, .24), transparent 22%),
     linear-gradient(90deg, rgba(9, 22, 26, .94), rgba(28, 44, 42, .62) 48%, rgba(96, 68, 35, .2)),
-    url("https://images.unsplash.com/photo-1539650116574-75c0c6d73f6e?auto=format&fit=crop&w=1800&q=82");
+    url("/images/hero.jpg");
   background-size: cover;
   background-position: center;
 }
@@ -616,7 +616,7 @@ button:disabled {
   border-radius: 8px;
   background:
     linear-gradient(180deg, rgba(23, 50, 58, .05), rgba(23, 50, 58, .34)),
-    url("https://images.unsplash.com/photo-1601581875309-fafbf2d3ed3a?auto=format&fit=crop&w=1000&q=82");
+    url("/images/luxor.jpg");
   background-size: cover;
   background-position: center;
 }
@@ -1671,7 +1671,7 @@ button:disabled {
   align-items: flex-end;
   background:
     linear-gradient(90deg, rgba(22, 49, 56, .88), rgba(22, 49, 56, .38)),
-    url("https://images.unsplash.com/photo-1572252009286-268acec5ca0a?auto=format&fit=crop&w=1400&q=80");
+    url("/images/cairo.jpg");
   background-size: cover;
   background-position: center;
   color: #ffffff;
@@ -2467,7 +2467,7 @@ button:disabled {
   background:
     radial-gradient(700px 380px at 82% 8%, rgba(199, 154, 62, 0.30), transparent 60%),
     linear-gradient(75deg, rgba(15, 13, 10, 0.92) 8%, rgba(20, 18, 14, 0.55) 52%, rgba(60, 44, 22, 0.18)),
-    url("https://images.unsplash.com/photo-1539650116574-75c0c6d73f6e?auto=format&fit=crop&w=1800&q=82");
+    url("/images/hero.jpg");
   background-size: cover;
   background-position: center;
 }
@@ -3274,7 +3274,7 @@ button:disabled {
   background:
     radial-gradient(900px 500px at 50% 120%, rgba(199, 154, 62, 0.34), transparent 70%),
     linear-gradient(180deg, rgba(15, 13, 10, 0.55) 0%, rgba(15, 13, 10, 0.30) 38%, rgba(15, 13, 10, 0.78) 100%),
-    url("https://images.unsplash.com/photo-1568322445389-f64ac2515020?auto=format&fit=crop&w=1900&q=82");
+    url("/images/aswan.jpg");
   background-size: cover;
   background-position: center 38%;
 }
@@ -3667,7 +3667,7 @@ button:disabled {
   background:
     linear-gradient(90deg, rgba(11,12,15,0.85) 0%, rgba(11,12,15,0.52) 40%, rgba(11,12,15,0.15) 72%, rgba(11,12,15,0.02) 100%),
     linear-gradient(180deg, rgba(11,12,15,0.20) 0%, rgba(11,12,15,0) 32%, rgba(11,12,15,0.42) 100%),
-    url("https://images.unsplash.com/photo-1568322445389-f64ac2515020?auto=format&fit=crop&w=2000&q=88");
+    url("/images/aswan.jpg");
   background-size: cover;
   background-position: center 42%;
 }
@@ -3705,7 +3705,7 @@ button:disabled {
   .public-hero.hero-search {
     background:
       linear-gradient(180deg, rgba(14,12,9,0.55) 0%, rgba(14,12,9,0.45) 35%, rgba(14,12,9,0.85) 100%),
-      url("https://images.unsplash.com/photo-1539650116574-75c0c6d73f6e?auto=format&fit=crop&w=1200&q=85");
+      url("/images/hero.jpg");
     background-size: cover;
     background-position: center;
   }
