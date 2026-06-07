@@ -11,6 +11,25 @@ import { RichText } from "./RichText";
 const money = (n) => (n == null ? "—" : "$" + Number(n).toLocaleString());
 const fmtDate = (d) => (d ? new Intl.DateTimeFormat("en", { month: "short", day: "numeric", year: "numeric" }).format(new Date(d)) : "—");
 const isPkg = (x) => x?.type === "package";
+
+// Preset meeting points per city (per operations rules). Admin ticks the ones
+// that apply; a tour can carry more than one (e.g. Cairo & Giza day tours).
+const MEETING_POINT_PRESETS = {
+  Cairo: [
+    { point: "In front of the Egyptian Museum (Tahrir)", note: "Be there by 8:00 AM at the latest" },
+    { point: "In front of Marriott Mena House, Giza", note: "Be there by 8:45 AM at the latest" },
+  ],
+  Luxor: [
+    { point: "In front of Steigenberger Resort Achti, Luxor (formerly Etap)", note: "East Bank tour — departs 8:30 AM" },
+    { point: "In front of Steigenberger Resort Achti, Luxor (formerly Etap)", note: "West Bank tour — departs 7:30 AM" },
+    { point: "In front of Steigenberger Resort Achti, Luxor (formerly Etap)", note: "Dendera, Abydos or Aswan — departs 7:15 AM" },
+  ],
+  Aswan: [
+    { point: "Coptic Orthodox Cathedral of the Archangel Michael, Aswan", note: "Aswan day tour — departs 8:30 AM" },
+    { point: "Coptic Orthodox Cathedral of the Archangel Michael, Aswan", note: "Abu Simbel or Luxor — departs 6:30 AM" },
+  ],
+};
+const samePoint = (a, b) => a.point === b.point && a.note === b.note;
 const seatsOf = (d) => (d.pledges || []).reduce((s, p) => s + Number(p.seats || 0), 0);
 
 // Minimal flat navigation. One group, no header. Departures keeps a subtle
@@ -256,6 +275,13 @@ function ProductEditor({ type: typeProp, existing, onClose, onSaved }) {
     pickupNote: existing?.pickupNote || "",
     bookingCutoffHours: existing?.bookingCutoffHours ?? 24,
   });
+  const [meetingPoints, setMeetingPoints] = useState(() => {
+    if (existing?.meetingPoints?.length) return existing.meetingPoints;
+    if (existing?.meetingPoint) return [{ point: existing.meetingPoint, note: existing.pickupNote || "" }];
+    return [];
+  });
+  const togglePreset = (preset) => setMeetingPoints((list) =>
+    list.some((m) => samePoint(m, preset)) ? list.filter((m) => !samePoint(m, preset)) : [...list, preset]);
   const [overviewHtml, setOverviewHtml] = useState(existing?.overviewHtml || "");
   const [policiesHtml, setPoliciesHtml] = useState(existing?.policiesHtml || "");
   const [included, setIncluded] = useState(existing?.included?.length ? existing.included : [""]);
@@ -307,7 +333,9 @@ function ProductEditor({ type: typeProp, existing, onClose, onSaved }) {
         duration: f.duration.trim() || undefined,
         included: clean(included), notIncluded: clean(notIncluded), whatToBring: clean(whatToBring),
         overviewHtml, policiesHtml,
-        meetingPoint: f.meetingPoint.trim(), pickupNote: f.pickupNote.trim(),
+        meetingPoints: meetingPoints.map((m) => ({ point: (m.point || "").trim(), note: (m.note || "").trim() })).filter((m) => m.point),
+        meetingPoint: (meetingPoints[0]?.point || f.meetingPoint || "").trim(),
+        pickupNote: (meetingPoints[0]?.note || f.pickupNote || "").trim(),
         bookingCutoffHours: Number(f.bookingCutoffHours) || 0,
         images,
       };
@@ -399,10 +427,39 @@ function ProductEditor({ type: typeProp, existing, onClose, onSaved }) {
               <RowList label="What's included" rows={included} setRows={setIncluded} placeholder="e.g. Licensed Egyptologist guide" />
               <RowList label="Not included" rows={notIncluded} setRows={setNotIncluded} placeholder="e.g. Entrance tickets" />
               <RowList label="What to bring" rows={whatToBring} setRows={setWhatToBring} placeholder="e.g. Sun hat, comfortable shoes" />
-              <div className="form-grid">
-                <Field label="Meeting point"><input value={f.meetingPoint} onChange={set("meetingPoint")} placeholder="Hotel lobby / central pickup" /></Field>
-                <Field label="Pickup note"><input value={f.pickupNote} onChange={set("pickupNote")} placeholder="Pickup 30 min before start" /></Field>
-              </div>
+              <Field label="Meeting points" full>
+                {!pkg && (MEETING_POINT_PRESETS[f.city] || []).length > 0 && (
+                  <div className="mp-presets">
+                    <span className="mp-presets-hint">Standard {f.city} meeting points — tick the ones that apply:</span>
+                    {(MEETING_POINT_PRESETS[f.city] || []).map((preset, i) => {
+                      const on = meetingPoints.some((m) => samePoint(m, preset));
+                      return (
+                        <label className={on ? "mp-preset on" : "mp-preset"} key={i}>
+                          <input type="checkbox" checked={on} onChange={() => togglePreset(preset)} />
+                          <span className="mp-preset-body">
+                            <strong>{preset.point}</strong>
+                            <span>{preset.note}</span>
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+                <div className="mp-list">
+                  {meetingPoints.map((m, i) => {
+                    const isPreset = Object.values(MEETING_POINT_PRESETS).flat().some((p) => samePoint(p, m));
+                    if (isPreset) return null;
+                    return (
+                      <div className="mp-row" key={i}>
+                        <input value={m.point} onChange={(e) => setMeetingPoints((l) => l.map((x, j) => j === i ? { ...x, point: e.target.value } : x))} placeholder="Meeting point / pickup location" />
+                        <input value={m.note} onChange={(e) => setMeetingPoints((l) => l.map((x, j) => j === i ? { ...x, note: e.target.value } : x))} placeholder="Be there by 8:00 AM / Departs 7:30 AM" />
+                        <button type="button" className="icon-btn" onClick={() => setMeetingPoints((l) => l.filter((_, j) => j !== i))}><Trash2 size={14} /></button>
+                      </div>
+                    );
+                  })}
+                </div>
+                <button type="button" className="btn-ghost sm" onClick={() => setMeetingPoints((l) => [...l, { point: "", note: "" }])}><Plus size={14} />Add custom meeting point</button>
+              </Field>
               <Field label="Cancellation & policies" full><RichText value={policiesHtml} onChange={setPoliciesHtml} placeholder="Free cancellation up to 48h before, etc." /></Field>
             </div>
           )}

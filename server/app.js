@@ -288,9 +288,10 @@ app.post("/api/admin/tour-products", requireAuth, requireRole("super_admin", "op
         (id, type, title, city, cities, nights, duration, default_time, guide, vehicle,
          min_seats, max_seats, base_cost, published_rate, break_price, quality, deposit_percent,
          description, included, not_included, itinerary, accommodation_tiers,
-         overview_html, policies_html, what_to_bring, meeting_point, pickup_note, booking_cutoff_hours, images)
+         overview_html, policies_html, what_to_bring, meeting_point, pickup_note, booking_cutoff_hours, images,
+         meeting_points)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,
-         $23,$24,$25,$26,$27,$28,$29)
+         $23,$24,$25,$26,$27,$28,$29,$30)
        ON CONFLICT (id) DO UPDATE SET
          type=EXCLUDED.type, title=EXCLUDED.title, city=EXCLUDED.city, cities=EXCLUDED.cities,
          nights=EXCLUDED.nights, duration=EXCLUDED.duration, default_time=EXCLUDED.default_time,
@@ -302,7 +303,7 @@ app.post("/api/admin/tour-products", requireAuth, requireRole("super_admin", "op
          overview_html=EXCLUDED.overview_html, policies_html=EXCLUDED.policies_html,
          what_to_bring=EXCLUDED.what_to_bring, meeting_point=EXCLUDED.meeting_point,
          pickup_note=EXCLUDED.pickup_note, booking_cutoff_hours=EXCLUDED.booking_cutoff_hours,
-         images=EXCLUDED.images`,
+         images=EXCLUDED.images, meeting_points=EXCLUDED.meeting_points`,
       [
         id, type, title, body.city || "Cairo",
         type === "package" ? JSON.stringify(body.cities || [body.city || "Cairo"]) : null,
@@ -321,6 +322,7 @@ app.post("/api/admin/tour-products", requireAuth, requireRole("super_admin", "op
         JSON.stringify(body.whatToBring || []), body.meetingPoint || null,
         body.pickupNote || null, Number.isFinite(Number(body.bookingCutoffHours)) ? Number(body.bookingCutoffHours) : 24,
         JSON.stringify(body.images || []),
+        JSON.stringify(Array.isArray(body.meetingPoints) ? body.meetingPoints : []),
       ]
     );
     return loadProduct(c, id);
@@ -484,6 +486,49 @@ app.delete("/api/public/departures/:id/bookings/:pledgeId", h(async (req, res) =
     return loadDeparture(c, dep.id);
   });
   res.json({ departure: presentDeparture(departure, req.user) });
+}));
+
+// Public: look up a booking by its code to see GoAhead status. No auth, no PII.
+app.get("/api/public/bookings/:code", h(async (req, res) => {
+  const code = String(req.params.code || "").trim();
+  if (!code) throw new AppError(422, "Booking code required.");
+  const r = await pool.query(
+    `SELECT p.booking_code, p.seats, p.status AS pledge_status,
+            d.id AS dep_id, d.route, d.date, d.start_date, d.end_date, d.city,
+            d.status AS dep_status, d.min_seats,
+            (SELECT COALESCE(SUM(seats), 0) FROM pledges WHERE departure_id = d.id) AS seats_booked,
+            tp.title AS product_title
+       FROM pledges p
+       JOIN departures d ON d.id = p.departure_id
+       LEFT JOIN tour_products tp ON tp.id = d.tour_product_id
+      WHERE UPPER(p.booking_code) = UPPER($1)
+      LIMIT 1`,
+    [code]
+  );
+  if (!r.rows.length) throw new AppError(404, "Booking not found.");
+  const b = r.rows[0];
+  const goAhead = Number(b.min_seats) || 4;
+  const seatsBooked = Number(b.seats_booked) || 0;
+  const cancelled = b.pledge_status === "cancelled";
+  const confirmed = !cancelled && (b.dep_status === "supplier_confirmed" || seatsBooked >= goAhead);
+  const fmt = (s) => {
+    if (!s) return "";
+    const d = s instanceof Date ? s : new Date(`${s}T12:00:00`);
+    return Number.isNaN(d.getTime()) ? "" : new Intl.DateTimeFormat("en", { weekday: "short", day: "numeric", month: "short", year: "numeric" }).format(d);
+  };
+  const dateLabel = b.start_date ? `${fmt(b.start_date)} – ${fmt(b.end_date)}` : fmt(b.date);
+  res.json({ booking: {
+    code: b.booking_code,
+    tourTitle: b.product_title || b.route,
+    city: b.city || "",
+    dateLabel,
+    seats: Number(b.seats),
+    seatsBooked,
+    goAhead,
+    confirmed,
+    statusLabel: cancelled ? "Cancelled" : confirmed ? "Confirmed — GoAhead" : "Forming",
+    statusTone: cancelled ? "cancelled" : confirmed ? "go" : "pending",
+  } });
 }));
 
 // ---- shared write helpers ----

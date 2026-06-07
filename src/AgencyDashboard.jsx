@@ -318,9 +318,22 @@ function TourBooking({ product, agencyId, onBack, onReload }) {
             </div>
           )}
 
-          {(product.meetingPoint || (product.whatToBring || []).length || hasHtml(product.policiesHtml)) && (
+          {((product.meetingPoints || []).filter((m) => m && m.point).length || product.meetingPoint || (product.whatToBring || []).length || hasHtml(product.policiesHtml)) && (
             <div className="tb-extras">
-              {product.meetingPoint && <div><h3><MapPin size={15} />Meeting & pickup</h3><p>{product.meetingPoint}</p>{product.pickupNote && <p className="muted-line">{product.pickupNote}</p>}</div>}
+              {((product.meetingPoints || []).filter((m) => m && m.point).length || product.meetingPoint) && (
+                <div>
+                  <h3><MapPin size={15} />Meeting &amp; pickup</h3>
+                  {(product.meetingPoints || []).filter((m) => m && m.point).length > 0 ? (
+                    <ul className="meet-points">
+                      {(product.meetingPoints || []).filter((m) => m && m.point).map((m, i) => (
+                        <li key={i}><strong>{m.point}</strong>{m.note && <span>{m.note}</span>}</li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <><p>{product.meetingPoint}</p>{product.pickupNote && <p className="muted-line">{product.pickupNote}</p>}</>
+                  )}
+                </div>
+              )}
               {(product.whatToBring || []).length > 0 && <div><h3><Check size={15} />What to bring</h3><div className="chip-row">{product.whatToBring.map((b) => <span key={b}>{b}</span>)}</div></div>}
               {hasHtml(product.policiesHtml) && <div><h3><ShieldCheck size={15} />Cancellation & policies</h3><div className="rich" dangerouslySetInnerHTML={{ __html: product.policiesHtml }} /></div>}
             </div>

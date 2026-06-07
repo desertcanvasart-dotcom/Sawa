@@ -15,16 +15,21 @@ import {
   Filter,
   Handshake,
   Hotel,
+  Mail,
   MapPin,
+  Menu,
   MessageCircle,
   Package,
+  Phone,
   Plus,
   Search,
   Settings2,
   ShieldCheck,
   Sparkles,
+  Ticket,
   Trash2,
   Users,
+  X,
 } from "lucide-react";
 import "./styles.css";
 import { supabase, apiFetch, API_BASE } from "./supabaseClient";
@@ -614,6 +619,7 @@ function App() {
   if (!isPortalRoute) {
     return (
       <PublicSite
+        path={path}
         cityStats={cityStats}
         customerCalendars={customerCalendars}
         customerSummary={customerSummary}
@@ -920,7 +926,22 @@ function AgenciesPanel() {
   );
 }
 
+function pageFromPath(p) {
+  const clean = (p || "/").replace(/\/+$/, "") || "/";
+  if (clean === "/tours" || clean === "/packages") return "tours";
+  if (clean === "/how-it-works") return "how";
+  if (clean === "/about") return "about";
+  if (clean === "/contact") return "contact";
+  if (clean === "/faq") return "faq";
+  if (clean === "/privacy") return "privacy";
+  if (clean === "/terms") return "terms";
+  if (clean === "/booking" || clean.startsWith("/booking/")) return "booking";
+  if (clean === "/") return "home";
+  return "404";
+}
+
 function PublicSite({
+  path,
   cityStats,
   customerCalendars,
   customerSummary,
@@ -991,18 +1012,36 @@ function PublicSite({
   }
 
   const showDetail = routeTour || routePackage;
+  const page = (path === "/" || path === "") ? "home" : (showDetail ? "detail" : pageFromPath(path));
+
+  // Standalone marketing/legal pages share the nav + footer shell.
+  if (page !== "home" && page !== "detail") {
+    return (
+      <main className="public-shell">
+        <PublicNav navigate={navigate} path={path} />
+        <PublicRoute
+          page={page}
+          path={path}
+          navigate={navigate}
+          customerCalendars={customerCalendars}
+          customerSummary={customerSummary}
+          cityStats={cityStats}
+          selectedCity={selectedCity}
+          setSelectedCity={setSelectedCity}
+        />
+        <PublicFooter navigate={navigate} />
+      </main>
+    );
+  }
 
   return (
     <main className="public-shell">
-      <PublicNav navigate={navigate} />
+      <PublicNav navigate={navigate} path={path} />
       <section className={showDetail ? "public-hero" : "public-hero hero-soft"}>
         {!showDetail ? (
           <div className="hero-soft-grid">
             <div className="hero-soft-copy">
-              <p className="hero-pill">
-                <span className="live-dot" aria-hidden="true" />
-                {customerSummary.dates} live departures this week
-              </p>
+              <p className="hero-eyebrow">Shared departures, confirmed together</p>
               <h1>Egypt tours that actually run.</h1>
               <span>Shared day tours and multi-day packages across Cairo, Luxor, and Aswan — with live seat counts, so you know your date is going before you pay.</span>
 
@@ -1010,7 +1049,7 @@ function PublicSite({
                 className="hero-search-bar"
                 onSubmit={(event) => {
                   event.preventDefault();
-                  document.getElementById("live-departures")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                  navigate("/tours");
                 }}
               >
                 <div className="hsb-field">
@@ -1052,13 +1091,11 @@ function PublicSite({
               <div className="hero-media-chip">
                 <span className="hero-chip-dot" aria-hidden="true" />
                 <div>
-                  <strong>{customerSummary.goAheadDates} groups going ahead</strong>
+                  <strong>
+                    {customerSummary.goAheadDates} {customerSummary.goAheadDates === 1 ? "group" : "groups"} going ahead
+                  </strong>
                   <span>Confirmed — guide &amp; transport booked</span>
                 </div>
-              </div>
-              <div className="hero-media-badge">
-                <BadgeCheck size={16} />
-                No payment until your date confirms
               </div>
             </div>
           </div>
@@ -1156,31 +1193,31 @@ function PublicSite({
               </div>
             </section>
 
-            <section className="reviews-soft reveal" id="reviews">
-              <div className="reviews-soft-head">
-                <div>
-                  <p className="reviews-kicker">After the tour ran</p>
-                  <h2>Travellers who actually went.</h2>
+            <section className="reviews2 reveal" id="reviews">
+              <aside className="reviews2-aside">
+                <p className="reviews2-kicker">After the tour ran</p>
+                <h2>Travellers who actually went.</h2>
+                <div className="reviews2-rating">
+                  <span className="reviews2-num">4.9</span>
+                  <span className="reviews2-stars" aria-label="4.9 out of 5">★★★★★</span>
+                  <span className="reviews2-meta">from 312 confirmed travellers</span>
                 </div>
-                <div className="reviews-rating">
-                  <span className="reviews-rating-num">4.9</span>
-                  <span className="reviews-rating-stars" aria-label="4.9 out of 5">★★★★★</span>
-                  <span className="reviews-rating-meta">from 312 confirmed travellers</span>
-                </div>
-              </div>
-              <div className="reviews-wall">
-                {reviews.map((review, i) => (
-                  <article className={i === 0 ? "review-soft-card is-featured" : "review-soft-card"} key={review.name}>
-                    <div className="review-stars" aria-label="5 out of 5">★★★★★</div>
-                    <p>“{review.text}”</p>
-                    <div className="review-by">
-                      <div className="review-avatar" aria-hidden="true">{review.name[0]}</div>
-                      <div>
-                        <strong>{review.name}</strong>
-                        <span>{review.location} · {review.trip}</span>
-                      </div>
-                    </div>
-                  </article>
+                <ul className="reviews2-trust">
+                  <li><Users size={17} /> Small groups, never crowded</li>
+                  <li><ShieldCheck size={17} /> Verified, licensed operators</li>
+                  <li><CalendarDays size={17} /> Real departures, confirmed before you pay</li>
+                </ul>
+              </aside>
+              <div className="reviews2-quotes">
+                {reviews.map((review) => (
+                  <figure className="reviews2-quote" key={review.name}>
+                    <span className="reviews2-stars" aria-label="5 out of 5">★★★★★</span>
+                    <blockquote>{review.text}</blockquote>
+                    <figcaption>
+                      <strong>{review.name}</strong>
+                      <span>{review.location} · {review.trip}</span>
+                    </figcaption>
+                  </figure>
                 ))}
               </div>
             </section>
@@ -1226,24 +1263,108 @@ function scrollToBooking(navigate) {
   }
 }
 
-function PublicNav({ navigate }) {
+function SawaMark({ size = 30 }) {
   return (
-    <header className="public-nav">
-      <button className="public-brand" onClick={() => navigate("/")}>
-        <span className="brand-mark">S</span>
-        <strong>Sawa Tours</strong>
-      </button>
-      <nav>
-        <a href="/#live-departures">Tours</a>
-        <a href="/#how-it-works">How it works</a>
-        <a href="/#reviews">Reviews</a>
-        <a href="/#blog">Notes</a>
-      </nav>
-      <button className="nav-cta" onClick={() => scrollToBooking(navigate)}>
-        Book now
-        <span className="nav-cta-icon"><ArrowRight size={15} /></span>
-      </button>
-    </header>
+    <svg className="sawa-mark" width={size} height={size} viewBox="0 0 32 32" fill="none" aria-hidden="true">
+      <circle cx="16" cy="16" r="12.4" stroke="currentColor" strokeWidth="1.4" opacity="0.8" />
+      <path
+        d="M21 11.4c0-2.3-3.2-3.1-5.4-1.9-2.1 1.1-2.1 3.7.6 4.8 3 1.2 3.4 4.1 1 5.4-2.2 1.2-5.4.3-5.4-2"
+        stroke="currentColor"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <circle cx="7.1" cy="7.1" r="2" fill="currentColor" />
+      <circle cx="24.9" cy="7.1" r="2.5" fill="#f4c95d" />
+      <circle cx="7.1" cy="24.9" r="2" fill="currentColor" />
+      <circle cx="24.9" cy="24.9" r="2" fill="currentColor" />
+    </svg>
+  );
+}
+
+function SawaWordmark() {
+  return (
+    <span className="sawa-wordmark">
+      <strong>Sawa</strong>
+      <em>Tours</em>
+    </span>
+  );
+}
+
+const PUBLIC_LINKS = [
+  { label: "Tours", to: "/tours" },
+  { label: "How it works", to: "/how-it-works" },
+  { label: "About", to: "/about" },
+  { label: "Contact", to: "/contact" },
+];
+
+function PublicNav({ navigate, path = "/" }) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const go = (to) => { setMenuOpen(false); navigate(to); };
+  const isActive = (to) => path === to || (to !== "/" && path.startsWith(to));
+
+  useEffect(() => {
+    document.body.style.overflow = menuOpen ? "hidden" : "";
+    return () => { document.body.style.overflow = ""; };
+  }, [menuOpen]);
+
+  return (
+    <>
+      <header className="public-nav">
+        <button className="public-brand" onClick={() => go("/")} aria-label="Sawa Tours home">
+          <SawaMark size={30} />
+          <SawaWordmark />
+        </button>
+        <nav className="public-nav-links">
+          {PUBLIC_LINKS.map((l) => (
+            <a
+              key={l.to}
+              href={l.to}
+              className={isActive(l.to) ? "active" : ""}
+              onClick={(e) => { e.preventDefault(); go(l.to); }}
+            >
+              {l.label}
+            </a>
+          ))}
+        </nav>
+        <div className="public-nav-right">
+          <button className="nav-cta" onClick={() => go("/tours")}>
+            Book now
+            <span className="nav-cta-icon"><ArrowRight size={15} /></span>
+          </button>
+          <button
+            className="nav-burger"
+            aria-label={menuOpen ? "Close menu" : "Open menu"}
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen((v) => !v)}
+          >
+            {menuOpen ? <X size={22} /> : <Menu size={22} />}
+          </button>
+        </div>
+      </header>
+
+      {menuOpen && (
+        <div className="nav-overlay" role="dialog" aria-modal="true">
+          <nav className="nav-overlay-links">
+            {PUBLIC_LINKS.map((l, i) => (
+              <a
+                key={l.to}
+                href={l.to}
+                style={{ "--i": i }}
+                className={isActive(l.to) ? "active" : ""}
+                onClick={(e) => { e.preventDefault(); go(l.to); }}
+              >
+                {l.label}
+              </a>
+            ))}
+            <a href="/faq" style={{ "--i": PUBLIC_LINKS.length }} onClick={(e) => { e.preventDefault(); go("/faq"); }}>FAQ</a>
+          </nav>
+          <button className="nav-overlay-cta" onClick={() => go("/tours")}>
+            Book now <ArrowRight size={18} />
+          </button>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -1258,38 +1379,461 @@ function SectionHeading({ kicker, title }) {
 
 function PublicFooter({ navigate }) {
   return (
-    <footer className="footer-min">
-      <button className="footer-min-brand" onClick={() => navigate("/")}>
-        <span className="brand-mark">S</span>
-        <strong>Sawa Tours</strong>
+    <footer className="footer-bare">
+      <button className="footer-bare-brand" onClick={() => navigate("/")}>
+        <SawaMark size={24} />
+        <SawaWordmark />
       </button>
-
-      <p className="footer-min-tag">Egypt tours that actually run.</p>
-
-      <button className="footer-min-cta" onClick={() => scrollToBooking(navigate)}>
-        Book now
-        <span className="footer-min-arrow"><ArrowRight size={16} /></span>
-      </button>
-
-      <nav className="footer-min-links">
-        <a href="/#live-departures">Tours</a>
-        <a href="/#how-it-works">How it works</a>
-        <a href="/#reviews">Reviews</a>
-        <a href="https://wa.me/201092847613" target="_blank" rel="noreferrer">WhatsApp</a>
+      <nav className="footer-bare-links">
+        <button onClick={() => navigate("/faq")}>FAQ</button>
+        <button onClick={() => navigate("/privacy")}>Privacy</button>
+        <button onClick={() => navigate("/terms")}>Terms</button>
+        <button onClick={() => navigate("/agency")}>Agency login</button>
       </nav>
-
-      <div className="footer-min-legal">
-        <span>© {new Date().getFullYear()} Sawa Tours · Licensed in Cairo</span>
-        <span className="footer-min-dot" aria-hidden="true">·</span>
-        <a href="/privacy">Privacy</a>
-        <a href="/terms">Terms</a>
-        <button className="footer-agency-link" onClick={() => navigate("/agency")}>Agency login</button>
-      </div>
+      <span className="footer-bare-copy">© {new Date().getFullYear()} Sawa Tours</span>
     </footer>
   );
 }
 
 // Renders trusted admin-authored HTML (TipTap output), or plain-text fallback.
+// ============================================================
+// PUBLIC PAGES — standalone marketing / legal / utility pages
+// ============================================================
+
+function PublicRoute({ page, path, navigate, customerCalendars, customerSummary, cityStats, selectedCity, setSelectedCity }) {
+  switch (page) {
+    case "tours":
+      return (
+        <ToursPage
+          navigate={navigate}
+          customerCalendars={customerCalendars}
+          cityStats={cityStats}
+          selectedCity={selectedCity}
+          setSelectedCity={setSelectedCity}
+        />
+      );
+    case "how": return <HowItWorksPage navigate={navigate} customerSummary={customerSummary} />;
+    case "about": return <AboutPage navigate={navigate} customerSummary={customerSummary} />;
+    case "contact": return <ContactPage navigate={navigate} />;
+    case "faq": return <FaqPage navigate={navigate} />;
+    case "privacy": return <LegalPage kind="privacy" navigate={navigate} />;
+    case "terms": return <LegalPage kind="terms" navigate={navigate} />;
+    case "booking": return <BookingLookupPage navigate={navigate} path={path} />;
+    default: return <NotFoundPage navigate={navigate} />;
+  }
+}
+
+function PageHead({ eyebrow, title, lead }) {
+  return (
+    <header className="page-head reveal in">
+      {eyebrow && <p className="page-eyebrow">{eyebrow}</p>}
+      <h1>{title}</h1>
+      {lead && <p className="page-lead">{lead}</p>}
+    </header>
+  );
+}
+
+// ---- /tours : full catalog ----
+function ToursPage({ navigate, customerCalendars, cityStats, selectedCity, setSelectedCity }) {
+  const [view, setView] = useState("all");
+  const [q, setQ] = useState("");
+  const cities = ["All cities", ...cityStats.map((c) => c.name)];
+
+  let items = customerCalendars.filter((p) => selectedCity === "All cities" || p.city === selectedCity);
+  if (view === "day_tours") items = items.filter((p) => !isPackage(p));
+  if (view === "packages") items = items.filter((p) => isPackage(p));
+  if (q.trim()) {
+    const t = q.trim().toLowerCase();
+    items = items.filter((p) => `${p.title} ${p.city} ${(p.cities || []).join(" ")}`.toLowerCase().includes(t));
+  }
+  items = items.slice().sort((a, b) => {
+    const al = a.dates[0], bl = b.dates[0];
+    const as = al ? seatsTotal(al.pledges) : 0, bs = bl ? seatsTotal(bl.pledges) : 0;
+    const ac = as >= goAheadFor(al || a) ? 1 : 0, bc = bs >= goAheadFor(bl || b) ? 1 : 0;
+    return bc - ac || bs - as;
+  });
+
+  return (
+    <div className="page-wrap">
+      <PageHead
+        eyebrow="Browse"
+        title="Find a departure that's going."
+        lead="Every tour shows live seats and whether the date is confirmed to run. Hold a seat for free — you only pay once it's GoAhead."
+      />
+
+      <div className="tours-toolbar reveal in">
+        <div className="tours-cities">
+          {cities.map((c) => (
+            <button
+              key={c}
+              className={selectedCity === c ? "chip on" : "chip"}
+              onClick={() => setSelectedCity(c)}
+            >
+              {c === "All cities" ? "All Egypt" : c}
+            </button>
+          ))}
+        </div>
+        <div className="tours-toolbar-right">
+          <div className="seg" role="tablist">
+            <button role="tab" aria-selected={view === "all"} className={view === "all" ? "on" : ""} onClick={() => setView("all")}>All</button>
+            <button role="tab" aria-selected={view === "day_tours"} className={view === "day_tours" ? "on" : ""} onClick={() => setView("day_tours")}>Day tours</button>
+            <button role="tab" aria-selected={view === "packages"} className={view === "packages" ? "on" : ""} onClick={() => setView("packages")}>Packages</button>
+          </div>
+          <label className="tours-search">
+            <Search size={16} />
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search tours…" />
+          </label>
+        </div>
+      </div>
+
+      {items.length === 0 ? (
+        <div className="page-empty reveal in">
+          <MapPin size={26} />
+          <strong>No tours match that yet.</strong>
+          <p>Try another city or clear your search.</p>
+          <button className="btn-pill" onClick={() => { setView("all"); setQ(""); setSelectedCity("All cities"); }}>Clear filters</button>
+        </div>
+      ) : (
+        <div className="departure-modules tours-grid reveal in">
+          {items.map((p) => (
+            isPackage(p)
+              ? <PackageCard key={p.id} navigate={navigate} product={p} />
+              : <TourCard key={p.id} navigate={navigate} product={p} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---- /how-it-works ----
+function HowItWorksPage({ navigate, customerSummary }) {
+  const steps = [
+    { n: "01", t: "Hold a seat, free", d: "Pick a date and reserve your spot with no card and no deposit. You're simply joining the group that's forming for that day." },
+    { n: "02", t: "The group fills", d: "As more travellers book the same date, it moves toward GoAhead. The shared cost of the guide and vehicle is split across everyone, so the price stays fair." },
+    { n: "03", t: "It runs — guaranteed", d: "Once the minimum number of travellers is reached, we confirm the guide and transport and take your deposit. If a date never fills, you pay nothing." },
+  ];
+  return (
+    <div className="page-wrap">
+      <PageHead
+        eyebrow="How Sawa works"
+        title="Your seat is free until the trip is real."
+        lead="“Sawa” means together. We pool small bookings from different travellers into one shared group, so day tours and packages actually run — and you never pay for a date that isn't confirmed."
+      />
+
+      <div className="how2-steps reveal in">
+        {steps.map((s) => (
+          <article className="how2-step" key={s.n}>
+            <span className="how2-num">{s.n}</span>
+            <h3>{s.t}</h3>
+            <p>{s.d}</p>
+          </article>
+        ))}
+      </div>
+
+      <section className="how2-goahead reveal in">
+        <div className="how2-goahead-mark"><SawaMark size={64} /></div>
+        <div>
+          <p className="page-eyebrow">The gold dot</p>
+          <h2>GoAhead means your tour is confirmed.</h2>
+          <p>When a date reaches its minimum travellers, it turns GoAhead — the guide and vehicle are booked and the departure is locked in. Until then, your seat is just a free hold. No surprises, no last-minute cancellations after you've paid.</p>
+        </div>
+      </section>
+
+      <section className="how2-trust reveal in">
+        <div className="how2-trust-item"><Users size={20} /><div><strong>Small groups</strong><span>Shared, never crowded — a real guide, not a mega-bus.</span></div></div>
+        <div className="how2-trust-item"><ShieldCheck size={20} /><div><strong>Verified operators</strong><span>Licensed Egyptian guides and checked vehicles on every trip.</span></div></div>
+        <div className="how2-trust-item"><BadgeCheck size={20} /><div><strong>No payment until confirmed</strong><span>You're only charged once the date is guaranteed to run.</span></div></div>
+      </section>
+
+      <PageCTA navigate={navigate} note={`${customerSummary?.goAheadDates ?? 0} groups going ahead right now`} />
+    </div>
+  );
+}
+
+// ---- /about ----
+function AboutPage({ navigate, customerSummary }) {
+  return (
+    <div className="page-wrap">
+      <PageHead
+        eyebrow="About Sawa"
+        title="Shared departures, confirmed together."
+        lead="Sawa is a Cairo-based shared-tour platform. We connect independent travellers heading the same way on the same day, so small bookings become real, guaranteed group departures across Egypt."
+      />
+
+      <section className="about-lead reveal in">
+        <div className="about-lead-text">
+          <h2>Why we built it</h2>
+          <p>Booking a day tour in Egypt usually means two bad options: pay a premium for a private car, or book a cheap group tour that quietly gets cancelled when not enough people sign up. Sawa fixes the second problem. By pooling bookings from multiple agencies and travellers into one shared group, a date only needs a handful of people to become guaranteed — and everyone shares a fair price.</p>
+          <p>You hold your seat for free and watch the group fill in real time. The moment it reaches GoAhead, the guide and vehicle are locked in. You only pay when the trip is real.</p>
+        </div>
+        <aside className="about-stats">
+          <div><strong>{customerSummary?.tours ?? 0}</strong><span>tours &amp; packages</span></div>
+          <div><strong>{customerSummary?.goAheadDates ?? 0}</strong><span>going ahead now</span></div>
+          <div><strong>3</strong><span>cities: Cairo, Luxor, Aswan</span></div>
+        </aside>
+      </section>
+
+      <section className="about-pillars reveal in">
+        <article><Users size={22} /><h3>Small groups</h3><p>Shared, never crowded. A proper guide and a comfortable vehicle, not a packed coach.</p></article>
+        <article><ShieldCheck size={22} /><h3>Verified operators</h3><p>Every departure runs with licensed Egyptian guides and inspected transport.</p></article>
+        <article><CalendarDays size={22} /><h3>Real departures</h3><p>Dates are confirmed before you pay — what you book is what actually runs.</p></article>
+      </section>
+
+      <PageCTA navigate={navigate} />
+    </div>
+  );
+}
+
+// ---- /contact ----
+function ContactPage({ navigate }) {
+  const [form, setForm] = useState({ name: "", email: "", message: "" });
+  const [sent, setSent] = useState(false);
+  const set = (k) => (e) => setForm((s) => ({ ...s, [k]: e.target.value }));
+  const submit = (e) => {
+    e.preventDefault();
+    const body = encodeURIComponent(`From: ${form.name} (${form.email})\n\n${form.message}`);
+    window.location.href = `mailto:hello@sawatours.org?subject=${encodeURIComponent("Sawa enquiry")}&body=${body}`;
+    setSent(true);
+  };
+  return (
+    <div className="page-wrap">
+      <PageHead
+        eyebrow="Talk to us"
+        title="We reply within two hours."
+        lead="Questions about a date, a pickup, or a private group? Message us on WhatsApp for the fastest answer, or send a note below."
+      />
+      <div className="contact-grid reveal in">
+        <div className="contact-methods">
+          <a className="contact-card" href="https://wa.me/201092847613" target="_blank" rel="noreferrer">
+            <MessageCircle size={20} />
+            <div><strong>WhatsApp</strong><span>+20 109 284 7613</span></div>
+          </a>
+          <a className="contact-card" href="mailto:hello@sawatours.org">
+            <Mail size={20} />
+            <div><strong>Email</strong><span>hello@sawatours.org</span></div>
+          </a>
+          <div className="contact-card static">
+            <Clock3 size={20} />
+            <div><strong>Hours</strong><span>9am – 9pm Cairo time, daily</span></div>
+          </div>
+          <div className="contact-card static">
+            <MapPin size={20} />
+            <div><strong>Based in</strong><span>Cairo, Egypt · licensed operator</span></div>
+          </div>
+        </div>
+
+        <form className="contact-form" onSubmit={submit}>
+          {sent ? (
+            <div className="contact-sent">
+              <BadgeCheck size={28} />
+              <strong>Thanks — your message is on its way.</strong>
+              <p>We'll get back to you within two hours during Cairo hours. For anything urgent, reach us on WhatsApp.</p>
+            </div>
+          ) : (
+            <>
+              <label className="field"><span>Your name</span><input value={form.name} onChange={set("name")} required placeholder="Full name" /></label>
+              <label className="field"><span>Email</span><input type="email" value={form.email} onChange={set("email")} required placeholder="you@email.com" /></label>
+              <label className="field"><span>Message</span><textarea value={form.message} onChange={set("message")} required rows={5} placeholder="Which tour or date are you asking about?" /></label>
+              <button className="btn-pill primary" type="submit">Send message <ArrowRight size={16} /></button>
+            </>
+          )}
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ---- /faq ----
+const FAQ_GROUPS = [
+  {
+    title: "Booking & payment",
+    items: [
+      { q: "Do I pay when I book?", a: "No. Holding a seat is completely free. You only pay a deposit once your date reaches GoAhead and is confirmed to run." },
+      { q: "What happens if the tour doesn't fill?", a: "If a date never reaches the minimum number of travellers, it simply doesn't run and you're charged nothing. We'll let you know and help you move to another date." },
+      { q: "How much is the deposit?", a: "It varies by tour, but it's a small percentage of the total shown clearly before you confirm. The balance is settled per the tour's terms." },
+    ],
+  },
+  {
+    title: "GoAhead & how it works",
+    items: [
+      { q: "What does GoAhead mean?", a: "GoAhead means a date has reached the minimum travellers, so the guide and vehicle are booked and the departure is guaranteed to run." },
+      { q: "Can a confirmed tour still be cancelled?", a: "Once a date is GoAhead we don't cancel it for low numbers. In rare cases of safety or weather, we'll rebook or refund you." },
+    ],
+  },
+  {
+    title: "On the day",
+    items: [
+      { q: "Where do we meet?", a: "Each tour lists its exact meeting point and time — for example the Egyptian Museum in Tahrir for Cairo tours. You'll get the details with your confirmation." },
+      { q: "Are the groups large?", a: "No. Sawa runs small shared groups with a licensed guide — enough people to make the date work, never a crowded coach." },
+    ],
+  },
+  {
+    title: "Cancellations",
+    items: [
+      { q: "Can I cancel my booking?", a: "Yes. Free holds can be released any time before confirmation. After GoAhead, each tour's cancellation policy applies and is shown on the tour page." },
+    ],
+  },
+];
+
+function FaqPage({ navigate }) {
+  return (
+    <div className="page-wrap">
+      <PageHead eyebrow="FAQ" title="Questions, answered." lead="Everything about holding a seat, GoAhead, and what happens on the day. Still stuck? Talk to us on WhatsApp." />
+      <div className="faq-groups reveal in">
+        {FAQ_GROUPS.map((g) => (
+          <section className="faq-group" key={g.title}>
+            <h2>{g.title}</h2>
+            {g.items.map((it) => (
+              <details className="faq-item" key={it.q}>
+                <summary><span>{it.q}</span><ChevronDown size={18} /></summary>
+                <p>{it.a}</p>
+              </details>
+            ))}
+          </section>
+        ))}
+      </div>
+      <PageCTA navigate={navigate} />
+    </div>
+  );
+}
+
+// ---- /privacy and /terms ----
+function LegalPage({ kind, navigate }) {
+  const updated = "June 2026";
+  const content = kind === "privacy" ? PRIVACY_SECTIONS : TERMS_SECTIONS;
+  const title = kind === "privacy" ? "Privacy Policy" : "Terms of Service";
+  return (
+    <div className="page-wrap legal-wrap">
+      <PageHead eyebrow="Legal" title={title} lead={`Last updated ${updated}. This is a plain-language summary of how Sawa operates — please review with your own counsel before launch.`} />
+      <article className="legal-body reveal in">
+        {content.map((s) => (
+          <section key={s.h}>
+            <h2>{s.h}</h2>
+            {s.p.map((para, i) => <p key={i}>{para}</p>)}
+          </section>
+        ))}
+        <p className="legal-contact">Questions about this policy? Email <a href="mailto:hello@sawatours.org">hello@sawatours.org</a>.</p>
+      </article>
+    </div>
+  );
+}
+
+const PRIVACY_SECTIONS = [
+  { h: "What we collect", p: ["When you hold a seat or book a tour, we collect the details you give us — your name, email, phone number, the travellers in your party, and the tour and date you choose.", "We also collect basic technical information such as your browser type and pages visited, to keep the service running and secure."] },
+  { h: "How we use it", p: ["We use your information to confirm departures, contact you about your booking, take payment when a date is confirmed, and provide support. Agencies you book through can see the booking details needed to run your tour.", "We do not sell your personal information."] },
+  { h: "Who sees it", p: ["Your booking details are shared only with the operating agency and our operations team, strictly to deliver your tour. Payment is handled by our payment provider; we don't store full card details."] },
+  { h: "Your choices", p: ["You can ask us to access, correct, or delete your information at any time by emailing us. You can opt out of non-essential messages while still receiving booking updates."] },
+  { h: "Data retention", p: ["We keep booking records for as long as needed to provide the service and meet legal and accounting obligations, then delete or anonymise them."] },
+];
+
+const TERMS_SECTIONS = [
+  { h: "The Sawa model", p: ["Sawa pools bookings from multiple travellers and agencies into shared group departures. Holding a seat is free and does not guarantee the tour will run. A departure becomes confirmed (GoAhead) only when it reaches the minimum number of travellers."] },
+  { h: "Bookings & payment", p: ["You pay nothing to hold a seat. Once a date reaches GoAhead, the deposit shown at booking becomes due to confirm your place. The remaining balance is payable per the individual tour's terms.", "Prices are shown per person and may vary with group size, accommodation tier, and room type for packages."] },
+  { h: "Cancellations", p: ["You may release a free hold at any time before confirmation at no cost. After a date is confirmed, the cancellation policy shown on that tour applies. Sawa and its operators may cancel for reasons of safety, weather, or force majeure, in which case we will rebook or refund you."] },
+  { h: "On the day", p: ["You are responsible for arriving at the listed meeting point at the stated time. Tours depart on schedule; missed departures due to late arrival are not refundable."] },
+  { h: "Operators", p: ["Tours are delivered by licensed Egyptian operators. Sawa coordinates the shared booking; the operating agency is responsible for the conduct of the tour itself."] },
+  { h: "Liability", p: ["To the extent permitted by law, Sawa's liability is limited to the amount you paid for the affected booking. Please ensure you have appropriate travel insurance."] },
+];
+
+// ---- /booking : look up a booking by code ----
+function BookingLookupPage({ navigate, path }) {
+  const initial = decodeURIComponent((path.match(/^\/booking\/([^/]+)/) || [])[1] || "");
+  const [code, setCode] = useState(initial);
+  const [state, setState] = useState({ status: "idle", data: null, error: "" });
+
+  async function lookup(e) {
+    if (e) e.preventDefault();
+    const c = code.trim();
+    if (!c) return;
+    setState({ status: "loading", data: null, error: "" });
+    try {
+      const r = await fetch(`${API_BASE}/public/bookings/${encodeURIComponent(c)}`);
+      if (r.status === 404) { setState({ status: "notfound", data: null, error: "" }); return; }
+      if (!r.ok) throw new Error("Something went wrong. Please try again.");
+      const j = await r.json();
+      setState({ status: "found", data: j.booking, error: "" });
+    } catch (err) {
+      setState({ status: "error", data: null, error: err.message });
+    }
+  }
+
+  useEffect(() => { if (initial) lookup(); /* eslint-disable-next-line */ }, []);
+
+  const b = state.data;
+  return (
+    <div className="page-wrap">
+      <PageHead eyebrow="Your booking" title="Check your departure." lead="Enter the booking code from your confirmation to see whether your date has reached GoAhead." />
+      <form className="booking-lookup reveal in" onSubmit={lookup}>
+        <label className="field">
+          <span>Booking code</span>
+          <input value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="e.g. SAWA-7K2QX" />
+        </label>
+        <button className="btn-pill primary" type="submit" disabled={state.status === "loading"}>
+          {state.status === "loading" ? "Checking…" : "Check status"} <Search size={16} />
+        </button>
+      </form>
+
+      <div className="booking-result reveal in">
+        {state.status === "notfound" && (
+          <div className="page-empty"><Ticket size={26} /><strong>No booking found with that code.</strong><p>Double-check the code in your confirmation email, or contact us.</p><button className="btn-pill" onClick={() => navigate("/contact")}>Contact us</button></div>
+        )}
+        {state.status === "error" && <div className="form-error">{state.error}</div>}
+        {state.status === "found" && b && (
+          <article className={`booking-card ${b.confirmed ? "is-go" : ""}`}>
+            <div className="booking-card-status">
+              <span className={`booking-badge ${b.statusTone}`}>{b.statusLabel}</span>
+              <span className="booking-code">{b.code}</span>
+            </div>
+            <h2>{b.tourTitle}</h2>
+            <div className="booking-meta">
+              <div><CalendarDays size={16} /> {b.dateLabel}</div>
+              <div><Users size={16} /> {b.seats} {b.seats === 1 ? "seat" : "seats"}</div>
+              {b.city && <div><MapPin size={16} /> {b.city}</div>}
+            </div>
+            <div className="booking-progress">
+              <div className="booking-progress-row"><span>{b.seatsBooked}/{b.goAhead} seats to confirm</span><b>{b.confirmed ? "GoAhead — confirmed" : "Still forming"}</b></div>
+              <i><em style={{ width: `${Math.min(100, (b.seatsBooked / Math.max(1, b.goAhead)) * 100)}%` }} /></i>
+            </div>
+            <p className="booking-note">{b.confirmed
+              ? "Your date is confirmed — the guide and transport are booked. See your confirmation email for the meeting point and time."
+              : "Your seat is held. We'll let you know the moment this date reaches GoAhead."}</p>
+          </article>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ---- 404 ----
+function NotFoundPage({ navigate }) {
+  return (
+    <div className="page-wrap page-404">
+      <div className="reveal in">
+        <SawaMark size={56} />
+        <h1>This page wandered off.</h1>
+        <p>The page you're looking for doesn't exist — but plenty of tours do.</p>
+        <div className="page-404-actions">
+          <button className="btn-pill primary" onClick={() => navigate("/tours")}>Browse tours <ArrowRight size={16} /></button>
+          <button className="btn-pill" onClick={() => navigate("/")}>Back home</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Shared closing call-to-action used across marketing pages.
+function PageCTA({ navigate, note }) {
+  return (
+    <section className="page-cta reveal in">
+      {note && <p className="page-cta-note"><span className="live-dot" aria-hidden="true" />{note}</p>}
+      <h2>Ready when your group is.</h2>
+      <p>Hold a seat for free and watch it turn GoAhead.</p>
+      <button className="btn-pill primary lg" onClick={() => navigate("/tours")}>Browse tours <ArrowRight size={18} /></button>
+    </section>
+  );
+}
+
 function RichBlock({ html, fallback }) {
   if (html && html.replace(/<[^>]*>/g, "").trim()) {
     return <div className="rich" dangerouslySetInnerHTML={{ __html: html }} />;
@@ -1324,14 +1868,29 @@ function Gallery({ product }) {
 function TourExtras({ product }) {
   const bring = (product.whatToBring || []).filter(Boolean);
   const hasPolicy = product.policiesHtml && product.policiesHtml.replace(/<[^>]*>/g, "").trim();
-  if (!product.meetingPoint && !product.pickupNote && !bring.length && !hasPolicy) return null;
+  const points = (product.meetingPoints || []).filter((m) => m && m.point);
+  const hasMeeting = points.length > 0 || product.meetingPoint || product.pickupNote;
+  if (!hasMeeting && !bring.length && !hasPolicy) return null;
   return (
     <div className="tour-extras">
-      {(product.meetingPoint || product.pickupNote) && (
+      {hasMeeting && (
         <div className="extra-block">
-          <h3><MapPin size={16} />Meeting & pickup</h3>
-          {product.meetingPoint && <p>{product.meetingPoint}</p>}
-          {product.pickupNote && <p className="muted-line">{product.pickupNote}</p>}
+          <h3><MapPin size={16} />Meeting &amp; pickup</h3>
+          {points.length > 0 ? (
+            <ul className="meet-points">
+              {points.map((m, i) => (
+                <li key={i}>
+                  <strong>{m.point}</strong>
+                  {m.note && <span>{m.note}</span>}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <>
+              {product.meetingPoint && <p>{product.meetingPoint}</p>}
+              {product.pickupNote && <p className="muted-line">{product.pickupNote}</p>}
+            </>
+          )}
         </div>
       )}
       {bring.length > 0 && (

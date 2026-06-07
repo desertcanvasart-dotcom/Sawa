@@ -53,6 +53,7 @@ export function mapProduct(r) {
     whatToBring: r.what_to_bring ?? [],
     meetingPoint: r.meeting_point ?? "",
     pickupNote: r.pickup_note ?? "",
+    meetingPoints: r.meeting_points ?? [],
     bookingCutoffHours: r.booking_cutoff_hours == null ? 24 : num(r.booking_cutoff_hours),
     images: r.images ?? [],
   };
