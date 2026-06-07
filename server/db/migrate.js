@@ -17,6 +17,7 @@ const MIGRATIONS = [
   { name: "006_tour_rich", file: "schema_006_tour_rich.sql" },
   { name: "007_booking_lifecycle", file: "schema_007_booking_lifecycle.sql" },
   { name: "008_meeting_points", file: "schema_008_meeting_points.sql" },
+  { name: "009_destinations", file: "schema_009_destinations.sql" },
 ];
 
 async function main() {

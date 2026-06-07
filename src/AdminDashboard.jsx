@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import {
   LayoutDashboard, Package, CalendarDays, Users, ClipboardList, ScrollText,
   Plus, Check, X, Search, Archive, ArchiveRestore, CircleDollarSign, ShieldCheck,
-  TrendingUp, AlertTriangle, MapPin, Hotel, ArrowUpRight, Trash2, Pencil,
+  TrendingUp, AlertTriangle, MapPin, Hotel, ArrowUpRight, ArrowLeft, Trash2, Pencil,
 } from "lucide-react";
 import { apiFetch, supabase, uploadImage } from "./supabaseClient";
 import { DashSidebar } from "./DashSidebar";
@@ -12,23 +12,8 @@ const money = (n) => (n == null ? "—" : "$" + Number(n).toLocaleString());
 const fmtDate = (d) => (d ? new Intl.DateTimeFormat("en", { month: "short", day: "numeric", year: "numeric" }).format(new Date(d)) : "—");
 const isPkg = (x) => x?.type === "package";
 
-// Preset meeting points per city (per operations rules). Admin ticks the ones
-// that apply; a tour can carry more than one (e.g. Cairo & Giza day tours).
-const MEETING_POINT_PRESETS = {
-  Cairo: [
-    { point: "In front of the Egyptian Museum (Tahrir)", note: "Be there by 8:00 AM at the latest" },
-    { point: "In front of Marriott Mena House, Giza", note: "Be there by 8:45 AM at the latest" },
-  ],
-  Luxor: [
-    { point: "In front of Steigenberger Resort Achti, Luxor (formerly Etap)", note: "East Bank tour — departs 8:30 AM" },
-    { point: "In front of Steigenberger Resort Achti, Luxor (formerly Etap)", note: "West Bank tour — departs 7:30 AM" },
-    { point: "In front of Steigenberger Resort Achti, Luxor (formerly Etap)", note: "Dendera, Abydos or Aswan — departs 7:15 AM" },
-  ],
-  Aswan: [
-    { point: "Coptic Orthodox Cathedral of the Archangel Michael, Aswan", note: "Aswan day tour — departs 8:30 AM" },
-    { point: "Coptic Orthodox Cathedral of the Archangel Michael, Aswan", note: "Abu Simbel or Luxor — departs 6:30 AM" },
-  ],
-};
+// Meeting points are now managed per-destination (Destinations section) and the
+// tour editor reads them from the selected destination.
 const samePoint = (a, b) => a.point === b.point && a.note === b.note;
 const seatsOf = (d) => (d.pledges || []).reduce((s, p) => s + Number(p.seats || 0), 0);
 
@@ -40,6 +25,7 @@ const NAV_GROUPS = [
     items: [
       { id: "overview", label: "Overview", icon: LayoutDashboard },
       { id: "tours", label: "Tours & Packages", icon: Package },
+      { id: "destinations", label: "Destinations", icon: MapPin },
       { id: "departures", label: "Departures", icon: CalendarDays, alert: (s) => s?.departureStatus?.readyToConfirm || 0 },
       { id: "bookings", label: "Bookings", icon: ClipboardList },
       { id: "agencies", label: "Agencies", icon: Users },
@@ -53,18 +39,21 @@ export function AdminDashboard({ user, agency, signOut, navigate }) {
   const [section, setSection] = useState("overview");
   const [data, setData] = useState(null);       // bootstrap
   const [stats, setStats] = useState(null);
+  const [destinations, setDestinations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState("");
 
   async function loadAll() {
     setLoading(true);
     try {
-      const [boot, st] = await Promise.all([
+      const [boot, st, dest] = await Promise.all([
         apiFetch("/bootstrap").then((r) => r.json()),
         apiFetch("/admin/stats").then((r) => r.json()),
+        apiFetch("/admin/destinations").then((r) => r.json()).catch(() => ({ destinations: [] })),
       ]);
       setData(boot);
       setStats(st);
+      setDestinations(dest.destinations || []);
     } catch (e) {
       setNotice("Could not load dashboard data.");
     } finally {
@@ -95,7 +84,8 @@ export function AdminDashboard({ user, agency, signOut, navigate }) {
         {!loading && data && (
           <>
             {section === "overview" && <Overview stats={stats} data={data} onGo={setSection} />}
-            {section === "tours" && <ToursSection data={data} reload={loadAll} flash={flash} />}
+            {section === "tours" && <ToursSection data={data} destinations={destinations} reload={loadAll} flash={flash} />}
+            {section === "destinations" && <DestinationsSection destinations={destinations} reload={loadAll} flash={flash} />}
             {section === "departures" && <DeparturesSection data={data} reload={loadAll} flash={flash} />}
             {section === "bookings" && <BookingsSection />}
             {section === "agencies" && <AgenciesSection flash={flash} />}
@@ -189,7 +179,7 @@ function StatusRow({ tone, icon: Icon, label, value }) {
 function Empty({ label }) { return <div className="dash-empty">{label}</div>; }
 
 /* ---------------- Tours & Packages ---------------- */
-function ToursSection({ data, reload, flash }) {
+function ToursSection({ data, destinations = [], reload, flash }) {
   const [editor, setEditor] = useState(null); // null | {type}
   const products = data.tourProducts || [];
 
@@ -199,6 +189,19 @@ function ToursSection({ data, reload, flash }) {
       body: JSON.stringify({ active: !(p.active !== false) }),
     });
     if (r.ok) { flash(p.active !== false ? "Tour archived." : "Tour restored."); reload(); }
+  }
+
+  // Full-page editor takes over the section when adding/editing.
+  if (editor) {
+    return (
+      <ProductEditor
+        type={editor.type}
+        existing={editor.existing}
+        destinations={destinations}
+        onClose={() => setEditor(null)}
+        onSaved={() => { setEditor(null); flash(editor.existing ? "Tour updated." : "Tour created."); reload(); }}
+      />
+    );
   }
 
   return (
@@ -237,29 +240,126 @@ function ToursSection({ data, reload, flash }) {
         </table>
       </div>
 
+    </>
+  );
+}
+
+/* ---------------- Destinations ---------------- */
+function DestinationsSection({ destinations, reload, flash }) {
+  const [editor, setEditor] = useState(null); // null | {} | { existing }
+
+  async function remove(d) {
+    if (!window.confirm(`Delete "${d.name}"? Tours that already saved its meeting points keep them.`)) return;
+    const r = await apiFetch(`/admin/destinations/${d.id}`, { method: "DELETE" });
+    if (r.ok) { flash("Destination deleted."); reload(); }
+  }
+
+  return (
+    <>
+      <PageHead
+        title="Destinations"
+        sub="Cities travellers can book in. Each destination owns its meeting points — tours pick a destination and inherit them."
+        action={<button className="btn-primary" onClick={() => setEditor({})}><Plus size={16} />Add destination</button>}
+      />
+      <div className="table-wrap">
+        <table className="dash-table">
+          <thead><tr><th>Name</th><th>Meeting points</th><th>Status</th><th></th></tr></thead>
+          <tbody>
+            {destinations.map((d) => (
+              <tr key={d.id}>
+                <td><strong>{d.name}</strong></td>
+                <td>{(d.meetingPoints?.length || 0)} {(d.meetingPoints?.length || 0) === 1 ? "point" : "points"}</td>
+                <td>{d.active === false ? <span className="tag tag-off">Hidden</span> : <span className="tag tag-on">Active</span>}</td>
+                <td className="row-actions">
+                  <button className="icon-btn" title="Edit" onClick={() => setEditor({ existing: d })}><Pencil size={15} /></button>
+                  <button className="icon-btn" title="Delete" onClick={() => remove(d)}><Trash2 size={15} /></button>
+                </td>
+              </tr>
+            ))}
+            {destinations.length === 0 && <tr><td colSpan={4}><Empty label="No destinations yet. Add your first city." /></td></tr>}
+          </tbody>
+        </table>
+      </div>
       {editor && (
-        <ProductEditor
-          type={editor.type}
+        <DestinationEditor
           existing={editor.existing}
           onClose={() => setEditor(null)}
-          onSaved={() => { setEditor(null); flash(editor.existing ? "Tour updated." : "Tour created."); reload(); }}
+          onSaved={() => { setEditor(null); flash("Destination saved."); reload(); }}
         />
       )}
     </>
   );
 }
 
+function DestinationEditor({ existing, onClose, onSaved }) {
+  const [name, setName] = useState(existing?.name || "");
+  const [active, setActive] = useState(existing?.active !== false);
+  const [points, setPoints] = useState(existing?.meetingPoints?.length ? existing.meetingPoints : [{ point: "", note: "" }]);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+
+  async function save() {
+    setErr("");
+    if (!name.trim()) return setErr("Destination name is required.");
+    setBusy(true);
+    try {
+      const body = {
+        name: name.trim(),
+        active,
+        meetingPoints: points.map((p) => ({ point: (p.point || "").trim(), note: (p.note || "").trim() })).filter((p) => p.point),
+      };
+      if (existing?.id) body.id = existing.id;
+      const r = await apiFetch("/admin/destinations", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || "Could not save.");
+      onSaved();
+    } catch (e) { setErr(e.message); } finally { setBusy(false); }
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-head">
+          <h2>{existing ? "Edit destination" : "New destination"}</h2>
+          <button className="icon-btn" onClick={onClose}><X size={18} /></button>
+        </div>
+        <div className="modal-body">
+          <Field label="Destination name"><input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Alexandria" /></Field>
+          <label className="dest-toggle">
+            <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} />
+            <span>Visible to travellers</span>
+          </label>
+          <div className="modal-subhead dest-mp-head"><h3>Meeting points</h3><button type="button" className="btn-ghost sm" onClick={() => setPoints((p) => [...p, { point: "", note: "" }])}><Plus size={14} />Add meeting point</button></div>
+          {points.map((p, i) => (
+            <div className="itin-row" key={i}>
+              <input placeholder="Location (e.g. In front of the Egyptian Museum, Tahrir)" value={p.point} onChange={(e) => setPoints((ps) => ps.map((x, j) => j === i ? { ...x, point: e.target.value } : x))} />
+              <input placeholder="Time note (Be there by 8:00 AM / Departs 7:30 AM)" value={p.note} onChange={(e) => setPoints((ps) => ps.map((x, j) => j === i ? { ...x, note: e.target.value } : x))} />
+              <button type="button" className="icon-btn" onClick={() => setPoints((ps) => ps.filter((_, j) => j !== i))}><Trash2 size={14} /></button>
+            </div>
+          ))}
+          {err && <p className="dest-err">{err}</p>}
+        </div>
+        <div className="modal-foot">
+          <button type="button" className="btn-ghost" onClick={onClose}>Cancel</button>
+          <button type="button" className="btn-primary" disabled={busy} onClick={save}>{busy ? "Saving…" : "Save destination"}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const STEPS = ["Details", "Content", "Itinerary", "Dates"];
 
-function ProductEditor({ type: typeProp, existing, onClose, onSaved }) {
+function ProductEditor({ type: typeProp, existing, destinations = [], onClose, onSaved }) {
   const editing = !!existing;
   const type = existing?.type || typeProp;
   const pkg = type === "package";
   const [step, setStep] = useState(0);
 
+  const firstDest = destinations.find((d) => d.active !== false)?.name || destinations[0]?.name || "Cairo";
   const [f, setF] = useState({
     title: existing?.title || "",
-    city: existing?.city || "Cairo",
+    city: existing?.city || firstDest,
     cities: (existing?.cities || ["Cairo", "Luxor"]).join(", "),
     nights: existing?.nights || 3,
     duration: existing?.duration || "",
@@ -302,6 +402,17 @@ function ProductEditor({ type: typeProp, existing, onClose, onSaved }) {
   const [err, setErr] = useState("");
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }));
   const clean = (arr) => arr.map((x) => x.trim()).filter(Boolean);
+
+  // Meeting-point presets come from the selected destination (managed in the
+  // Destinations section). Falls back gracefully if the city has no destination.
+  const destByName = Object.fromEntries(destinations.map((d) => [d.name, d]));
+  const cityPresets = destByName[f.city]?.meetingPoints || [];
+  const allPresetPoints = destinations.flatMap((d) => d.meetingPoints || []);
+  const cityOptions = (() => {
+    const names = destinations.filter((d) => d.active !== false).map((d) => d.name);
+    if (f.city && !names.includes(f.city)) names.unshift(f.city);
+    return names.length ? names : ["Cairo", "Luxor", "Aswan"];
+  })();
 
   async function handleUpload(fileList) {
     const files = Array.from(fileList || []);
@@ -371,13 +482,10 @@ function ProductEditor({ type: typeProp, existing, onClose, onSaved }) {
   const last = STEPS.length - 1;
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal modal-wide" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-head">
-          <h2>{editing ? "Edit " : "New "}{pkg ? "package" : "day tour"}</h2>
-          <button className="icon-btn" onClick={onClose}><X size={18} /></button>
-        </div>
-
+    <div className="editor-page">
+      <div className="editor-page-head">
+        <button className="editor-back" onClick={onClose}><ArrowLeft size={16} />Back to Tours</button>
+        <h1>{editing ? "Edit " : "New "}{pkg ? "package" : "day tour"}</h1>
         <div className="wiz-steps">
           {STEPS.map((s, i) => (
             <button key={s} className={`wiz-step ${i === step ? "active" : ""} ${i < step ? "done" : ""}`} onClick={() => setStep(i)}>
@@ -385,12 +493,13 @@ function ProductEditor({ type: typeProp, existing, onClose, onSaved }) {
             </button>
           ))}
         </div>
+      </div>
 
-        <div className="modal-body">
+      <div className="editor-page-body">
           {step === 0 && (
             <div className="form-grid">
               <Field label="Title" full><input value={f.title} onChange={set("title")} placeholder={pkg ? "Cairo & Luxor 4-day discovery" : "Giza Pyramids and Sphinx"} /></Field>
-              {!pkg && <Field label="City"><input value={f.city} onChange={set("city")} /></Field>}
+              {!pkg && <Field label="Destination"><select value={f.city} onChange={set("city")}>{cityOptions.map((c) => <option key={c} value={c}>{c}</option>)}</select></Field>}
               {pkg && <Field label="Cities (comma-separated)" full><input value={f.cities} onChange={set("cities")} placeholder="Cairo, Luxor" /></Field>}
               {pkg && <Field label="Nights"><input type="number" min="1" value={f.nights} onChange={set("nights")} /></Field>}
               <Field label="Duration label"><input value={f.duration} onChange={set("duration")} placeholder={pkg ? "4 days · 3 nights" : "4 hours"} /></Field>
@@ -428,10 +537,10 @@ function ProductEditor({ type: typeProp, existing, onClose, onSaved }) {
               <RowList label="Not included" rows={notIncluded} setRows={setNotIncluded} placeholder="e.g. Entrance tickets" />
               <RowList label="What to bring" rows={whatToBring} setRows={setWhatToBring} placeholder="e.g. Sun hat, comfortable shoes" />
               <Field label="Meeting points" full>
-                {!pkg && (MEETING_POINT_PRESETS[f.city] || []).length > 0 && (
+                {!pkg && cityPresets.length > 0 && (
                   <div className="mp-presets">
-                    <span className="mp-presets-hint">Standard {f.city} meeting points — tick the ones that apply:</span>
-                    {(MEETING_POINT_PRESETS[f.city] || []).map((preset, i) => {
+                    <span className="mp-presets-hint">{f.city} meeting points (from Destinations) — tick the ones that apply:</span>
+                    {cityPresets.map((preset, i) => {
                       const on = meetingPoints.some((m) => samePoint(m, preset));
                       return (
                         <label className={on ? "mp-preset on" : "mp-preset"} key={i}>
@@ -445,9 +554,12 @@ function ProductEditor({ type: typeProp, existing, onClose, onSaved }) {
                     })}
                   </div>
                 )}
+                {!pkg && cityPresets.length === 0 && (
+                  <span className="mp-presets-hint">No saved meeting points for {f.city}. Add them in the Destinations section, or add custom ones below.</span>
+                )}
                 <div className="mp-list">
                   {meetingPoints.map((m, i) => {
-                    const isPreset = Object.values(MEETING_POINT_PRESETS).flat().some((p) => samePoint(p, m));
+                    const isPreset = allPresetPoints.some((p) => samePoint(p, m));
                     if (isPreset) return null;
                     return (
                       <div className="mp-row" key={i}>
@@ -515,7 +627,7 @@ function ProductEditor({ type: typeProp, existing, onClose, onSaved }) {
           {err && <div className="auth-error" role="alert">{err}</div>}
         </div>
 
-        <div className="modal-foot wiz-foot">
+        <div className="editor-page-foot">
           <button type="button" className="btn-ghost" onClick={onClose}>Cancel</button>
           <div className="wiz-nav">
             {step > 0 && <button type="button" className="btn-ghost" onClick={() => setStep(step - 1)}>Back</button>}
@@ -523,7 +635,6 @@ function ProductEditor({ type: typeProp, existing, onClose, onSaved }) {
             {step === last && <button type="button" className="btn-primary" disabled={busy} onClick={save}>{busy ? "Saving…" : editing ? "Save changes" : (pkg ? "Create package" : "Create tour")}</button>}
           </div>
         </div>
-      </div>
     </div>
   );
 }

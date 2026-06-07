@@ -531,6 +531,62 @@ app.get("/api/public/bookings/:code", h(async (req, res) => {
   } });
 }));
 
+// ---- Destinations: tourist-facing cities, each owning its meeting points ----
+const mapDest = (d) => ({
+  id: d.id, name: d.name, meetingPoints: d.meeting_points || [],
+  active: d.active !== false, sortOrder: d.sort_order,
+});
+
+// Public: active destinations (used by the tour editor + site).
+app.get("/api/destinations", h(async (_req, res) => {
+  const r = await pool.query("SELECT * FROM destinations WHERE active = true ORDER BY sort_order, name");
+  res.json({ destinations: r.rows.map(mapDest) });
+}));
+
+// Admin: all destinations (including inactive).
+app.get("/api/admin/destinations", requireAuth, requireRole("super_admin", "ops_staff"), h(async (_req, res) => {
+  const r = await pool.query("SELECT * FROM destinations ORDER BY sort_order, name");
+  res.json({ destinations: r.rows.map(mapDest) });
+}));
+
+// Admin: create or update a destination.
+app.post("/api/admin/destinations", requireAuth, requireRole("super_admin", "ops_staff"), h(async (req, res) => {
+  const name = String(req.body?.name || "").trim();
+  if (!name) throw new AppError(422, "Destination name is required.");
+  const mps = Array.isArray(req.body?.meetingPoints)
+    ? req.body.meetingPoints.map((m) => ({ point: String(m.point || "").trim(), note: String(m.note || "").trim() })).filter((m) => m.point)
+    : [];
+  const active = req.body?.active !== false;
+  const sortOrder = Number.isFinite(Number(req.body?.sortOrder)) ? Number(req.body.sortOrder) : 0;
+  let row;
+  if (req.body?.id) {
+    const r = await pool.query(
+      "UPDATE destinations SET name=$1, meeting_points=$2, active=$3, sort_order=$4 WHERE id=$5 RETURNING *",
+      [name, JSON.stringify(mps), active, sortOrder, Number(req.body.id)]
+    );
+    if (!r.rows.length) throw new AppError(404, "Destination not found.");
+    row = r.rows[0];
+  } else {
+    const r = await pool.query(
+      `INSERT INTO destinations (name, meeting_points, active, sort_order) VALUES ($1,$2,$3,$4)
+       ON CONFLICT (name) DO UPDATE SET meeting_points=EXCLUDED.meeting_points, active=EXCLUDED.active, sort_order=EXCLUDED.sort_order
+       RETURNING *`,
+      [name, JSON.stringify(mps), active, sortOrder]
+    );
+    row = r.rows[0];
+  }
+  await logAudit(req, { action: "destination.save", entity: "destination", entityId: row.id, detail: { name } });
+  res.status(201).json({ destination: mapDest(row) });
+}));
+
+// Admin: delete a destination.
+app.delete("/api/admin/destinations/:id", requireAuth, requireRole("super_admin", "ops_staff"), h(async (req, res) => {
+  const r = await pool.query("DELETE FROM destinations WHERE id=$1 RETURNING id", [Number(req.params.id)]);
+  if (!r.rows.length) throw new AppError(404, "Destination not found.");
+  await logAudit(req, { action: "destination.delete", entity: "destination", entityId: Number(req.params.id) });
+  res.json({ ok: true });
+}));
+
 // ---- shared write helpers ----
 async function insertPledge(c, departureId, p) {
   await c.query(
