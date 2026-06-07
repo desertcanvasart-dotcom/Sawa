@@ -54,8 +54,22 @@ export function LoginGate({ children, onSession }) {
 
   if (status === "loading") {
     return (
-      <main className="auth-screen">
-        <div className="auth-card"><div className="brand-mark">S</div><p>Loading…</p></div>
+      <main className="app-loader">
+        <div className="app-loader-inner">
+          <div className="app-loader-mark">
+            <span className="app-loader-ring" aria-hidden="true" />
+            <svg className="sawa-mark" width="52" height="52" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+              <circle cx="16" cy="16" r="12.4" stroke="currentColor" strokeWidth="1.4" opacity="0.8" />
+              <path d="M21 11.4c0-2.3-3.2-3.1-5.4-1.9-2.1 1.1-2.1 3.7.6 4.8 3 1.2 3.4 4.1 1 5.4-2.2 1.2-5.4.3-5.4-2" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+              <circle cx="7.1" cy="7.1" r="2" fill="currentColor" />
+              <circle cx="24.9" cy="7.1" r="2.5" fill="#f4c95d" />
+              <circle cx="7.1" cy="24.9" r="2" fill="currentColor" />
+              <circle cx="24.9" cy="24.9" r="2" fill="currentColor" />
+            </svg>
+          </div>
+          <span className="sawa-wordmark"><strong>Sawa</strong><em>Tours</em></span>
+          <span className="app-loader-sub">Signing you in…</span>
+        </div>
       </main>
     );
   }

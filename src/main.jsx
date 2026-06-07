@@ -606,12 +606,7 @@ function App() {
   }
 
   if (isLoading) {
-    return (
-      <main className="loading-screen">
-        <div className="brand-mark">S</div>
-        <strong>Loading Sawa shared tour desk...</strong>
-      </main>
-    );
+    return <LoadingScreen />;
   }
 
   const isPortalRoute = path.startsWith("/admin") || path.startsWith("/agency") || path.startsWith("/portal");
@@ -1288,6 +1283,21 @@ function SawaWordmark() {
       <strong>Sawa</strong>
       <em>Tours</em>
     </span>
+  );
+}
+
+function LoadingScreen({ label = "Preparing your shared departures…" }) {
+  return (
+    <main className="app-loader">
+      <div className="app-loader-inner">
+        <div className="app-loader-mark">
+          <span className="app-loader-ring" aria-hidden="true" />
+          <SawaMark size={52} />
+        </div>
+        <SawaWordmark />
+        <span className="app-loader-sub">{label}</span>
+      </div>
+    </main>
   );
 }
 
