@@ -32,7 +32,9 @@ app.disable("x-powered-by");
 // In production we serve the SPA from the same origin, so relax CSP/CORP that
 // would otherwise block the bundled assets. API security is unaffected.
 app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
-app.use(express.json());
+// 12mb allows base64-encoded image uploads (~9mb raw) through /api/admin/uploads.
+// (The route-level json parser ran too late because this global one parses first.)
+app.use(express.json({ limit: "12mb" }));
 
 // --- CORS: restrict to known origins (configurable via CORS_ORIGINS) ---
 const allowedOrigins = (process.env.CORS_ORIGINS || "http://localhost:5173")
