@@ -3,6 +3,7 @@ import {
   LayoutDashboard, Package, CalendarDays, Users, ClipboardList, ScrollText,
   Plus, Check, X, Search, Archive, ArchiveRestore, CircleDollarSign, ShieldCheck,
   TrendingUp, AlertTriangle, MapPin, Hotel, ArrowUpRight, ArrowLeft, Trash2, Pencil,
+  Newspaper,
 } from "lucide-react";
 import { apiFetch, supabase, uploadImage } from "./supabaseClient";
 import { DashSidebar } from "./DashSidebar";
@@ -16,6 +17,8 @@ const isPkg = (x) => x?.type === "package";
 // tour editor reads them from the selected destination.
 const samePoint = (a, b) => a.point === b.point && a.note === b.note;
 const seatsOf = (d) => (d.pledges || []).reduce((s, p) => s + Number(p.seats || 0), 0);
+const slugify = (s) => String(s || "").toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80);
+const csv = (s) => String(s || "").split(",").map((x) => x.trim()).filter(Boolean);
 
 // Minimal flat navigation. One group, no header. Departures keeps a subtle
 // alert dot when items are ready to confirm (the one thing worth surfacing).
@@ -26,6 +29,7 @@ const NAV_GROUPS = [
       { id: "overview", label: "Overview", icon: LayoutDashboard },
       { id: "tours", label: "Tours & Packages", icon: Package },
       { id: "destinations", label: "Destinations", icon: MapPin },
+      { id: "blog", label: "Blog", icon: Newspaper },
       { id: "departures", label: "Departures", icon: CalendarDays, alert: (s) => s?.departureStatus?.readyToConfirm || 0 },
       { id: "bookings", label: "Bookings", icon: ClipboardList },
       { id: "agencies", label: "Agencies", icon: Users },
@@ -40,20 +44,23 @@ export function AdminDashboard({ user, agency, signOut, navigate }) {
   const [data, setData] = useState(null);       // bootstrap
   const [stats, setStats] = useState(null);
   const [destinations, setDestinations] = useState([]);
+  const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState("");
 
   async function loadAll() {
     setLoading(true);
     try {
-      const [boot, st, dest] = await Promise.all([
+      const [boot, st, dest, blog] = await Promise.all([
         apiFetch("/bootstrap").then((r) => r.json()),
         apiFetch("/admin/stats").then((r) => r.json()),
         apiFetch("/admin/destinations").then((r) => r.json()).catch(() => ({ destinations: [] })),
+        apiFetch("/admin/blog").then((r) => r.json()).catch(() => ({ posts: [] })),
       ]);
       setData(boot);
       setStats(st);
       setDestinations(dest.destinations || []);
+      setPosts(blog.posts || []);
     } catch (e) {
       setNotice("Could not load dashboard data.");
     } finally {
@@ -86,6 +93,7 @@ export function AdminDashboard({ user, agency, signOut, navigate }) {
             {section === "overview" && <Overview stats={stats} data={data} onGo={setSection} />}
             {section === "tours" && <ToursSection data={data} destinations={destinations} reload={loadAll} flash={flash} />}
             {section === "destinations" && <DestinationsSection destinations={destinations} reload={loadAll} flash={flash} />}
+            {section === "blog" && <BlogSection posts={posts} reload={loadAll} flash={flash} />}
             {section === "departures" && <DeparturesSection data={data} reload={loadAll} flash={flash} />}
             {section === "bookings" && <BookingsSection />}
             {section === "agencies" && <AgenciesSection flash={flash} />}
@@ -342,6 +350,185 @@ function DestinationEditor({ existing, onClose, onSaved }) {
         <div className="modal-foot">
           <button type="button" className="btn-ghost" onClick={onClose}>Cancel</button>
           <button type="button" className="btn-primary" disabled={busy} onClick={save}>{busy ? "Saving…" : "Save destination"}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- Blog ---------------- */
+function BlogSection({ posts, reload, flash }) {
+  const [editor, setEditor] = useState(null); // null | {} | { existing }
+
+  async function remove(p) {
+    if (!window.confirm(`Delete "${p.title}"? This can't be undone.`)) return;
+    const r = await apiFetch(`/admin/blog/${p.id}`, { method: "DELETE" });
+    if (r.ok) { flash("Post deleted."); reload(); }
+  }
+
+  if (editor) {
+    return <BlogEditor existing={editor.existing} onClose={() => setEditor(null)} onSaved={() => { setEditor(null); flash("Post saved."); reload(); }} />;
+  }
+
+  return (
+    <>
+      <PageHead
+        title="Blog"
+        sub="Write articles with a what-you-see-is-what-you-get editor, plus full SEO and AI / GEO optimization."
+        action={<button className="btn-primary" onClick={() => setEditor({})}><Plus size={16} />New post</button>}
+      />
+      <div className="table-wrap">
+        <table className="dash-table">
+          <thead><tr><th>Title</th><th>Status</th><th>Updated</th><th></th></tr></thead>
+          <tbody>
+            {posts.map((p) => (
+              <tr key={p.id}>
+                <td><strong>{p.title}</strong><div className="sub">/blog/{p.slug}</div></td>
+                <td>{p.status === "published" ? <span className="tag tag-on">Published</span> : <span className="tag tag-off">Draft</span>}</td>
+                <td>{fmtDate(p.updatedAt)}</td>
+                <td className="row-actions">
+                  <button className="icon-btn" title="Edit" onClick={() => setEditor({ existing: p })}><Pencil size={15} /></button>
+                  <button className="icon-btn" title="Delete" onClick={() => remove(p)}><Trash2 size={15} /></button>
+                </td>
+              </tr>
+            ))}
+            {posts.length === 0 && <tr><td colSpan={4}><Empty label="No posts yet. Write your first article." /></td></tr>}
+          </tbody>
+        </table>
+      </div>
+    </>
+  );
+}
+
+function BlogEditor({ existing, onClose, onSaved }) {
+  const editing = !!existing;
+  const [slugTouched, setSlugTouched] = useState(!!existing?.slug);
+  const [f, setF] = useState({
+    title: existing?.title || "", slug: existing?.slug || "", excerpt: existing?.excerpt || "",
+    coverImage: existing?.coverImage || "", author: existing?.author || "Sawa Tours",
+    authorCredentials: existing?.authorCredentials || "", tags: (existing?.tags || []).join(", "),
+    metaTitle: existing?.metaTitle || "", metaDescription: existing?.metaDescription || "",
+    keywords: (existing?.keywords || []).join(", "), canonicalUrl: existing?.canonicalUrl || "",
+    ogImage: existing?.ogImage || "", noindex: existing?.noindex || false,
+    tldr: existing?.tldr || "", geoRegion: existing?.geoRegion || "", geoPlace: existing?.geoPlace || "",
+    geoLat: existing?.geoLat || "", geoLng: existing?.geoLng || "", localKeywords: (existing?.localKeywords || []).join(", "),
+  });
+  const [bodyHtml, setBodyHtml] = useState(existing?.bodyHtml || "");
+  const [keyTakeaways, setKeyTakeaways] = useState(existing?.keyTakeaways?.length ? existing.keyTakeaways : [""]);
+  const [faq, setFaq] = useState(existing?.faq?.length ? existing.faq : [{ q: "", a: "" }]);
+  const [busy, setBusy] = useState(false);
+  const [uploading, setUploading] = useState("");
+  const [err, setErr] = useState("");
+
+  const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.type === "checkbox" ? e.target.checked : e.target.value }));
+  const onTitle = (e) => setF((s) => ({ ...s, title: e.target.value, slug: slugTouched ? s.slug : slugify(e.target.value) }));
+  const onSlug = (e) => { setSlugTouched(true); setF((s) => ({ ...s, slug: slugify(e.target.value) })); };
+
+  async function pickImage(e, field) {
+    const file = e.target.files?.[0]; if (!file) return;
+    setUploading(field); setErr("");
+    try { const url = await uploadImage(file); setF((s) => ({ ...s, [field]: url })); }
+    catch (e2) { setErr(e2.message); } finally { setUploading(""); }
+  }
+
+  async function save(status) {
+    setErr("");
+    if (!f.title.trim()) return setErr("Title is required.");
+    setBusy(true);
+    try {
+      const body = {
+        ...(existing?.id ? { id: existing.id } : {}),
+        title: f.title.trim(), slug: (f.slug || slugify(f.title)).trim(), excerpt: f.excerpt.trim(),
+        coverImage: f.coverImage, bodyHtml, author: f.author.trim(), authorCredentials: f.authorCredentials.trim(),
+        tags: csv(f.tags), status,
+        metaTitle: f.metaTitle.trim(), metaDescription: f.metaDescription.trim(), keywords: csv(f.keywords),
+        canonicalUrl: f.canonicalUrl.trim(), ogImage: f.ogImage, noindex: f.noindex,
+        tldr: f.tldr.trim(), keyTakeaways: keyTakeaways.map((x) => x.trim()).filter(Boolean),
+        faq: faq.map((x) => ({ q: (x.q || "").trim(), a: (x.a || "").trim() })).filter((x) => x.q),
+        geoRegion: f.geoRegion.trim(), geoPlace: f.geoPlace.trim(), geoLat: f.geoLat.trim(), geoLng: f.geoLng.trim(),
+        localKeywords: csv(f.localKeywords),
+      };
+      const r = await apiFetch("/admin/blog", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || "Could not save.");
+      onSaved();
+    } catch (e) { setErr(e.message); } finally { setBusy(false); }
+  }
+
+  const ImageField = ({ label, field, hint }) => (
+    <Field label={label} full>
+      <div className="blog-img">
+        {f[field] ? <img src={f[field]} alt="" /> : <div className="blog-img-empty">No image</div>}
+        <div className="blog-img-actions">
+          <label className="btn-ghost sm">{uploading === field ? "Uploading…" : "Upload"}<input type="file" accept="image/*" hidden onChange={(e) => pickImage(e, field)} /></label>
+          {f[field] && <button type="button" className="btn-ghost sm" onClick={() => setF((s) => ({ ...s, [field]: "" }))}>Remove</button>}
+          {hint && <span className="field-hint">{hint}</span>}
+        </div>
+      </div>
+    </Field>
+  );
+
+  return (
+    <div className="editor-page">
+      <div className="editor-page-head">
+        <button className="editor-back" onClick={onClose}><ArrowLeft size={16} />Back to Blog</button>
+        <h1>{editing ? "Edit post" : "New post"}</h1>
+      </div>
+
+      <div className="editor-page-body blog-editor">
+        <div className="modal-subhead"><h3>Content</h3></div>
+        <div className="form-grid">
+          <Field label="Title" full><input value={f.title} onChange={onTitle} placeholder="Why shared tours actually run" /></Field>
+          <Field label="URL slug"><input value={f.slug} onChange={onSlug} placeholder="why-shared-tours-run" /></Field>
+          <Field label="Tags (comma-separated)"><input value={f.tags} onChange={set("tags")} placeholder="Egypt, Travel tips" /></Field>
+          <Field label="Excerpt (card + meta fallback)" full><textarea rows={2} value={f.excerpt} onChange={set("excerpt")} placeholder="One or two sentences shown on the blog card and in search results." /></Field>
+        </div>
+        <ImageField label="Cover image" field="coverImage" hint="Recommended ~1600px wide, JPG." />
+        <Field label="Article body" full><RichText value={bodyHtml} onChange={setBodyHtml} placeholder="Write your article — headings, bold, lists, links…" /></Field>
+        <div className="form-grid">
+          <Field label="Author"><input value={f.author} onChange={set("author")} placeholder="Sawa Tours" /></Field>
+          <Field label="Author credentials (E-E-A-T)"><input value={f.authorCredentials} onChange={set("authorCredentials")} placeholder="Licensed Egyptologist · 10 years guiding" /></Field>
+        </div>
+
+        <div className="modal-subhead"><h3>SEO</h3></div>
+        <div className="form-grid">
+          <Field label="Meta title" full><input value={f.metaTitle} onChange={set("metaTitle")} placeholder="Defaults to the post title" /></Field>
+          <Field label="Meta description" full><textarea rows={2} value={f.metaDescription} onChange={set("metaDescription")} placeholder="~150–160 characters for search snippets (defaults to the excerpt)." /></Field>
+          <Field label="Focus keywords (comma-separated)"><input value={f.keywords} onChange={set("keywords")} placeholder="aswan day tour, philae temple" /></Field>
+          <Field label="Canonical URL"><input value={f.canonicalUrl} onChange={set("canonicalUrl")} placeholder="https://sawatours.org/blog/…" /></Field>
+        </div>
+        <ImageField label="Social share image (Open Graph)" field="ogImage" hint="Defaults to the cover image. ~1200×630." />
+        <label className="dest-toggle"><input type="checkbox" checked={f.noindex} onChange={set("noindex")} /><span>Hide from search engines (noindex)</span></label>
+
+        <div className="modal-subhead"><h3>AI / Generative Engine (GEO)</h3></div>
+        <Field label="TL;DR — short answer for AI engines" full><textarea rows={2} value={f.tldr} onChange={set("tldr")} placeholder="A 1–2 sentence direct answer AI assistants can quote." /></Field>
+        <RowList label="Key takeaways" rows={keyTakeaways} setRows={setKeyTakeaways} placeholder="A concise, quotable fact" />
+        <div className="modal-subhead sub"><h3>FAQ (structured data)</h3><button type="button" className="btn-ghost sm" onClick={() => setFaq((q) => [...q, { q: "", a: "" }])}><Plus size={14} />Add question</button></div>
+        {faq.map((item, i) => (
+          <div className="faq-edit" key={i}>
+            <input value={item.q} onChange={(e) => setFaq((q) => q.map((x, j) => j === i ? { ...x, q: e.target.value } : x))} placeholder="Question" />
+            <textarea rows={2} value={item.a} onChange={(e) => setFaq((q) => q.map((x, j) => j === i ? { ...x, a: e.target.value } : x))} placeholder="Answer" />
+            <button type="button" className="icon-btn" onClick={() => setFaq((q) => q.filter((_, j) => j !== i))}><Trash2 size={14} /></button>
+          </div>
+        ))}
+
+        <div className="modal-subhead"><h3>Location (geo)</h3></div>
+        <div className="form-grid">
+          <Field label="Region / city"><input value={f.geoRegion} onChange={set("geoRegion")} placeholder="Aswan, Egypt" /></Field>
+          <Field label="Place name"><input value={f.geoPlace} onChange={set("geoPlace")} placeholder="Philae Temple" /></Field>
+          <Field label="Latitude"><input value={f.geoLat} onChange={set("geoLat")} placeholder="24.0254" /></Field>
+          <Field label="Longitude"><input value={f.geoLng} onChange={set("geoLng")} placeholder="32.8844" /></Field>
+          <Field label="Local keywords (comma-separated)" full><input value={f.localKeywords} onChange={set("localKeywords")} placeholder="things to do in aswan, aswan tours" /></Field>
+        </div>
+
+        {err && <div className="auth-error" role="alert">{err}</div>}
+      </div>
+
+      <div className="editor-page-foot">
+        <button type="button" className="btn-ghost" onClick={onClose}>Cancel</button>
+        <div className="wiz-nav">
+          <button type="button" className="btn-ghost" disabled={busy} onClick={() => save("draft")}>{busy ? "Saving…" : "Save draft"}</button>
+          <button type="button" className="btn-primary" disabled={busy} onClick={() => save("published")}>{busy ? "Saving…" : "Publish"}</button>
         </div>
       </div>
     </div>

@@ -19,6 +19,7 @@ import {
   MapPin,
   Menu,
   MessageCircle,
+  Newspaper,
   Package,
   Phone,
   Plus,
@@ -931,6 +932,8 @@ function pageFromPath(p) {
   if (clean === "/privacy") return "privacy";
   if (clean === "/terms") return "terms";
   if (clean === "/booking" || clean.startsWith("/booking/")) return "booking";
+  if (clean === "/blog") return "blog";
+  if (clean.startsWith("/blog/")) return "blogpost";
   if (clean === "/") return "home";
   return "404";
 }
@@ -1304,6 +1307,7 @@ function LoadingScreen({ label = "Preparing your shared departures…" }) {
 const PUBLIC_LINKS = [
   { label: "Tours", to: "/tours" },
   { label: "How it works", to: "/how-it-works" },
+  { label: "Blog", to: "/blog" },
   { label: "About", to: "/about" },
   { label: "Contact", to: "/contact" },
 ];
@@ -1429,6 +1433,8 @@ function PublicRoute({ page, path, navigate, customerCalendars, customerSummary,
     case "privacy": return <LegalPage kind="privacy" navigate={navigate} />;
     case "terms": return <LegalPage kind="terms" navigate={navigate} />;
     case "booking": return <BookingLookupPage navigate={navigate} path={path} />;
+    case "blog": return <BlogIndexPage navigate={navigate} />;
+    case "blogpost": return <BlogPostPage navigate={navigate} slug={decodeURIComponent((path.match(/^\/blog\/([^/]+)/) || [])[1] || "")} />;
     default: return <NotFoundPage navigate={navigate} />;
   }
 }
@@ -1841,6 +1847,155 @@ function PageCTA({ navigate, note }) {
       <p>Hold a seat for free and watch it turn GoAhead.</p>
       <button className="btn-pill primary lg" onClick={() => navigate("/tours")}>Browse tours <ArrowRight size={18} /></button>
     </section>
+  );
+}
+
+// ---- Blog: SEO + GEO meta injection ----
+function upsertMeta(attr, key, content) {
+  if (!content) return;
+  let el = document.head.querySelector(`meta[${attr}="${key}"]`);
+  if (!el) { el = document.createElement("meta"); el.setAttribute(attr, key); document.head.appendChild(el); }
+  el.setAttribute("content", content);
+  el.setAttribute("data-blog-meta", "1");
+}
+function setCanonical(href) {
+  if (!href) return;
+  let el = document.head.querySelector('link[rel="canonical"]');
+  if (!el) { el = document.createElement("link"); el.setAttribute("rel", "canonical"); document.head.appendChild(el); }
+  el.setAttribute("href", href);
+  el.setAttribute("data-blog-meta", "1");
+}
+function abs(u) { return u && !u.startsWith("http") ? window.location.origin + u : u; }
+function applyPostMeta(p) {
+  const title = p.metaTitle || p.title;
+  const desc = p.metaDescription || p.excerpt || p.tldr || "";
+  const url = p.canonicalUrl || `${window.location.origin}/blog/${p.slug}`;
+  const img = abs(p.ogImage || p.coverImage || "");
+  document.title = `${title} — Sawa Tours`;
+  upsertMeta("name", "description", desc);
+  if (p.keywords?.length) upsertMeta("name", "keywords", p.keywords.join(", "));
+  upsertMeta("name", "robots", p.noindex ? "noindex,nofollow" : "index,follow");
+  upsertMeta("name", "author", p.author || "Sawa Tours");
+  setCanonical(url);
+  upsertMeta("property", "og:type", "article");
+  upsertMeta("property", "og:title", title);
+  upsertMeta("property", "og:description", desc);
+  upsertMeta("property", "og:url", url);
+  if (img) upsertMeta("property", "og:image", img);
+  upsertMeta("name", "twitter:card", img ? "summary_large_image" : "summary");
+  upsertMeta("name", "twitter:title", title);
+  upsertMeta("name", "twitter:description", desc);
+  if (p.geoRegion) upsertMeta("name", "geo.region", p.geoRegion);
+  if (p.geoPlace) upsertMeta("name", "geo.placename", p.geoPlace);
+  if (p.geoLat && p.geoLng) { upsertMeta("name", "geo.position", `${p.geoLat};${p.geoLng}`); upsertMeta("name", "ICBM", `${p.geoLat}, ${p.geoLng}`); }
+  const ld = [{
+    "@context": "https://schema.org", "@type": "Article", headline: title, description: desc,
+    image: img ? [img] : undefined, author: { "@type": "Person", name: p.author || "Sawa Tours", description: p.authorCredentials || undefined },
+    publisher: { "@type": "Organization", name: "Sawa Tours" }, datePublished: p.publishedAt || undefined, mainEntityOfPage: url,
+  }];
+  if (p.faq?.length) ld.push({ "@context": "https://schema.org", "@type": "FAQPage", mainEntity: p.faq.map((f) => ({ "@type": "Question", name: f.q, acceptedAnswer: { "@type": "Answer", text: f.a } })) });
+  if (p.geoPlace && p.geoLat && p.geoLng) ld.push({ "@context": "https://schema.org", "@type": "Place", name: p.geoPlace, geo: { "@type": "GeoCoordinates", latitude: p.geoLat, longitude: p.geoLng } });
+  let s = document.getElementById("blog-jsonld");
+  if (!s) { s = document.createElement("script"); s.id = "blog-jsonld"; s.type = "application/ld+json"; document.head.appendChild(s); }
+  s.textContent = JSON.stringify(ld);
+}
+function resetMeta() {
+  document.title = "Sawa Tours — Shared departures, confirmed together";
+  document.querySelectorAll("[data-blog-meta]").forEach((e) => e.remove());
+  const s = document.getElementById("blog-jsonld");
+  if (s) s.remove();
+}
+const blogDate = (d) => (d ? new Intl.DateTimeFormat("en", { day: "numeric", month: "long", year: "numeric" }).format(new Date(d)) : "");
+
+// ---- /blog : listing ----
+function BlogIndexPage({ navigate }) {
+  const [state, setState] = useState({ status: "loading", posts: [] });
+  useEffect(() => {
+    document.title = "Blog — Sawa Tours";
+    let alive = true;
+    fetch(`${API_BASE}/blog`).then((r) => r.json()).then((j) => { if (alive) setState({ status: "done", posts: j.posts || [] }); })
+      .catch(() => alive && setState({ status: "error", posts: [] }));
+    return () => { alive = false; };
+  }, []);
+  return (
+    <div className="page-wrap">
+      <PageHead eyebrow="The journal" title="Notes from the Nile." lead="Guides, history, and practical tips for seeing Egypt the shared way — written by the people who run the tours." />
+      {state.status === "loading" ? (
+        <div className="blog-grid">{[0, 1, 2].map((i) => <div className="blog-skel" key={i} />)}</div>
+      ) : state.posts.length === 0 ? (
+        <div className="page-empty"><Newspaper size={26} /><strong>No articles yet.</strong><p>Check back soon for stories from across Egypt.</p></div>
+      ) : (
+        <div className="blog-grid reveal in">
+          {state.posts.map((p) => (
+            <article className="blog-card" key={p.id} onClick={() => navigate(`/blog/${p.slug}`)}>
+              <div className="blog-card-media" style={p.coverImage ? { backgroundImage: `url(${p.coverImage})` } : undefined}>
+                {!p.coverImage && <Newspaper size={26} />}
+              </div>
+              <div className="blog-card-body">
+                {p.tags?.[0] && <span className="blog-card-tag">{p.tags[0]}</span>}
+                <h3>{p.title}</h3>
+                {p.excerpt && <p>{p.excerpt}</p>}
+                <div className="blog-card-meta">{p.author || "Sawa Tours"}{p.publishedAt ? ` · ${blogDate(p.publishedAt)}` : ""}</div>
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---- /blog/:slug : article ----
+function BlogPostPage({ navigate, slug }) {
+  const [state, setState] = useState({ status: "loading", post: null });
+  useEffect(() => {
+    let alive = true;
+    fetch(`${API_BASE}/blog/${encodeURIComponent(slug)}`)
+      .then((r) => (r.status === 404 ? Promise.reject(new Error("nf")) : r.json()))
+      .then((j) => { if (alive) { setState({ status: "done", post: j.post }); applyPostMeta(j.post); } })
+      .catch(() => alive && setState({ status: "error", post: null }));
+    return () => { alive = false; resetMeta(); };
+  }, [slug]);
+
+  if (state.status === "loading") return <div className="page-wrap"><div className="blog-post-skel" /></div>;
+  if (state.status !== "done" || !state.post) return <NotFoundPage navigate={navigate} />;
+  const p = state.post;
+  const takeaways = (p.keyTakeaways || []).filter(Boolean);
+  const faq = (p.faq || []).filter((f) => f.q);
+  return (
+    <article className="page-wrap blog-post">
+      <button className="blog-back" onClick={() => navigate("/blog")}><ArrowLeft size={16} /> All articles</button>
+      <header className="blog-post-head reveal in">
+        {p.tags?.[0] && <span className="page-eyebrow">{p.tags[0]}</span>}
+        <h1>{p.title}</h1>
+        <div className="blog-post-meta">
+          <span>{p.author || "Sawa Tours"}{p.authorCredentials ? ` · ${p.authorCredentials}` : ""}</span>
+          {p.publishedAt && <span>{blogDate(p.publishedAt)}</span>}
+          {p.geoRegion && <span><MapPin size={14} /> {p.geoRegion}</span>}
+        </div>
+      </header>
+      {p.coverImage && <img className="blog-post-cover reveal in" src={p.coverImage} alt={p.title} />}
+      {p.tldr && <div className="blog-tldr reveal in"><strong>In short</strong><p>{p.tldr}</p></div>}
+      <div className="blog-post-body rich reveal in" dangerouslySetInnerHTML={{ __html: p.bodyHtml || "" }} />
+      {takeaways.length > 0 && (
+        <div className="blog-takeaways reveal in">
+          <h2>Key takeaways</h2>
+          <ul>{takeaways.map((t, i) => <li key={i}><Check size={16} /> <span>{t}</span></li>)}</ul>
+        </div>
+      )}
+      {faq.length > 0 && (
+        <section className="blog-faq reveal in">
+          <h2>Frequently asked</h2>
+          {faq.map((item, i) => (
+            <details className="faq-item" key={i}>
+              <summary><span>{item.q}</span><ChevronDown size={18} /></summary>
+              <p>{item.a}</p>
+            </details>
+          ))}
+        </section>
+      )}
+      <PageCTA navigate={navigate} />
+    </article>
   );
 }
 
