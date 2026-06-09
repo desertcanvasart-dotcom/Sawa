@@ -20,9 +20,10 @@ import {
   sendEmail, emailMode,
   inviteEmail, bookingConfirmationEmail, goAheadEmail, cancellationEmail,
 } from "./email.js";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { buildHead, robotsTxt, sitemapXml, llmsTxt, llmsFullTxt } from "./seo.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const distDir = join(__dirname, "..", "dist");
@@ -1083,12 +1084,34 @@ app.post("/api/admin/uploads", requireAuth, requireRole("super_admin", "ops_staf
 // Unknown /api/* path -> JSON 404.
 app.use("/api", (_req, res) => res.status(404).json({ error: "Not found." }));
 
+// ============================ AI-readability files ============================
+app.get("/robots.txt", (_req, res) => res.type("text/plain").send(robotsTxt()));
+app.get("/llms.txt", (_req, res) => res.type("text/plain").send(llmsTxt()));
+app.get("/llms-full.txt", (_req, res) => res.type("text/plain").send(llmsFullTxt()));
+app.get("/sitemap.xml", h(async (_req, res) => res.type("application/xml").send(await sitemapXml())));
+
 // ============================ STATIC SPA (production) ============================
-// Serve the built frontend from /dist and fall back to index.html for client routes.
+// Serve the built frontend from /dist. For HTML routes, inject a fully-formed
+// <head> (title, meta, OpenGraph, JSON-LD) server-side so crawlers and AI
+// engines read complete pages; the SPA still hydrates the body normally.
 if (existsSync(distDir)) {
-  app.use(express.static(distDir));
-  // Express 5 needs a named splat ("/*all") instead of the bare "*".
-  app.get("/*all", (_req, res) => res.sendFile(join(distDir, "index.html")));
+  const template = readFileSync(join(distDir, "index.html"), "utf8");
+  const renderPage = async (req, res) => {
+    try {
+      const { title, head } = await buildHead(req.path);
+      const html = template
+        .replace(/<title>[\s\S]*?<\/title>/, `<title>${title.replace(/</g, "&lt;")}</title>`)
+        .replace("</head>", `${head}\n</head>`);
+      res.type("html").send(html);
+    } catch (e) {
+      console.error("[seo] head injection failed for", req.path, "-", e.message);
+      res.sendFile(join(distDir, "index.html"));
+    }
+  };
+  // Root must be handled before static (static would otherwise serve raw index.html).
+  app.get("/", renderPage);
+  app.use(express.static(distDir, { index: false }));
+  app.get("/*all", renderPage);      // all other client routes
 }
 
 // ============================ ERRORS ============================
