@@ -34,6 +34,7 @@ import {
   Ticket,
   Trash2,
   Users,
+  Utensils,
   X,
 } from "lucide-react";
 import "./styles.css";
@@ -1039,8 +1040,8 @@ function PublicSite({
   return (
     <main className="public-shell">
       <PublicNav navigate={navigate} path={path} />
-      {!routeTour && (
-      <section className={showDetail ? "public-hero" : "public-hero hero-soft"}>
+      {!showDetail && (
+      <section className="public-hero hero-soft">
         {!showDetail ? (
           <div className="hero-soft-grid">
             <div className="hero-soft-copy">
@@ -2617,6 +2618,64 @@ function TourDetail({ isSaving, navigate, onBookPublicDeparture, onCancelPublicB
   );
 }
 
+// Rich day-by-day accordion for packages: city + title header, then meals,
+// accommodation, included-today and optional activities on expand.
+function PackageItinerary({ items }) {
+  const [open, setOpen] = useState(0);
+  return (
+    <ol className="tdx-itin tdx-itin-pkg">
+      {items.map((day, i) => {
+        const isOpen = open === i;
+        const included = (day.included || []).filter(Boolean);
+        const optional = (day.optional || []).filter(Boolean);
+        return (
+          <li key={day.day || i} className={isOpen ? "open" : ""}>
+            <button
+              type="button"
+              className="tdx-itin-head"
+              aria-expanded={isOpen}
+              onClick={() => setOpen(isOpen ? -1 : i)}
+            >
+              <span className="tdx-itin-mark">{day.day || i + 1}</span>
+              <span className="tdx-itin-headtext">
+                <em>Day {day.day || i + 1} · {day.city}</em>
+                <strong>{day.title}</strong>
+              </span>
+              <ChevronDown size={18} className="tdx-itin-chev" aria-hidden="true" />
+            </button>
+            <div className="tdx-itin-body">
+              <div className="tdx-itin-inner tdx-itin-rich">
+                {day.description && <p>{day.description}</p>}
+                <div className="tdx-daymeta">
+                  {day.accommodation && day.accommodation !== "—" && (
+                    <span><Hotel size={14} />{day.accommodation}</span>
+                  )}
+                  {day.meals && day.meals !== "—" && (
+                    <span><Utensils size={14} />{day.meals}</span>
+                  )}
+                </div>
+                {included.length > 0 && (
+                  <div className="tdx-daylist">
+                    <h4><Check size={14} />Included today</h4>
+                    <ul>{included.map((x) => <li key={x}>{x}</li>)}</ul>
+                  </div>
+                )}
+                {optional.length > 0 && (
+                  <details className="tdx-dayopt">
+                    <summary>Optional activities ({optional.length})</summary>
+                    <ul>{optional.map((x) => <li key={x}>{x}</li>)}</ul>
+                  </details>
+                )}
+                {day.special && <p className="tdx-dayspecial"><Bell size={13} />{day.special}</p>}
+              </div>
+            </div>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
 function PackageDetail({ isSaving, navigate, onBookPublicDeparture, onCancelPublicBooking, publicBooking, pkg }) {
   const leadDeparture = pkg.dates[0];
   const [selectedDepartureId, setSelectedDepartureId] = useState(leadDeparture?.id || "");
@@ -2640,6 +2699,11 @@ function PackageDetail({ isSaving, navigate, onBookPublicDeparture, onCancelPubl
   const balanceDue = Math.max(0, bookingTotal - depositDue);
   const remainingSeats = selectedDeparture ? Math.max(0, selectedDeparture.maxSeats - currentSeats) : goAhead;
   const soldOut = remainingSeats <= 0;
+  const basePrice = livePriceFor(selectedDeparture || pkg, currentSeats);
+  const breakBase = safePrice(pkg.breakPrice, Math.round(pkg.publishedRate * 0.8));
+  const seatPct = goAhead ? Math.min(100, Math.round((currentSeats / goAhead) * 100)) : 0;
+  const cities = pkg.cities || [pkg.city];
+  const itin = (pkg.itinerary || []).filter((day) => day && (day.title || day.description));
 
   useEffect(() => {
     setSelectedDepartureId(leadDeparture?.id || "");
@@ -2694,186 +2758,228 @@ function PackageDetail({ isSaving, navigate, onBookPublicDeparture, onCancelPubl
   }
 
   return (
-    <article className="tour-detail-page">
-      <button className="back-button" onClick={() => navigate("/")}>
-        <ArrowLeft size={18} />All tours
+    <article className="tdx">
+      <button className="tdx-back" onClick={() => navigate("/tours")}>
+        <ArrowLeft size={17} />All tours
       </button>
 
-      <Gallery product={pkg} />
+      <TourGallery product={pkg} />
 
-      <section className="tour-detail-grid">
-        <div className="panel tour-detail-main">
-          <div className="tour-calendar-header">
-            <div>
-              <strong>{pkg.title}</strong>
-              <p>{(pkg.cities || [pkg.city]).join(" → ")} · {pkg.duration} · {pkg.guide}</p>
+      <header className="tdx-head">
+        <div className="tdx-head-top">
+          <span className="tdx-eyebrow"><Package size={14} />{pkg.duration} · multi-day package</span>
+          {pkg.quality ? (
+            <span className="tdx-rating">
+              <Stars value={pkg.quality} />
+              <b>{Number(pkg.quality).toFixed(1)}</b>
+              <span>from confirmed travellers</span>
+            </span>
+          ) : null}
+        </div>
+        <h1>{pkg.title}</h1>
+        <div className="tdx-facts">
+          <span><MapPin size={16} />{cities.join(" · ")}</span>
+          {pkg.nights ? <span><Hotel size={16} />{pkg.nights} nights</span> : null}
+          {pkg.guide && <span><Globe size={16} />{pkg.guide}</span>}
+          {pkg.vehicle && <span><Car size={16} />{pkg.vehicle}</span>}
+        </div>
+      </header>
+
+      <div className="tdx-grid">
+        <div className="tdx-content">
+          <section className="tdx-block">
+            <h2>About this trip</h2>
+            <CollapsibleHtml html={pkg.overviewHtml} fallback={pkg.description} />
+            {cities.length > 1 && (
+              <div className="tdx-route">
+                {cities.map((stop, i) => (
+                  <span key={stop}>
+                    {stop}{i < cities.length - 1 && <ChevronRight size={15} aria-hidden="true" />}
+                  </span>
+                ))}
+              </div>
+            )}
+          </section>
+
+          {itin.length > 0 && (
+            <section className="tdx-block">
+              <h2>Day-by-day itinerary</h2>
+              <PackageItinerary items={itin} />
+            </section>
+          )}
+
+          <section className="tdx-block">
+            <h2>What's included</h2>
+            <div className="tdx-incl">
+              <ul className="tdx-incl-yes">
+                {(pkg.included || []).map((item) => <li key={item}><Check size={16} />{item}</li>)}
+                {!(pkg.included || []).length && <li className="muted-line">Details on request.</li>}
+              </ul>
+              <ul className="tdx-incl-no">
+                {(pkg.notIncluded || []).map((item) => <li key={item}><X size={15} />{item}</li>)}
+                {!(pkg.notIncluded || []).length && <li className="muted-line">—</li>}
+              </ul>
             </div>
-            <span className="price-pill">from ${pricePerPerson}/person</span>
-          </div>
-
-          <RichBlock html={pkg.overviewHtml} fallback={pkg.description} />
-
-          <div className="itinerary-block">
-            <h3>Day-by-day itinerary</h3>
-            <ol className="itinerary-list">
-              {(pkg.itinerary || []).map((day, i) => (
-                <li key={day.day || i}>
-                  <div className="itinerary-day">Day {day.day || i + 1} · {day.city}</div>
-                  <strong>{day.title}</strong>
-                  {day.description && /<\w+/.test(day.description)
-                    ? <div className="rich" dangerouslySetInnerHTML={{ __html: day.description }} />
-                    : <p>{day.description}</p>}
-                  <small>Meals: {day.meals || "—"}</small>
-                </li>
-              ))}
-            </ol>
-          </div>
-
-          <div className="included-grid">
-            <div>
-              <h3>What's included</h3>
-              {(pkg.included || []).map((item) => <p key={item}><Check size={16} />{item}</p>)}
-            </div>
-            <div>
-              <h3>Not included</h3>
-              {(pkg.notIncluded || []).map((item) => <p key={item}><ChevronDown size={16} />{item}</p>)}
-            </div>
-          </div>
+          </section>
 
           <TourExtras product={pkg} />
         </div>
 
-        <aside className="panel booking-panel">
-          <span>Live shared price (per person)</span>
-          <strong>${pricePerPerson}</strong>
-          <p>The base shared rate drops as the group grows. Hotel tier and single supplement are added on top.</p>
-          <form className="public-booking-form" onSubmit={submitPublicBooking} noValidate>
-            <div className="field">
-              <label htmlFor="pk-date">Start date</label>
-              <select id="pk-date" value={selectedDepartureId} onChange={(event) => setSelectedDepartureId(event.target.value)}>
-                {pkg.dates.map((d) => {
-                  const seats = seatsTotal(d.pledges);
-                  return (
-                    <option key={d.id} value={d.id}>
-                      {formatRange(d.startDate || d.date, d.endDate)} · {seats}/{goAheadFor(d)} seats
+        <aside className="tdx-aside">
+          <div className="tdx-booking">
+            <div className="tdx-price">
+              <span className="tdx-price-label">Live shared price · per person</span>
+              <div className="tdx-price-now">
+                <strong>${pricePerPerson}</strong>
+                <em>per person</em>
+              </div>
+              <p>The shared rate drops as the group grows. Hotel tier and single supplement add on top.</p>
+            </div>
+            <div className="tdx-ladder">
+              <div><span>Published</span><b>${safePrice(pkg.publishedRate, basePrice)}</b></div>
+              <div className="is-live"><span>Current</span><b>${basePrice}</b></div>
+              <div><span>At full group</span><b>${breakBase}</b></div>
+            </div>
+            {!soldOut && (
+              <div className="tdx-seatbar">
+                <div className="tdx-seatbar-top">
+                  <span>{currentSeats}/{goAhead} travellers to confirm</span>
+                  <b>{Math.max(0, goAhead - currentSeats)} to go</b>
+                </div>
+                <i><em style={{ width: `${seatPct}%` }} /></i>
+              </div>
+            )}
+            <form className="public-booking-form" onSubmit={submitPublicBooking} noValidate>
+              <div className="field">
+                <label htmlFor="pk-date">Start date</label>
+                <select id="pk-date" value={selectedDepartureId} onChange={(event) => setSelectedDepartureId(event.target.value)}>
+                  {pkg.dates.map((d) => {
+                    const seats = seatsTotal(d.pledges);
+                    return (
+                      <option key={d.id} value={d.id}>
+                        {formatRange(d.startDate || d.date, d.endDate)} · {seats}/{goAheadFor(d)} seats
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+              <div className="field">
+                <label htmlFor="pk-tier">Hotel &amp; cruise tier</label>
+                <select
+                  id="pk-tier"
+                  value={tierId}
+                  onChange={(event) => {
+                    setTierId(event.target.value);
+                    if (errors.tier) setErrors((e) => ({ ...e, tier: undefined }));
+                  }}
+                  aria-invalid={errors.tier ? "true" : "false"}
+                  className={errors.tier ? "input-error" : ""}
+                >
+                  {tiers.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}{t.perPersonSupplement ? ` (+$${t.perPersonSupplement}/pp)` : ""}
                     </option>
-                  );
-                })}
-              </select>
-            </div>
-            <div className="field">
-              <label htmlFor="pk-tier">Hotel tier</label>
-              <select
-                id="pk-tier"
-                value={tierId}
-                onChange={(event) => {
-                  setTierId(event.target.value);
-                  if (errors.tier) setErrors((e) => ({ ...e, tier: undefined }));
-                }}
-                aria-invalid={errors.tier ? "true" : "false"}
-                className={errors.tier ? "input-error" : ""}
-              >
-                {tiers.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}{t.perPersonSupplement ? ` (+$${t.perPersonSupplement}/pp)` : ""}
-                  </option>
-                ))}
-              </select>
-              {errors.tier && <span className="field-error" role="alert">{errors.tier}</span>}
-            </div>
-            <div className="field">
-              <label htmlFor="pk-room">Room type</label>
-              <select id="pk-room" value={roomingType} onChange={(event) => setRoomingType(event.target.value)}>
-                <option value="single">Single (single supplement applies)</option>
-                <option value="double">Double / twin</option>
-                <option value="triple">Triple</option>
-              </select>
-            </div>
-            <div className="field">
-              <label htmlFor="pk-name">Your name</label>
-              <input
-                id="pk-name"
-                value={travelerName}
-                onChange={(event) => {
-                  setTravelerName(event.target.value);
-                  if (errors.name) setErrors((e) => ({ ...e, name: undefined }));
-                }}
-                placeholder="e.g. Tarek El-Sharkawy"
-                aria-invalid={errors.name ? "true" : "false"}
-                className={errors.name ? "input-error" : ""}
-              />
-              {errors.name
-                ? <span className="field-error" role="alert">{errors.name}</span>
-                : <span className="field-hint">Who should we put the lead booking under?</span>}
-            </div>
-            <div className="field">
-              <label htmlFor="pk-email">Email <span className="field-opt">(optional)</span></label>
-              <input
-                id="pk-email"
-                type="email"
-                value={travelerEmail}
-                onChange={(event) => {
-                  setTravelerEmail(event.target.value);
-                  if (errors.email) setErrors((e) => ({ ...e, email: undefined }));
-                }}
-                placeholder="you@email.com"
-                aria-invalid={errors.email ? "true" : "false"}
-                className={errors.email ? "input-error" : ""}
-              />
-              {errors.email
-                ? <span className="field-error" role="alert">{errors.email}</span>
-                : <span className="field-hint">We'll email your booking confirmation here.</span>}
-            </div>
-            <div className="field">
-              <label htmlFor="pk-phone">Phone / WhatsApp <span className="field-opt">(optional)</span></label>
-              <input id="pk-phone" type="tel" value={travelerPhone} onChange={(e) => setTravelerPhone(e.target.value)} placeholder="+20 1XX XXX XXXX" />
-            </div>
-            <div className="field">
-              <label htmlFor="pk-seats">Travelers</label>
-              <input
-                id="pk-seats"
-                min="1"
-                max={Math.max(1, remainingSeats)}
-                type="number"
-                value={travelerSeats}
-                onChange={(event) => {
-                  setTravelerSeats(event.target.value);
-                  if (errors.seats) setErrors((e) => ({ ...e, seats: undefined }));
-                }}
-                aria-invalid={errors.seats ? "true" : "false"}
-                className={errors.seats ? "input-error" : ""}
-                disabled={soldOut}
-              />
-              {errors.seats
-                ? <span className="field-error" role="alert">{errors.seats}</span>
-                : <span className="field-hint">{soldOut ? "This departure is fully booked." : `${remainingSeats} place${remainingSeats === 1 ? "" : "s"} left.`}</span>}
-            </div>
-            <div className="deposit-summary">
-              <div><span>Booking total</span><strong>${bookingTotal}</strong></div>
-              <div><span>Deposit today</span><strong>${depositDue}</strong></div>
-              <div><span>Balance</span><strong>${balanceDue}</strong></div>
-              <p>{depositPercentValue}% deposit confirms the reservation. Balance due {selectedDeparture ? balanceDueDate(selectedDeparture.startDate || selectedDeparture.date) : "one day before departure"}.</p>
-            </div>
-            <button className="primary full" disabled={isSaving || !selectedDeparture || soldOut} type="submit">
-              {isSaving ? "Updating seats..." : soldOut ? "Departure full" : "Join this package"}
-            </button>
-          </form>
-          {publicBooking && Number(publicBooking.departureId) === Number(selectedDeparture?.id) && (
-            <div className="booking-receipt">
-              <strong>Request added: {publicBooking.code}</strong>
-              <p>{publicBooking.seats} traveler{publicBooking.seats > 1 ? "s" : ""} · {publicBooking.tierName || "Standard"} · {publicBooking.roomingType || "double"} room</p>
-              {publicBooking.depositDue && (
-                <p>${publicBooking.depositDue} deposit due now · ${publicBooking.balanceDue} balance due {publicBooking.balanceDueDate}</p>
-              )}
-              <button disabled={isSaving} onClick={onCancelPublicBooking}>Cancel this request</button>
-            </div>
-          )}
+                  ))}
+                </select>
+                {errors.tier && <span className="field-error" role="alert">{errors.tier}</span>}
+              </div>
+              <div className="field">
+                <label htmlFor="pk-room">Room type</label>
+                <select id="pk-room" value={roomingType} onChange={(event) => setRoomingType(event.target.value)}>
+                  <option value="single">Single (supplement applies)</option>
+                  <option value="double">Double / twin</option>
+                  <option value="triple">Triple</option>
+                </select>
+              </div>
+              <div className="tdx-frow">
+                <div className="field tdx-fname">
+                  <label htmlFor="pk-name">Your name</label>
+                  <input
+                    id="pk-name"
+                    value={travelerName}
+                    onChange={(event) => {
+                      setTravelerName(event.target.value);
+                      if (errors.name) setErrors((e) => ({ ...e, name: undefined }));
+                    }}
+                    placeholder="e.g. Tarek El-Sharkawy"
+                    aria-invalid={errors.name ? "true" : "false"}
+                    className={errors.name ? "input-error" : ""}
+                  />
+                  {errors.name && <span className="field-error" role="alert">{errors.name}</span>}
+                </div>
+                <div className="field tdx-fseats">
+                  <label htmlFor="pk-seats">Travelers</label>
+                  <input
+                    id="pk-seats"
+                    min="1"
+                    max={Math.max(1, remainingSeats)}
+                    type="number"
+                    value={travelerSeats}
+                    onChange={(event) => {
+                      setTravelerSeats(event.target.value);
+                      if (errors.seats) setErrors((e) => ({ ...e, seats: undefined }));
+                    }}
+                    aria-invalid={errors.seats ? "true" : "false"}
+                    className={errors.seats ? "input-error" : ""}
+                    disabled={soldOut}
+                  />
+                  {errors.seats && <span className="field-error" role="alert">{errors.seats}</span>}
+                </div>
+              </div>
+              <div className="tdx-frow">
+                <div className="field">
+                  <label htmlFor="pk-email">Email <span className="field-opt">(optional)</span></label>
+                  <input
+                    id="pk-email"
+                    type="email"
+                    value={travelerEmail}
+                    onChange={(event) => {
+                      setTravelerEmail(event.target.value);
+                      if (errors.email) setErrors((e) => ({ ...e, email: undefined }));
+                    }}
+                    placeholder="you@email.com"
+                    aria-invalid={errors.email ? "true" : "false"}
+                    className={errors.email ? "input-error" : ""}
+                  />
+                  {errors.email && <span className="field-error" role="alert">{errors.email}</span>}
+                </div>
+                <div className="field">
+                  <label htmlFor="pk-phone">Phone <span className="field-opt">(optional)</span></label>
+                  <input id="pk-phone" type="tel" value={travelerPhone} onChange={(e) => setTravelerPhone(e.target.value)} placeholder="+20 1XX XXX XXXX" />
+                </div>
+              </div>
+              <div className="deposit-summary tdx-deposit">
+                <div><span>Total</span><strong>${bookingTotal}</strong></div>
+                <div><span>Deposit today</span><strong>${depositDue}</strong></div>
+                <div><span>Balance</span><strong>${balanceDue}</strong></div>
+                <p>{depositPercentValue}% confirms the reservation · balance due {selectedDeparture ? balanceDueDate(selectedDeparture.startDate || selectedDeparture.date) : "before departure"}.</p>
+              </div>
+              <button className="primary full" disabled={isSaving || !selectedDeparture || soldOut} type="submit">
+                {isSaving ? "Updating seats..." : soldOut ? "Departure full" : "Join this package"}
+              </button>
+            </form>
+            {publicBooking && Number(publicBooking.departureId) === Number(selectedDeparture?.id) && (
+              <div className="booking-receipt">
+                <strong>Request added: {publicBooking.code}</strong>
+                <p>{publicBooking.seats} traveler{publicBooking.seats > 1 ? "s" : ""} · {publicBooking.tierName || "Standard"} · {publicBooking.roomingType || "double"} room</p>
+                {publicBooking.depositDue && (
+                  <p>${publicBooking.depositDue} deposit due now · ${publicBooking.balanceDue} balance due {publicBooking.balanceDueDate}</p>
+                )}
+                <button disabled={isSaving} onClick={onCancelPublicBooking}>Cancel this request</button>
+              </div>
+            )}
+          </div>
+          <ul className="tdx-assure">
+            <li><ShieldCheck size={16} />No payment until your group is confirmed</li>
+            <li><Users size={16} />Small shared groups, never crowded</li>
+            <li><BadgeCheck size={16} />Flights, cruise &amp; sleeper train all included</li>
+          </ul>
         </aside>
-      </section>
+      </div>
 
       {leadDeparture && <LiveDepartureTimeline departure={leadDeparture} />}
 
-      <section className="tour-calendar">
+      <section className="tour-calendar tdx-dates">
         <div className="tour-calendar-header">
           <div>
             <strong>Upcoming departures</strong>
