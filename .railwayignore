@@ -1,0 +1,6 @@
+node_modules/
+dist/
+.git/
+*.log
+public/images/tours/
+public/images/packages/
