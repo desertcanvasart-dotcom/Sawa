@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   ArrowLeft,
@@ -7,12 +7,15 @@ import {
   BadgeCheck,
   Bell,
   CalendarDays,
+  Camera,
   Car,
   Check,
   ChevronDown,
+  ChevronRight,
   CircleDollarSign,
   Clock3,
   Filter,
+  Globe,
   Handshake,
   Hotel,
   Mail,
@@ -27,6 +30,7 @@ import {
   Settings2,
   ShieldCheck,
   Sparkles,
+  Star,
   Ticket,
   Trash2,
   Users,
@@ -1035,6 +1039,7 @@ function PublicSite({
   return (
     <main className="public-shell">
       <PublicNav navigate={navigate} path={path} />
+      {!routeTour && (
       <section className={showDetail ? "public-hero" : "public-hero hero-soft"}>
         {!showDetail ? (
           <div className="hero-soft-grid">
@@ -1117,6 +1122,7 @@ function PublicSite({
           </>
         )}
       </section>
+      )}
 
       <section className="public-content">
         {notice && <div className="notice" role="status">{notice}</div>}
@@ -2166,6 +2172,164 @@ function PackageCard({ navigate, product }) {
   );
 }
 
+// Star rating row (filled to the rounded score) for the detail header.
+function Stars({ value = 5, size = 15 }) {
+  const full = Math.round(value);
+  return (
+    <span className="tdx-stars" aria-hidden="true">
+      {[1, 2, 3, 4, 5].map((n) => (
+        <Star key={n} size={size} className={n <= full ? "on" : ""} />
+      ))}
+    </span>
+  );
+}
+
+// Editorial gallery: one tall lead image + a 2x2 grid, opening a lightbox.
+function TourGallery({ product }) {
+  const imgs = (product.images || []).filter((i) => i?.url);
+  const [lightbox, setLightbox] = useState(-1);
+
+  if (!imgs.length) {
+    return <div className="tdx-gallery-solo" style={{ backgroundImage: `url(${coverImage(product)})` }} />;
+  }
+
+  const lead = imgs[0];
+  const rest = imgs.slice(1, 5);
+
+  return (
+    <>
+      <div className={`tdx-gallery ${rest.length ? "has-side" : "lead-only"}`}>
+        <button
+          className="tdx-gallery-lead"
+          style={{ backgroundImage: `url(${lead.url})` }}
+          onClick={() => setLightbox(0)}
+          aria-label="Open photo 1"
+        />
+        {rest.length > 0 && (
+          <div className="tdx-gallery-side">
+            {rest.map((im, i) => (
+              <button
+                key={i}
+                className="tdx-gallery-cell"
+                style={{ backgroundImage: `url(${im.url})` }}
+                onClick={() => setLightbox(i + 1)}
+                aria-label={`Open photo ${i + 2}`}
+              >
+                {i === rest.length - 1 && imgs.length > 5 && (
+                  <span className="tdx-gallery-more"><Camera size={16} />+{imgs.length - 5}</span>
+                )}
+              </button>
+            ))}
+          </div>
+        )}
+        {imgs.length > 1 && (
+          <button className="tdx-gallery-all" onClick={() => setLightbox(0)}>
+            <Camera size={15} />All {imgs.length} photos
+          </button>
+        )}
+      </div>
+      {lightbox >= 0 && (
+        <Lightbox imgs={imgs} index={lightbox} setIndex={setLightbox} onClose={() => setLightbox(-1)} />
+      )}
+    </>
+  );
+}
+
+// Full-screen photo viewer with keyboard + click navigation.
+function Lightbox({ imgs, index, setIndex, onClose }) {
+  useEffect(() => {
+    const onKey = (event) => {
+      if (event.key === "Escape") onClose();
+      if (event.key === "ArrowRight") setIndex((i) => (i + 1) % imgs.length);
+      if (event.key === "ArrowLeft") setIndex((i) => (i - 1 + imgs.length) % imgs.length);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [imgs.length, onClose, setIndex]);
+
+  const img = imgs[index];
+  return (
+    <div className="tdx-lightbox" role="dialog" aria-modal="true" onClick={onClose}>
+      <button className="tdx-lb-close" onClick={onClose} aria-label="Close photos"><X size={20} /></button>
+      <button
+        className="tdx-lb-nav prev"
+        onClick={(event) => { event.stopPropagation(); setIndex((i) => (i - 1 + imgs.length) % imgs.length); }}
+        aria-label="Previous photo"
+      ><ArrowLeft size={22} /></button>
+      <figure className="tdx-lb-stage" onClick={(event) => event.stopPropagation()}>
+        <img src={img.url} alt={img.alt || `Photo ${index + 1}`} />
+      </figure>
+      <button
+        className="tdx-lb-nav next"
+        onClick={(event) => { event.stopPropagation(); setIndex((i) => (i + 1) % imgs.length); }}
+        aria-label="Next photo"
+      ><ArrowRight size={22} /></button>
+      <span className="tdx-lb-count">{index + 1} / {imgs.length}</span>
+    </div>
+  );
+}
+
+// Long overview text, clamped with a "Read more" toggle to keep the page calm.
+function CollapsibleHtml({ html, fallback }) {
+  const ref = useRef(null);
+  const [expanded, setExpanded] = useState(false);
+  const [overflowing, setOverflowing] = useState(false);
+  const hasHtml = html && html.replace(/<[^>]*>/g, "").trim();
+  useEffect(() => {
+    if (ref.current) setOverflowing(ref.current.scrollHeight > 320);
+  }, [html, fallback]);
+  if (!hasHtml && !fallback) return null;
+  const clamped = overflowing && !expanded;
+  return (
+    <div className={`tdx-readmore ${clamped ? "is-clamped" : ""}`}>
+      <div className="tdx-readmore-body" ref={ref}>
+        {hasHtml
+          ? <div className="rich" dangerouslySetInnerHTML={{ __html: html }} />
+          : <p>{fallback}</p>}
+      </div>
+      {overflowing && (
+        <button type="button" className="tdx-readmore-btn" onClick={() => setExpanded((v) => !v)}>
+          {expanded ? "Show less" : "Read more"}
+          <ChevronDown size={16} aria-hidden="true" />
+        </button>
+      )}
+    </div>
+  );
+}
+
+// Collapsible day-by-day itinerary — one open at a time.
+function ItineraryAccordion({ items }) {
+  const [open, setOpen] = useState(0);
+  return (
+    <ol className="tdx-itin">
+      {items.map((day, i) => {
+        const isOpen = open === i;
+        return (
+          <li key={day.day || i} className={isOpen ? "open" : ""}>
+            <button
+              type="button"
+              className="tdx-itin-head"
+              aria-expanded={isOpen}
+              onClick={() => setOpen(isOpen ? -1 : i)}
+            >
+              <span className="tdx-itin-mark">{i + 1}</span>
+              <strong>{day.title || `Stop ${i + 1}`}</strong>
+              <ChevronDown size={18} className="tdx-itin-chev" aria-hidden="true" />
+            </button>
+            <div className="tdx-itin-body">
+              <div className="tdx-itin-inner">
+                {day.description && (/<\w+/.test(day.description)
+                  ? <div className="rich" dangerouslySetInnerHTML={{ __html: day.description }} />
+                  : <p>{day.description}</p>)}
+              </div>
+            </div>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
 function TourDetail({ isSaving, navigate, onBookPublicDeparture, onCancelPublicBooking, publicBooking, tour }) {
   const leadDeparture = tour.dates[0];
   const [selectedDepartureId, setSelectedDepartureId] = useState(leadDeparture?.id || "");
@@ -2190,6 +2354,9 @@ function TourDetail({ isSaving, navigate, onBookPublicDeparture, onCancelPublicB
 
   const maxSelectable = Math.min(4, Math.max(0, remainingSeats));
   const soldOut = remainingSeats <= 0;
+  const seatPct = goAhead ? Math.min(100, Math.round((currentSeats / goAhead) * 100)) : 0;
+  const itinerary = (tour.itinerary || []).filter((day) => day && (day.title || day.description));
+  const stops = routeStops[tour.id] || [tour.city, tour.title];
 
   useEffect(() => {
     setSelectedDepartureId(leadDeparture?.id || "");
@@ -2241,50 +2408,97 @@ function TourDetail({ isSaving, navigate, onBookPublicDeparture, onCancelPublicB
   }
 
   return (
-    <article className="tour-detail-page">
-      <button className="back-button" onClick={() => navigate("/")}>
-        <ArrowLeft size={18} />All tours
+    <article className="tdx">
+      <button className="tdx-back" onClick={() => navigate("/tours")}>
+        <ArrowLeft size={17} />All tours
       </button>
 
-      <Gallery product={tour} />
+      <TourGallery product={tour} />
 
-      <section className="tour-detail-grid">
-        <div className="panel tour-detail-main">
-          <div className="tour-calendar-header">
-            <div>
-              <strong>{tour.title}</strong>
-              <p>{tour.city} · {tour.duration} · {tour.guide}</p>
-            </div>
-            <span className="price-pill">from ${currentPrice}</span>
-          </div>
+      <header className="tdx-head">
+        <div className="tdx-head-top">
+          <span className="tdx-eyebrow"><MapPin size={14} />{tour.city}, Egypt</span>
+          {tour.quality ? (
+            <span className="tdx-rating">
+              <Stars value={tour.quality} />
+              <b>{Number(tour.quality).toFixed(1)}</b>
+              <span>from confirmed travellers</span>
+            </span>
+          ) : null}
+        </div>
+        <h1>{tour.title}</h1>
+        <div className="tdx-facts">
+          {tour.duration && <span><Clock3 size={16} />{tour.duration}</span>}
+          <span><Users size={16} />Small group · max {tour.maxSeats}</span>
+          {tour.guide && <span><Globe size={16} />{tour.guide}</span>}
+          {tour.vehicle && <span><Car size={16} />{tour.vehicle}</span>}
+        </div>
+      </header>
 
-          <RichBlock html={tour.overviewHtml} fallback={tour.description} />
+      <div className="tdx-grid">
+        <div className="tdx-content">
+          <section className="tdx-block">
+            <h2>About this tour</h2>
+            <CollapsibleHtml html={tour.overviewHtml} fallback={tour.description} />
+            {stops.length > 1 && (
+              <div className="tdx-route">
+                {stops.map((stop, i) => (
+                  <span key={stop}>
+                    {stop}{i < stops.length - 1 && <ChevronRight size={15} aria-hidden="true" />}
+                  </span>
+                ))}
+              </div>
+            )}
+          </section>
 
-          <div className="included-grid">
-            <div>
-              <h3>What's included</h3>
-              {(tour.included || []).map((item) => <p key={item}><Check size={16} />{item}</p>)}
-              {!(tour.included || []).length && <p className="muted-line">Details on request.</p>}
+          <section className="tdx-block">
+            <h2>What's included</h2>
+            <div className="tdx-incl">
+              <ul className="tdx-incl-yes">
+                {(tour.included || []).map((item) => <li key={item}><Check size={16} />{item}</li>)}
+                {!(tour.included || []).length && <li className="muted-line">Details on request.</li>}
+              </ul>
+              <ul className="tdx-incl-no">
+                {(tour.notIncluded || []).map((item) => <li key={item}><X size={15} />{item}</li>)}
+                {!(tour.notIncluded || []).length && <li className="muted-line">—</li>}
+              </ul>
             </div>
-            <div>
-              <h3>Not included</h3>
-              {(tour.notIncluded || []).map((item) => <p key={item}><ChevronDown size={16} />{item}</p>)}
-              {!(tour.notIncluded || []).length && <p className="muted-line">—</p>}
-            </div>
-          </div>
+          </section>
+
+          {itinerary.length > 0 && (
+            <section className="tdx-block">
+              <h2>Your day, stop by stop</h2>
+              <ItineraryAccordion items={itinerary} />
+            </section>
+          )}
 
           <TourExtras product={tour} />
         </div>
 
-        <aside className="panel booking-panel">
-          <span>Live shared price</span>
-          <strong>${projectedPrice}</strong>
-          <p>Choose a date. If your seats make the group larger, the price drops automatically for this reservation.</p>
-          <div className="price-ladder">
-            <div><span>At {goAhead} seats</span><strong>${safePrice(tour.publishedRate, currentPrice)}</strong></div>
-            <div><span>Current</span><strong>${currentPrice}</strong></div>
-            <div><span>Break price</span><strong>${breakPrice}</strong></div>
+        <aside className="tdx-aside">
+        <div className="tdx-booking">
+          <div className="tdx-price">
+            <span className="tdx-price-label">Live shared price</span>
+            <div className="tdx-price-now">
+              <strong>${projectedPrice}</strong>
+              <em>per person</em>
+            </div>
+            <p>The more seats join, the lower the shared price.</p>
           </div>
+          <div className="tdx-ladder">
+            <div><span>Published</span><b>${safePrice(tour.publishedRate, currentPrice)}</b></div>
+            <div className="is-live"><span>Current</span><b>${currentPrice}</b></div>
+            <div><span>At full group</span><b>${breakPrice}</b></div>
+          </div>
+          {!soldOut && (
+            <div className="tdx-seatbar">
+              <div className="tdx-seatbar-top">
+                <span>{currentSeats}/{goAhead} seats to confirm this date</span>
+                <b>{Math.max(0, goAhead - currentSeats)} to go</b>
+              </div>
+              <i><em style={{ width: `${seatPct}%` }} /></i>
+            </div>
+          )}
           <form className="public-booking-form" onSubmit={submitPublicBooking} noValidate>
             <div className="field">
               <label htmlFor="td-date">Date</label>
@@ -2299,69 +2513,67 @@ function TourDetail({ isSaving, navigate, onBookPublicDeparture, onCancelPublicB
                 })}
               </select>
             </div>
-            <div className="field">
-              <label htmlFor="td-name">Your name</label>
-              <input
-                id="td-name"
-                value={travelerName}
-                onChange={(event) => {
-                  setTravelerName(event.target.value);
-                  if (errors.name) setErrors((e) => ({ ...e, name: undefined }));
-                }}
-                placeholder="e.g. Yara Mansour"
-                aria-invalid={errors.name ? "true" : "false"}
-                className={errors.name ? "input-error" : ""}
-              />
-              {errors.name
-                ? <span className="field-error" role="alert">{errors.name}</span>
-                : <span className="field-hint">Who should we put the lead booking under?</span>}
+            <div className="tdx-frow">
+              <div className="field tdx-fname">
+                <label htmlFor="td-name">Your name</label>
+                <input
+                  id="td-name"
+                  value={travelerName}
+                  onChange={(event) => {
+                    setTravelerName(event.target.value);
+                    if (errors.name) setErrors((e) => ({ ...e, name: undefined }));
+                  }}
+                  placeholder="e.g. Yara Mansour"
+                  aria-invalid={errors.name ? "true" : "false"}
+                  className={errors.name ? "input-error" : ""}
+                />
+                {errors.name && <span className="field-error" role="alert">{errors.name}</span>}
+              </div>
+              <div className="field tdx-fseats">
+                <label htmlFor="td-seats">Seats</label>
+                <input
+                  id="td-seats"
+                  min="1"
+                  max={Math.max(1, maxSelectable)}
+                  type="number"
+                  value={travelerSeats}
+                  onChange={(event) => {
+                    setTravelerSeats(event.target.value);
+                    if (errors.seats) setErrors((e) => ({ ...e, seats: undefined }));
+                  }}
+                  aria-invalid={errors.seats ? "true" : "false"}
+                  className={errors.seats ? "input-error" : ""}
+                  disabled={soldOut}
+                />
+                {errors.seats && <span className="field-error" role="alert">{errors.seats}</span>}
+              </div>
             </div>
-            <div className="field">
-              <label htmlFor="td-email">Email <span className="field-opt">(optional)</span></label>
-              <input
-                id="td-email"
-                type="email"
-                value={travelerEmail}
-                onChange={(event) => {
-                  setTravelerEmail(event.target.value);
-                  if (errors.email) setErrors((e) => ({ ...e, email: undefined }));
-                }}
-                placeholder="you@email.com"
-                aria-invalid={errors.email ? "true" : "false"}
-                className={errors.email ? "input-error" : ""}
-              />
-              {errors.email
-                ? <span className="field-error" role="alert">{errors.email}</span>
-                : <span className="field-hint">We'll email your booking confirmation here.</span>}
+            <div className="tdx-frow">
+              <div className="field">
+                <label htmlFor="td-email">Email <span className="field-opt">(optional)</span></label>
+                <input
+                  id="td-email"
+                  type="email"
+                  value={travelerEmail}
+                  onChange={(event) => {
+                    setTravelerEmail(event.target.value);
+                    if (errors.email) setErrors((e) => ({ ...e, email: undefined }));
+                  }}
+                  placeholder="you@email.com"
+                  aria-invalid={errors.email ? "true" : "false"}
+                  className={errors.email ? "input-error" : ""}
+                />
+                {errors.email && <span className="field-error" role="alert">{errors.email}</span>}
+              </div>
+              <div className="field">
+                <label htmlFor="td-phone">Phone <span className="field-opt">(optional)</span></label>
+                <input id="td-phone" type="tel" value={travelerPhone} onChange={(e) => setTravelerPhone(e.target.value)} placeholder="+20 1XX XXX XXXX" />
+              </div>
             </div>
-            <div className="field">
-              <label htmlFor="td-phone">Phone / WhatsApp <span className="field-opt">(optional)</span></label>
-              <input id="td-phone" type="tel" value={travelerPhone} onChange={(e) => setTravelerPhone(e.target.value)} placeholder="+20 1XX XXX XXXX" />
-            </div>
-            <div className="field">
-              <label htmlFor="td-seats">Seats</label>
-              <input
-                id="td-seats"
-                min="1"
-                max={Math.max(1, maxSelectable)}
-                type="number"
-                value={travelerSeats}
-                onChange={(event) => {
-                  setTravelerSeats(event.target.value);
-                  if (errors.seats) setErrors((e) => ({ ...e, seats: undefined }));
-                }}
-                aria-invalid={errors.seats ? "true" : "false"}
-                className={errors.seats ? "input-error" : ""}
-                disabled={soldOut}
-              />
-              {errors.seats
-                ? <span className="field-error" role="alert">{errors.seats}</span>
-                : <span className="field-hint">{soldOut ? "This date is fully booked." : `${remainingSeats} seat${remainingSeats === 1 ? "" : "s"} left on this date.`}</span>}
-            </div>
-            <div className="deposit-summary">
+            <div className="deposit-summary tdx-deposit">
               <div><span>Deposit today</span><strong>${depositDue}</strong></div>
               <div><span>Balance</span><strong>${balanceDue}</strong></div>
-              <p>{depositPercentValue}% deposit confirms the reservation. The balance is due {selectedDeparture ? balanceDueDate(selectedDeparture.date) : "one day before departure"}.</p>
+              <p>{depositPercentValue}% confirms your seat · balance due {selectedDeparture ? balanceDueDate(selectedDeparture.date) : "before departure"}.</p>
             </div>
             <button className="primary full" disabled={isSaving || !selectedDeparture || soldOut} type="submit">
               {isSaving ? "Updating seats..." : soldOut ? "Date full" : "Join this departure"}
@@ -2377,12 +2589,18 @@ function TourDetail({ isSaving, navigate, onBookPublicDeparture, onCancelPublicB
               <button disabled={isSaving} onClick={onCancelPublicBooking}>Cancel this request</button>
             </div>
           )}
+        </div>
+        <ul className="tdx-assure">
+          <li><ShieldCheck size={16} />No payment until your group is confirmed</li>
+          <li><Users size={16} />Small shared groups, never crowded</li>
+          <li><BadgeCheck size={16} />Licensed guide &amp; vehicle on every date</li>
+        </ul>
         </aside>
-      </section>
+      </div>
 
       {leadDeparture && <LiveDepartureTimeline departure={leadDeparture} />}
 
-      <section className="tour-calendar">
+      <section className="tour-calendar tdx-dates">
         <div className="tour-calendar-header">
           <div>
             <strong>Available dates</strong>

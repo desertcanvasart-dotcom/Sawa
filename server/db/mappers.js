@@ -56,11 +56,11 @@ export function mapProduct(r) {
     meetingPoints: r.meeting_points ?? [],
     bookingCutoffHours: r.booking_cutoff_hours == null ? 24 : num(r.booking_cutoff_hours),
     images: r.images ?? [],
+    itinerary: r.itinerary ?? [],
   };
   if (r.type === "package") {
     out.cities = r.cities ?? [];
     out.nights = num(r.nights);
-    out.itinerary = r.itinerary ?? [];
     out.accommodationTiers = r.accommodation_tiers ?? [];
   }
   return out;
