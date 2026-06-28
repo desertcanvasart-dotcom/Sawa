@@ -183,6 +183,9 @@ app.get("/api/bootstrap", h(async (req, res) => {
     byDep.get(p.departure_id).push(p);
   }
 
+  // Never let a browser/proxy serve a stale catalogue — admin edits must show
+  // on the next reload of the public site.
+  res.set("Cache-Control", "no-store");
   res.json({
     // Only platform staff get the agency directory; agencies/public don't need it.
     agencies: isPlatform(req.user) ? agencies.rows.map(mapAgency) : [],
@@ -297,10 +300,10 @@ app.post("/api/admin/tour-products", requireAuth, requireRole("super_admin", "op
          $23,$24,$25,$26,$27,$28,$29,$30)
        ON CONFLICT (id) DO UPDATE SET
          type=EXCLUDED.type, title=EXCLUDED.title, city=EXCLUDED.city, cities=EXCLUDED.cities,
-         nights=EXCLUDED.nights, duration=EXCLUDED.duration, default_time=EXCLUDED.default_time,
+         nights=EXCLUDED.nights, duration=EXCLUDED.duration,
          guide=EXCLUDED.guide, vehicle=EXCLUDED.vehicle, min_seats=EXCLUDED.min_seats,
-         max_seats=EXCLUDED.max_seats, base_cost=EXCLUDED.base_cost, published_rate=EXCLUDED.published_rate,
-         break_price=EXCLUDED.break_price, quality=EXCLUDED.quality, deposit_percent=EXCLUDED.deposit_percent,
+         max_seats=EXCLUDED.max_seats, published_rate=EXCLUDED.published_rate,
+         break_price=EXCLUDED.break_price, deposit_percent=EXCLUDED.deposit_percent,
          description=EXCLUDED.description, included=EXCLUDED.included, not_included=EXCLUDED.not_included,
          itinerary=EXCLUDED.itinerary, accommodation_tiers=EXCLUDED.accommodation_tiers,
          overview_html=EXCLUDED.overview_html, policies_html=EXCLUDED.policies_html,

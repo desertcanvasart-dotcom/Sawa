@@ -286,6 +286,18 @@ function App() {
     loadBootstrap();
   }, [authToken]);
 
+  // Refetch the catalogue when the tab regains focus, so admin edits (new
+  // dates, price or itinerary changes) appear without a manual hard refresh.
+  useEffect(() => {
+    const refresh = () => { if (document.visibilityState === "visible") loadBootstrap(); };
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, []);
+
   function navigate(to) {
     window.history.pushState({}, "", to);
     setPath(to);

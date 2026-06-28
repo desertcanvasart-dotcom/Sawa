@@ -189,8 +189,8 @@ async function run() {
     ]
   );
 
-  // Three future departures.
-  const starts = ["2026-07-12", "2026-08-16", "2026-09-20"];
+  // Published departures.
+  const starts = ["2026-11-13", "2026-12-11", "2027-01-15", "2027-02-19", "2027-03-12", "2027-04-16"];
   const { rows } = await pool.query("SELECT COALESCE(MAX(id), 1000) AS m FROM departures");
   let nextId = Number(rows[0].m) + 1;
   for (const start of starts) {
