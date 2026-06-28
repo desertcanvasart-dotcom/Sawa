@@ -2639,50 +2639,54 @@ function TourDetail({ isSaving, navigate, onBookPublicDeparture, onCancelPublicB
 function PackageItinerary({ items }) {
   const [open, setOpen] = useState(0);
   return (
-    <ol className="tdx-itin tdx-itin-pkg">
+    <ol className="pitin">
       {items.map((day, i) => {
         const isOpen = open === i;
         const included = (day.included || []).filter(Boolean);
         const optional = (day.optional || []).filter(Boolean);
+        const dayNum = day.day || i + 1;
+        const meals = day.meals && day.meals !== "—" ? day.meals : "";
+        const last = i === items.length - 1;
         return (
-          <li key={day.day || i} className={isOpen ? "open" : ""}>
-            <button
-              type="button"
-              className="tdx-itin-head"
-              aria-expanded={isOpen}
-              onClick={() => setOpen(isOpen ? -1 : i)}
-            >
-              <span className="tdx-itin-mark">{day.day || i + 1}</span>
-              <span className="tdx-itin-headtext">
-                <em>Day {day.day || i + 1} · {day.city}</em>
-                <strong>{day.title}</strong>
-              </span>
-              <ChevronDown size={18} className="tdx-itin-chev" aria-hidden="true" />
-            </button>
-            <div className="tdx-itin-body">
-              <div className="tdx-itin-inner tdx-itin-rich">
-                {day.description && <p>{day.description}</p>}
-                <div className="tdx-daymeta">
-                  {day.accommodation && day.accommodation !== "—" && (
-                    <span><Hotel size={14} />{day.accommodation}</span>
+          <li key={dayNum} className={`pitin-day${isOpen ? " open" : ""}${last ? " last" : ""}`}>
+            <div className="pitin-rail"><span className="pitin-node">{dayNum}</span></div>
+            <div className="pitin-card">
+              <button
+                type="button"
+                className="pitin-head"
+                aria-expanded={isOpen}
+                onClick={() => setOpen(isOpen ? -1 : i)}
+              >
+                <span className="pitin-headmain">
+                  <span className="pitin-eyebrow">Day {dayNum} · {day.city}</span>
+                  <strong className="pitin-title">{day.title}</strong>
+                </span>
+                {day.overnight && (
+                  <span className="pitin-overnight"><Hotel size={13} />{day.overnight}</span>
+                )}
+                <ChevronDown size={18} className="pitin-chev" aria-hidden="true" />
+              </button>
+              <div className="pitin-body">
+                <div className="pitin-inner">
+                  {day.description && <p className="pitin-desc">{day.description}</p>}
+                  {meals && (
+                    <div className="pitin-chips">
+                      <span className="pitin-chip"><Utensils size={13} />{meals}</span>
+                    </div>
                   )}
-                  {day.meals && day.meals !== "—" && (
-                    <span><Utensils size={14} />{day.meals}</span>
+                  {included.length > 0 && (
+                    <ul className="pitin-incl">
+                      {included.map((x) => <li key={x}><Check size={15} />{x}</li>)}
+                    </ul>
                   )}
+                  {optional.length > 0 && (
+                    <div className="pitin-opt">
+                      <span className="pitin-opt-tag">Optional</span>
+                      <ul>{optional.map((x) => <li key={x}>{x}</li>)}</ul>
+                    </div>
+                  )}
+                  {day.special && <p className="pitin-note"><Bell size={13} />{day.special}</p>}
                 </div>
-                {included.length > 0 && (
-                  <div className="tdx-daylist">
-                    <h4><Check size={14} />Included today</h4>
-                    <ul>{included.map((x) => <li key={x}>{x}</li>)}</ul>
-                  </div>
-                )}
-                {optional.length > 0 && (
-                  <details className="tdx-dayopt">
-                    <summary>Optional activities ({optional.length})</summary>
-                    <ul>{optional.map((x) => <li key={x}>{x}</li>)}</ul>
-                  </details>
-                )}
-                {day.special && <p className="tdx-dayspecial"><Bell size={13} />{day.special}</p>}
               </div>
             </div>
           </li>
