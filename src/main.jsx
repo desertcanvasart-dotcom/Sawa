@@ -2992,7 +2992,7 @@ function PackageDetail({ isSaving, navigate, onBookPublicDeparture, onCancelPubl
           <ul className="tdx-assure">
             <li><ShieldCheck size={16} />No payment until your group is confirmed</li>
             <li><Users size={16} />Small shared groups, never crowded</li>
-            <li><BadgeCheck size={16} />Flights, cruise &amp; sleeper train all included</li>
+            <li><BadgeCheck size={16} />Domestic flights, Nile cruise &amp; sightseeing included</li>
           </ul>
         </aside>
       </div>
