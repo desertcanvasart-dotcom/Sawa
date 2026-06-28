@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   ArrowLeft,
@@ -39,9 +39,11 @@ import {
 } from "lucide-react";
 import "./styles.css";
 import { supabase, apiFetch, API_BASE } from "./supabaseClient";
-import { LoginGate } from "./LoginGate";
-import { AdminDashboard } from "./AdminDashboard";
-import { AgencyDashboard } from "./AgencyDashboard";
+// Lazy-loaded so the heavy authenticated portal (admin desk + TipTap editor)
+// is split out of the public bundle and never downloaded by visitors.
+const LoginGate = lazy(() => import("./LoginGate").then((m) => ({ default: m.LoginGate })));
+const AdminDashboard = lazy(() => import("./AdminDashboard").then((m) => ({ default: m.AdminDashboard })));
+const AgencyDashboard = lazy(() => import("./AgencyDashboard").then((m) => ({ default: m.AgencyDashboard })));
 
 const DEFAULT_GO_AHEAD = 4;
 
@@ -642,6 +644,7 @@ function App() {
 
   // Authenticated portal: login required. View is driven by the user's ROLE.
   return (
+    <Suspense fallback={<LoadingScreen />}>
     <LoginGate onSession={(token) => setAuthToken(token)}>
       {({ user, agency, signOut }) => (
         <Portal
@@ -673,6 +676,7 @@ function App() {
         />
       )}
     </LoginGate>
+    </Suspense>
   );
 }
 

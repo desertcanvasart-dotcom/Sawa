@@ -15,29 +15,28 @@ const IMG_RE = /\.(jpe?g|png|webp)$/i;
 const KEY = "egypt-nile-cruise-9d";
 const ID = "pkg_egypt_nile_cruise_9d";
 
-const GALLERY_FOLDERS = [
-  "cairo/giza-pyramids-and-sphinx",
-  "aswan/aswan-nile-river",
-  "luxor/karnak-temple",
-  "luxor/valley-of-the-kings",
-  "aswan/philae-temple",
-  "abu-simbel/abu-simbel-temples",
-  "luxor/luxor-nile-river-and-west-bank",
-  "cairo/grand-egyptian-museum",
+// Curated, itinerary-relevant gallery (cover first). Output names double as
+// cache-busting storage keys.
+const GALLERY = [
+  { src: "cairo/giza-pyramids-and-sphinx/culmination-journey-through-egypt-giza-shpinx-second-pyramid.jpg", name: "sphinx-giza.jpg", alt: "The Great Sphinx before the pyramid of Khafre at Giza" },
+  { src: "cairo/giza-pyramids-and-sphinx/giza-pyramids-at-dusk-cairo-egypt.jpg", name: "giza-dusk.jpg", alt: "Pyramids of Giza at dusk" },
+  { src: "nile-river/nile-cruise/nile-cruise-ship-egypt.jpg", name: "nile-cruise.jpg", alt: "Nile cruise ship" },
+  { src: "aswan/aswan-nile-river/egypt-nile-valley-boat-cruising-nile-between-luxor-aswan.jpg", name: "nile-cruising.jpg", alt: "Cruising the Nile between Luxor and Aswan" },
+  { src: "luxor/karnak-temple/luxor-egypt-great-hypostyle-hall-temple-amun-karnak-luxor-egypt.jpg", name: "karnak.jpg", alt: "The Great Hypostyle Hall at Karnak Temple" },
+  { src: "luxor/valley-of-the-kings/aerial-view-valley-of-kings-luxor.jpg", name: "valley-of-the-kings.jpg", alt: "Aerial view of the Valley of the Kings" },
+  { src: "aswan/philae-temple/egypt-temple-philae-nile.jpg", name: "philae.jpg", alt: "Philae Temple on the Nile" },
+  { src: "nile-river/felucca/felucca-cruising-nile.jpg", name: "felucca.jpg", alt: "A felucca sailing on the Nile at Aswan" },
+  { src: "abu-simbel/abu-simbel-temples/abu-simbel-great-temple-egypt.jpg", name: "abu-simbel.jpg", alt: "The Great Temple of Ramses II at Abu Simbel" },
+  { src: "cairo/islamic-cairo/cairo-egypt-december-20-after-dusk-al-muizz-street-wakings-up-building-s-illumination.jpg", name: "al-muizz-street.jpg", alt: "Al-Muizz Street illuminated in Islamic Cairo" },
 ];
 
 const itinerary = [
   {
     day: 1, city: "Cairo", title: "Arrival in Cairo",
-    description: "Welcome to Egypt. You'll be met on arrival at Cairo International Airport and transferred to your hotel. Your adventure begins with an important welcome meeting at 6pm. If you have time spare, explore the busy city streets or visit the Cairo Citadel, dating to 1176 and home to several museums and mosques.",
-    accommodation: "Hotel (1 night)", meals: "—",
-    included: ["Arrival transfer"],
-    optional: [
-      "The Citadel (entrance fee) — EGP550",
-      "Coptic Museum (entrance fee) — EGP280",
-      "Islamic Art Museum (entrance fee) — EGP340",
-      "National Museum of Egyptian Civilization & Royal Mummy Room — EGP550",
-    ],
+    description: "Welcome to Egypt. You'll be met on arrival at Cairo International Airport and transferred to your hotel. Your adventure begins with an important welcome meeting at 6pm, followed by dinner together at a local restaurant. If you have time spare beforehand, explore the busy city streets or visit the Cairo Citadel, dating to 1176 and home to several museums and mosques.",
+    accommodation: "Hotel (1 night)", meals: "Dinner at a local restaurant",
+    included: ["Arrival transfer", "Welcome dinner at a local restaurant"],
+    optional: [],
     special: "Please attend the welcome meeting — we collect insurance and next-of-kin details. Provide flight details at least 14 days before travel so we can confirm your arrival transfer.",
   },
   {
@@ -48,10 +47,7 @@ const itinerary = [
       "Pyramids of Giza & the Sphinx", "Grand Egyptian Museum", "Memphis & Saqqara",
       "Old Cairo", "Khan el-Khalili bazaar visit",
     ],
-    optional: [
-      "The Great Pyramid of Cheops (entrance fee) — EGP1500",
-      "The 3rd Pyramid of Menkaure (entrance fee) — EGP280",
-    ],
+    optional: [],
     special: "The sleeper train departs Cairo around 8pm and takes about 10 hours. Cabins are two-berth, air-conditioned, with bedding and an included dinner and breakfast on board.",
   },
   {
@@ -59,11 +55,7 @@ const itinerary = [
     description: "Pull into Luxor around 6am and take advantage of the early-morning calm at Karnak Temple — a vast complex of temples, chapels and pylons developed over 1,000 years. Your leader walks you through highlights such as the Avenue of Sphinxes and the Great Temple of Amun. Board your Nile cruise, settle into your cabin, and join an optional afternoon walking tour of Luxor and its bazaar.",
     accommodation: "Nile River Cruise (1 night)", meals: "Breakfast, Lunch, Dinner",
     included: ["Karnak Temple"],
-    optional: [
-      "Mummification Museum (entrance fee) — EGP220",
-      "Luxor Museum (entrance fee) — EGP400",
-      "Karnak Sound & Light Show — USD48",
-    ],
+    optional: [],
     special: "Tonight your boat is docked in Luxor. Cruise boats are large and comfortable with private facilities and full air-conditioning; meals are included but drinks are extra.",
   },
   {
@@ -72,11 +64,7 @@ const itinerary = [
     accommodation: "Nile River Cruise (1 night)", meals: "Breakfast, Lunch, Dinner",
     included: ["Colossi of Memnon", "Valley of the Kings (3 tombs)", "Tomb of Tutankhamun", "Hatshepsut Temple"],
     optional: [
-      "Hot Air Balloon over the Valley of the Kings — USD120",
-      "Tomb of Queen Nefertari, Valley of the Queens — EGP2500",
-      "Valley of the Queens (entrance fee) — EGP220",
-      "Deir el-Medina (entrance fee) — EGP220",
-      "Medinet Habu Temple (entrance fee) — EGP220",
+      "Hot air balloon over the Valley of the Kings — USD120",
     ],
     special: "Tonight your boat is docked in Edfu. The hot air balloon is weather-dependent; pickup is around 4:30–5am.",
   },
@@ -90,14 +78,11 @@ const itinerary = [
   },
   {
     day: 6, city: "Nile Cruise — Aswan", title: "Aswan at your pace & a felucca sail",
-    description: "Time to explore or relax. Your leader can recommend optional activities: the High Dam and Unfinished Obelisk, the Nubian Museum, or the breathtaking Abu Simbel — Ramses II's four colossal statues carved into the mountainside, one of Egypt's most memorable sights. Late afternoon, enjoy a leisurely felucca sail before dinner on the ship.",
+    description: "Time to explore Aswan at your own pace. Wander the bustling local market and souk for spices and crafts, take in views of the Nile, and relax by the water. Late afternoon, enjoy a leisurely felucca sail before dinner on the ship.",
     accommodation: "Nile River Cruise (1 night)", meals: "Breakfast, Lunch, Dinner",
-    included: ["Felucca sail on the Nile"],
-    optional: [
-      "Abu Simbel by car (transfer, guide & entry) — USD110",
-      "Abu Simbel by flight (flights, transfers, guide & entry) — from USD596",
-    ],
-    special: "Tonight your boat is docked in Aswan.",
+    included: ["Local market visit", "Felucca sail on the Nile"],
+    optional: [],
+    special: "Tonight your boat is docked in Aswan. An Abu Simbel excursion by road or flight can be arranged on request.",
   },
   {
     day: 7, city: "Aswan → Cairo", title: "Philae Temple, fly to Cairo & a home-cooked dinner",
@@ -109,9 +94,9 @@ const itinerary = [
   },
   {
     day: 8, city: "Cairo", title: "Islamic Cairo & Al-Muizz Street",
-    description: "A full day in medieval Cairo. Walk Al-Muizz Street, one of the oldest streets in the city and an open-air museum of Islamic architecture — mosques, madrasas and merchant houses lining a thousand-year-old thoroughfare. Lose yourself in the lanes of the surrounding old city, stopping for mint tea and a final round of bazaar browsing.",
-    accommodation: "Hotel (1 night)", meals: "Breakfast",
-    included: ["Al-Muizz Street & Islamic Cairo walk"],
+    description: "A full day in medieval Cairo. Walk Al-Muizz Street, one of the oldest streets in the city and an open-air museum of Islamic architecture — mosques, madrasas and merchant houses lining a thousand-year-old thoroughfare. Lose yourself in the lanes of the surrounding old city, stopping for mint tea and a final round of bazaar browsing, before a farewell dinner together at a local restaurant.",
+    accommodation: "Hotel (1 night)", meals: "Breakfast, Dinner at a local restaurant",
+    included: ["Al-Muizz Street & Islamic Cairo walk", "Farewell dinner at a local restaurant"],
     optional: [],
     special: "An easy, walkable day — comfortable shoes recommended.",
   },
@@ -137,7 +122,7 @@ const product = {
     "Arrival and departure airport transfers",
     "All internal Egypt flights and the overnight sleeper train Cairo → Luxor",
     "3 nights Cairo hotel, 4 nights Nile cruise (full board), 1 night sleeper train",
-    "8 breakfasts, 5 lunches, 6 dinners",
+    "8 breakfasts, 5 lunches, 8 dinners — including 3 dinners out (welcome, home-cooked family & farewell)",
     "Licensed Egyptologist guide throughout",
     "Pyramids of Giza & the Sphinx, Grand Egyptian Museum, Memphis & Saqqara",
     "Karnak, Valley of the Kings (3 tombs), Tomb of Tutankhamun, Hatshepsut Temple",
@@ -172,17 +157,11 @@ function collectImages() {
   rmSync(dest, { recursive: true, force: true });
   mkdirSync(dest, { recursive: true });
   const images = [];
-  for (const rel of GALLERY_FOLDERS) {
-    const abs = join(SRC_ROOT, rel);
-    if (!existsSync(abs)) { console.warn("  ! missing folder:", rel); continue; }
-    const files = readdirSync(abs).filter((f) => IMG_RE.test(f)).sort().slice(0, 2);
-    for (const f of files) {
-      const i = images.length + 1;
-      const out = `${String(i).padStart(2, "0")}${extname(f).toLowerCase()}`;
-      copyFileSync(join(abs, f), join(dest, out));
-      images.push({ url: `/images/packages/${KEY}/${out}`, alt: altFrom(f) });
-      if (images.length >= 10) return images;
-    }
+  for (const g of GALLERY) {
+    const abs = join(SRC_ROOT, g.src);
+    if (!existsSync(abs)) { console.warn("  ! missing file:", g.src); continue; }
+    copyFileSync(abs, join(dest, g.name));
+    images.push({ url: `/images/packages/${KEY}/${g.name}`, alt: g.alt });
   }
   return images;
 }
