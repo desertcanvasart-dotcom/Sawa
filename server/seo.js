@@ -125,9 +125,12 @@ export async function buildHead(pathname) {
     if (path === "/faq") graph.push(FAQ_SCHEMA);
     if (STATIC[path].crumb) crumbs.push({ name: STATIC[path].crumb, url });
     if (path === "/") graph.push({ "@type": "WebPage", url, name: m.title, description: m.description, isPartOf: { "@id": SITE_ID } });
-  } else if (/^\/tour\/[^/]+$/.test(path)) {
+  } else if (/^\/(tour|package)\/[^/]+$/.test(path)) {
+    // Tours and packages both live in tour_products, so the same schema builder
+    // covers both. (Packages were previously falling through to "Page not found".)
     const res = await tourSchema(decodeURIComponent(path.split("/")[2]), url);
     if (res) { m = { ...m, ...res.meta }; graph.push(res.schema); crumbs.push({ name: "Tours", url: `${BRAND.url}/tours` }, { name: res.crumbName, url }); }
+    else m = { ...m, noindex: true, title: `Tour not found | ${BRAND.name}` };
   } else if (/^\/blog\/[^/]+$/.test(path)) {
     const res = await postSchema(decodeURIComponent(path.split("/")[2]), url);
     if (res) { m = { ...m, ...res.meta }; res.schema.forEach((s) => graph.push(s)); crumbs.push({ name: "Blog", url: `${BRAND.url}/blog` }, { name: res.crumbName, url }); }
@@ -214,8 +217,8 @@ export async function sitemapXml() {
   add("/", null, "weekly");
   ["/tours", "/how-it-works", "/about", "/contact", "/faq", "/blog", "/privacy", "/terms"].forEach((p) => add(p, null, "monthly"));
   try {
-    const tours = await pool.query("SELECT id FROM tour_products WHERE active IS NOT FALSE");
-    tours.rows.forEach((t) => add(`/tour/${encodeURIComponent(t.id)}`, null, "weekly"));
+    const tours = await pool.query("SELECT id, type FROM tour_products WHERE active IS NOT FALSE");
+    tours.rows.forEach((t) => add(`/${t.type === "package" ? "package" : "tour"}/${encodeURIComponent(t.id)}`, null, "weekly"));
     const posts = await pool.query("SELECT slug, updated_at FROM blog_posts WHERE status='published'");
     posts.rows.forEach((p) => add(`/blog/${encodeURIComponent(p.slug)}`, p.updated_at instanceof Date ? p.updated_at.toISOString() : p.updated_at, "monthly"));
   } catch { /* DB optional */ }
