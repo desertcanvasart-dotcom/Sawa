@@ -33,6 +33,16 @@ app.disable("x-powered-by");
 // In production we serve the SPA from the same origin, so relax CSP/CORP that
 // would otherwise block the bundled assets. API security is unaffected.
 app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
+// The embeddable booking widget (/embed/*) must be frameable on ANY external
+// site (WordPress, custom sites, etc.), so drop the same-origin frame guard
+// for those routes only. The rest of the app stays SAMEORIGIN-protected.
+app.use((req, res, next) => {
+  if (req.path.startsWith("/embed")) {
+    res.removeHeader("X-Frame-Options");
+    res.setHeader("Content-Security-Policy", "frame-ancestors *;");
+  }
+  next();
+});
 // 12mb allows base64-encoded image uploads (~9mb raw) through /api/admin/uploads.
 // (The route-level json parser ran too late because this global one parses first.)
 app.use(express.json({ limit: "12mb" }));

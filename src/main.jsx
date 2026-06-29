@@ -627,6 +627,15 @@ function App() {
     }
   }
 
+  const embedMatch = path.match(/^\/embed\/(tour|package)\/([^/?#]+)/);
+  if (embedMatch) {
+    if (isLoading) return null;
+    const embedType = embedMatch[1];
+    const embedId = decodeURIComponent(embedMatch[2]);
+    const embedProduct = customerCalendars.find((p) => p.id === embedId);
+    return <EmbedWidget type={embedType} product={embedProduct} />;
+  }
+
   if (isLoading) {
     return <LoadingScreen />;
   }
@@ -1326,6 +1335,62 @@ function LoadingScreen({ label = "Preparing your shared departures…" }) {
         <span className="app-loader-sub">{label}</span>
       </div>
     </main>
+  );
+}
+
+// Self-contained, embeddable booking widget for external sites (iframe).
+// Shows a product's cover, rating, live shared price and a click-through CTA.
+function EmbedWidget({ type, product }) {
+  useEffect(() => {
+    document.body.style.background = "transparent";
+    const post = () => {
+      const height = Math.ceil(document.documentElement.getBoundingClientRect().height);
+      try { window.parent?.postMessage({ type: "sawa-embed-height", height }, "*"); } catch (e) { /* cross-origin */ }
+    };
+    post();
+    const ro = new ResizeObserver(post);
+    ro.observe(document.body);
+    window.addEventListener("load", post);
+    return () => { ro.disconnect(); window.removeEventListener("load", post); };
+  }, [product]);
+
+  if (!product) {
+    return <div className="embed-card embed-empty">This tour is no longer available.</div>;
+  }
+
+  const pkg = isPackage(product);
+  const lead = openDates(product)[0] || product.dates[0];
+  const seats = lead ? seatsTotal(lead.pledges) : 0;
+  const goAhead = goAheadFor(product);
+  const livePrice = lead ? livePriceFor({ ...product, ...lead }, seats) : livePriceFor(product, goAhead);
+  const breakPrice = safePrice(product.breakPrice, Math.round(product.publishedRate * 0.8));
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  const url = `${origin}/${pkg ? "package" : "tour"}/${product.id}`;
+  const facts = pkg
+    ? `${(product.cities || [product.city]).join(" · ")}`
+    : `${product.city} · ${product.duration || ""}`;
+
+  return (
+    <a className="embed-card" href={url} target="_blank" rel="noopener noreferrer">
+      <div className="embed-media" style={{ backgroundImage: `url(${coverImage(product)})` }}>
+        <span className="embed-badge">
+          {pkg ? <><Package size={12} />{product.nights}-night package</> : product.city}
+        </span>
+      </div>
+      <div className="embed-body">
+        <div className="embed-meta">
+          {product.quality ? <span className="embed-rating"><Star size={12} />{Number(product.quality).toFixed(1)}</span> : null}
+          <span className="embed-facts">{facts}</span>
+        </div>
+        <strong className="embed-title">{product.title}</strong>
+        <div className="embed-price">
+          <span>from</span><b>${livePrice.toLocaleString()}</b><span>/ person</span>
+        </div>
+        <p className="embed-hook">Shared price — it drops as the group grows, down to ${breakPrice.toLocaleString()}/person.</p>
+        <span className="embed-cta">View &amp; book<ArrowRight size={16} /></span>
+        <span className="embed-brand">Powered by <b>Sawa&nbsp;Tours</b></span>
+      </div>
+    </a>
   );
 }
 
