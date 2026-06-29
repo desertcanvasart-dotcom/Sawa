@@ -206,6 +206,10 @@ async function run() {
     );
   }
 
+  // Keep the sequence ahead of our manually-assigned ids, otherwise the admin
+  // dashboard's nextval() collides with these rows and POST /departures 500s.
+  await pool.query("SELECT setval('departures_id_seq', (SELECT MAX(id) FROM departures), true)");
+
   console.log(`✓ ${p.title}\n  ${images.length} images · ${itinerary.length} days · ${starts.length} departures`);
   await pool.end();
 }

@@ -38,6 +38,10 @@ async function run() {
       ]
     );
   }
+  // Keep the sequence ahead of our manual ids so the dashboard's nextval()
+  // doesn't collide (a stale sequence makes POST /admin/departures 500).
+  await pool.query("SELECT setval('departures_id_seq', (SELECT MAX(id) FROM departures), true)");
+
   console.log(`✓ ${p.title}: set ${DATES.length} departures — ${DATES.join(", ")}`);
   await pool.end();
 }
