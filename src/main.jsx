@@ -1342,6 +1342,10 @@ function LoadingScreen({ label = "Preparing your shared departures…" }) {
   );
 }
 
+// Canonical public site — embed links always point here, wherever the widget
+// is hosted.
+const SITE_URL = "https://sawatours.org";
+
 // Reports the widget's height to the host page so the iframe can auto-size.
 function useEmbedAutoResize(dep) {
   useEffect(() => {
@@ -1362,22 +1366,15 @@ function useEmbedAutoResize(dep) {
 // Short, professional, no per-tour detail. Embeddable on any external site.
 function BrandEmbed() {
   useEmbedAutoResize(null);
-  const origin = typeof window !== "undefined" ? window.location.origin : "";
   return (
-    <a className="embed-card embed-brand-card" href={`${origin}/tours`} target="_blank" rel="noopener noreferrer">
-      <div className="embed-hero">
-        <span className="embed-wordmark"><SawaMark size={24} /><span><b>Sawa</b><i>Tours</i></span></span>
-        <strong className="embed-headline">Egypt tours that actually run.</strong>
-      </div>
-      <div className="embed-body">
-        <p className="embed-sub">Shared day tours and Nile cruises across Cairo, Luxor &amp; Aswan. Your date is confirmed before you pay — and the price drops as the group grows.</p>
-        <div className="embed-trust">
-          <span><ShieldCheck size={14} />Licensed guides</span>
-          <span><BadgeCheck size={14} />No payment until confirmed</span>
-          <span><Users size={14} />Live group pricing</span>
-        </div>
+    <a className="embed-banner" href={`${SITE_URL}/tours`} target="_blank" rel="noopener noreferrer">
+      <div className="embed-banner-content">
+        <span className="embed-eyebrow"><SawaMark size={20} />Sawa Tours</span>
+        <strong className="embed-banner-title">Egypt tours that actually run.</strong>
+        <p className="embed-banner-text">Shared day tours and Nile cruises across Cairo, Luxor &amp; Aswan — your date is confirmed before you pay, and the price drops as the group grows.</p>
         <span className="embed-cta">Explore Egypt tours<ArrowRight size={16} /></span>
       </div>
+      <div className="embed-banner-media" style={{ backgroundImage: "url(/images/hero.jpg)" }} aria-hidden="true" />
     </a>
   );
 }
@@ -1397,8 +1394,7 @@ function EmbedWidget({ type, product }) {
   const goAhead = goAheadFor(product);
   const livePrice = lead ? livePriceFor({ ...product, ...lead }, seats) : livePriceFor(product, goAhead);
   const breakPrice = safePrice(product.breakPrice, Math.round(product.publishedRate * 0.8));
-  const origin = typeof window !== "undefined" ? window.location.origin : "";
-  const url = `${origin}/${pkg ? "package" : "tour"}/${product.id}`;
+  const url = `${SITE_URL}/${pkg ? "package" : "tour"}/${product.id}`;
   const facts = pkg
     ? `${(product.cities || [product.city]).join(" · ")}`
     : `${product.city} · ${product.duration || ""}`;

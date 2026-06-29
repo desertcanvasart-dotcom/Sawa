@@ -6346,23 +6346,23 @@ button:disabled {
 .embed-brand b { color: var(--ink-soft); font-weight: 700; }
 .embed-empty { padding: 28px 18px; text-align: center; color: var(--ink-soft); font-size: 14px; }
 
-/* Brand embed variant (/embed) — the site's overall message */
-.embed-brand-card { max-width: 400px; }
-.embed-hero {
-  position: relative; padding: 22px 20px 20px; color: #fff; display: grid; gap: 11px;
-  background:
-    radial-gradient(circle at 82% 8%, rgba(244,201,93,.30), transparent 42%),
-    linear-gradient(180deg, rgba(9,22,26,.74), rgba(14,35,41,.93)),
-    url("/images/hero.jpg");
-  background-size: cover; background-position: center;
+/* Brand embed variant (/embed) — full-width promo banner: title, text, button + image */
+.embed-banner {
+  display: grid; grid-template-columns: minmax(0, 1fr) 40%;
+  width: 100%; background: var(--surface); border: 1px solid var(--line); border-radius: 18px;
+  overflow: hidden; text-decoration: none; color: var(--ink); box-shadow: var(--shadow-md);
+  font-family: var(--font-body); transition: transform .2s cubic-bezier(.16,1,.3,1), box-shadow .2s;
 }
-.embed-wordmark { display: inline-flex; align-items: center; gap: 8px; color: #fff; }
-.embed-wordmark > span { font-family: var(--font-display); font-size: 17px; line-height: 1; }
-.embed-wordmark b { font-weight: 600; }
-.embed-wordmark i { font-style: normal; font-weight: 600; color: var(--gold); margin-left: 3px; }
-.embed-headline { font-family: var(--font-display); font-weight: 600; font-size: 22px; line-height: 1.12; letter-spacing: -0.02em; color: #fff; }
-.embed-brand-card .embed-body { gap: 12px; padding: 16px 18px 16px; }
-.embed-sub { margin: 0; color: var(--ink-soft); font-size: 13px; line-height: 1.55; }
-.embed-trust { display: grid; gap: 9px; }
-.embed-trust span { display: inline-flex; align-items: center; gap: 9px; font-size: 12.5px; font-weight: 600; color: var(--ink); }
-.embed-trust svg { color: var(--go); flex: none; }
+.embed-banner:hover { transform: translateY(-2px); box-shadow: var(--shadow-lg); }
+.embed-banner-content { padding: clamp(20px, 3vw, 30px); display: grid; gap: 11px; align-content: center; }
+.embed-eyebrow { display: inline-flex; align-items: center; gap: 8px; font-family: var(--font-display); font-weight: 600; font-size: 14px; color: var(--ink); }
+.embed-eyebrow .sawa-mark { color: var(--ink); }
+.embed-banner-title { font-family: var(--font-display); font-weight: 600; font-size: clamp(21px, 3.4vw, 30px); line-height: 1.08; letter-spacing: -0.025em; color: var(--ink); text-wrap: balance; }
+.embed-banner-text { margin: 0; color: var(--ink-soft); font-size: 14.5px; line-height: 1.55; max-width: 48ch; }
+.embed-banner .embed-cta { width: fit-content; min-width: 200px; padding: 0 22px; margin-top: 6px; }
+.embed-banner-media { background-size: cover; background-position: center; background-color: var(--sand-200); min-height: 100%; }
+@media (max-width: 560px) {
+  .embed-banner { grid-template-columns: 1fr; }
+  .embed-banner-media { order: -1; min-height: 150px; }
+  .embed-banner .embed-cta { width: 100%; }
+}
