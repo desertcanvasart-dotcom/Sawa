@@ -150,7 +150,13 @@ const publicBookingSchema = z.object({
   seats: z.coerce.number().int().min(1),
   roomingType: z.enum(["single", "double", "triple"]).optional(),
   accommodationTier: z.string().optional(),
+  refCode: z.string().trim().max(60).optional(),
 });
+
+// Referral codes: lowercase, url-safe, capped. Returns "" if nothing usable.
+function cleanRefCode(raw) {
+  return String(raw || "").toLowerCase().replace(/[^a-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 48);
+}
 
 function parse(schema, body) {
   const result = schema.safeParse(body ?? {});
@@ -433,6 +439,12 @@ app.post("/api/public/departures/:id/bookings", h(async (req, res) => {
     const product = dep.tourProductId ? await loadProduct(c, dep.tourProductId) : null;
     if (bookingClosed(dep, product)) throw new AppError(409, "Bookings for this date have closed.");
     const pricing = computePledgePricing(dep, product, input);
+    const refCode = cleanRefCode(input.refCode);
+    if (refCode) {
+      // Make sure the partner exists so a booking always shows in the report,
+      // even if the click-through visit wasn't tracked.
+      await c.query("INSERT INTO referrals (code) VALUES ($1) ON CONFLICT (code) DO NOTHING", [refCode]);
+    }
     const pledgeId = `pl_${dep.id}_${Date.now()}`;
     const booking = {
       id: pledgeId,
@@ -444,6 +456,7 @@ app.post("/api/public/departures/:id/bookings", h(async (req, res) => {
       customerPhone: input.customerPhone || null,
       source: "public",
       bookingCode: publicBookingCode(),
+      refCode: refCode || null,
       ...pricing,
     };
     await insertPledge(c, dep.id, booking);
@@ -545,6 +558,65 @@ app.get("/api/public/bookings/:code", h(async (req, res) => {
     statusLabel: cancelled ? "Cancelled" : confirmed ? "Confirmed — GoAhead" : "Forming",
     statusTone: cancelled ? "cancelled" : confirmed ? "go" : "pending",
   } });
+}));
+
+// ---- Referrals / affiliate tracking -----------------------------------------
+
+// Public: count a click-through from a partner widget. Fire-and-forget.
+app.post("/api/track/referral", h(async (req, res) => {
+  const code = cleanRefCode((req.body || {}).code);
+  if (!code) return res.status(204).end();
+  await pool.query(
+    `INSERT INTO referrals (code, visits) VALUES ($1, 1)
+     ON CONFLICT (code) DO UPDATE SET visits = referrals.visits + 1`,
+    [code]
+  );
+  res.status(204).end();
+}));
+
+// Admin: per-partner performance (visits, bookings, revenue, commission).
+app.get("/api/admin/referrals", requireAuth, requireRole("super_admin", "ops_staff"), h(async (_req, res) => {
+  const r = await pool.query(
+    `SELECT r.code, r.name, r.commission_percent, r.visits, r.active, r.created_at,
+            COUNT(p.id) FILTER (WHERE p.status <> 'cancelled') AS bookings,
+            COALESCE(SUM(p.seats) FILTER (WHERE p.status <> 'cancelled'), 0) AS travellers,
+            COALESCE(SUM(p.booking_total) FILTER (WHERE p.status <> 'cancelled'), 0) AS revenue
+       FROM referrals r
+       LEFT JOIN pledges p ON p.ref_code = r.code
+      GROUP BY r.code
+      ORDER BY revenue DESC, r.visits DESC, r.code`
+  );
+  res.json({ referrals: r.rows.map((x) => {
+    const revenue = Number(x.revenue) || 0;
+    const visits = Number(x.visits) || 0;
+    const bookings = Number(x.bookings) || 0;
+    const commissionPercent = Number(x.commission_percent) || 0;
+    return {
+      code: x.code, name: x.name || "", commissionPercent, visits, bookings,
+      travellers: Number(x.travellers) || 0, revenue, active: x.active !== false,
+      conversion: visits ? Math.round((bookings / visits) * 1000) / 10 : 0,
+      commission: Math.round(revenue * commissionPercent) / 100,
+    };
+  }) });
+}));
+
+// Admin: create or update a partner code.
+app.post("/api/admin/referrals", requireAuth, requireRole("super_admin", "ops_staff"), h(async (req, res) => {
+  const body = req.body || {};
+  const code = cleanRefCode(body.code || body.name);
+  if (!code) throw new AppError(422, "A code (or name) is required.");
+  const commission = Math.min(100, Math.max(0, Number(body.commissionPercent) || 0));
+  await pool.query(
+    `INSERT INTO referrals (code, name, commission_percent, active)
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT (code) DO UPDATE SET
+       name = COALESCE(NULLIF(EXCLUDED.name, ''), referrals.name),
+       commission_percent = EXCLUDED.commission_percent,
+       active = EXCLUDED.active`,
+    [code, String(body.name || "").trim(), commission, body.active === false ? false : true]
+  );
+  await logAudit(req, { action: "referral.upsert", entity: "referral", entityId: code });
+  res.status(201).json({ code });
 }));
 
 // ---- Destinations: tourist-facing cities, each owning its meeting points ----
@@ -693,15 +765,15 @@ async function insertPledge(c, departureId, p) {
       (id, departure_id, agency_id, agency, seats, customers, price_per_person, booking_total,
        deposit_percent, deposit_due, balance_due, balance_due_date, source, booking_code,
        rooming_type, accommodation_tier, accommodation_tier_name, created_by_user_id, customer_email,
-       customer_phone)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)`,
+       customer_phone, ref_code)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)`,
     [
       p.id, departureId, p.agencyId ?? null, p.agency ?? null, p.seats, p.customers ?? null,
       p.pricePerPerson ?? null, p.bookingTotal ?? null, p.depositPercent ?? null,
       p.depositDue ?? null, p.balanceDue ?? null, p.balanceDueDate ?? null,
       p.source ?? null, p.bookingCode ?? null, p.roomingType ?? null,
       p.accommodationTier ?? null, p.accommodationTierName ?? null, p.createdByUserId ?? null,
-      p.customerEmail ?? null, p.customerPhone ?? null,
+      p.customerEmail ?? null, p.customerPhone ?? null, p.refCode ?? null,
     ]
   );
   await refreshStatus(c, departureId);

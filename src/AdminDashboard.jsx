@@ -3,7 +3,7 @@ import {
   LayoutDashboard, Package, CalendarDays, Users, ClipboardList, ScrollText,
   Plus, Check, X, Search, Archive, ArchiveRestore, CircleDollarSign, ShieldCheck,
   TrendingUp, AlertTriangle, MapPin, Hotel, ArrowUpRight, ArrowLeft, Trash2, Pencil,
-  Newspaper,
+  Newspaper, Share2, Copy,
 } from "lucide-react";
 import { apiFetch, supabase, uploadImage } from "./supabaseClient";
 import { DashSidebar } from "./DashSidebar";
@@ -32,6 +32,7 @@ const NAV_GROUPS = [
       { id: "blog", label: "Blog", icon: Newspaper },
       { id: "departures", label: "Departures", icon: CalendarDays, alert: (s) => s?.departureStatus?.readyToConfirm || 0 },
       { id: "bookings", label: "Bookings", icon: ClipboardList },
+      { id: "referrals", label: "Referrals", icon: Share2 },
       { id: "agencies", label: "Agencies", icon: Users },
       { id: "team", label: "Operations team", icon: ShieldCheck },
       { id: "activity", label: "Activity", icon: ScrollText },
@@ -96,6 +97,7 @@ export function AdminDashboard({ user, agency, signOut, navigate }) {
             {section === "blog" && <BlogSection posts={posts} reload={loadAll} flash={flash} />}
             {section === "departures" && <DeparturesSection data={data} reload={loadAll} flash={flash} />}
             {section === "bookings" && <BookingsSection />}
+            {section === "referrals" && <ReferralsSection flash={flash} />}
             {section === "agencies" && <AgenciesSection flash={flash} />}
             {section === "team" && <OpsTeamSection flash={flash} currentUserId={user.id} />}
             {section === "activity" && <ActivitySection />}
@@ -1094,6 +1096,103 @@ function BookingDrawer({ booking: b, onClose, onStatus }) {
 }
 
 /* ---------------- Agencies ---------------- */
+/* ---------------- Referrals / affiliate tracking ---------------- */
+function ReferralsSection({ flash }) {
+  const [rows, setRows] = useState(null);
+  const [form, setForm] = useState({ name: "", code: "", commissionPercent: "" });
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const set = (k) => (e) => setForm((s) => ({ ...s, [k]: e.target.value }));
+
+  async function load() {
+    const j = await apiFetch("/admin/referrals").then((r) => r.json()).catch(() => ({ referrals: [] }));
+    setRows(j.referrals || []);
+  }
+  useEffect(() => { load(); }, []);
+
+  const embedSnippet = (code) =>
+    `<iframe src="https://sawatours.org/embed?ref=${code}" style="width:100%;border:0;border-radius:18px;min-height:240px" loading="lazy" title="Sawa Tours"></iframe>`;
+  const linkFor = (code) => `https://sawatours.org/tours?ref=${code}`;
+
+  async function copy(text, label) {
+    try { await navigator.clipboard.writeText(text); flash(`${label} copied to clipboard.`); }
+    catch (e) { flash("Copy failed — please copy manually."); }
+  }
+
+  async function create(e) {
+    e.preventDefault(); setBusy(true); setErr("");
+    try {
+      const r = await apiFetch("/admin/referrals", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: form.name, code: form.code || form.name, commissionPercent: Number(form.commissionPercent) || 0 }),
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || "Could not save partner.");
+      setForm({ name: "", code: "", commissionPercent: "" });
+      await load();
+      flash(`Partner "${j.code}" saved — copy its embed code from the table.`);
+    } catch (e2) { setErr(e2.message); } finally { setBusy(false); }
+  }
+
+  const totals = (rows || []).reduce((a, r) => ({
+    visits: a.visits + r.visits, bookings: a.bookings + r.bookings,
+    revenue: a.revenue + r.revenue, commission: a.commission + r.commission,
+  }), { visits: 0, bookings: 0, revenue: 0, commission: 0 });
+
+  return (
+    <>
+      <PageHead title="Referrals" sub="Partners who embed the Sawa widget. Each tracked code shows its click-throughs, bookings, revenue and commission." />
+      <div className="dash-two">
+        <div className="dash-card">
+          <div className="dash-card-head"><h2>Partners</h2></div>
+          <div className="table-wrap">
+            <table className="dash-table">
+              <thead><tr><th>Partner</th><th>Visits</th><th>Bookings</th><th>Conv.</th><th>Revenue</th><th>Rate</th><th>Est. payout</th><th></th></tr></thead>
+              <tbody>
+                {(rows || []).map((r) => (
+                  <tr key={r.code} className={r.active ? "" : "row-archived"}>
+                    <td><strong>{r.name || r.code}</strong><div className="sub">{r.code}</div></td>
+                    <td>{r.visits}</td>
+                    <td>{r.bookings}</td>
+                    <td>{r.conversion}%</td>
+                    <td>{money(r.revenue)}</td>
+                    <td>{r.commissionPercent}%</td>
+                    <td>{money(r.commission)}</td>
+                    <td className="row-actions">
+                      <button className="icon-btn" title="Copy embed code" onClick={() => copy(embedSnippet(r.code), "Embed code")}><Copy size={15} /></button>
+                      <button className="icon-btn" title="Copy tracked link" onClick={() => copy(linkFor(r.code), "Tracked link")}><Share2 size={15} /></button>
+                    </td>
+                  </tr>
+                ))}
+                {rows && rows.length === 0 && <tr><td colSpan={8}><Empty label="No partners yet. Add one to generate a tracked widget." /></td></tr>}
+                {rows && rows.length > 0 && (
+                  <tr className="row-total">
+                    <td><strong>Total</strong></td><td><strong>{totals.visits}</strong></td><td><strong>{totals.bookings}</strong></td><td></td>
+                    <td><strong>{money(totals.revenue)}</strong></td><td></td><td><strong>{money(totals.commission)}</strong></td><td></td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div className="dash-card">
+          <div className="dash-card-head"><h2>Add partner</h2></div>
+          <form className="stack-form" onSubmit={create}>
+            <Field label="Partner name" full>
+              <input value={form.name} onChange={(e) => setForm((s) => ({ ...s, name: e.target.value, code: s.code || slugify(e.target.value) }))} placeholder="Cairo Travel Blog" />
+            </Field>
+            <Field label="Code (used in ?ref=)" full><input value={form.code} onChange={set("code")} placeholder="cairo-travel-blog" /></Field>
+            <Field label="Commission %" full><input type="number" min="0" max="100" value={form.commissionPercent} onChange={set("commissionPercent")} placeholder="8" /></Field>
+            {err && <div className="auth-error">{err}</div>}
+            <button className="btn-primary" disabled={busy}>{busy ? "Saving…" : "Save partner"}</button>
+            <p className="field-hint">After saving, use the copy buttons in the table to grab the partner's ready-to-paste embed code or tracked link.</p>
+          </form>
+        </div>
+      </div>
+    </>
+  );
+}
+
 function AgenciesSection({ flash }) {
   const [list, setList] = useState(null);
   const [form, setForm] = useState({ name: "", phone: "", ownerName: "", ownerEmail: "" });

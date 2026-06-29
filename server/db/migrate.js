@@ -19,6 +19,7 @@ const MIGRATIONS = [
   { name: "008_meeting_points", file: "schema_008_meeting_points.sql" },
   { name: "009_destinations", file: "schema_009_destinations.sql" },
   { name: "010_blog", file: "schema_010_blog.sql" },
+  { name: "011_referrals", file: "schema_011_referrals.sql" },
 ];
 
 async function main() {

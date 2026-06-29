@@ -288,6 +288,12 @@ function App() {
     loadBootstrap();
   }, [authToken]);
 
+  // Remember the referring partner on landing (skip the embed page itself —
+  // that's an impression, we only count real click-throughs).
+  useEffect(() => {
+    if (!window.location.pathname.startsWith("/embed")) captureReferral();
+  }, []);
+
   // Refetch the catalogue when the tab regains focus, so admin edits (new
   // dates, price or itinerary changes) appear without a manual hard refresh.
   useEffect(() => {
@@ -580,7 +586,7 @@ function App() {
       const response = await fetch(`${API_BASE}/public/departures/${departureId}/bookings`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ customerName, customerEmail, seats: Number(seats), roomingType, accommodationTier }),
+        body: JSON.stringify({ customerName, customerEmail, seats: Number(seats), roomingType, accommodationTier, refCode: getStoredRef() }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Could not request seats.");
@@ -1346,6 +1352,46 @@ function LoadingScreen({ label = "Preparing your shared departures…" }) {
 // is hosted.
 const SITE_URL = "https://sawatours.org";
 
+// ---- Referral attribution (?ref=CODE) ----
+const REF_KEY = "sawa_ref";
+const REF_TTL = 30 * 24 * 60 * 60 * 1000; // remember the partner for 30 days
+function cleanRef(raw) {
+  return String(raw || "").toLowerCase().replace(/[^a-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 48);
+}
+function refFromUrl() {
+  try { return cleanRef(new URLSearchParams(window.location.search).get("ref")); } catch (e) { return ""; }
+}
+// On a real landing (not the embed itself): remember the partner + count one
+// click-through. Stored client-side; sent with the booking later.
+function captureReferral() {
+  const code = refFromUrl();
+  if (!code) return;
+  try {
+    localStorage.setItem(REF_KEY, JSON.stringify({ code, ts: Date.now() }));
+    const flag = `sawa_ref_hit_${code}`;
+    if (!sessionStorage.getItem(flag)) {
+      sessionStorage.setItem(flag, "1");
+      fetch(`${API_BASE}/track/referral`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code }), keepalive: true,
+      }).catch(() => {});
+    }
+  } catch (e) { /* storage blocked — ignore */ }
+}
+function getStoredRef() {
+  try {
+    const raw = localStorage.getItem(REF_KEY);
+    if (!raw) return "";
+    const { code, ts } = JSON.parse(raw);
+    return code && Date.now() - ts <= REF_TTL ? code : "";
+  } catch (e) { return ""; }
+}
+// Carry the embed's own ?ref through to the click-through link.
+function withEmbedRef(url) {
+  const code = refFromUrl();
+  return code ? `${url}?ref=${encodeURIComponent(code)}` : url;
+}
+
 // Reports the widget's height to the host page so the iframe can auto-size.
 function useEmbedAutoResize(dep) {
   useEffect(() => {
@@ -1367,7 +1413,7 @@ function useEmbedAutoResize(dep) {
 function BrandEmbed() {
   useEmbedAutoResize(null);
   return (
-    <a className="embed-banner" href={`${SITE_URL}/tours`} target="_blank" rel="noopener noreferrer">
+    <a className="embed-banner" href={withEmbedRef(`${SITE_URL}/tours`)} target="_blank" rel="noopener noreferrer">
       <div className="embed-banner-content">
         <span className="embed-eyebrow"><SawaMark size={20} />Sawa Tours</span>
         <strong className="embed-banner-title">Egypt tours that actually run.</strong>
@@ -1394,7 +1440,7 @@ function EmbedWidget({ type, product }) {
   const goAhead = goAheadFor(product);
   const livePrice = lead ? livePriceFor({ ...product, ...lead }, seats) : livePriceFor(product, goAhead);
   const breakPrice = safePrice(product.breakPrice, Math.round(product.publishedRate * 0.8));
-  const url = `${SITE_URL}/${pkg ? "package" : "tour"}/${product.id}`;
+  const url = withEmbedRef(`${SITE_URL}/${pkg ? "package" : "tour"}/${product.id}`);
   const facts = pkg
     ? `${(product.cities || [product.city]).join(" · ")}`
     : `${product.city} · ${product.duration || ""}`;
