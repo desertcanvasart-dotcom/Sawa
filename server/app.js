@@ -600,6 +600,31 @@ app.get("/api/admin/referrals", requireAuth, requireRole("super_admin", "ops_sta
   }) });
 }));
 
+// Agency: fetch (or auto-create) this agency's own referral code + its stats,
+// so it can self-serve the tracked widget without the admin.
+app.get("/api/agency/widget", requireAuth, requireRole("agency_owner", "agency_agent"), h(async (req, res) => {
+  const agencyId = req.user.agencyId;
+  if (!agencyId) throw new AppError(403, "This account is not linked to an agency.");
+  let row = (await pool.query("SELECT * FROM referrals WHERE agency_id = $1 LIMIT 1", [agencyId])).rows[0];
+  if (!row) {
+    const ag = (await pool.query("SELECT name FROM agencies WHERE id = $1", [agencyId])).rows[0];
+    const base = cleanRefCode(ag?.name) || `agency-${cleanRefCode(agencyId)}`;
+    let code = base, n = 1;
+    while ((await pool.query("SELECT 1 FROM referrals WHERE code = $1", [code])).rowCount) code = `${base}-${++n}`;
+    await pool.query("INSERT INTO referrals (code, name, agency_id) VALUES ($1, $2, $3)", [code, ag?.name || "Agency", agencyId]);
+    row = (await pool.query("SELECT * FROM referrals WHERE code = $1", [code])).rows[0];
+  }
+  const agg = (await pool.query(
+    `SELECT COUNT(*) FILTER (WHERE status <> 'cancelled') AS bookings,
+            COALESCE(SUM(booking_total) FILTER (WHERE status <> 'cancelled'), 0) AS revenue
+       FROM pledges WHERE ref_code = $1`, [row.code])).rows[0];
+  res.json({
+    code: row.code, name: row.name || "", visits: row.visits || 0,
+    bookings: Number(agg.bookings) || 0, revenue: Number(agg.revenue) || 0,
+    commissionPercent: Number(row.commission_percent) || 0,
+  });
+}));
+
 // Admin: create or update a partner code.
 app.post("/api/admin/referrals", requireAuth, requireRole("super_admin", "ops_staff"), h(async (req, res) => {
   const body = req.body || {};

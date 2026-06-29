@@ -1,7 +1,8 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   LayoutDashboard, Ticket, ClipboardList, Users as UsersIcon, ShieldCheck, ArrowUpRight,
   Check, ChevronDown, AlertTriangle, CalendarDays, MapPin, Package, Hotel, ArrowLeft, Search, Clock3,
+  Share2, Copy,
 } from "lucide-react";
 import { DashSidebar } from "./DashSidebar";
 import { apiFetch } from "./supabaseClient";
@@ -60,6 +61,7 @@ export function AgencyDashboard({ user, agency, signOut, navigate, departures, t
         { id: "overview", label: "Overview", icon: LayoutDashboard },
         { id: "book", label: "Book seats", icon: Ticket },
         { id: "bookings", label: "My bookings", icon: ClipboardList },
+        { id: "widget", label: "Promote", icon: Share2 },
         ...(isOwner ? [{ id: "team", label: "Team", icon: UsersIcon }] : []),
       ],
     },
@@ -143,6 +145,8 @@ export function AgencyDashboard({ user, agency, signOut, navigate, departures, t
             </div>
           </>
         )}
+
+        {section === "widget" && <WidgetSection tourProducts={tourProducts} />}
 
         {section === "team" && isOwner && (
           <>
@@ -400,6 +404,79 @@ function TourBooking({ product, agencyId, onBack, onReload }) {
   );
 }
 function hasHtml(s) { return s && s.replace(/<[^>]*>/g, "").trim().length > 0; }
+
+/* ---------------- Promote: self-serve tracked widget ---------------- */
+const EMBED_SCRIPT = `<script>
+(function(){function s(f){try{var c=getComputedStyle(document.body),a=document.querySelector('a');f.contentWindow.postMessage({type:'sawa-embed-theme',bg:c.backgroundColor,text:c.color,accent:a?getComputedStyle(a).color:''},'*');}catch(e){}}
+addEventListener('message',function(e){if(!e.data)return;if(e.data.type==='sawa-embed-height')document.querySelectorAll('iframe[data-sawa-embed]').forEach(function(f){f.style.height=e.data.height+'px';});if(e.data.type==='sawa-embed-ready')document.querySelectorAll('iframe[data-sawa-embed]').forEach(s);});
+addEventListener('load',function(){document.querySelectorAll('iframe[data-sawa-embed]').forEach(s);});})();
+<\/script>`;
+
+function WidgetSection({ tourProducts = [] }) {
+  const [info, setInfo] = useState(null);
+  const [err, setErr] = useState("");
+  const [productId, setProductId] = useState("");
+  const [copied, setCopied] = useState("");
+
+  useEffect(() => {
+    apiFetch("/agency/widget").then((r) => r.json()).then((j) => {
+      if (j.error) throw new Error(j.error);
+      setInfo(j);
+    }).catch(() => setErr("Could not load your widget. Please retry."));
+  }, []);
+
+  const SITE = "https://sawatours.org";
+  const code = info?.code;
+  const products = (tourProducts || []).filter((p) => p.active !== false);
+  const prod = products.find((p) => p.id === productId);
+  const iframe = (src) => `<iframe src="${SITE}${src}" style="width:100%;border:0;border-radius:18px" loading="lazy" data-sawa-embed></iframe>`;
+  const brandSnippet = code ? `${iframe(`/embed?ref=${code}`)}\n${EMBED_SCRIPT}` : "";
+  const prodSnippet = (code && prod) ? `${iframe(`/embed/${isPkg(prod) ? "package" : "tour"}/${prod.id}?ref=${code}`)}\n${EMBED_SCRIPT}` : "";
+
+  const copy = async (text, key) => {
+    try { await navigator.clipboard.writeText(text); setCopied(key); setTimeout(() => setCopied(""), 1800); }
+    catch (e) { setCopied(""); }
+  };
+
+  return (
+    <>
+      <div className="dash-head"><div><h1>Promote Sawa</h1><p>Put the Sawa widget on your own website, blog or social bio. Every booking it brings is tracked to your agency.</p></div></div>
+      {err && <div className="auth-error">{err}</div>}
+      {info && (
+        <>
+          <div className="kpi-grid">
+            <Kpi icon={Share2} label="Your code" value={info.code} foot="added to your widget automatically" />
+            <Kpi icon={ArrowUpRight} label="Click-throughs" value={info.visits} foot="visits from your widget" />
+            <Kpi icon={ClipboardList} label="Bookings" value={info.bookings} foot="credited to you" accent />
+            <Kpi icon={CalendarDays} label="Revenue" value={money(info.revenue)} foot="from your referrals" />
+          </div>
+
+          <div className="dash-card">
+            <div className="dash-card-head">
+              <h2>Website banner</h2>
+              <button className="btn-ghost sm" onClick={() => copy(brandSnippet, "brand")}><Copy size={14} />{copied === "brand" ? "Copied!" : "Copy code"}</button>
+            </div>
+            <p className="field-hint">Paste anywhere — your website, a WordPress “Custom HTML” block, or hand it to your designer or an AI website builder. It matches your site's colours automatically.</p>
+            <textarea className="embed-snippet" readOnly rows={5} value={brandSnippet} onFocus={(e) => e.target.select()} />
+          </div>
+
+          <div className="dash-card">
+            <div className="dash-card-head">
+              <h2>Promote a specific tour or package</h2>
+              {prod && <button className="btn-ghost sm" onClick={() => copy(prodSnippet, "prod")}><Copy size={14} />{copied === "prod" ? "Copied!" : "Copy code"}</button>}
+            </div>
+            <select className="embed-select" value={productId} onChange={(e) => setProductId(e.target.value)}>
+              <option value="">Choose a tour or package…</option>
+              {products.map((p) => <option key={p.id} value={p.id}>{isPkg(p) ? "Package" : "Tour"} — {p.title}</option>)}
+            </select>
+            {prod && <textarea className="embed-snippet" readOnly rows={5} value={prodSnippet} onFocus={(e) => e.target.select()} />}
+          </div>
+        </>
+      )}
+      {!info && !err && <div className="dash-empty">Loading your widget…</div>}
+    </>
+  );
+}
 
 function Kpi({ icon: Icon, label, value, foot, accent }) {
   return (
