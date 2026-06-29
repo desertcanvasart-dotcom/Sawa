@@ -627,6 +627,10 @@ function App() {
     }
   }
 
+  const embedPath = path.replace(/\/+$/, "");
+  if (embedPath === "/embed" || embedPath === "/embed/brand" || embedPath === "/embed/sawa") {
+    return <BrandEmbed />;
+  }
   const embedMatch = path.match(/^\/embed\/(tour|package)\/([^/?#]+)/);
   if (embedMatch) {
     if (isLoading) return null;
@@ -1338,9 +1342,8 @@ function LoadingScreen({ label = "Preparing your shared departures…" }) {
   );
 }
 
-// Self-contained, embeddable booking widget for external sites (iframe).
-// Shows a product's cover, rating, live shared price and a click-through CTA.
-function EmbedWidget({ type, product }) {
+// Reports the widget's height to the host page so the iframe can auto-size.
+function useEmbedAutoResize(dep) {
   useEffect(() => {
     document.body.style.background = "transparent";
     const post = () => {
@@ -1352,7 +1355,37 @@ function EmbedWidget({ type, product }) {
     ro.observe(document.body);
     window.addEventListener("load", post);
     return () => { ro.disconnect(); window.removeEventListener("load", post); };
-  }, [product]);
+  }, [dep]);
+}
+
+// Brand widget: the website's overall message + a click-through to the site.
+// Short, professional, no per-tour detail. Embeddable on any external site.
+function BrandEmbed() {
+  useEmbedAutoResize(null);
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  return (
+    <a className="embed-card embed-brand-card" href={`${origin}/tours`} target="_blank" rel="noopener noreferrer">
+      <div className="embed-hero">
+        <span className="embed-wordmark"><SawaMark size={24} /><span><b>Sawa</b><i>Tours</i></span></span>
+        <strong className="embed-headline">Egypt tours that actually run.</strong>
+      </div>
+      <div className="embed-body">
+        <p className="embed-sub">Shared day tours and Nile cruises across Cairo, Luxor &amp; Aswan. Your date is confirmed before you pay — and the price drops as the group grows.</p>
+        <div className="embed-trust">
+          <span><ShieldCheck size={14} />Licensed guides</span>
+          <span><BadgeCheck size={14} />No payment until confirmed</span>
+          <span><Users size={14} />Live group pricing</span>
+        </div>
+        <span className="embed-cta">Explore Egypt tours<ArrowRight size={16} /></span>
+      </div>
+    </a>
+  );
+}
+
+// Self-contained, embeddable booking widget for external sites (iframe).
+// Shows a product's cover, rating, live shared price and a click-through CTA.
+function EmbedWidget({ type, product }) {
+  useEmbedAutoResize(product);
 
   if (!product) {
     return <div className="embed-card embed-empty">This tour is no longer available.</div>;
