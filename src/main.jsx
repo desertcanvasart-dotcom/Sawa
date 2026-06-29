@@ -1393,18 +1393,57 @@ function withEmbedRef(url) {
 }
 
 // Reports the widget's height to the host page so the iframe can auto-size.
+// ---- Embed theming: let the widget take on the host site's palette ----
+function parseColor(c) {
+  if (!c) return null;
+  let s = String(c).trim();
+  let m = s.match(/^#?([0-9a-f]{3})$/i);
+  if (m) { const h = m[1]; return [parseInt(h[0] + h[0], 16), parseInt(h[1] + h[1], 16), parseInt(h[2] + h[2], 16), 1]; }
+  m = s.match(/^#?([0-9a-f]{6})$/i);
+  if (m) { const h = m[1]; return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16), 1]; }
+  m = s.match(/rgba?\(([^)]+)\)/i);
+  if (m) { const p = m[1].split(/[ ,/]+/).map(Number); return [p[0], p[1], p[2], p[3] == null ? 1 : p[3]]; }
+  return null;
+}
+const rgbaStr = (c, a) => `rgba(${c[0] | 0}, ${c[1] | 0}, ${c[2] | 0}, ${a})`;
+const readableOn = (c) => ((0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2]) / 255 > 0.6 ? "#16242a" : "#ffffff");
+function applyEmbedTheme(o) {
+  if (!o) return;
+  const s = document.documentElement.style, set = (k, v) => v && s.setProperty(k, v);
+  if (o.theme === "dark") { set("--surface", "#16191c"); set("--ink", "#f2f4f5"); set("--ink-soft", "#a9b0b4"); set("--line", "rgba(255,255,255,0.14)"); }
+  const bg = parseColor(o.bg); if (bg && bg[3] !== 0) set("--surface", rgbaStr(bg, 1));
+  const text = parseColor(o.text); if (text) { set("--ink", rgbaStr(text, 1)); set("--ink-soft", rgbaStr(text, 0.62)); set("--line", rgbaStr(text, 0.14)); }
+  const muted = parseColor(o.muted); if (muted) set("--ink-soft", rgbaStr(muted, 1));
+  const border = parseColor(o.border); if (border) set("--line", rgbaStr(border, border[3]));
+  const accent = parseColor(o.accent); if (accent && accent[3] !== 0) { set("--gold", rgbaStr(accent, 1)); set("--embed-cta-text", readableOn(accent)); }
+  if (o.radius) set("--embed-radius", /[a-z%]/i.test(o.radius) ? o.radius : `${o.radius}px`);
+  if (o.font) { set("--font-body", o.font); set("--font-display", o.font); }
+}
+function embedThemeFromUrl() {
+  try {
+    const q = new URLSearchParams(window.location.search);
+    return { theme: q.get("theme"), bg: q.get("bg"), text: q.get("text"), muted: q.get("muted"),
+      border: q.get("border"), accent: q.get("accent"), radius: q.get("radius"), font: q.get("font") };
+  } catch (e) { return {}; }
+}
+
 function useEmbedAutoResize(dep) {
   useEffect(() => {
     document.body.style.background = "transparent";
+    applyEmbedTheme(embedThemeFromUrl());
     const post = () => {
       const height = Math.ceil(document.documentElement.getBoundingClientRect().height);
       try { window.parent?.postMessage({ type: "sawa-embed-height", height }, "*"); } catch (e) { /* cross-origin */ }
     };
+    // Let the host's optional companion script send its palette to match.
+    const onMsg = (e) => { if (e.data && e.data.type === "sawa-embed-theme") applyEmbedTheme(e.data); };
+    window.addEventListener("message", onMsg);
+    try { window.parent?.postMessage({ type: "sawa-embed-ready" }, "*"); } catch (e) { /* cross-origin */ }
     post();
     const ro = new ResizeObserver(post);
     ro.observe(document.body);
     window.addEventListener("load", post);
-    return () => { ro.disconnect(); window.removeEventListener("load", post); };
+    return () => { ro.disconnect(); window.removeEventListener("load", post); window.removeEventListener("message", onMsg); };
   }, [dep]);
 }
 
