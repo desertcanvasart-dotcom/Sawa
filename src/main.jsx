@@ -15,6 +15,7 @@ import {
   CircleDollarSign,
   Clock3,
   Filter,
+  Flag,
   Globe,
   Handshake,
   Hotel,
@@ -24,6 +25,7 @@ import {
   MessageCircle,
   Newspaper,
   Package,
+  Percent,
   Phone,
   Plus,
   Search,
@@ -2347,6 +2349,59 @@ function ItineraryAccordion({ items }) {
   );
 }
 
+// Live shared-price explainer: one price for everyone, dropping as the group
+// grows. Fully dynamic — the bar, cards and footer react to confirmed seats.
+function LiveSharedPrice({ currentSeats, goAhead, maxSeats, headlinePrice, nowPrice, bestPrice }) {
+  const cap = Math.max(Number(maxSeats) || 0, goAhead, 1);
+  const fillPct = Math.min(100, Math.round((currentSeats / cap) * 100));
+  const goPct = Math.min(98, Math.max(2, Math.round((goAhead / cap) * 100)));
+  const confirmed = currentSeats >= goAhead;
+  const needed = Math.max(0, goAhead - currentSeats);
+  return (
+    <div className="lsp">
+      <span className="lsp-label">Live shared price · per person</span>
+      <div className="lsp-now">
+        <strong>${headlinePrice.toLocaleString()}</strong>
+        <em>per person, today</em>
+      </div>
+      <p className="lsp-lead">Everyone on this departure pays the same price. As the group grows, it drops for all of you — early bookers are refunded the difference.</p>
+
+      <div className="lsp-track">
+        <div className="lsp-ends">
+          <span><Flag size={14} />Departs at {goAhead}</span>
+          <span><Percent size={14} />Best price at {maxSeats}</span>
+        </div>
+        <div className="lsp-bar">
+          <i style={{ width: `${fillPct}%` }} />
+          <span className="lsp-mark" style={{ left: `${goPct}%` }} />
+        </div>
+        <div className="lsp-scale">
+          <span className="lsp-s-mid" style={{ left: `${goPct}%` }}>{goAhead} · departure go</span>
+          <span className="lsp-s-right">{maxSeats} · full</span>
+        </div>
+      </div>
+
+      <div className="lsp-cards">
+        <div className="lsp-card">
+          <span>Now · {currentSeats} confirmed</span>
+          <strong>${nowPrice.toLocaleString()}</strong>
+        </div>
+        <div className="lsp-card is-best">
+          <span>Best · all {maxSeats} seats</span>
+          <strong>${bestPrice.toLocaleString()}</strong>
+        </div>
+      </div>
+
+      <p className="lsp-foot">
+        <Users size={15} />
+        {confirmed
+          ? "This departure is confirmed — each extra traveller lowers the price for everyone"
+          : `${needed} more confirm the departure · each extra traveller after that lowers the price for everyone`}
+      </p>
+    </div>
+  );
+}
+
 function TourDetail({ isSaving, navigate, onBookPublicDeparture, onCancelPublicBooking, publicBooking, tour }) {
   const leadDeparture = tour.dates[0];
   const [selectedDepartureId, setSelectedDepartureId] = useState(leadDeparture?.id || "");
@@ -2494,28 +2549,14 @@ function TourDetail({ isSaving, navigate, onBookPublicDeparture, onCancelPublicB
 
         <aside className="tdx-aside">
         <div className="tdx-booking">
-          <div className="tdx-price">
-            <span className="tdx-price-label">Live shared price</span>
-            <div className="tdx-price-now">
-              <strong>${projectedPrice}</strong>
-              <em>per person</em>
-            </div>
-            <p>The more seats join, the lower the shared price.</p>
-          </div>
-          <div className="tdx-ladder">
-            <div><span>Published</span><b>${safePrice(tour.publishedRate, currentPrice)}</b></div>
-            <div className="is-live"><span>Current</span><b>${currentPrice}</b></div>
-            <div><span>At full group</span><b>${breakPrice}</b></div>
-          </div>
-          {!soldOut && (
-            <div className="tdx-seatbar">
-              <div className="tdx-seatbar-top">
-                <span>{currentSeats}/{goAhead} seats to confirm this date</span>
-                <b>{Math.max(0, goAhead - currentSeats)} to go</b>
-              </div>
-              <i><em style={{ width: `${seatPct}%` }} /></i>
-            </div>
-          )}
+          <LiveSharedPrice
+            currentSeats={currentSeats}
+            goAhead={goAhead}
+            maxSeats={selectedDeparture?.maxSeats || goAhead}
+            headlinePrice={projectedPrice}
+            nowPrice={currentPrice}
+            bestPrice={breakPrice}
+          />
           <form className="public-booking-form" onSubmit={submitPublicBooking} noValidate>
             <div className="field">
               <label htmlFor="td-date">Date</label>
@@ -2720,6 +2761,7 @@ function PackageDetail({ isSaving, navigate, onBookPublicDeparture, onCancelPubl
   const remainingSeats = selectedDeparture ? Math.max(0, selectedDeparture.maxSeats - currentSeats) : goAhead;
   const soldOut = remainingSeats <= 0;
   const basePrice = livePriceFor(selectedDeparture || pkg, currentSeats);
+  const projectedBase = livePriceFor(selectedDeparture || pkg, projectedSeats);
   const breakBase = safePrice(pkg.breakPrice, Math.round(pkg.publishedRate * 0.8));
   const seatPct = goAhead ? Math.min(100, Math.round((currentSeats / goAhead) * 100)) : 0;
   const cities = pkg.cities || [pkg.city];
@@ -2847,28 +2889,15 @@ function PackageDetail({ isSaving, navigate, onBookPublicDeparture, onCancelPubl
 
         <aside className="tdx-aside">
           <div className="tdx-booking">
-            <div className="tdx-price">
-              <span className="tdx-price-label">Live shared price · per person</span>
-              <div className="tdx-price-now">
-                <strong>${pricePerPerson}</strong>
-                <em>per person</em>
-              </div>
-              <p>The shared rate drops as the group grows. Hotel tier and single supplement add on top.</p>
-            </div>
-            <div className="tdx-ladder">
-              <div><span>Published</span><b>${safePrice(pkg.publishedRate, basePrice)}</b></div>
-              <div className="is-live"><span>Current</span><b>${basePrice}</b></div>
-              <div><span>At full group</span><b>${breakBase}</b></div>
-            </div>
-            {!soldOut && (
-              <div className="tdx-seatbar">
-                <div className="tdx-seatbar-top">
-                  <span>{currentSeats}/{goAhead} travellers to confirm</span>
-                  <b>{Math.max(0, goAhead - currentSeats)} to go</b>
-                </div>
-                <i><em style={{ width: `${seatPct}%` }} /></i>
-              </div>
-            )}
+            <LiveSharedPrice
+              currentSeats={currentSeats}
+              goAhead={goAhead}
+              maxSeats={selectedDeparture?.maxSeats || goAhead}
+              headlinePrice={projectedBase}
+              nowPrice={basePrice}
+              bestPrice={breakBase}
+            />
+            <p className="lsp-tier-note">Shared rate shown per person. Your hotel &amp; cruise tier and any single supplement are added on top — see the total below.</p>
             <form className="public-booking-form" onSubmit={submitPublicBooking} noValidate>
               <div className="field">
                 <label htmlFor="pk-date">Start date</label>
