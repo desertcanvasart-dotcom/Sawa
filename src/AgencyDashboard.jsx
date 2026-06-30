@@ -114,7 +114,7 @@ export function AgencyDashboard({ user, agency, signOut, navigate, departures, t
         )}
 
         {section === "book" && (
-          <BookTours tourProducts={tourProducts} departures={departures} agencyId={agencyId} onReload={onReload} />
+          <BookTours tourProducts={tourProducts} departures={departures} agencyId={agencyId} agencyName={agency?.name} agencyPax={stats.seats} onReload={onReload} />
         )}
 
         {section === "bookings" && (
@@ -160,7 +160,7 @@ export function AgencyDashboard({ user, agency, signOut, navigate, departures, t
 }
 
 /* ---------------- Book seats: catalog -> tour detail -> book ---------------- */
-function BookTours({ tourProducts, departures, agencyId, onReload }) {
+function BookTours({ tourProducts, departures, agencyId, agencyName, agencyPax = 0, onReload }) {
   const [openId, setOpenId] = useState(null);
   const [q, setQ] = useState("");
   const [type, setType] = useState("all");
@@ -185,7 +185,7 @@ function BookTours({ tourProducts, departures, agencyId, onReload }) {
   });
 
   const open = openId ? catalog.find((p) => p.id === openId) : null;
-  if (open) return <TourBooking product={open} agencyId={agencyId} onBack={() => setOpenId(null)} onReload={onReload} />;
+  if (open) return <TourBooking product={open} agencyId={agencyId} agencyName={agencyName} agencyPax={agencyPax} onBack={() => setOpenId(null)} onReload={onReload} />;
 
   return (
     <>
@@ -229,7 +229,7 @@ function BookTours({ tourProducts, departures, agencyId, onReload }) {
   );
 }
 
-function TourBooking({ product, agencyId, onBack, onReload }) {
+function TourBooking({ product, agencyId, agencyName, agencyPax = 0, onBack, onReload }) {
   const pkg = isPkg(product);
   const tiers = product.accommodationTiers || [];
   const bookable = product.dates.filter((d) => seatsOf(d) < d.maxSeats);
@@ -237,7 +237,7 @@ function TourBooking({ product, agencyId, onBack, onReload }) {
   const [seats, setSeats] = useState(1);
   const [tierId, setTierId] = useState(tiers[0]?.id || "");
   const [rooming, setRooming] = useState("double");
-  const [customers, setCustomers] = useState("");
+  const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
@@ -247,13 +247,23 @@ function TourBooking({ product, agencyId, onBack, onReload }) {
   const dep = product.dates.find((d) => Number(d.id) === Number(depId));
   const booked = dep ? seatsOf(dep) : 0;
   const remaining = dep ? Math.max(0, dep.maxSeats - booked) : 0;
+  const goAhead = goAheadOf(dep || product);
+  const seatPct = dep && dep.maxSeats ? Math.min(100, Math.round((booked / dep.maxSeats) * 100)) : 0;
   const tier = tiers.find((t) => t.id === tierId) || tiers[0];
-  const projected = dep ? Math.min(dep.maxSeats, booked + Number(seats || 1)) : Number(seats || 1);
+  const nSeats = Math.max(1, Number(seats || 1));
+  const projected = dep ? Math.min(dep.maxSeats, booked + nSeats) : nSeats;
   let pp = dep ? livePrice({ ...product, ...dep }, projected) : product.publishedRate;
   if (pkg && tier) pp += (Number(tier.perPersonSupplement) || 0) + (rooming === "single" ? Number(tier.singleSupplement) || 0 : 0);
-  const total = pp * Number(seats || 1);
+  const total = pp * nSeats;
   const depositPct = Number(dep?.depositPercent || product.depositPercent || (pkg ? 20 : 10));
   const deposit = Math.ceil(total * depositPct / 100);
+  const balance = Math.max(0, total - deposit);
+  const depDate = dep ? (dep.startDate || dep.date) : null;
+  const balanceDue = depDate ? fmtDate(new Date(new Date(`${depDate}T12:00:00`).getTime() - 86400000)) : "before departure";
+
+  // Auto reference: agency initial + seats in this booking + running pax total.
+  const initial = (agencyName || "X").trim().charAt(0).toUpperCase() || "X";
+  const reference = `${initial}-${nSeats}-${(Number(agencyPax) || 0) + nSeats}`;
 
   const imgs = (product.images || []).filter((i) => i?.url);
   const heroImg = imgs.length ? imgs[Math.min(gi, imgs.length - 1)].url : coverOf(product);
@@ -262,17 +272,18 @@ function TourBooking({ product, agencyId, onBack, onReload }) {
     e.preventDefault();
     setErr(""); setMsg("");
     if (!dep) return setErr("Pick a date.");
-    if (!customers.trim()) return setErr("Add a customer reference (name or party).");
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return setErr("Enter a valid customer email.");
+    if (phone.trim().length < 6) return setErr("Enter a customer phone number.");
     if (Number(seats) > remaining) return setErr(`Only ${remaining} seat${remaining === 1 ? "" : "s"} left on this date.`);
     setBusy(true);
     try {
-      const body = { seats: Number(seats), customers: customers.trim(), customerPhone: phone.trim() };
+      const body = { seats: nSeats, customers: reference, customerEmail: email.trim(), customerPhone: phone.trim() };
       if (pkg) { body.roomingType = rooming; body.accommodationTier = tierId; }
       const r = await apiFetch(`/departures/${dep.id}/pledges`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error || "Could not book.");
-      setMsg(`Booked ${seats} seat${seats > 1 ? "s" : ""} for ${customers.trim()}.`);
-      setCustomers(""); setPhone(""); setSeats(1);
+      setMsg(`Booked ${nSeats} seat${nSeats > 1 ? "s" : ""} — ref ${reference}.`);
+      setEmail(""); setPhone(""); setSeats(1);
       onReload && onReload();
     } catch (e2) { setErr(e2.message); } finally { setBusy(false); }
   }
@@ -345,16 +356,24 @@ function TourBooking({ product, agencyId, onBack, onReload }) {
         </div>
 
         <aside className="tb-book">
-          <div className="tb-book-head">
-            <span>From</span>
-            <strong>${pp}{pkg ? " /person" : ""}</strong>
+          <div className="tb-price">
+            <span className="tb-price-cap">Live shared price</span>
+            <div className="tb-price-now"><strong>${pp}</strong><em>per person</em></div>
           </div>
           {!product.dates.length ? (
             <div className="dash-empty">No dates published yet. Ask the admin to publish a departure.</div>
           ) : (
             <form className="tb-form" onSubmit={book}>
-              <label>{pkg ? "Start date" : "Date"}
-                <select value={depId} onChange={(e) => setDepId(e.target.value)}>
+              {dep && (
+                <div className="tb-seatbar">
+                  <div className="tb-seatbar-top"><span>{booked}/{dep.maxSeats} booked</span><b>GoAhead at {goAhead}</b></div>
+                  <div className="tb-seatbar-track"><i style={{ width: `${seatPct}%` }} /></div>
+                </div>
+              )}
+
+              <div className="tb-field">
+                <label htmlFor="bk-date">{pkg ? "Start date" : "Date"}</label>
+                <select id="bk-date" value={depId} onChange={(e) => setDepId(e.target.value)}>
                   {product.dates.map((d) => {
                     const left = d.maxSeats - seatsOf(d);
                     return <option key={d.id} value={d.id} disabled={left <= 0}>
@@ -362,40 +381,64 @@ function TourBooking({ product, agencyId, onBack, onReload }) {
                     </option>;
                   })}
                 </select>
-              </label>
-              <label>Seats
-                <input type="number" min="1" max={Math.max(1, remaining)} value={seats} onChange={(e) => setSeats(e.target.value)} />
-              </label>
-              {pkg && (
+              </div>
+
+              {pkg ? (
                 <>
-                  <label>Hotel tier
-                    <select value={tierId} onChange={(e) => setTierId(e.target.value)}>
+                  <div className="tb-field">
+                    <label htmlFor="bk-tier">Hotel &amp; cruise tier</label>
+                    <select id="bk-tier" value={tierId} onChange={(e) => setTierId(e.target.value)}>
                       {tiers.map((t) => <option key={t.id} value={t.id}>{t.name}{t.perPersonSupplement ? ` (+$${t.perPersonSupplement}/pp)` : ""}</option>)}
                     </select>
-                  </label>
-                  <label>Room type
-                    <select value={rooming} onChange={(e) => setRooming(e.target.value)}>
-                      <option value="single">Single</option><option value="double">Double / twin</option><option value="triple">Triple</option>
-                    </select>
-                  </label>
+                  </div>
+                  <div className="tb-row">
+                    <div className="tb-field">
+                      <label htmlFor="bk-room">Room type</label>
+                      <select id="bk-room" value={rooming} onChange={(e) => setRooming(e.target.value)}>
+                        <option value="single">Single</option><option value="double">Double / twin</option><option value="triple">Triple</option>
+                      </select>
+                    </div>
+                    <div className="tb-field tb-seats">
+                      <label htmlFor="bk-seats">Seats</label>
+                      <input id="bk-seats" type="number" min="1" max={Math.max(1, remaining)} value={seats} onChange={(e) => setSeats(e.target.value)} />
+                    </div>
+                  </div>
                 </>
+              ) : (
+                <div className="tb-field tb-seats">
+                  <label htmlFor="bk-seats">Seats</label>
+                  <input id="bk-seats" type="number" min="1" max={Math.max(1, remaining)} value={seats} onChange={(e) => setSeats(e.target.value)} />
+                </div>
               )}
-              <label>Customer reference
-                <input value={customers} onChange={(e) => setCustomers(e.target.value)} placeholder="Name, party, voucher ID" />
-              </label>
-              <label>Customer phone <span className="field-opt">(optional)</span>
-                <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+20 1XX XXX XXXX" />
-              </label>
+
+              <div className="tb-divider"><span>Customer details</span></div>
+
+              <div className="tb-field">
+                <label>Booking reference</label>
+                <input className="tb-ref" value={reference} readOnly tabIndex={-1} aria-label="Auto-generated booking reference" />
+                <span className="tb-hint">Auto-generated · {agencyName ? `${initial} (${agencyName})` : "agency"} · {nSeats} seat{nSeats > 1 ? "s" : ""}</span>
+              </div>
+              <div className="tb-row">
+                <div className="tb-field">
+                  <label htmlFor="bk-email">Customer email</label>
+                  <input id="bk-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="customer@email.com" />
+                </div>
+                <div className="tb-field">
+                  <label htmlFor="bk-phone">Customer phone</label>
+                  <input id="bk-phone" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+20 1XX XXX XXXX" />
+                </div>
+              </div>
 
               <div className="tb-summary">
-                <div><span>{booked}/{dep?.maxSeats} booked · GoAhead at {goAheadOf(dep || product)}</span></div>
-                <div className="tb-money"><span>Total</span><strong>${total}</strong></div>
-                <div className="tb-money"><span>Deposit ({depositPct}%)</span><strong>${deposit}</strong></div>
+                <div className="tb-sum-row"><span>${pp} × {nSeats} traveller{nSeats > 1 ? "s" : ""}</span><b>${total}</b></div>
+                <div className="tb-sum-row tb-sum-key"><span>Deposit today ({depositPct}%)</span><b>${deposit}</b></div>
+                <div className="tb-sum-row"><span>Balance</span><b>${balance}</b></div>
+                <p className="tb-sum-note">Balance due {balanceDue}.</p>
               </div>
 
               {err && <div className="auth-error">{err}</div>}
-              {msg && <div className="temp-pass" style={{ margin: 0 }}><strong>{msg}</strong></div>}
-              <button className="btn-primary" type="submit" disabled={busy || remaining <= 0}><Check size={17} />{busy ? "Booking…" : remaining <= 0 ? "Date full" : "Book seats"}</button>
+              {msg && <div className="tb-ok"><Check size={15} />{msg}</div>}
+              <button className="btn-primary tb-submit" type="submit" disabled={busy || remaining <= 0}><Check size={17} />{busy ? "Booking…" : remaining <= 0 ? "Date full" : "Confirm booking"}</button>
             </form>
           )}
         </aside>
