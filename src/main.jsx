@@ -40,6 +40,7 @@ import {
   X,
 } from "lucide-react";
 import "./styles.css";
+import "./redesign.css";
 import { supabase, apiFetch, API_BASE } from "./supabaseClient";
 // Lazy-loaded so the heavy authenticated portal (admin desk + TipTap editor)
 // is split out of the public bundle and never downloaded by visitors.
@@ -980,6 +981,374 @@ function pageFromPath(p) {
   return "404";
 }
 
+// ============ Editorial home page (redesign), wired to live data ============
+const SxArrow = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M13 6l6 6-6 6" /></svg>;
+const SxLogoMark = () => (
+  <svg className="mark" viewBox="0 0 100 100" aria-hidden="true">
+    <circle className="ring" cx="50" cy="50" r="36" />
+    <path className="s" d="M62 34 C44 34 44 50 52 50 C60 50 60 66 38 66" />
+    <circle className="dot" cx="23" cy="40" r="5.5" /><circle className="dot" cx="31" cy="74" r="5.5" /><circle className="dot" cx="70" cy="62" r="5.5" />
+    <circle className="go" cx="74" cy="30" r="6.5" />
+  </svg>
+);
+
+function PublicHomeV2({ navigate, products = [], summary = {}, cities = [] }) {
+  const rootRef = useRef(null);
+  const [tight, setTight] = useState(false);
+  const [menu, setMenu] = useState(false);
+  const [tab, setTab] = useState("All Egypt");
+
+  const model = (products || []).filter((p) => (p.dates || []).length).map((p) => {
+    const lead = openDates(p)[0] || p.dates[0];
+    const seats = lead ? seatsTotal(lead.pledges) : 0;
+    const goAhead = goAheadFor(p);
+    const price = lead ? livePriceFor({ ...p, ...lead }, seats) : livePriceFor(p, goAhead);
+    const pct = goAhead ? Math.min(100, Math.round((seats / goAhead) * 100)) : 0;
+    const confirmed = !!lead && (lead.status === "supplier_confirmed" || seats >= goAhead);
+    return { p, lead, seats, goAhead, price, pct, confirmed, full: productFullyBooked(p),
+      cityList: isPackage(p) ? (p.cities || [p.city]) : [p.city] };
+  });
+  const featured = model.find((m) => m.confirmed && !m.full) || model.find((m) => !m.full) || model[0];
+  const board = model.filter((m) => m !== featured)
+    .filter((m) => tab === "All Egypt" || m.cityList.includes(tab))
+    .slice(0, 6);
+  const tabNames = ["All Egypt", ...cities.map((c) => c.name)];
+  const marquee = [...new Set([...cities.map((c) => c.name), ...model.flatMap((m) => m.cityList)])].filter(Boolean);
+  const linkOf = (m) => `/${isPackage(m.p) ? "package" : "tour"}/${m.p.id}`;
+  const depDate = (m) => (m?.lead ? formatDate(m.lead.startDate || m.lead.date) : "");
+  const scrollTo = (id) => (e) => { e.preventDefault(); document.getElementById(id)?.scrollIntoView({ behavior: "smooth" }); };
+
+  useEffect(() => {
+    const onScroll = () => setTight(window.scrollY > 20);
+    window.addEventListener("scroll", onScroll, { passive: true }); onScroll();
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+  useEffect(() => {
+    const root = rootRef.current; if (!root) return;
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach((e) => {
+        if (!e.isIntersecting) return;
+        e.target.classList.add("in");
+        e.target.querySelectorAll("[data-fill]").forEach((b) => { b.style.width = b.dataset.fill; });
+        io.unobserve(e.target);
+      });
+    }, { threshold: 0.16, rootMargin: "0px 0px -7% 0px" });
+    root.querySelectorAll(".rv").forEach((el) => io.observe(el));
+    const t = setTimeout(() => root.querySelectorAll(".hero [data-fill], .how-core [data-fill]").forEach((b) => { b.style.width = b.dataset.fill; }), 500);
+    return () => { io.disconnect(); clearTimeout(t); };
+  }, [board.length, tab, featured]);
+
+  const navLinks = [["How it works", "how"], ["Departures", "departures"], ["The promise", "promise"], ["For operators", "operators"]];
+  const Logo = (props) => (
+    <a className="logo" aria-label="Sawa Tours home" onClick={() => navigate("/")} {...props}><SxLogoMark /><span className="nm"><b>Sawa</b><i>Tours · Egypt</i></span></a>
+  );
+
+  return (
+    <div className="sx" ref={rootRef}>
+      <div className="grain" />
+      <div className="nav-shell">
+        <nav className={`nav${tight ? " tight" : ""}`} aria-label="Primary">
+          <Logo />
+          <div className="nav-links">
+            {navLinks.map(([label, id]) => <a key={id} href={`#${id}`} onClick={scrollTo(id)}>{label}</a>)}
+          </div>
+          <div className="nav-right">
+            <a href="#departures" className="btn gold sm" onClick={scrollTo("departures")}>Find a departure<span className="chip"><SxArrow /></span></a>
+            <button className="menu-btn" aria-label="Open menu" onClick={() => setMenu(true)}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
+            </button>
+          </div>
+        </nav>
+      </div>
+
+      <div className={`overlay${menu ? " open" : ""}`}>
+        <button className="close" aria-label="Close menu" onClick={() => setMenu(false)}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg></button>
+        {navLinks.map(([label, id]) => <a key={id} href={`#${id}`} onClick={(e) => { setMenu(false); scrollTo(id)(e); }}>{label}</a>)}
+      </div>
+
+      <main>
+        {/* HERO */}
+        <section className="hero">
+          <div className="hero-bg" />
+          <div className="wrap hero-grid">
+            <div className="hero-copy rv">
+              <span className="eyebrow"><span className="live" />Shared departures across Egypt</span>
+              <h1>See Egypt the way<br />it's meant to be — <span className="ital gld">together</span>.</h1>
+              <p className="lede">Sawa pools travellers from verified Egyptian operators into one shared departure. A few travellers on the same route, and the trip is locked in. We call that moment the <strong>GoAhead</strong>.</p>
+              <div className="hero-cta">
+                <a href="#departures" className="btn teal" onClick={scrollTo("departures")}>Browse Egypt departures<span className="chip"><SxArrow /></span></a>
+                <a href="#how" className="btn plain" onClick={scrollTo("how")}>How it works<span className="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M12 5v14M5 12l7 7 7-7" /></svg></span></a>
+              </div>
+              <div className="hero-meta">
+                <div className="m"><b className="tnum">{summary.tours || model.length}</b><span>Egypt tours &amp;<br />packages live</span></div>
+                <div className="sep" />
+                <div className="m"><b className="tnum">{summary.goAheadDates || 0}</b><span>departures<br />confirmed &amp; running</span></div>
+                <div className="sep" />
+                <div className="m"><b className="tnum">{cities.length || 0}</b><span>destinations<br />across Egypt</span></div>
+              </div>
+            </div>
+            <div className="hero-visual rv" data-d="2">
+              <div className="cascade">
+                <div className="shell ph-1"><div className="core">
+                  <img src={coverImage(model[0]?.p || {})} alt={model[0]?.p?.title || "Egypt"} />
+                  <div className="cap"><p className="rt">{(model[0]?.cityList || ["Egypt"])[0]}</p><h3>{model[0]?.p?.title || "Egypt tours"}</h3></div>
+                </div></div>
+                <div className="shell ph-2"><div className="core">
+                  <img src={coverImage(model[1]?.p || model[0]?.p || {})} alt={model[1]?.p?.title || "Egypt"} />
+                  <div className="cap"><p className="rt">{(model[1]?.cityList || ["Egypt"])[0]}</p><h3>{model[1]?.p?.title || "Shared departures"}</h3></div>
+                </div></div>
+                {featured && (
+                  <div className="confirm">
+                    <div className="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg></div>
+                    <div><b>{featured.confirmed ? "GoAhead confirmed" : "Forming now"}</b><span>{featured.p.title.slice(0, 22)} · {depDate(featured)}</span></div>
+                  </div>
+                )}
+                {featured && (
+                  <div className="seats-chip">
+                    <div className="avatars"><i>HA</i><i>MK</i><i>SL</i><i>Rf</i><i>+{Math.max(0, featured.seats - 4)}</i></div>
+                    <b className="tnum">{featured.seats} / {featured.goAhead}</b>
+                    <span>travellers joined{featured.goAhead - featured.seats > 0 ? ` — ${featured.goAhead - featured.seats} to go` : " — confirmed"}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* MARQUEE */}
+        <div className="marquee" aria-hidden="true">
+          <div className="track">
+            {[...marquee, ...marquee].map((name, i) => (
+              <span className="item" key={i}><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="5" /></svg>{name}</span>
+            ))}
+          </div>
+        </div>
+
+        {/* HOW IT WORKS */}
+        <section className="block" id="how">
+          <div className="wrap how">
+            <div className="how-sticky rv">
+              <span className="eyebrow">How Sawa works</span>
+              <h2 className="serif" style={{ fontWeight: 500, color: "var(--teal)", fontSize: "clamp(2.2rem,4.4vw,3.5rem)", lineHeight: 1.04, letterSpacing: "-.02em", marginTop: 22 }}>A departure no single operator could fill — built from <span className="ital" style={{ fontStyle: "italic" }}>everyone's</span> travellers.</h2>
+              <p style={{ fontSize: "1.1rem", color: "var(--muted)", marginTop: 18, maxWidth: "30rem" }}>Operators across Egypt post the routes they'd love to run. Travellers from anywhere join the same date. Sawa handles the matching, the count, and the confirmation.</p>
+              <a href="#departures" className="btn teal" style={{ marginTop: 32 }} onClick={scrollTo("departures")}>See open departures<span className="chip"><SxArrow /></span></a>
+            </div>
+            <div>
+              <div className="how-steps">
+                <div className="hstep rv"><div className="idx tnum">01</div><div><h3>Operators post a route</h3><p>A licensed Egyptian operator lists a date and itinerary they want to run but can't fill alone. No upfront risk — it only departs once the group forms.</p></div></div>
+                <div className="hstep rv" data-d="1"><div className="idx tnum">02</div><div><h3>Travellers join the same date</h3><p>Your two travellers, our four, another agency's three — all on one shared departure. Everyone watches the seats fill in real time.</p></div></div>
+                <div className="hstep rv" data-d="2"><div className="idx tnum">03</div><div><h3>The minimum is met, the gold dot turns on</h3><p>The group is confirmed, the date locks, and every traveller gets the GoAhead. Confirmed together — no cancelled trips, no solo surcharge.</p></div></div>
+              </div>
+              {featured && (
+                <div className="how-card rv" data-d="2" style={{ marginTop: 28 }}>
+                  <div className="how-core">
+                    <span className="lab">Live departure</span>
+                    <h4>{featured.p.title}</h4>
+                    <div className="demo">
+                      <div className="dt"><b>{depDate(featured)}</b>{featured.confirmed ? <span className="go"><span className="d" />GoAhead</span> : <span className="go" style={{ background: "rgba(247,243,234,.14)", color: "var(--cream)" }}>Forming</span>}</div>
+                      <div className="av"><i>HA</i><i>MK</i><i>SL</i><i>Rf</i><i>JD</i><i className="empty">+{Math.max(0, featured.goAhead - featured.seats)}</i></div>
+                      <div className="bar"><i data-fill={`${featured.pct}%`} /></div>
+                      <div className="dm"><span><b>{featured.seats}</b> of {featured.goAhead} joined</span><span>{Math.max(0, featured.goAhead - featured.seats)} seats left</span></div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </section>
+
+        {/* DEPARTURES */}
+        <section className="block" id="departures" style={{ paddingTop: 20 }}>
+          <div className="wrap">
+            <div className="dep-head rv">
+              <div className="head" style={{ marginBottom: 0 }}>
+                <span className="eyebrow" style={{ marginBottom: 20 }}><span className="live" />Open departures</span>
+                <h2 style={{ fontSize: "clamp(2rem,3.8vw,3rem)" }}>Join a group that's already <span className="ital">forming</span>.</h2>
+              </div>
+              <div className="tabs" role="tablist">
+                {tabNames.map((t) => <button key={t} className={`tab${tab === t ? " on" : ""}`} onClick={() => setTab(t)}>{t}</button>)}
+              </div>
+            </div>
+
+            <div className="dep-layout">
+              {featured && (
+                <article className="card feature rv" onClick={() => navigate(linkOf(featured))} style={{ cursor: "pointer" }}>
+                  <div className="core">
+                    <div className="media">
+                      <img src={coverImage(featured.p)} alt={featured.p.title} />
+                      {featured.confirmed ? <span className="badge go"><span className="d" />GoAhead · running</span> : <span className="badge form">Forming now</span>}
+                      <span className="price"><b className="tnum">${featured.price}</b><small>per person</small></span>
+                    </div>
+                    <div className="body">
+                      <span className="rt">Featured · {featured.cityList.join(" → ")}{featured.p.duration ? ` · ${featured.p.duration}` : ""}</span>
+                      <h3>{featured.p.title}</h3>
+                      <p className="desc">{(featured.p.description || "A shared Sawa departure across Egypt.").slice(0, 130)}</p>
+                      <div className="info">
+                        <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /></svg>Departs {depDate(featured)}</span>
+                        <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /></svg>{featured.p.guide || "Licensed operator"}</span>
+                      </div>
+                      <div className="prog">
+                        <div className="pt"><b>{featured.seats} of {featured.goAhead} joined</b><span className={`st${featured.confirmed ? " ok" : ""}`}>{featured.confirmed ? "Confirmed · running" : `${Math.max(0, featured.goAhead - featured.seats)} to GoAhead`}</span></div>
+                        <div className="pbar gold"><i data-fill={`${featured.pct}%`} /></div>
+                      </div>
+                      <div className="foot">
+                        <div className="when">{featured.confirmed ? "Running" : "Forming"}<b>{Math.max(0, featured.goAhead - featured.seats) || featured.seats} {featured.confirmed ? "joined" : "seats to go"}</b></div>
+                        <span className="join">Reserve a seat<span className="c"><SxArrow /></span></span>
+                      </div>
+                    </div>
+                  </div>
+                </article>
+              )}
+
+              <div className="board rv" data-d="1">
+                <div className="board-in">
+                  <div className="board-top">
+                    <span className="bt"><span className="live" />Forming now</span>
+                    <span className="cnt tnum">{model.length} departures open</span>
+                  </div>
+                  <div className="board-rows">
+                    {board.map((m) => (
+                      <a key={m.p.id} className="drow" onClick={() => navigate(linkOf(m))}>
+                        <div className="thumb"><img src={coverImage(m.p)} alt={m.p.title} />{m.confirmed && <span className="gdot" />}</div>
+                        <div className="mid">
+                          <span className="rt">{m.cityList.join(" · ")}{m.p.duration ? ` · ${m.p.duration}` : ""}</span>
+                          <h4>{m.p.title}</h4>
+                          <div className="mini"><span className={`pbar ${m.confirmed ? "gold" : "teal"}`}><i data-fill={`${m.pct}%`} /></span><span className={`lab${m.confirmed ? " ok" : ""}`}><b>{m.seats}</b>/{m.goAhead} · {m.confirmed ? "confirmed" : `${Math.max(0, m.goAhead - m.seats)} to go`}</span></div>
+                        </div>
+                        <div className="rt-col">
+                          <div className="pr tnum">${m.price}<small>/ person</small></div>
+                          <span className="arr"><SxArrow /></span>
+                        </div>
+                      </a>
+                    ))}
+                    {board.length === 0 && <div style={{ padding: "30px 22px", color: "var(--muted)" }}>No departures in this filter yet.</div>}
+                  </div>
+                  <div className="board-foot">
+                    <span><b className="tnum">{model.length}</b> live across Egypt</span>
+                    <a className="join" onClick={() => navigate("/tours")}>View all<span className="c"><SxArrow /></span></a>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="dep-foot rv">
+              <a className="btn teal" onClick={() => navigate("/tours")}>See all Egypt departures<span className="chip"><SxArrow /></span></a>
+            </div>
+          </div>
+        </section>
+
+        {/* PROMISE */}
+        <section className="block band" id="promise">
+          <div className="wrap">
+            <div className="head rv">
+              <span className="eyebrow on-dark" style={{ marginBottom: 22 }}>The symbol, explained</span>
+              <h2 style={{ color: "var(--cream)" }}>Every part of the Sawa mark is a <span className="ital" style={{ fontStyle: "italic", color: "var(--gold)" }}>promise</span>.</h2>
+              <p style={{ color: "rgba(247,243,234,.72)" }}>It isn't decoration. The circle, the route and the gold dot each stand for how a shared departure actually works.</p>
+            </div>
+            <div className="promise-grid">
+              <div className="psym rv">
+                <svg className="gl" viewBox="0 0 100 100" aria-hidden="true"><circle cx="32" cy="32" r="8" fill="currentColor" /><circle cx="68" cy="32" r="8" fill="currentColor" /><circle cx="32" cy="68" r="8" fill="currentColor" /><circle cx="68" cy="68" r="8" fill="currentColor" /></svg>
+                <h3>A real group</h3><p>The dots are the travellers it takes to confirm a departure. Below the minimum it stays a plan — at the minimum it becomes a trip.</p>
+              </div>
+              <div className="psym rv" data-d="1">
+                <svg className="gl" viewBox="0 0 100 100" aria-hidden="true"><path d="M68 30 C44 30 44 50 56 50 C68 50 68 70 38 70" fill="none" stroke="currentColor" strokeWidth="8" strokeLinecap="round" /><circle cx="30" cy="34" r="6" fill="currentColor" /><circle cx="40" cy="72" r="6" fill="currentColor" /><circle cx="70" cy="58" r="6" fill="currentColor" /></svg>
+                <h3>One shared route</h3><p>The S-path is the single journey everyone is on. Different operators, different travellers — one road, one guide, one group.</p>
+              </div>
+              <div className="psym rv" data-d="2">
+                <svg className="gl" viewBox="0 0 100 100" aria-hidden="true"><path d="M68 30 C44 30 44 50 56 50 C68 50 68 70 38 70" fill="none" stroke="currentColor" strokeWidth="8" strokeLinecap="round" /><circle cx="30" cy="34" r="6" fill="currentColor" /><circle cx="40" cy="72" r="6" fill="currentColor" /><circle className="go" cx="74" cy="28" r="8" /></svg>
+                <h3 className="g">GoAhead</h3><p>The single gold dot is the moment of truth. When it lights up, your tour is confirmed, paid and really running.</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* OPERATORS */}
+        <section className="block" id="operators">
+          <div className="wrap ops">
+            <div className="rv">
+              <span className="eyebrow">For Egyptian operators &amp; agencies</span>
+              <h2 className="serif" style={{ fontWeight: 500, color: "var(--teal)", fontSize: "clamp(2rem,4vw,3rem)", lineHeight: 1.06, letterSpacing: "-.02em", marginTop: 22 }}>Stop cancelling tours you <span className="ital" style={{ fontStyle: "italic" }}>almost</span> filled.</h2>
+              <p style={{ fontSize: "1.08rem", color: "var(--muted)", marginTop: 16, maxWidth: "34rem" }}>List the departures you can't fill on your own. Sawa pools demand across operators so the date runs — and everyone's travellers ride together.</p>
+              <div className="ops-list">
+                {[["Zero-risk listings", "Post a date with no commitment. It only runs once the group confirms."], ["Fill from everyone's pipeline", "Your two travellers join ours and three other agencies' — the math finally works."], ["Keep your brand and margin", "You run the tour. Sawa handles matching, payments and the GoAhead confirmation."]].map(([b, p]) => (
+                  <div className="it" key={b}><span className="ck"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg></span><div><b>{b}</b><p>{p}</p></div></div>
+                ))}
+              </div>
+            </div>
+            <div className="ops-panel rv" data-d="1">
+              <div className="ops-inner">
+                <h3>Your tours, finally full</h3>
+                <p>Why operators bring their dates to Sawa.</p>
+                <div className="ostat">
+                  <div className="s"><b className="tnum">{summary.goAheadDates || 0}</b><span>departures running right now</span></div>
+                  <div className="s"><b className="tnum">{summary.tours || model.length}</b><span>tours &amp; packages listed</span></div>
+                  <div className="s"><b className="tnum">{cities.length || 0}</b><span>destinations across Egypt</span></div>
+                  <div className="s"><b className="tnum">$0</b><span>upfront cost to list a route</span></div>
+                </div>
+                <a className="btn gold" style={{ width: "100%", justifyContent: "space-between" }} onClick={() => navigate("/agency")}>Become a verified operator<span className="chip"><SxArrow /></span></a>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* CTA */}
+        <section className="cta-wrap">
+          <div className="wrap">
+            <div className="cta rv">
+              <div className="cta-inner">
+                <img src={coverImage(featured?.p || model[0]?.p || {})} alt="Egypt" />
+                <div className="in">
+                  <span className="eyebrow on-dark"><span className="live" />Shared departures, confirmed together</span>
+                  <h2>Your Egypt trip is one<br />traveller <span className="ital">away</span>.</h2>
+                  <p>Find an open departure, take a seat, and watch the gold dot light up.</p>
+                  <div className="hero-cta">
+                    <a href="#departures" className="btn gold" onClick={scrollTo("departures")}>Find a departure<span className="chip"><SxArrow /></span></a>
+                    <a className="btn light" onClick={() => navigate("/agency")}>List a tour<span className="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg></span></a>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <div className="sfooter">
+        <div className="wrap">
+          <div className="fgrid">
+            <div>
+              <Logo />
+              <p className="fblurb">Shared departures, confirmed together. Sawa pools travellers across verified Egyptian operators so the tours you want actually run — and a gold dot you can trust.</p>
+            </div>
+            <div className="fcol"><h4>Travel</h4>
+              <a onClick={() => navigate("/tours")}>Open departures</a>
+              <a href="#how" onClick={scrollTo("how")}>How it works</a>
+              <a href="#promise" onClick={scrollTo("promise")}>The GoAhead promise</a>
+              <a onClick={() => navigate("/tours")}>All Egypt tours</a>
+            </div>
+            <div className="fcol"><h4>Operators</h4>
+              <a onClick={() => navigate("/agency")}>List a tour</a>
+              <a onClick={() => navigate("/agency")}>Operator login</a>
+              <a onClick={() => navigate("/contact")}>Contact</a>
+            </div>
+            <div className="fcol"><h4>Company</h4>
+              <a onClick={() => navigate("/about")}>About Sawa</a>
+              <a onClick={() => navigate("/faq")}>FAQ</a>
+              <a onClick={() => navigate("/contact")}>Support</a>
+            </div>
+          </div>
+          <div className="fbot">
+            <span>© 2026 Sawa Tours. Shared departures, confirmed together.</span>
+            <div className="lks"><a onClick={() => navigate("/privacy")}>Privacy</a><a onClick={() => navigate("/terms")}>Terms</a></div>
+            <div className="socials">
+              <a aria-label="WhatsApp"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-8.5 15.2L2 22l4.9-1.4A10 10 0 1 0 12 2Zm5.4 14.1c-.2.6-1.3 1.2-1.8 1.2-.5.1-1 .1-1.7-.1-.4-.1-.9-.3-1.6-.6a9 9 0 0 1-3.4-3c-.3-.4-.8-1.1-.8-2.1s.5-1.5.7-1.7c.2-.2.4-.3.6-.3h.4c.2 0 .4 0 .5.4l.7 1.6c.1.1 0 .3 0 .4l-.3.4c-.2.2-.3.3-.1.5.5.9 1 1.3 1.8 1.8.2.1.4.1.5 0l.5-.6c.2-.2.3-.2.5-.1l1.5.7c.2.1.4.2.4.3.1.1.1.6-.1 1Z" /></svg></a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function PublicSite({
   path,
   cityStats,
@@ -1053,6 +1422,11 @@ function PublicSite({
 
   const showDetail = routeTour || routePackage;
   const page = (path === "/" || path === "") ? "home" : (showDetail ? "detail" : pageFromPath(path));
+
+  // New editorial home page (own nav + footer), wired to live data.
+  if (page === "home") {
+    return <PublicHomeV2 navigate={navigate} products={customerCalendars} summary={customerSummary} cities={cityStats} />;
+  }
 
   // Standalone marketing/legal pages share the nav + footer shell.
   if (page !== "home" && page !== "detail") {
