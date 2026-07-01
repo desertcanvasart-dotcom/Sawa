@@ -119,6 +119,37 @@ export function goAheadEmail({ to, route, dateLabel }) {
   return { to, subject, html, text, kind: "goahead" };
 }
 
+export function listingApprovedEmail({ to, fullName, title }) {
+  const subject = `Approved: "${title}" is now live on Sawa`;
+  const text =
+    `Hi ${fullName || ""},\n\nGood news — your tour listing "${title}" has been reviewed and approved. ` +
+    `It's now live on Sawa and open for travellers to book.\n\nManage it any time at ${APP_URL}/agency`;
+  const html = shell(
+    "Your listing is approved",
+    `<p>Good news — your tour listing <strong>"${title}"</strong> has been reviewed and <strong>approved</strong>. It's now live on Sawa and open for bookings.</p>
+     <p><a href="${APP_URL}/agency" style="background:#1f5f7a;color:#fff;padding:10px 18px;border-radius:999px;text-decoration:none;display:inline-block">Open your dashboard</a></p>`
+  );
+  return { to, subject, html, text, kind: "listing_approved" };
+}
+
+export function listingRejectedEmail({ to, fullName, title, reason }) {
+  const subject = `Update on your listing "${title}"`;
+  const text =
+    `Hi ${fullName || ""},\n\nThanks for submitting "${title}". We couldn't approve it as-is.\n\n` +
+    `Reason:\n${reason || "No reason provided."}\n\n` +
+    `You can edit the listing and resubmit it for review at ${APP_URL}/agency`;
+  const html = shell(
+    "Your listing needs a change",
+    `<p>Thanks for submitting <strong>"${title}"</strong>. We couldn't approve it as-is.</p>
+     <p style="background:#fbeaea;border-left:3px solid #c0553f;border-radius:8px;padding:14px;color:#7a2e1f">
+       <strong>Reason for rejection</strong><br/>${(reason || "No reason provided.").replace(/\n/g, "<br/>")}
+     </p>
+     <p>Edit the listing and resubmit it for review whenever you're ready.</p>
+     <p><a href="${APP_URL}/agency" style="background:#1f5f7a;color:#fff;padding:10px 18px;border-radius:999px;text-decoration:none;display:inline-block">Edit &amp; resubmit</a></p>`
+  );
+  return { to, subject, html, text, kind: "listing_rejected" };
+}
+
 export function cancellationEmail({ to, route, dateLabel }) {
   const subject = `Cancellation — ${route}`;
   const text = `This confirms your booking for ${route} on ${dateLabel} has been cancelled.`;

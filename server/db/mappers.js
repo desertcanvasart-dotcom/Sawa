@@ -47,6 +47,12 @@ export function mapProduct(r) {
     included: r.included ?? [],
     notIncluded: r.not_included ?? [],
     active: r.active !== false,
+    // Approval workflow
+    status: r.status || "approved",
+    agencyId: r.agency_id || null,
+    submittedAt: r.submitted_at || null,
+    reviewedAt: r.reviewed_at || null,
+    rejectionReason: r.rejection_reason || "",
     // Phase A — rich content
     overviewHtml: r.overview_html ?? "",
     policiesHtml: r.policies_html ?? "",

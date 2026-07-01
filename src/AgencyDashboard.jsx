@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { DashSidebar } from "./DashSidebar";
 import { apiFetch } from "./supabaseClient";
+import { ProductEditor } from "./AdminDashboard";
 
 const money = (n) => (n == null ? "—" : "$" + Number(n).toLocaleString());
 const fmtDate = (d) => (d ? new Intl.DateTimeFormat("en", { month: "short", day: "numeric", year: "numeric" }).format(new Date(d)) : "—");
@@ -60,6 +61,7 @@ export function AgencyDashboard({ user, agency, signOut, navigate, departures, t
       items: [
         { id: "overview", label: "Overview", icon: LayoutDashboard },
         { id: "book", label: "Book seats", icon: Ticket },
+        { id: "listings", label: "List a tour", icon: Package },
         { id: "bookings", label: "My bookings", icon: ClipboardList },
         { id: "widget", label: "Promote", icon: Share2 },
         ...(isOwner ? [{ id: "team", label: "Team", icon: UsersIcon }] : []),
@@ -146,6 +148,8 @@ export function AgencyDashboard({ user, agency, signOut, navigate, departures, t
           </>
         )}
 
+        {section === "listings" && <MyListingsSection />}
+
         {section === "widget" && <WidgetSection tourProducts={tourProducts} />}
 
         {section === "team" && isOwner && (
@@ -156,6 +160,121 @@ export function AgencyDashboard({ user, agency, signOut, navigate, departures, t
         )}
       </main>
     </div>
+  );
+}
+
+/* ---------------- List a tour: submit + track approval ---------------- */
+function listingStatusTag(status) {
+  if (status === "approved") return <span className="tag tag-on"><Check size={12} /> Live</span>;
+  if (status === "rejected") return <span className="tag tag-off">Needs changes</span>;
+  return <span className="tag"><Clock3 size={12} /> In review</span>;
+}
+function MyListingsSection() {
+  const [products, setProducts] = useState(null);
+  const [editor, setEditor] = useState(null); // {type} for new, {existing} for edit
+  const [picking, setPicking] = useState(false);
+  const [err, setErr] = useState("");
+
+  async function load() {
+    setErr("");
+    try {
+      const r = await apiFetch("/agency/tour-products");
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || "Could not load your listings.");
+      setProducts(j.products || []);
+    } catch (e) { setErr(e.message); setProducts([]); }
+  }
+  useEffect(() => { load(); }, []);
+
+  if (editor) {
+    return (
+      <ProductEditor
+        type={editor.existing?.type || editor.type}
+        existing={editor.existing}
+        agencyMode
+        saveEndpoint="/agency/tour-products"
+        onClose={() => setEditor(null)}
+        onSaved={() => { setEditor(null); load(); }}
+      />
+    );
+  }
+
+  const list = products || [];
+  const rejected = list.filter((p) => p.status === "rejected");
+  return (
+    <>
+      <div className="dash-head">
+        <div><h1>List a tour</h1><p>Submit a tour for review. Our team approves it before it goes live — you'll get an email either way.</p></div>
+        <button className="btn-primary" onClick={() => setPicking(true)}><Package size={16} />List a new tour</button>
+      </div>
+
+      {err && <div className="auth-error" role="alert">{err}</div>}
+
+      {rejected.length > 0 && (
+        <div className="notice-band warn">
+          {rejected.length === 1 ? "1 listing needs changes" : `${rejected.length} listings need changes`} before they can go live — see the reason on each card below, edit, and resubmit.
+        </div>
+      )}
+
+      {products === null ? (
+        <div className="dash-empty">Loading your listings…</div>
+      ) : !list.length ? (
+        <div className="empty-cta">
+          <Package size={26} />
+          <h3>No listings yet</h3>
+          <p>Create your first tour or package. It won't go live until an admin approves it.</p>
+          <button className="btn-primary" onClick={() => setPicking(true)}>List a tour</button>
+        </div>
+      ) : (
+        <div className="listing-grid">
+          {list.map((p) => {
+            const img = p.images?.[0]?.url;
+            return (
+              <article className="listing-card" key={p.id}>
+                <div className="listing-media">
+                  {img ? <img src={img} alt={p.title} /> : <div className="listing-noimg"><Package size={22} /></div>}
+                  <span className="listing-type">{p.type === "package" ? "Package" : "Day tour"}</span>
+                </div>
+                <div className="listing-body">
+                  <div className="listing-top"><h3>{p.title || "Untitled"}</h3>{listingStatusTag(p.status)}</div>
+                  <p className="listing-agency">{p.city || "—"} · {p.duration || "—"} · {money(p.publishedRate)}/person</p>
+                  <p className="listing-desc">{p.description || "No description yet."}</p>
+                  {p.status === "rejected" && p.rejectionReason ? (
+                    <div className="listing-reject"><strong>Why it was rejected</strong><br />{p.rejectionReason}</div>
+                  ) : null}
+                  {p.status === "pending" ? <p className="field-hint">Submitted{p.submittedAt ? ` ${fmtDate(p.submittedAt)}` : ""} — waiting for review.</p> : null}
+                  {p.status === "approved" ? <p className="field-hint">Live on Sawa. Editing it will send it back for review.</p> : null}
+                  <div className="listing-actions">
+                    <button className="btn-ghost sm" onClick={() => setEditor({ existing: p })}>
+                      {p.status === "rejected" ? "Edit & resubmit" : "Edit"}
+                    </button>
+                  </div>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      )}
+
+      {picking && (
+        <div className="modal-overlay" onClick={() => setPicking(false)}>
+          <div className="modal modal-sm" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-head"><h2>What are you listing?</h2></div>
+            <div className="modal-body">
+              <div className="pick-grid">
+                <button className="pick-card" onClick={() => { setPicking(false); setEditor({ type: "day_tour" }); }}>
+                  <CalendarDays size={22} /><strong>Day tour</strong><span>A single-day experience.</span>
+                </button>
+                <button className="pick-card" onClick={() => { setPicking(false); setEditor({ type: "package" }); }}>
+                  <Package size={22} /><strong>Multi-day package</strong><span>Several days with nights & itinerary.</span>
+                </button>
+              </div>
+            </div>
+            <div className="modal-foot"><button className="btn-ghost" onClick={() => setPicking(false)}>Cancel</button></div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 

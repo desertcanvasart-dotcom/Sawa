@@ -19,6 +19,7 @@ import { logAudit } from "./audit.js";
 import {
   sendEmail, emailMode,
   inviteEmail, bookingConfirmationEmail, goAheadEmail, cancellationEmail,
+  listingApprovedEmail, listingRejectedEmail,
 } from "./email.js";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -186,10 +187,18 @@ app.get("/api/me", requireAuth, h(async (req, res) => {
 
 // Bootstrap — open to all; pledge detail redacted per viewer.
 app.get("/api/bootstrap", h(async (req, res) => {
+  // Platform staff see every product (incl. pending/rejected/archived) so they can
+  // manage them. Everyone else — the public site and agencies browsing to book —
+  // only sees live, approved listings. An agency's own pending/rejected listings
+  // are served separately via GET /api/agency/tour-products.
+  const canSeeAll = req.user && (req.user.role === "super_admin" || req.user.role === "ops_staff");
+  const productsSql = canSeeAll
+    ? "SELECT * FROM tour_products ORDER BY id"
+    : "SELECT * FROM tour_products WHERE active IS NOT FALSE AND status = 'approved' ORDER BY id";
   const [agencies, cities, products, departures, pledges] = await Promise.all([
     pool.query("SELECT * FROM agencies ORDER BY id"),
     pool.query("SELECT * FROM cities ORDER BY id"),
-    pool.query("SELECT * FROM tour_products ORDER BY id"),
+    pool.query(productsSql),
     pool.query("SELECT * FROM departures ORDER BY id"),
     pool.query("SELECT * FROM pledges ORDER BY created_at ASC, id ASC"),
   ]);
@@ -295,62 +304,158 @@ app.post("/api/admin/departures", requireAuth, requireRole("super_admin", "ops_s
   res.status(201).json({ departure: presentDeparture(departure, req.user) });
 }));
 
-// Admin creates / updates a tour product (platform staff only).
-app.post("/api/admin/tour-products", requireAuth, requireRole("super_admin", "ops_staff"), h(async (req, res) => {
-  const body = req.body || {};
+// Shared upsert used by both the admin editor and the agency listing editor.
+// `review` carries the approval state to write: { status, agencyId, submittedBy, reviewedBy }.
+async function upsertTourProduct(c, body, review) {
   const title = String(body.title || "").trim();
   if (!title) throw new AppError(422, "Title is required.");
   const type = body.type === "package" ? "package" : "day_tour";
   const id = body.id ||
     `${type === "package" ? "pkg" : "tour"}_${title.toLowerCase().replace(/[^a-z0-9]+/g, "_").slice(0, 32)}_${Date.now().toString(36)}`;
   const publishedRate = Number(body.publishedRate || 0);
+  const now = new Date().toISOString();
+  const reviewedAt = review.status === "approved" ? now : null;
+  await c.query(
+    `INSERT INTO tour_products
+      (id, type, title, city, cities, nights, duration, default_time, guide, vehicle,
+       min_seats, max_seats, base_cost, published_rate, break_price, quality, deposit_percent,
+       description, included, not_included, itinerary, accommodation_tiers,
+       overview_html, policies_html, what_to_bring, meeting_point, pickup_note, booking_cutoff_hours, images,
+       meeting_points, status, agency_id, submitted_by, submitted_at, reviewed_by, reviewed_at, rejection_reason)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,
+       $23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37)
+     ON CONFLICT (id) DO UPDATE SET
+       type=EXCLUDED.type, title=EXCLUDED.title, city=EXCLUDED.city, cities=EXCLUDED.cities,
+       nights=EXCLUDED.nights, duration=EXCLUDED.duration,
+       guide=EXCLUDED.guide, vehicle=EXCLUDED.vehicle, min_seats=EXCLUDED.min_seats,
+       max_seats=EXCLUDED.max_seats, published_rate=EXCLUDED.published_rate,
+       break_price=EXCLUDED.break_price, deposit_percent=EXCLUDED.deposit_percent,
+       description=EXCLUDED.description, included=EXCLUDED.included, not_included=EXCLUDED.not_included,
+       itinerary=EXCLUDED.itinerary, accommodation_tiers=EXCLUDED.accommodation_tiers,
+       overview_html=EXCLUDED.overview_html, policies_html=EXCLUDED.policies_html,
+       what_to_bring=EXCLUDED.what_to_bring, meeting_point=EXCLUDED.meeting_point,
+       pickup_note=EXCLUDED.pickup_note, booking_cutoff_hours=EXCLUDED.booking_cutoff_hours,
+       images=EXCLUDED.images, meeting_points=EXCLUDED.meeting_points,
+       status=EXCLUDED.status, submitted_at=EXCLUDED.submitted_at,
+       submitted_by=EXCLUDED.submitted_by, reviewed_by=EXCLUDED.reviewed_by,
+       reviewed_at=EXCLUDED.reviewed_at, rejection_reason=EXCLUDED.rejection_reason,
+       agency_id=COALESCE(tour_products.agency_id, EXCLUDED.agency_id)`,
+    [
+      id, type, title, body.city || "Cairo",
+      type === "package" ? JSON.stringify(body.cities || [body.city || "Cairo"]) : null,
+      type === "package" ? Number(body.nights || 3) : null,
+      body.duration || (type === "package" ? `${Number(body.nights || 3) + 1} days · ${body.nights || 3} nights` : "4 hours"),
+      body.defaultTime || "08:00", body.guide || "Licensed Egyptologist",
+      body.vehicle || (type === "package" ? "Private van + flights" : "Van, 10 seats"),
+      Number(body.minSeats || 4), Number(body.maxSeats || (type === "package" ? 12 : 10)),
+      Number(body.baseCost || 0), publishedRate,
+      Number(body.breakPrice || Math.round(publishedRate * 0.8)), Number(body.quality || 4.7),
+      Number(body.depositPercent || (type === "package" ? 20 : 10)), body.description || "",
+      JSON.stringify(body.included || []), JSON.stringify(body.notIncluded || []),
+      type === "package" ? JSON.stringify(body.itinerary || []) : null,
+      type === "package" ? JSON.stringify(body.accommodationTiers || []) : null,
+      body.overviewHtml || null, body.policiesHtml || null,
+      JSON.stringify(body.whatToBring || []), body.meetingPoint || null,
+      body.pickupNote || null, Number.isFinite(Number(body.bookingCutoffHours)) ? Number(body.bookingCutoffHours) : 24,
+      JSON.stringify(body.images || []),
+      JSON.stringify(Array.isArray(body.meetingPoints) ? body.meetingPoints : []),
+      review.status, review.agencyId || null, review.submittedBy || null, now,
+      review.reviewedBy || null, reviewedAt, null,
+    ]
+  );
+  return loadProduct(c, id);
+}
 
-  const product = await withTransaction(async (c) => {
-    await c.query(
-      `INSERT INTO tour_products
-        (id, type, title, city, cities, nights, duration, default_time, guide, vehicle,
-         min_seats, max_seats, base_cost, published_rate, break_price, quality, deposit_percent,
-         description, included, not_included, itinerary, accommodation_tiers,
-         overview_html, policies_html, what_to_bring, meeting_point, pickup_note, booking_cutoff_hours, images,
-         meeting_points)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,
-         $23,$24,$25,$26,$27,$28,$29,$30)
-       ON CONFLICT (id) DO UPDATE SET
-         type=EXCLUDED.type, title=EXCLUDED.title, city=EXCLUDED.city, cities=EXCLUDED.cities,
-         nights=EXCLUDED.nights, duration=EXCLUDED.duration,
-         guide=EXCLUDED.guide, vehicle=EXCLUDED.vehicle, min_seats=EXCLUDED.min_seats,
-         max_seats=EXCLUDED.max_seats, published_rate=EXCLUDED.published_rate,
-         break_price=EXCLUDED.break_price, deposit_percent=EXCLUDED.deposit_percent,
-         description=EXCLUDED.description, included=EXCLUDED.included, not_included=EXCLUDED.not_included,
-         itinerary=EXCLUDED.itinerary, accommodation_tiers=EXCLUDED.accommodation_tiers,
-         overview_html=EXCLUDED.overview_html, policies_html=EXCLUDED.policies_html,
-         what_to_bring=EXCLUDED.what_to_bring, meeting_point=EXCLUDED.meeting_point,
-         pickup_note=EXCLUDED.pickup_note, booking_cutoff_hours=EXCLUDED.booking_cutoff_hours,
-         images=EXCLUDED.images, meeting_points=EXCLUDED.meeting_points`,
-      [
-        id, type, title, body.city || "Cairo",
-        type === "package" ? JSON.stringify(body.cities || [body.city || "Cairo"]) : null,
-        type === "package" ? Number(body.nights || 3) : null,
-        body.duration || (type === "package" ? `${Number(body.nights || 3) + 1} days · ${body.nights || 3} nights` : "4 hours"),
-        body.defaultTime || "08:00", body.guide || "Licensed Egyptologist",
-        body.vehicle || (type === "package" ? "Private van + flights" : "Van, 10 seats"),
-        Number(body.minSeats || 4), Number(body.maxSeats || (type === "package" ? 12 : 10)),
-        Number(body.baseCost || 0), publishedRate,
-        Number(body.breakPrice || Math.round(publishedRate * 0.8)), Number(body.quality || 4.7),
-        Number(body.depositPercent || (type === "package" ? 20 : 10)), body.description || "",
-        JSON.stringify(body.included || []), JSON.stringify(body.notIncluded || []),
-        type === "package" ? JSON.stringify(body.itinerary || []) : null,
-        type === "package" ? JSON.stringify(body.accommodationTiers || []) : null,
-        body.overviewHtml || null, body.policiesHtml || null,
-        JSON.stringify(body.whatToBring || []), body.meetingPoint || null,
-        body.pickupNote || null, Number.isFinite(Number(body.bookingCutoffHours)) ? Number(body.bookingCutoffHours) : 24,
-        JSON.stringify(body.images || []),
-        JSON.stringify(Array.isArray(body.meetingPoints) ? body.meetingPoints : []),
-      ]
-    );
-    return loadProduct(c, id);
-  });
+// Admin creates / updates a tour product (platform staff only). Admin edits are
+// auto-approved — a platform admin publishing a tour needs no second sign-off.
+app.post("/api/admin/tour-products", requireAuth, requireRole("super_admin", "ops_staff"), h(async (req, res) => {
+  const body = req.body || {};
+  const product = await withTransaction((c) =>
+    upsertTourProduct(c, body, { status: "approved", submittedBy: req.user.id, reviewedBy: req.user.id }));
   res.status(201).json({ product });
+}));
+
+// Agency submits / edits a tour listing. It goes to 'pending' and stays offline
+// until a platform admin approves it. Editing an approved listing sends it back
+// to pending (re-approval required).
+app.post("/api/agency/tour-products", requireAuth, requireRole("agency_owner", "agency_agent"), h(async (req, res) => {
+  const body = req.body || {};
+  if (!req.user.agencyId) throw new AppError(403, "Your account is not linked to an agency.");
+  const product = await withTransaction(async (c) => {
+    if (body.id) {
+      const owner = await c.query(`SELECT agency_id FROM tour_products WHERE id=$1`, [body.id]);
+      if (!owner.rows.length) throw new AppError(404, "Listing not found.");
+      if (owner.rows[0].agency_id && owner.rows[0].agency_id !== req.user.agencyId) {
+        throw new AppError(403, "You can only edit your own listings.");
+      }
+    }
+    return upsertTourProduct(c, body, { status: "pending", agencyId: req.user.agencyId, submittedBy: req.user.id });
+  });
+  await logAudit(req, { action: "listing.submit", entity: "tour_product", entityId: product.id, detail: { title: product.title } });
+  res.status(201).json({ product });
+}));
+
+// Agency lists its own submissions (all statuses).
+app.get("/api/agency/tour-products", requireAuth, requireRole("agency_owner", "agency_agent"), h(async (req, res) => {
+  const r = await pool.query(
+    `SELECT * FROM tour_products WHERE agency_id=$1 ORDER BY submitted_at DESC NULLS LAST, id`,
+    [req.user.agencyId]
+  );
+  res.json({ products: r.rows.map(mapProduct) });
+}));
+
+// Resolve the best notification address for a listing's owning agency.
+async function listingOwnerContact(product) {
+  if (product.submittedBy) {
+    const u = await pool.query(`SELECT email, full_name FROM app_users WHERE id=$1`, [product.submittedBy]);
+    if (u.rows[0]?.email) return u.rows[0];
+  }
+  if (product.agencyId) {
+    const o = await pool.query(
+      `SELECT email, full_name FROM app_users WHERE agency_id=$1 AND role='agency_owner' AND status='active' LIMIT 1`,
+      [product.agencyId]
+    );
+    if (o.rows[0]?.email) return o.rows[0];
+  }
+  return null;
+}
+
+// Admin approves a pending listing -> goes live, agency notified by email.
+app.post("/api/admin/tour-products/:id/approve", requireAuth, requireRole("super_admin", "ops_staff"), h(async (req, res) => {
+  const product = await withTransaction(async (c) => {
+    const r = await c.query(
+      `UPDATE tour_products SET status='approved', reviewed_by=$1, reviewed_at=now(), rejection_reason=NULL, active=true WHERE id=$2 RETURNING *`,
+      [req.user.id, req.params.id]
+    );
+    if (!r.rows.length) throw new AppError(404, "Listing not found.");
+    return mapProduct(r.rows[0]);
+  });
+  await logAudit(req, { action: "listing.approve", entity: "tour_product", entityId: product.id, detail: { title: product.title } });
+  const contact = await listingOwnerContact(product);
+  if (contact?.email) {
+    sendEmail(listingApprovedEmail({ to: contact.email, fullName: contact.full_name, title: product.title })).catch(() => {});
+  }
+  res.json({ product, notified: !!contact?.email });
+}));
+
+// Admin rejects a pending listing with a reason -> stays offline, agency notified.
+app.post("/api/admin/tour-products/:id/reject", requireAuth, requireRole("super_admin", "ops_staff"), h(async (req, res) => {
+  const reason = String(req.body?.reason || "").trim();
+  if (!reason) throw new AppError(422, "A reason for the rejection is required.");
+  const product = await withTransaction(async (c) => {
+    const r = await c.query(
+      `UPDATE tour_products SET status='rejected', reviewed_by=$1, reviewed_at=now(), rejection_reason=$2 WHERE id=$3 RETURNING *`,
+      [req.user.id, reason, req.params.id]
+    );
+    if (!r.rows.length) throw new AppError(404, "Listing not found.");
+    return mapProduct(r.rows[0]);
+  });
+  await logAudit(req, { action: "listing.reject", entity: "tour_product", entityId: product.id, detail: { title: product.title, reason } });
+  const contact = await listingOwnerContact(product);
+  if (contact?.email) {
+    sendEmail(listingRejectedEmail({ to: contact.email, fullName: contact.full_name, title: product.title, reason })).catch(() => {});
+  }
+  res.json({ product, notified: !!contact?.email });
 }));
 
 // Admin updates pricing; cascades to that product's departures (platform staff only).
@@ -1057,9 +1162,10 @@ app.get("/api/admin/stats", requireAuth, requireRole("super_admin", "ops_staff")
   const [deps, pledges, products, agencies] = await Promise.all([
     pool.query(`SELECT id, status, date, start_date, type, route, min_seats, max_seats FROM departures`),
     pool.query(`SELECT departure_id, seats, booking_total, deposit_due, source, created_at FROM pledges`),
-    pool.query(`SELECT id, type, active FROM tour_products`),
+    pool.query(`SELECT id, type, active, status FROM tour_products`),
     pool.query(`SELECT id FROM agencies WHERE status='active'`),
   ]);
+  const pendingListings = products.rows.filter((p) => p.status === "pending").length;
 
   const seatsByDep = new Map();
   let totalSeats = 0, totalRevenue = 0, totalDeposits = 0, bookingsCount = pledges.rows.length;
@@ -1101,6 +1207,7 @@ app.get("/api/admin/stats", requireAuth, requireRole("super_admin", "ops_staff")
       revenue: totalRevenue,
       depositsDue: totalDeposits,
     },
+    pendingListings,
     departureStatus: { open, readyToConfirm, confirmed, atRisk },
   });
 }));

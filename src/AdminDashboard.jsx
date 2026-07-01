@@ -3,7 +3,7 @@ import {
   LayoutDashboard, Package, CalendarDays, Users, ClipboardList, ScrollText,
   Plus, Check, X, Search, Archive, ArchiveRestore, CircleDollarSign, ShieldCheck,
   TrendingUp, AlertTriangle, MapPin, Hotel, ArrowUpRight, ArrowLeft, Trash2, Pencil,
-  Newspaper, Share2, Copy,
+  Newspaper, Share2, Copy, Inbox,
 } from "lucide-react";
 import { apiFetch, supabase, uploadImage } from "./supabaseClient";
 import { DashSidebar } from "./DashSidebar";
@@ -28,6 +28,7 @@ const NAV_GROUPS = [
     items: [
       { id: "overview", label: "Overview", icon: LayoutDashboard },
       { id: "tours", label: "Tours & Packages", icon: Package },
+      { id: "listings", label: "Listing requests", icon: Inbox, alert: (s) => s?.pendingListings || 0 },
       { id: "destinations", label: "Destinations", icon: MapPin },
       { id: "blog", label: "Blog", icon: Newspaper },
       { id: "departures", label: "Departures", icon: CalendarDays, alert: (s) => s?.departureStatus?.readyToConfirm || 0 },
@@ -93,10 +94,11 @@ export function AdminDashboard({ user, agency, signOut, navigate }) {
           <>
             {section === "overview" && <Overview stats={stats} data={data} onGo={setSection} />}
             {section === "tours" && <ToursSection data={data} destinations={destinations} reload={loadAll} flash={flash} />}
+            {section === "listings" && <ListingRequestsSection data={data} reload={loadAll} flash={flash} />}
             {section === "destinations" && <DestinationsSection destinations={destinations} reload={loadAll} flash={flash} />}
             {section === "blog" && <BlogSection posts={posts} reload={loadAll} flash={flash} />}
             {section === "departures" && <DeparturesSection data={data} reload={loadAll} flash={flash} />}
-            {section === "bookings" && <BookingsSection />}
+            {section === "bookings" && <BookingsSection data={data} />}
             {section === "referrals" && <ReferralsSection flash={flash} />}
             {section === "agencies" && <AgenciesSection flash={flash} />}
             {section === "team" && <OpsTeamSection flash={flash} currentUserId={user.id} />}
@@ -539,11 +541,14 @@ function BlogEditor({ existing, onClose, onSaved }) {
 
 const STEPS = ["Details", "Content", "Itinerary", "Dates"];
 
-function ProductEditor({ type: typeProp, existing, destinations = [], onClose, onSaved }) {
+export function ProductEditor({ type: typeProp, existing, destinations = [], onClose, onSaved, saveEndpoint = "/admin/tour-products", agencyMode = false }) {
   const editing = !!existing;
   const type = existing?.type || typeProp;
   const pkg = type === "package";
   const [step, setStep] = useState(0);
+  // Agencies submit a listing for review — they don't publish live departure
+  // dates themselves, so drop the "Dates" step for them.
+  const steps = agencyMode ? STEPS.slice(0, 3) : STEPS;
 
   const firstDest = destinations.find((d) => d.active !== false)?.name || destinations[0]?.name || "Cairo";
   const [f, setF] = useState({
@@ -649,34 +654,37 @@ function ProductEditor({ type: typeProp, existing, destinations = [], onClose, o
           name: t.name, perPersonSupplement: Number(t.perPersonSupplement) || 0, singleSupplement: Number(t.singleSupplement) || 0,
         }));
       }
-      const r = await apiFetch("/admin/tour-products", {
+      const r = await apiFetch(saveEndpoint, {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
       });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error || "Could not save.");
       const productId = j.product.id;
 
-      // Publish any first dates entered (merged create flow).
-      const wantDates = clean(dates);
-      for (const d of wantDates) {
-        await apiFetch("/admin/departures", {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(pkg ? { tourProductId: productId, startDate: d } : { tourProductId: productId, date: d }),
-        });
+      // Publish any first dates entered (merged create flow). Agencies submit for
+      // review and don't publish departures directly, so skip this for them.
+      if (!agencyMode) {
+        const wantDates = clean(dates);
+        for (const d of wantDates) {
+          await apiFetch("/admin/departures", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(pkg ? { tourProductId: productId, startDate: d } : { tourProductId: productId, date: d }),
+          });
+        }
       }
       onSaved();
     } catch (e2) { setErr(e2.message); } finally { setBusy(false); }
   }
 
-  const last = STEPS.length - 1;
+  const last = steps.length - 1;
 
   return (
     <div className="editor-page">
       <div className="editor-page-head">
-        <button className="editor-back" onClick={onClose}><ArrowLeft size={16} />Back to Tours</button>
-        <h1>{editing ? "Edit " : "New "}{pkg ? "package" : "day tour"}</h1>
+        <button className="editor-back" onClick={onClose}><ArrowLeft size={16} />{agencyMode ? "Back to my listings" : "Back to Tours"}</button>
+        <h1>{editing ? "Edit " : (agencyMode ? "List a new " : "New ")}{pkg ? "package" : "day tour"}</h1>
         <div className="wiz-steps">
-          {STEPS.map((s, i) => (
+          {steps.map((s, i) => (
             <button key={s} className={`wiz-step ${i === step ? "active" : ""} ${i < step ? "done" : ""}`} onClick={() => setStep(i)}>
               <span className="wiz-num">{i + 1}</span>{s}
             </button>
@@ -821,7 +829,7 @@ function ProductEditor({ type: typeProp, existing, destinations = [], onClose, o
           <div className="wiz-nav">
             {step > 0 && <button type="button" className="btn-ghost" onClick={() => setStep(step - 1)}>Back</button>}
             {step < last && <button type="button" className="btn-primary" onClick={() => setStep(step + 1)}>Next</button>}
-            {step === last && <button type="button" className="btn-primary" disabled={busy} onClick={save}>{busy ? "Saving…" : editing ? "Save changes" : (pkg ? "Create package" : "Create tour")}</button>}
+            {step === last && <button type="button" className="btn-primary" disabled={busy} onClick={save}>{busy ? "Saving…" : agencyMode ? (editing ? "Save & resubmit" : "Submit for review") : editing ? "Save changes" : (pkg ? "Create package" : "Create tour")}</button>}
           </div>
         </div>
     </div>
@@ -844,6 +852,131 @@ function RowList({ label, rows, setRows, placeholder }) {
 
 function Field({ label, children, full }) {
   return <label className={`field ${full ? "field-full" : ""}`}><span>{label}</span>{children}</label>;
+}
+
+/* ---------------- Listing requests (approval) ---------------- */
+const LISTING_TABS = [
+  { id: "pending", label: "Awaiting review" },
+  { id: "rejected", label: "Rejected" },
+  { id: "approved", label: "Approved" },
+];
+function statusTag(status) {
+  if (status === "approved") return <span className="tag tag-on">Approved</span>;
+  if (status === "rejected") return <span className="tag tag-off">Rejected</span>;
+  return <span className="tag tag-warn">Awaiting review</span>;
+}
+function ListingRequestsSection({ data, reload, flash }) {
+  const [tab, setTab] = useState("pending");
+  const [rejecting, setRejecting] = useState(null); // product being rejected
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState("");
+  const [err, setErr] = useState("");
+
+  // Only agency-submitted listings enter this queue (agency_id present).
+  const submitted = (data.tourProducts || []).filter((p) => p.agencyId);
+  const pending = submitted.filter((p) => p.status === "pending");
+  const shown = submitted
+    .filter((p) => p.status === tab)
+    .sort((a, b) => new Date(b.submittedAt || 0) - new Date(a.submittedAt || 0));
+  const agencyName = (id) => data.agencies?.find((a) => String(a.id) === String(id))?.name || "An agency";
+
+  async function approve(p) {
+    setBusy(p.id); setErr("");
+    try {
+      const r = await apiFetch(`/admin/tour-products/${p.id}/approve`, { method: "POST" });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || "Could not approve.");
+      flash(`"${p.title}" approved${j.notified ? " — agency emailed" : ""}.`);
+      reload();
+    } catch (e) { setErr(e.message); } finally { setBusy(""); }
+  }
+  async function reject() {
+    if (!reason.trim()) { setErr("Please write a reason."); return; }
+    setBusy(rejecting.id); setErr("");
+    try {
+      const r = await apiFetch(`/admin/tour-products/${rejecting.id}/reject`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reason: reason.trim() }),
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || "Could not reject.");
+      flash(`"${rejecting.title}" rejected${j.notified ? " — agency emailed the reason" : ""}.`);
+      setRejecting(null); setReason(""); reload();
+    } catch (e) { setErr(e.message); } finally { setBusy(""); }
+  }
+
+  return (
+    <>
+      <PageHead title="Listing requests" sub="Tours submitted by agencies. Nothing goes live until you approve it." />
+      <div className="seg-tabs">
+        {LISTING_TABS.map((t) => (
+          <button key={t.id} className={`seg-tab ${tab === t.id ? "on" : ""}`} onClick={() => setTab(t.id)}>
+            {t.label}{t.id === "pending" && pending.length ? <span className="seg-count">{pending.length}</span> : null}
+          </button>
+        ))}
+      </div>
+
+      {err && !rejecting && <div className="auth-error" role="alert">{err}</div>}
+
+      {!shown.length && <div className="dash-empty">No {tab === "pending" ? "listings awaiting review" : tab + " listings"} right now.</div>}
+
+      <div className="listing-grid">
+        {shown.map((p) => {
+          const img = p.images?.[0]?.url;
+          return (
+            <article className="listing-card" key={p.id}>
+              <div className="listing-media">
+                {img ? <img src={img} alt={p.title} /> : <div className="listing-noimg"><Package size={22} /></div>}
+                <span className="listing-type">{p.type === "package" ? "Package" : "Day tour"}</span>
+              </div>
+              <div className="listing-body">
+                <div className="listing-top">
+                  <h3>{p.title || "Untitled listing"}</h3>
+                  {statusTag(p.status)}
+                </div>
+                <p className="listing-agency">by <strong>{agencyName(p.agencyId)}</strong>{p.submittedAt ? ` · submitted ${fmtDate(p.submittedAt)}` : ""}</p>
+                <p className="listing-desc">{p.description || "No description provided."}</p>
+                <div className="listing-facts">
+                  <span><MapPin size={13} />{p.city || "—"}</span>
+                  <span><CalendarDays size={13} />{p.duration || "—"}</span>
+                  <span><CircleDollarSign size={13} />{money(p.publishedRate)}/person</span>
+                  <span><Users size={13} />min {p.minSeats} · max {p.maxSeats}</span>
+                  <span><Package size={13} />{(p.images?.length || 0)} photos</span>
+                </div>
+                {p.included?.length ? <p className="listing-inc"><strong>Includes:</strong> {p.included.slice(0, 4).join(" · ")}{p.included.length > 4 ? "…" : ""}</p> : null}
+                {p.status === "rejected" && p.rejectionReason ? (
+                  <div className="listing-reject"><strong>Rejection reason</strong><br />{p.rejectionReason}</div>
+                ) : null}
+                {p.status !== "approved" && (
+                  <div className="listing-actions">
+                    <button className="btn-primary sm" disabled={busy === p.id} onClick={() => approve(p)}><Check size={15} />{busy === p.id ? "…" : "Approve & publish"}</button>
+                    <button className="btn-ghost sm danger" disabled={busy === p.id} onClick={() => { setRejecting(p); setReason(""); setErr(""); }}><X size={15} />Reject</button>
+                  </div>
+                )}
+              </div>
+            </article>
+          );
+        })}
+      </div>
+
+      {rejecting && (
+        <div className="modal-overlay" onClick={() => setRejecting(null)}>
+          <div className="modal modal-sm" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-head"><h2>Reject "{rejecting.title}"</h2><button className="icon-btn" onClick={() => setRejecting(null)}><X size={18} /></button></div>
+            <div className="modal-body">
+              <p className="field-hint">Write why this listing can't go live. The agency receives this reason by email and can edit &amp; resubmit.</p>
+              <textarea className="reason-box" rows={5} autoFocus value={reason} onChange={(e) => setReason(e.target.value)}
+                placeholder="e.g. A very similar Giza day tour is already listed — please differentiate the itinerary or merge with the existing one." />
+              {err && <div className="auth-error" role="alert">{err}</div>}
+            </div>
+            <div className="modal-foot">
+              <button className="btn-ghost" onClick={() => setRejecting(null)}>Cancel</button>
+              <button className="btn-primary danger" disabled={busy === rejecting.id} onClick={reject}>{busy === rejecting.id ? "Sending…" : "Reject & notify agency"}</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
 }
 
 /* ---------------- Departures ---------------- */
@@ -983,9 +1116,25 @@ function bookingStatusTag(s) {
   return "tag";
 }
 
-function BookingsSection() {
+const BOOKING_FILTERS = [
+  { id: "all", label: "All" },
+  { id: "pending", label: "Requests" },
+  { id: "confirmed", label: "Confirmed" },
+  { id: "paid", label: "Paid" },
+  { id: "cancelled", label: "Cancelled" },
+];
+function depFillStatus(d) {
+  const seats = seatsOf(d), min = Math.max(1, d.minSeats || 4);
+  if (d.status === "cancelled") return { key: "cancelled", label: "Cancelled", tone: "off", seats, min };
+  if (d.status === "supplier_confirmed") return { key: "confirmed", label: "Confirmed · running", tone: "on", seats, min };
+  if (seats >= min) return { key: "ready", label: "Ready to confirm", tone: "ready", seats, min };
+  return { key: "forming", label: `${min - seats} more to GoAhead`, tone: "warn", seats, min };
+}
+function BookingsSection({ data }) {
   const [rows, setRows] = useState(null);
   const [q, setQ] = useState("");
+  const [view, setView] = useState("list");   // list | tours
+  const [filter, setFilter] = useState("all");
   const [open, setOpen] = useState(null); // selected booking
 
   async function load() {
@@ -995,11 +1144,32 @@ function BookingsSection() {
   }
   useEffect(() => { load(); }, []);
 
-  const shown = (rows || []).filter((b) => {
+  const all = rows || [];
+  const counts = all.reduce((m, b) => { m[b.status] = (m[b.status] || 0) + 1; return m; }, {});
+  const totals = all.reduce((m, b) => {
+    if (b.status !== "cancelled") { m.seats += Number(b.seats || 0); m.revenue += Number(b.bookingTotal || 0); m.deposits += Number(b.depositDue || 0); }
+    return m;
+  }, { seats: 0, revenue: 0, deposits: 0 });
+
+  const shown = all.filter((b) => {
+    if (filter !== "all" && b.status !== filter) return false;
     if (!q) return true;
     const t = `${b.route} ${b.customers} ${b.customerEmail} ${b.customerPhone} ${b.agency} ${b.bookingCode}`.toLowerCase();
     return t.includes(q.toLowerCase());
   });
+
+  // Per-departure roll-up: how each date is filling + its booking value.
+  const revByDep = all.reduce((m, b) => {
+    if (b.status === "cancelled") return m;
+    const e = m[b.departureId] || (m[b.departureId] = { seats: 0, revenue: 0, count: 0 });
+    e.seats += Number(b.seats || 0); e.revenue += Number(b.bookingTotal || 0); e.count += 1;
+    return m;
+  }, {});
+  const tourRows = (data?.departures || [])
+    .filter((d) => d.status !== "cancelled" && (revByDep[d.id] || seatsOf(d) > 0))
+    .map((d) => ({ d, fill: depFillStatus(d), agg: revByDep[d.id] || { seats: seatsOf(d), revenue: 0, count: 0 } }))
+    .filter(({ d }) => { if (!q) return true; return `${d.route} ${d.city}`.toLowerCase().includes(q.toLowerCase()); })
+    .sort((a, b) => new Date(a.d.startDate || a.d.date) - new Date(b.d.startDate || b.d.date));
 
   async function setStatus(id, status) {
     const r = await apiFetch(`/admin/bookings/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status }) });
@@ -1025,27 +1195,75 @@ function BookingsSection() {
             <button className="btn-ghost" onClick={exportCsv} disabled={!shown.length}>Export CSV</button>
           </div>
         } />
+
       {rows === null && <DashSkeleton />}
       {rows && (
-        <div className="table-wrap">
-          <table className="dash-table">
-            <thead><tr><th>Customer</th><th>Route</th><th>Booked by</th><th>Seats</th><th>Total</th><th>Balance</th><th>Status</th></tr></thead>
-            <tbody>
-              {shown.map((b) => (
-                <tr key={b.id} className="clickable" onClick={() => setOpen(b)}>
-                  <td><strong>{b.customers || "—"}</strong>{b.customerEmail && <div className="sub">{b.customerEmail}</div>}{b.bookingCode && <div className="sub">{b.bookingCode}</div>}</td>
-                  <td>{b.route}<div className="sub">{fmtDate(b.date)}</div></td>
-                  <td>{b.source === "public" ? <span className="tag">Direct</span> : b.agency}</td>
-                  <td>{b.seats}</td>
-                  <td>{money(b.bookingTotal)}</td>
-                  <td>{money(b.balanceDue)}{b.balanceDueDate && <div className="sub">by {fmtDate(b.balanceDueDate)}</div>}</td>
-                  <td><span className={`tag ${bookingStatusTag(b.status)}`}>{b.status}</span></td>
-                </tr>
+        <>
+          <div className="bk-summary">
+            <div className="bk-kpi"><span>Bookings</span><strong>{all.length}</strong><i>{counts.pending || 0} awaiting confirmation</i></div>
+            <div className="bk-kpi"><span>Seats booked</span><strong>{totals.seats}</strong><i>excludes cancelled</i></div>
+            <div className="bk-kpi"><span>Booking value</span><strong>{money(totals.revenue)}</strong><i>{money(totals.deposits)} deposits due</i></div>
+            <div className="bk-kpi"><span>Confirmed</span><strong>{counts.confirmed || 0}</strong><i>{counts.paid || 0} paid · {counts.cancelled || 0} cancelled</i></div>
+          </div>
+
+          <div className="bk-controls">
+            <div className="seg-tabs">
+              <button className={`seg-tab ${view === "list" ? "on" : ""}`} onClick={() => setView("list")}>Bookings</button>
+              <button className={`seg-tab ${view === "tours" ? "on" : ""}`} onClick={() => setView("tours")}>By tour</button>
+            </div>
+            {view === "list" && (
+              <div className="chip-row">
+                {BOOKING_FILTERS.map((f) => (
+                  <button key={f.id} className={`chip ${filter === f.id ? "on" : ""}`} onClick={() => setFilter(f.id)}>
+                    {f.label}{f.id !== "all" && counts[f.id] ? <span className="chip-n">{counts[f.id]}</span> : null}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {view === "list" ? (
+            <div className="table-wrap">
+              <table className="dash-table">
+                <thead><tr><th>Customer</th><th>Route</th><th>Booked by</th><th>Seats</th><th>Total</th><th>Balance</th><th>Status</th></tr></thead>
+                <tbody>
+                  {shown.map((b) => (
+                    <tr key={b.id} className="clickable" onClick={() => setOpen(b)}>
+                      <td><strong>{b.customers || "—"}</strong>{b.customerEmail && <div className="sub">{b.customerEmail}</div>}{b.bookingCode && <div className="sub">{b.bookingCode}</div>}</td>
+                      <td>{b.route}<div className="sub">{fmtDate(b.date)}</div></td>
+                      <td>{b.source === "public" ? <span className="tag">Direct</span> : b.agency}</td>
+                      <td>{b.seats}</td>
+                      <td>{money(b.bookingTotal)}</td>
+                      <td>{money(b.balanceDue)}{b.balanceDueDate && <div className="sub">by {fmtDate(b.balanceDueDate)}</div>}</td>
+                      <td><span className={`tag ${bookingStatusTag(b.status)}`}>{b.status}</span></td>
+                    </tr>
+                  ))}
+                  {shown.length === 0 && <tr><td colSpan={7}><Empty label="No bookings found." /></td></tr>}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="bk-tours">
+              {tourRows.map(({ d, fill, agg }) => (
+                <div className="bk-tour" key={d.id}>
+                  <div className="bk-tour-main">
+                    <div className="bk-tour-title">
+                      <strong>{d.route}</strong>
+                      <span className="sub">{d.city} · {fmtDate(d.startDate || d.date)}{d.type === "package" ? " · package" : ""}</span>
+                    </div>
+                    <div className="bk-meter"><i className={`fill-${fill.tone}`} style={{ width: `${Math.min(100, (fill.seats / fill.min) * 100)}%` }} /></div>
+                    <div className="bk-tour-stat"><b>{fill.seats}/{fill.min}</b><span className={`tag tag-${fill.tone === "on" ? "on" : fill.tone === "ready" ? "ready" : fill.tone === "off" ? "off" : "warn"}`}>{fill.label}</span></div>
+                  </div>
+                  <div className="bk-tour-side">
+                    <div><span>{agg.count}</span>bookings</div>
+                    <div><span>{money(agg.revenue)}</span>value</div>
+                  </div>
+                </div>
               ))}
-              {shown.length === 0 && <tr><td colSpan={7}><Empty label="No bookings found." /></td></tr>}
-            </tbody>
-          </table>
-        </div>
+              {tourRows.length === 0 && <Empty label="No booked departures yet." />}
+            </div>
+          )}
+        </>
       )}
 
       {open && <BookingDrawer booking={open} onClose={() => setOpen(null)} onStatus={setStatus} />}
