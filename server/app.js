@@ -1210,8 +1210,8 @@ app.get("/sitemap.xml", h(async (_req, res) => res.type("application/xml").send(
 // those to the live React booking app so real departures keep working.
 const siteDir = join(__dirname, "..", "site");
 if (existsSync(siteDir)) {
-  app.get("/tour.html", (_req, res) => res.redirect(302, "/tours"));
-  app.get("/pricing.html", (_req, res) => res.redirect(302, "/operators.html"));
+  app.get("/tour.html", (_req, res) => res.redirect(301, "/departures.html"));
+  app.get("/pricing.html", (_req, res) => res.redirect(301, "/operators.html"));
   app.get("/", (_req, res) => res.sendFile(join(siteDir, "index.html")));
   app.use(express.static(siteDir, { extensions: ["html"] }));
 }

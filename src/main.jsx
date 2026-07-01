@@ -993,9 +993,12 @@ const SxLogoMark = () => (
 );
 
 // Global chrome — the editorial glass nav + footer, shared by every public page.
-const SX_NAV_LINKS = [["How it works", "/how-it-works"], ["Departures", "/tours"], ["About", "/about"], ["Contact", "/contact"]];
+// Links point at the static editorial pages (served from /site) so the chrome is
+// identical across the whole site. Real <a href> = full navigation out of the SPA
+// back into the static pages; the SPA is only ever the tour-detail/booking body.
+const SX_NAV_LINKS = [["How it works", "/#how"], ["Departures", "/departures.html"], ["The GoAhead", "/trust.html"], ["For operators", "/operators.html"]];
 
-function SxNav({ navigate, cta = ["Find a departure", "/tours"] }) {
+function SxNav({ cta = ["Find a departure", "/departures.html"] }) {
   const [tight, setTight] = useState(false);
   const [menu, setMenu] = useState(false);
   useEffect(() => {
@@ -1007,33 +1010,33 @@ function SxNav({ navigate, cta = ["Find a departure", "/tours"] }) {
     <>
       <div className="nav-shell">
         <nav className={`nav${tight ? " tight" : ""}`} aria-label="Primary">
-          <a className="logo" onClick={() => navigate("/")}><SxLogoMark /><span className="nm"><b>Sawa</b><i>Tours · Egypt</i></span></a>
-          <div className="nav-links">{SX_NAV_LINKS.map(([l, to]) => <a key={to} onClick={() => navigate(to)}>{l}</a>)}</div>
+          <a className="logo" href="/"><SxLogoMark /><span className="nm"><b>Sawa</b><i>Tours · Egypt</i></span></a>
+          <div className="nav-links">{SX_NAV_LINKS.map(([l, to]) => <a key={to} href={to}>{l}</a>)}</div>
           <div className="nav-right">
-            <a className="btn gold sm" onClick={() => navigate(cta[1])}>{cta[0]}<span className="chip"><SxArrow /></span></a>
+            <a className="btn gold sm" href={cta[1]}>{cta[0]}<span className="chip"><SxArrow /></span></a>
             <button className="menu-btn" aria-label="Open menu" onClick={() => setMenu(true)}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 7h16M4 12h16M4 17h16" /></svg></button>
           </div>
         </nav>
       </div>
       <div className={`overlay${menu ? " open" : ""}`}>
         <button className="close" aria-label="Close menu" onClick={() => setMenu(false)}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg></button>
-        {SX_NAV_LINKS.map(([l, to]) => <a key={to} onClick={() => { setMenu(false); navigate(to); }}>{l}</a>)}
+        {SX_NAV_LINKS.map(([l, to]) => <a key={to} href={to}>{l}</a>)}
       </div>
     </>
   );
 }
 
-function SxFooter({ navigate }) {
+function SxFooter() {
   return (
     <div className="sfooter">
       <div className="wrap">
         <div className="fgrid">
-          <div><a className="logo" onClick={() => navigate("/")}><SxLogoMark /><span className="nm"><b>Sawa</b><i>Tours · Egypt</i></span></a><p className="fblurb">Shared departures, confirmed together. Sawa pools travellers across verified Egyptian operators so the tours you want actually run.</p></div>
-          <div className="fcol"><h4>Travel</h4><a onClick={() => navigate("/tours")}>Open departures</a><a onClick={() => navigate("/how-it-works")}>How it works</a><a onClick={() => navigate("/faq")}>FAQ</a></div>
-          <div className="fcol"><h4>Operators</h4><a onClick={() => navigate("/agency")}>Operator login</a><a onClick={() => navigate("/agency")}>Become verified</a></div>
-          <div className="fcol"><h4>Company</h4><a onClick={() => navigate("/about")}>About Sawa</a><a onClick={() => navigate("/contact")}>Contact</a></div>
+          <div><a className="logo" href="/"><SxLogoMark /><span className="nm"><b>Sawa</b><i>Tours · Egypt</i></span></a><p className="fblurb">Shared departures, confirmed together. Sawa pools travellers across verified Egyptian operators so the tours you want actually run.</p></div>
+          <div className="fcol"><h4>Travel</h4><a href="/departures.html">Open departures</a><a href="/#how">How it works</a><a href="/trust.html">The GoAhead promise</a><a href="/faq.html">FAQ</a></div>
+          <div className="fcol"><h4>Operators</h4><a href="/operators.html">List a tour</a><a href="/verify.html">Become verified</a><a href="/widget.html">Get the widget</a></div>
+          <div className="fcol"><h4>Company</h4><a href="/about.html">About Sawa</a><a href="/contact.html">Support</a><a href="/contact.html">Contact</a></div>
         </div>
-        <div className="fbot"><span>© 2026 Sawa Tours. Shared departures, confirmed together.</span><div className="lks"><a onClick={() => navigate("/privacy")}>Privacy</a><a onClick={() => navigate("/terms")}>Terms</a></div></div>
+        <div className="fbot"><span>© 2026 Sawa Tours. Shared departures, confirmed together.</span><div className="lks"><a href="/faq.html">FAQ</a><a href="/contact.html">Contact</a></div></div>
       </div>
     </div>
   );
