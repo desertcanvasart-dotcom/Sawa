@@ -10,6 +10,7 @@ import {
   goAheadSeatsFor,
   defaultDepositFor,
   bookingClosed,
+  DEFAULT_GO_AHEAD,
 } from "./domain.js";
 import { attachUser, requireAuth, requireRole, isPlatform, isAgency, AuthError } from "./auth.js";
 import { supabaseAdmin } from "./supabase.js";
@@ -25,6 +26,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildHead, robotsTxt, sitemapXml, llmsTxt, llmsFullTxt } from "./seo.js";
+import { cleanHtml, cleanItinerary } from "./sanitize.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const distDir = join(__dirname, "..", "dist");
@@ -165,6 +167,25 @@ const publicBookingSchema = z.object({
   refCode: z.string().trim().max(60).optional(),
 });
 
+// Agency-created pooling request. Numeric fields are bounded so a malformed or
+// hostile body can't create a departure with negative seats or absurd pricing.
+const createDepartureSchema = z.object({
+  route: z.string().trim().min(1, "Route is required."),
+  tourProductId: z.string().trim().optional(),
+  date: z.string().trim().optional(),
+  time: z.string().trim().optional(),
+  city: z.string().trim().optional(),
+  customers: z.string().trim().optional(),
+  cutoff: z.string().trim().optional(),
+  minSeats: z.coerce.number().int().positive().max(200).optional(),
+  maxSeats: z.coerce.number().int().positive().max(200).optional(),
+  baseCost: z.coerce.number().min(0).max(1_000_000).optional(),
+  publishedRate: z.coerce.number().positive().max(1_000_000).optional(),
+  breakPrice: z.coerce.number().min(0).max(1_000_000).optional(),
+}).refine((v) => !(v.minSeats && v.maxSeats) || v.maxSeats >= v.minSeats, {
+  message: "Max seats cannot be less than min seats.",
+});
+
 // Referral codes: lowercase, url-safe, capped. Returns "" if nothing usable.
 function cleanRefCode(raw) {
   return String(raw || "").toLowerCase().replace(/[^a-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 48);
@@ -248,9 +269,8 @@ app.get("/api/bootstrap", h(async (req, res) => {
 
 // Agency creates a custom day-tour pooling request (agency users only).
 app.post("/api/departures", requireAuth, requireRole("agency_owner", "agency_agent"), h(async (req, res) => {
-  const body = req.body || {};
-  const route = String(body.route || "").trim();
-  if (!route) throw new AppError(422, "Route is required.");
+  const body = parse(createDepartureSchema, req.body);
+  const route = body.route;
 
   const departure = await withTransaction(async (c) => {
     const agencyRes = await c.query(`SELECT * FROM agencies WHERE id=$1`, [req.user.agencyId]);
@@ -375,9 +395,9 @@ async function upsertTourProduct(c, body, review) {
       Number(body.breakPrice || Math.round(publishedRate * 0.8)), Number(body.quality || 4.7),
       Number(body.depositPercent || (type === "package" ? 20 : 10)), body.description || "",
       JSON.stringify(body.included || []), JSON.stringify(body.notIncluded || []),
-      type === "package" ? JSON.stringify(body.itinerary || []) : null,
+      type === "package" ? JSON.stringify(cleanItinerary(body.itinerary || [])) : null,
       type === "package" ? JSON.stringify(body.accommodationTiers || []) : null,
-      body.overviewHtml || null, body.policiesHtml || null,
+      cleanHtml(body.overviewHtml) || null, cleanHtml(body.policiesHtml) || null,
       JSON.stringify(body.whatToBring || []), body.meetingPoint || null,
       body.pickupNote || null, Number.isFinite(Number(body.bookingCutoffHours)) ? Number(body.bookingCutoffHours) : 24,
       JSON.stringify(body.images || []),
@@ -556,8 +576,9 @@ app.post("/api/departures/:id/pledges", requireAuth, requireRole("agency_owner",
   res.status(201).json({ departure: presentDeparture(departure, req.user) });
 }));
 
-// Public (direct traveller) booking — intentionally open, no auth.
-app.post("/api/public/departures/:id/bookings", h(async (req, res) => {
+// Public (direct traveller) booking — intentionally open, no auth, but the
+// stricter write limiter guards this and the public cancel below from abuse.
+app.post("/api/public/departures/:id/bookings", writeLimiter, h(async (req, res) => {
   const input = parse(publicBookingSchema, req.body);
   const result = await withTransaction(async (c) => {
     const dep = await loadDeparture(c, Number(req.params.id), { forUpdate: true });
@@ -631,7 +652,7 @@ app.delete("/api/departures/:id/pledges/:pledgeId", requireAuth, requireRole("ag
 }));
 
 // Public cancels a booking — open, but only public-sourced pledges.
-app.delete("/api/public/departures/:id/bookings/:pledgeId", h(async (req, res) => {
+app.delete("/api/public/departures/:id/bookings/:pledgeId", writeLimiter, h(async (req, res) => {
   const departure = await withTransaction(async (c) => {
     const dep = await loadDeparture(c, Number(req.params.id), { forUpdate: true });
     if (!dep) throw new AppError(404, "Departure not found.");
@@ -655,7 +676,7 @@ app.get("/api/public/bookings/:code", h(async (req, res) => {
     `SELECT p.booking_code, p.seats, p.status AS pledge_status,
             d.id AS dep_id, d.route, d.date, d.start_date, d.end_date, d.city,
             d.status AS dep_status, d.min_seats,
-            (SELECT COALESCE(SUM(seats), 0) FROM pledges WHERE departure_id = d.id) AS seats_booked,
+            (SELECT COALESCE(SUM(seats), 0) FROM pledges WHERE departure_id = d.id AND status <> 'cancelled') AS seats_booked,
             tp.title AS product_title
        FROM pledges p
        JOIN departures d ON d.id = p.departure_id
@@ -894,7 +915,7 @@ app.post("/api/admin/blog", requireAuth, requireRole("super_admin", "ops_staff")
         geo_lng=EXCLUDED.geo_lng, local_keywords=EXCLUDED.local_keywords, updated_at=now()
      RETURNING *`,
     [
-      id, slug, title, b.excerpt || null, b.coverImage || null, b.bodyHtml || null, b.author || null,
+      id, slug, title, b.excerpt || null, b.coverImage || null, cleanHtml(b.bodyHtml) || null, b.author || null,
       b.authorCredentials || null, arr(b.tags), status, b.publishedAt || null,
       b.metaTitle || null, b.metaDescription || null, arr(b.keywords), b.canonicalUrl || null, b.ogImage || null,
       b.noindex === true, b.tldr || null, arr(b.keyTakeaways), faq, b.geoRegion || null, b.geoPlace || null,
@@ -938,8 +959,13 @@ async function refreshStatus(c, departureId) {
   const dep = await c.query(`SELECT * FROM departures WHERE id=$1`, [departureId]);
   const row = dep.rows[0];
   if (["supplier_confirmed", "closed", "cancelled"].includes(row.status)) return;
-  const seats = (await c.query(`SELECT COALESCE(SUM(seats),0) AS s FROM pledges WHERE departure_id=$1`, [departureId])).rows[0].s;
-  const status = Number(seats) >= Math.max(1, row.min_seats) ? "minimum_reached" : "open";
+  // Cancelled pledges have freed their seats — exclude them from the count.
+  const seats = (await c.query(
+    `SELECT COALESCE(SUM(seats),0) AS s FROM pledges WHERE departure_id=$1 AND status <> 'cancelled'`,
+    [departureId]
+  )).rows[0].s;
+  const required = Math.max(1, Number(row.min_seats) || DEFAULT_GO_AHEAD);
+  const status = Number(seats) >= required ? "minimum_reached" : "open";
   await c.query(`UPDATE departures SET status=$1 WHERE id=$2`, [status, departureId]);
 }
 
@@ -1268,9 +1294,13 @@ app.get("/api/admin/bookings", requireAuth, requireRole("super_admin", "ops_staf
 app.patch("/api/admin/bookings/:id", requireAuth, requireRole("super_admin", "ops_staff"), h(async (req, res) => {
   const status = req.body?.status;
   if (!["pending", "confirmed", "paid", "cancelled"].includes(status)) throw new AppError(422, "Invalid status.");
-  const r = await pool.query(`UPDATE pledges SET status=$1 WHERE id=$2 RETURNING departure_id`, [status, req.params.id]);
-  if (!r.rows.length) throw new AppError(404, "Booking not found.");
-  // Cancelling frees the seats by refreshing the departure's status.
+  // Run inside a transaction and recompute the departure's status so that
+  // cancelling (or reinstating) a booking frees or reclaims its seats.
+  await withTransaction(async (c) => {
+    const r = await c.query(`UPDATE pledges SET status=$1 WHERE id=$2 RETURNING departure_id`, [status, req.params.id]);
+    if (!r.rows.length) throw new AppError(404, "Booking not found.");
+    await refreshStatus(c, r.rows[0].departure_id);
+  });
   await logAudit(req, { action: "booking.status", entity: "pledge", entityId: req.params.id, detail: { status } });
   res.json({ ok: true, status });
 }));
@@ -1300,8 +1330,10 @@ app.post("/api/admin/departures/:id/cancel", requireAuth, requireRole("super_adm
   res.json({ departure: presentDeparture(departure, req.user) });
 }));
 
-// Admin: upload a tour image (platform staff). Accepts JSON { filename, dataUrl }
-// where dataUrl is a base64 data URI. Returns the public URL.
+// Upload a tour image. Open to platform staff AND agency users, since agencies
+// upload photos for their own tour listings via the shared product editor.
+// Accepts JSON { filename, dataUrl } where dataUrl is a base64 data URI and
+// returns the public URL.
 const uploadLimiter = rateLimit({ windowMs: 60_000, max: 40, standardHeaders: true, legacyHeaders: false });
 app.post("/api/admin/uploads", requireAuth, requireRole("super_admin", "ops_staff", "agency_owner", "agency_agent"), uploadLimiter, express.json({ limit: "8mb" }), h(async (req, res) => {
   if (!supabaseAdmin) throw new AppError(500, "Storage is not configured.");
@@ -1385,9 +1417,12 @@ app.use((err, _req, res, _next) => {
   if (err?.issues?.length) {
     return res.status(422).json({ error: err.issues[0]?.message || "Invalid request." });
   }
-  const status = err.status || (err instanceof AuthError ? err.status : 500);
-  if (!status || status >= 500) console.error(err);
-  res.status(status || 500).json({ error: err.message || "Server error." });
+  const status = err.status || 500;
+  if (status >= 500) console.error(err);
+  // Never surface raw internal error text (e.g. Postgres messages) to clients.
+  // 4xx errors are our own AppError/AuthError with safe, user-facing messages.
+  const message = status >= 500 ? "Server error." : (err.message || "Request failed.");
+  res.status(status).json({ error: message });
 });
 
 // Railway provides PORT; fall back to API_PORT for local dev.

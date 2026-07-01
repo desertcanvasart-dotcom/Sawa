@@ -53,11 +53,12 @@ export function AdminDashboard({ user, agency, signOut, navigate }) {
   async function loadAll() {
     setLoading(true);
     try {
+      const okJson = (r) => (r.ok ? r.json() : Promise.reject(new Error(`Request failed (${r.status})`)));
       const [boot, st, dest, blog] = await Promise.all([
-        apiFetch("/bootstrap").then((r) => r.json()),
-        apiFetch("/admin/stats").then((r) => r.json()),
-        apiFetch("/admin/destinations").then((r) => r.json()).catch(() => ({ destinations: [] })),
-        apiFetch("/admin/blog").then((r) => r.json()).catch(() => ({ posts: [] })),
+        apiFetch("/bootstrap").then(okJson),
+        apiFetch("/admin/stats").then(okJson),
+        apiFetch("/admin/destinations").then(okJson).catch(() => ({ destinations: [] })),
+        apiFetch("/admin/blog").then(okJson).catch(() => ({ posts: [] })),
       ]);
       setData(boot);
       setStats(st);
@@ -1419,7 +1420,12 @@ function AgenciesSection({ flash }) {
   const [created, setCreated] = useState(null);
   const set = (k) => (e) => setForm((s) => ({ ...s, [k]: e.target.value }));
 
-  async function load() { const j = await apiFetch("/admin/agencies").then((r) => r.json()); setList(j.agencies || []); }
+  async function load() {
+    const r = await apiFetch("/admin/agencies");
+    if (!r.ok) return;
+    const j = await r.json();
+    setList(j.agencies || []);
+  }
   useEffect(() => { load(); }, []);
 
   async function create(e) {
@@ -1482,7 +1488,12 @@ function OpsTeamSection({ flash, currentUserId }) {
   const [created, setCreated] = useState(null);
   const set = (k) => (e) => setForm((s) => ({ ...s, [k]: e.target.value }));
 
-  async function load() { const j = await apiFetch("/admin/staff").then((r) => r.json()); setStaff(j.staff || []); }
+  async function load() {
+    const r = await apiFetch("/admin/staff");
+    if (!r.ok) return;
+    const j = await r.json();
+    setStaff(j.staff || []);
+  }
   useEffect(() => { load(); }, []);
 
   async function add(e) {
@@ -1556,7 +1567,7 @@ function OpsTeamSection({ flash, currentUserId }) {
 /* ---------------- Activity / audit ---------------- */
 function ActivitySection() {
   const [rows, setRows] = useState(null);
-  useEffect(() => { apiFetch("/admin/audit?limit=150").then((r) => r.json()).then((j) => setRows(j.entries || [])).catch(() => setRows([])); }, []);
+  useEffect(() => { apiFetch("/admin/audit?limit=150").then((r) => (r.ok ? r.json() : Promise.reject(r))).then((j) => setRows(j.entries || [])).catch(() => setRows([])); }, []);
   return (
     <>
       <PageHead title="Activity" sub="Every booking, confirmation, price change, and account action — who, what, when." />

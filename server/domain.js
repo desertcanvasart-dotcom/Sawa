@@ -16,7 +16,9 @@ export function defaultDepositFor(item) {
 }
 
 export function seatsTotal(pledges = []) {
-  return pledges.reduce((sum, p) => sum + Number(p.seats || 0), 0);
+  // Cancelled pledges no longer hold their seats, so they must not count toward
+  // capacity, live pricing, or the go-ahead threshold.
+  return pledges.reduce((sum, p) => (p?.status === "cancelled" ? sum : sum + Number(p.seats || 0)), 0);
 }
 
 function clampPrice(value, fallback) {

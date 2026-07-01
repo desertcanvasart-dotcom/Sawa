@@ -40,7 +40,14 @@ export async function uploadImage(file) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ filename: file.name, dataUrl }),
   });
-  const json = await res.json();
-  if (!res.ok) throw new Error(json.error || "Upload failed.");
+  // Error bodies aren't always JSON (proxies, 413s), so parse defensively and
+  // map the common failures to messages that actually tell the user what to do.
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    if (res.status === 401) throw new Error("Your session has expired — please sign in again.");
+    if (res.status === 403) throw new Error("This account can't upload images. Ask an admin to check your access.");
+    if (res.status === 413) throw new Error("That image is too large. Please use one under 6MB.");
+    throw new Error(json.error || "Upload failed. Please try again.");
+  }
   return json.url;
 }

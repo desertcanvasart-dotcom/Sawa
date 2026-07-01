@@ -12,6 +12,7 @@
     "db:seed": "node server/db/seed.js",
     "db:seed-users": "node server/db/seed-users.js",
     "db:reset": "node server/db/migrate.js && node server/db/seed.js && node server/db/seed-users.js",
+    "db:sanitize-html": "node server/db/sanitize-existing-html.js",
     "test": "node --test server/",
     "build": "vite build",
     "start": "node server/app.js",
@@ -35,6 +36,7 @@
     "pg": "^8.21.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "sanitize-html": "^2.17.5",
     "vite": "^7.0.0",
     "zod": "^4.4.3"
   },

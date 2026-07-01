@@ -424,7 +424,7 @@ function App() {
 
   async function addPledge(event) {
     event.preventDefault();
-    if (!selected) return;
+    if (!selected || isSaving) return;
     setIsSaving(true);
     setNotice("");
     try {
@@ -581,6 +581,7 @@ function App() {
   }
 
   async function bookPublicDeparture({ departureId, customerName, customerEmail, seats, roomingType, accommodationTier }) {
+    if (isSaving) return;
     setIsSaving(true);
     setNotice("");
     try {
@@ -2797,7 +2798,7 @@ function BlogIndexPage({ navigate }) {
   useEffect(() => {
     document.title = "Blog — Sawa Tours";
     let alive = true;
-    fetch(`${API_BASE}/blog`).then((r) => r.json()).then((j) => { if (alive) setState({ status: "done", posts: j.posts || [] }); })
+    fetch(`${API_BASE}/blog`).then((r) => (r.ok ? r.json() : Promise.reject(r))).then((j) => { if (alive) setState({ status: "done", posts: j.posts || [] }); })
       .catch(() => alive && setState({ status: "error", posts: [] }));
     return () => { alive = false; };
   }, []);
@@ -2835,7 +2836,7 @@ function BlogPostPage({ navigate, slug }) {
   useEffect(() => {
     let alive = true;
     fetch(`${API_BASE}/blog/${encodeURIComponent(slug)}`)
-      .then((r) => (r.status === 404 ? Promise.reject(new Error("nf")) : r.json()))
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(r.status === 404 ? "nf" : "err"))))
       .then((j) => { if (alive) { setState({ status: "done", post: j.post }); applyPostMeta(j.post); } })
       .catch(() => alive && setState({ status: "error", post: null }));
     return () => { alive = false; resetMeta(); };
