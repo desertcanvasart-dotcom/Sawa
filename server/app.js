@@ -1210,9 +1210,19 @@ app.get("/sitemap.xml", h(async (_req, res) => res.type("application/xml").send(
 // those to the live React booking app so real departures keep working.
 const siteDir = join(__dirname, "..", "site");
 if (existsSync(siteDir)) {
-  app.get("/tour.html", (_req, res) => res.redirect(301, "/departures.html"));
-  app.get("/pricing.html", (_req, res) => res.redirect(301, "/operators.html"));
+  // Canonicalize to clean, extensionless, SEO-friendly URLs: any /page.html
+  // permanently redirects to /page. `index` -> /, and the two designed links
+  // that have no page of their own map to real pages.
+  const htmlAlias = { index: "/", tour: "/departures", pricing: "/operators" };
+  app.use((req, res, next) => {
+    if (req.method !== "GET") return next();
+    const m = req.path.match(/^\/([a-z0-9-]+)\.html$/i);
+    if (!m) return next();
+    const name = m[1].toLowerCase();
+    return res.redirect(301, htmlAlias[name] || `/${name}`);
+  });
   app.get("/", (_req, res) => res.sendFile(join(siteDir, "index.html")));
+  // extensions:["html"] serves /operators from operators.html, etc.
   app.use(express.static(siteDir, { extensions: ["html"] }));
 }
 

@@ -11,14 +11,14 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="assets/sawa.css" />
+<link rel="stylesheet" href="/assets/sawa.css" />
 </head>
 <body>
 <div class="grain"></div>
 <a href="#main" style="position:absolute;left:-999px;top:0;z-index:99;background:var(--teal);color:#fff;padding:10px 16px;border-radius:8px" onfocus="this.style.left='12px'" onblur="this.style.left='-999px'">Skip to content</a>
 <div class="nav-shell">
   <nav class="nav" id="nav" aria-label="Primary">
-    <a href="index.html" class="logo" aria-label="Sawa Tours home">
+    <a href="/" class="logo" aria-label="Sawa Tours home">
       <svg class="mark" viewBox="0 0 100 100" aria-hidden="true">
         <circle class="ring" cx="50" cy="50" r="36"/>
         <path class="s" d="M62 34 C44 34 44 50 52 50 C60 50 60 66 38 66"/>
@@ -27,9 +27,9 @@
       </svg>
       <span class="nm"><b>Sawa</b><i>Tours · Egypt</i></span>
     </a>
-    <div class="nav-links"><a href="index.html#how">How it works</a><a href="departures.html" class="active">Departures</a><a href="trust.html">The GoAhead</a><a href="operators.html">For operators</a></div>
+    <div class="nav-links"><a href="/#how">How it works</a><a href="/departures" class="active">Departures</a><a href="/trust">The GoAhead</a><a href="/operators">For operators</a></div>
     <div class="nav-right">
-      <a href="departures.html" class="btn gold sm">Find a departure <span class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></a>
+      <a href="/departures" class="btn gold sm">Find a departure <span class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></a>
       <button class="menu-btn" id="open" aria-label="Open menu">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
       </button>
@@ -38,14 +38,14 @@
 </div>
 <div class="overlay" id="overlay">
   <button class="close" id="close" aria-label="Close menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
-  <a href="index.html#how">How it works</a><a href="departures.html">Departures</a><a href="trust.html">The GoAhead</a><a href="operators.html">For operators</a>
+  <a href="/#how">How it works</a><a href="/departures">Departures</a><a href="/trust">The GoAhead</a><a href="/operators">For operators</a>
 </div>
 <main id="main">
 
 <!-- HERO -->
 <section class="phero">
   <div class="wrap">
-    <div class="crumbs rv"><a href="index.html">Home</a><span class="sep">/</span><span>Open departures</span></div>
+    <div class="crumbs rv"><a href="/">Home</a><span class="sep">/</span><span>Open departures</span></div>
     <span class="eyebrow rv" style="margin-top:20px"><span class="live"></span>Forming now across Egypt</span>
     <h1 class="rv">Join a group that's<br>already <span class="gld ital">forming</span>.</h1>
     <p class="lede rv">Every departure below is a real route from a verified Egyptian operator. Reserve your seat for free and watch it fill — when four travelers commit, the gold dot lights up and your trip is confirmed.</p>
@@ -77,7 +77,7 @@
     </div>
 
     <div class="grid g-3 early">
-      <article class="card rv" data-region="Nile & South" onclick="location.href='tour.html'" style="cursor:pointer">
+      <article class="card rv" data-region="Nile & South" onclick="location.href='/departures'" style="cursor:pointer">
         <div class="core">
           <div class="media">
             <img src="https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/packages/egypt-nile-cruise-9d/nile-cruise.jpg" alt="Nile Cruise: Luxor to Aswan" />
@@ -98,12 +98,12 @@
             </div>
             <div class="foot">
               <div class="when">Running<b>$740 / person</b></div>
-              <a href="tour.html" class="join">Join this trip<span class="c"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></a>
+              <a href="/departures" class="join">Join this trip<span class="c"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></a>
             </div>
           </div>
         </div>
       </article>
-      <article class="card rv" data-region="Red Sea" onclick="location.href='tour.html'" style="cursor:pointer">
+      <article class="card rv" data-region="Red Sea" onclick="location.href='/departures'" style="cursor:pointer">
         <div class="core">
           <div class="media">
             <img src="https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/tours/aswan-highlights/04.jpg" alt="Dahab & the Blue Hole" />
@@ -124,12 +124,12 @@
             </div>
             <div class="foot">
               <div class="when">Almost full<b>$510 / person</b></div>
-              <a href="tour.html" class="join">Reserve a seat<span class="c"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></a>
+              <a href="/departures" class="join">Reserve a seat<span class="c"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></a>
             </div>
           </div>
         </div>
       </article>
-      <article class="card rv" data-region="Nile & South" onclick="location.href='tour.html'" style="cursor:pointer">
+      <article class="card rv" data-region="Nile & South" onclick="location.href='/departures'" style="cursor:pointer">
         <div class="core">
           <div class="media">
             <img src="https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/tours/abu-simbel/01.jpg" alt="Abu Simbel & Nubian Aswan" />
@@ -150,12 +150,12 @@
             </div>
             <div class="foot">
               <div class="when">Running<b>$420 / person</b></div>
-              <a href="tour.html" class="join">Join this trip<span class="c"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></a>
+              <a href="/departures" class="join">Join this trip<span class="c"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></a>
             </div>
           </div>
         </div>
       </article>
-      <article class="card rv" data-region="Cairo & Giza" onclick="location.href='tour.html'" style="cursor:pointer">
+      <article class="card rv" data-region="Cairo & Giza" onclick="location.href='/departures'" style="cursor:pointer">
         <div class="core">
           <div class="media">
             <img src="https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/tours/giza/02.jpg" alt="Pyramids & Old Cairo" />
@@ -176,12 +176,12 @@
             </div>
             <div class="foot">
               <div class="when">Almost full<b>$285 / person</b></div>
-              <a href="tour.html" class="join">Reserve a seat<span class="c"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></a>
+              <a href="/departures" class="join">Reserve a seat<span class="c"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></a>
             </div>
           </div>
         </div>
       </article>
-      <article class="card rv" data-region="Desert & oases" onclick="location.href='tour.html'" style="cursor:pointer">
+      <article class="card rv" data-region="Desert & oases" onclick="location.href='/departures'" style="cursor:pointer">
         <div class="core">
           <div class="media">
             <img src="https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/tours/memphis-saqqara/01.jpg" alt="White Desert & Bahariya" />
@@ -202,12 +202,12 @@
             </div>
             <div class="foot">
               <div class="when">Forming now<b>$330 / person</b></div>
-              <a href="tour.html" class="join">Reserve a seat<span class="c"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></a>
+              <a href="/departures" class="join">Reserve a seat<span class="c"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></a>
             </div>
           </div>
         </div>
       </article>
-      <article class="card rv" data-region="Desert & oases" onclick="location.href='tour.html'" style="cursor:pointer">
+      <article class="card rv" data-region="Desert & oases" onclick="location.href='/departures'" style="cursor:pointer">
         <div class="core">
           <div class="media">
             <img src="https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/tours/luxor-in-depth/01.jpg" alt="Siwa Oasis Expedition" />
@@ -228,12 +228,12 @@
             </div>
             <div class="foot">
               <div class="when">Forming now<b>$465 / person</b></div>
-              <a href="tour.html" class="join">Reserve a seat<span class="c"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></a>
+              <a href="/departures" class="join">Reserve a seat<span class="c"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></a>
             </div>
           </div>
         </div>
       </article>
-      <article class="card rv" data-region="Nile & South" onclick="location.href='tour.html'" style="cursor:pointer">
+      <article class="card rv" data-region="Nile & South" onclick="location.href='/departures'" style="cursor:pointer">
         <div class="core">
           <div class="media">
             <img src="https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/tours/luxor-in-depth/01.jpg" alt="Luxor in Depth" />
@@ -254,12 +254,12 @@
             </div>
             <div class="foot">
               <div class="when">Almost full<b>$240 / person</b></div>
-              <a href="tour.html" class="join">Reserve a seat<span class="c"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></a>
+              <a href="/departures" class="join">Reserve a seat<span class="c"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></a>
             </div>
           </div>
         </div>
       </article>
-      <article class="card rv" data-region="Red Sea" onclick="location.href='tour.html'" style="cursor:pointer">
+      <article class="card rv" data-region="Red Sea" onclick="location.href='/departures'" style="cursor:pointer">
         <div class="core">
           <div class="media">
             <img src="https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/tours/edfu-komombo/01.jpg" alt="Hurghada Reef Week" />
@@ -280,12 +280,12 @@
             </div>
             <div class="foot">
               <div class="when">Forming now<b>$690 / person</b></div>
-              <a href="tour.html" class="join">Reserve a seat<span class="c"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></a>
+              <a href="/departures" class="join">Reserve a seat<span class="c"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></a>
             </div>
           </div>
         </div>
       </article>
-      <article class="card rv" data-region="Alexandria" onclick="location.href='tour.html'" style="cursor:pointer">
+      <article class="card rv" data-region="Alexandria" onclick="location.href='/departures'" style="cursor:pointer">
         <div class="core">
           <div class="media">
             <img src="https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/tours/alexandria/01.jpg" alt="Alexandria by the Sea" />
@@ -306,7 +306,7 @@
             </div>
             <div class="foot">
               <div class="when">Forming now<b>$215 / person</b></div>
-              <a href="tour.html" class="join">Reserve a seat<span class="c"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></a>
+              <a href="/departures" class="join">Reserve a seat<span class="c"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></a>
             </div>
           </div>
         </div>
@@ -345,7 +345,7 @@
   <div class="wrap">
     <div class="fgrid">
       <div>
-        <a href="index.html" class="logo"><svg class="mark" viewBox="0 0 100 100" aria-hidden="true">
+        <a href="/" class="logo"><svg class="mark" viewBox="0 0 100 100" aria-hidden="true">
         <circle class="ring" cx="50" cy="50" r="36"/>
         <path class="s" d="M62 34 C44 34 44 50 52 50 C60 50 60 66 38 66"/>
         <circle class="dot" cx="23" cy="40" r="5.5"/><circle class="dot" cx="31" cy="74" r="5.5"/><circle class="dot" cx="70" cy="62" r="5.5"/>
@@ -355,24 +355,24 @@
       </div>
       <div class="fcol">
         <h4>Travel</h4>
-        <a href="departures.html">Open departures</a>
-        <a href="index.html#how">How it works</a>
-        <a href="trust.html">The GoAhead promise</a>
-        <a href="faq.html">FAQ</a>
+        <a href="/departures">Open departures</a>
+        <a href="/#how">How it works</a>
+        <a href="/trust">The GoAhead promise</a>
+        <a href="/faq">FAQ</a>
       </div>
       <div class="fcol">
         <h4>Operators</h4>
-        <a href="operators.html">List a tour</a>
-        <a href="verify.html">Become verified</a>
-        <a href="widget.html">Get the widget</a>
-        <a href="pricing.html">Pricing</a>
+        <a href="/operators">List a tour</a>
+        <a href="/verify">Become verified</a>
+        <a href="/widget">Get the widget</a>
+        <a href="/operators">Pricing</a>
       </div>
       <div class="fcol">
         <h4>Company</h4>
-        <a href="about.html">About Sawa</a>
-        <a href="contact.html">Support</a>
-        <a href="contact.html">Contact</a>
-        <a href="faq.html">FAQ</a>
+        <a href="/about">About Sawa</a>
+        <a href="/contact">Support</a>
+        <a href="/contact">Contact</a>
+        <a href="/faq">FAQ</a>
       </div>
     </div>
     <div class="fbot">
@@ -386,7 +386,7 @@
     </div>
   </div>
 </footer>
-<script src="assets/sawa.js"></script>
+<script src="/assets/sawa.js"></script>
 <script>
 /* Render REAL Sawa departures from the live API into the designed grid.
    Card markup/classes are identical to the static template — only the data

@@ -996,9 +996,9 @@ const SxLogoMark = () => (
 // Links point at the static editorial pages (served from /site) so the chrome is
 // identical across the whole site. Real <a href> = full navigation out of the SPA
 // back into the static pages; the SPA is only ever the tour-detail/booking body.
-const SX_NAV_LINKS = [["How it works", "/#how"], ["Departures", "/departures.html"], ["The GoAhead", "/trust.html"], ["For operators", "/operators.html"]];
+const SX_NAV_LINKS = [["How it works", "/#how"], ["Departures", "/departures"], ["The GoAhead", "/trust"], ["For operators", "/operators"]];
 
-function SxNav({ cta = ["Find a departure", "/departures.html"] }) {
+function SxNav({ cta = ["Find a departure", "/departures"] }) {
   const [tight, setTight] = useState(false);
   const [menu, setMenu] = useState(false);
   useEffect(() => {
@@ -1032,11 +1032,11 @@ function SxFooter() {
       <div className="wrap">
         <div className="fgrid">
           <div><a className="logo" href="/"><SxLogoMark /><span className="nm"><b>Sawa</b><i>Tours · Egypt</i></span></a><p className="fblurb">Shared departures, confirmed together. Sawa pools travellers across verified Egyptian operators so the tours you want actually run.</p></div>
-          <div className="fcol"><h4>Travel</h4><a href="/departures.html">Open departures</a><a href="/#how">How it works</a><a href="/trust.html">The GoAhead promise</a><a href="/faq.html">FAQ</a></div>
-          <div className="fcol"><h4>Operators</h4><a href="/operators.html">List a tour</a><a href="/verify.html">Become verified</a><a href="/widget.html">Get the widget</a></div>
-          <div className="fcol"><h4>Company</h4><a href="/about.html">About Sawa</a><a href="/contact.html">Support</a><a href="/contact.html">Contact</a></div>
+          <div className="fcol"><h4>Travel</h4><a href="/departures">Open departures</a><a href="/#how">How it works</a><a href="/trust">The GoAhead promise</a><a href="/faq">FAQ</a></div>
+          <div className="fcol"><h4>Operators</h4><a href="/operators">List a tour</a><a href="/verify">Become verified</a><a href="/widget">Get the widget</a></div>
+          <div className="fcol"><h4>Company</h4><a href="/about">About Sawa</a><a href="/contact">Support</a><a href="/contact">Contact</a></div>
         </div>
-        <div className="fbot"><span>© 2026 Sawa Tours. Shared departures, confirmed together.</span><div className="lks"><a href="/faq.html">FAQ</a><a href="/contact.html">Contact</a></div></div>
+        <div className="fbot"><span>© 2026 Sawa Tours. Shared departures, confirmed together.</span><div className="lks"><a href="/faq">FAQ</a><a href="/contact">Contact</a></div></div>
       </div>
     </div>
   );
