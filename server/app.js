@@ -1202,6 +1202,20 @@ app.get("/llms.txt", (_req, res) => res.type("text/plain").send(llmsTxt()));
 app.get("/llms-full.txt", (_req, res) => res.type("text/plain").send(llmsFullTxt()));
 app.get("/sitemap.xml", h(async (_req, res) => res.type("application/xml").send(await sitemapXml())));
 
+// ============================ MARKETING SITE (editorial) ============================
+// Static editorial pages live in /site (index, departures, trust, operators,
+// verify, widget, about, contact, faq). Served at the root so their relative
+// links (index.html, departures.html, assets/…) resolve as-authored. Tour CTAs
+// point at tour.html / pricing.html which don't exist as static pages — redirect
+// those to the live React booking app so real departures keep working.
+const siteDir = join(__dirname, "..", "site");
+if (existsSync(siteDir)) {
+  app.get("/tour.html", (_req, res) => res.redirect(302, "/tours"));
+  app.get("/pricing.html", (_req, res) => res.redirect(302, "/operators.html"));
+  app.get("/", (_req, res) => res.sendFile(join(siteDir, "index.html")));
+  app.use(express.static(siteDir, { extensions: ["html"] }));
+}
+
 // ============================ STATIC SPA (production) ============================
 // Serve the built frontend from /dist. For HTML routes, inject a fully-formed
 // <head> (title, meta, OpenGraph, JSON-LD) server-side so crawlers and AI

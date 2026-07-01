@@ -1,0 +1,926 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Sawa Tours — Shared departures across Egypt, confirmed together.</title>
+<meta name="description" content="Sawa pools travelers from verified Egyptian operators into one shared departure. Four travelers on the same route confirms the trip — Giza, the Nile, Abu Simbel, the White Desert and more." />
+<meta property="og:title" content="Sawa Tours — Shared departures across Egypt" />
+<meta property="og:description" content="Shared departures, confirmed together. Real Egypt tours that actually run." />
+<meta property="og:image" content="https://picsum.photos/seed/sawaog/1200/630" />
+
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='24' fill='%2317323A'/%3E%3Ccircle cx='50' cy='50' r='30' fill='none' stroke='%23F7F3EA' stroke-width='5'/%3E%3Cpath d='M62 36 C46 36 46 50 54 50 C62 50 62 64 38 64' fill='none' stroke='%23F7F3EA' stroke-width='7' stroke-linecap='round'/%3E%3Ccircle cx='72' cy='32' r='7' fill='%23F4C95D'/%3E%3C/svg%3E" />
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+<style>
+/* ============================================================
+   SAWA TOURS — Egypt  ·  Editorial Luxury system
+   ============================================================ */
+:root{
+  --teal:#17323A;
+  --teal-800:#16303a;
+  --teal-700:#21454f;
+  --teal-600:#2c5560;
+  --gold:#F4C95D;
+  --gold-deep:#d9ab45;
+  --gold-ink:#9a7a26;
+  --cream:#F7F3EA;
+  --paper:#fbf8f1;
+  --paper-2:#f1ebdc;
+  --ink:#15282e;
+  --muted:#5e6f72;
+  --muted-2:#86939557;
+  --line:rgba(23,50,58,.10);
+  --line-2:rgba(23,50,58,.16);
+
+  --r-xl:34px;
+  --r-lg:26px;
+  --r-md:18px;
+  --shadow-amb:0 40px 80px -42px rgba(23,50,58,.42);
+  --shadow-card:0 26px 50px -34px rgba(23,50,58,.4);
+  --shadow-soft:0 14px 34px -24px rgba(23,50,58,.5);
+  --ease:cubic-bezier(0.32,0.72,0,1);
+  --ease-2:cubic-bezier(0.16,1,0.3,1);
+  --max:1280px;
+}
+
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+body{
+  font-family:'Plus Jakarta Sans',system-ui,sans-serif;
+  background:var(--cream);color:var(--ink);line-height:1.6;
+  -webkit-font-smoothing:antialiased;overflow-x:hidden;
+}
+a{color:inherit;text-decoration:none}
+img{display:block;max-width:100%}
+button{font-family:inherit}
+::selection{background:var(--gold);color:var(--teal)}
+.wrap{max-width:var(--max);margin:0 auto;padding:0 28px}
+.serif{font-family:'Fraunces',Georgia,serif}
+.tnum{font-variant-numeric:tabular-nums}
+
+/* film grain */
+.grain{
+  position:fixed;inset:0;z-index:80;pointer-events:none;opacity:.04;mix-blend-mode:multiply;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* ---------- Logo mark ---------- */
+.mark{width:42px;height:42px;flex:0 0 auto}
+.mark .ring{fill:none;stroke:currentColor;stroke-width:5.5;opacity:.9}
+.mark .s{fill:none;stroke:currentColor;stroke-width:7.5;stroke-linecap:round}
+.mark .dot{fill:currentColor}
+.mark .go{fill:var(--gold)}
+.logo{display:flex;align-items:center;gap:13px;color:var(--teal)}
+.logo .nm{display:flex;flex-direction:column;line-height:1}
+.logo .nm b{font-family:'Fraunces',serif;font-size:1.42rem;font-weight:600;letter-spacing:-.01em}
+.logo .nm i{font-style:normal;font-size:.58rem;font-weight:600;letter-spacing:.46em;color:var(--gold-ink);text-transform:uppercase;margin-top:4px;padding-left:2px}
+
+/* ---------- Floating glass nav ---------- */
+.nav-shell{position:fixed;top:0;left:0;right:0;z-index:60;display:flex;justify-content:center;padding:18px 16px}
+.nav{
+  width:100%;max-width:1180px;display:flex;align-items:center;justify-content:space-between;
+  padding:11px 12px 11px 22px;border-radius:999px;
+  background:rgba(251,248,241,.72);backdrop-filter:saturate(170%) blur(20px);
+  border:1px solid rgba(255,255,255,.6);
+  box-shadow:0 1px 0 rgba(255,255,255,.7) inset, 0 18px 40px -26px rgba(23,50,58,.5);
+  transition:padding .5s var(--ease),box-shadow .5s var(--ease);
+}
+.nav.tight{box-shadow:0 1px 0 rgba(255,255,255,.7) inset, 0 22px 46px -24px rgba(23,50,58,.6)}
+.nav-links{display:flex;align-items:center;gap:6px}
+.nav-links a{
+  font-size:.92rem;font-weight:500;color:var(--teal-700);padding:9px 15px;border-radius:999px;
+  transition:background .4s var(--ease),color .4s var(--ease);position:relative;
+}
+.nav-links a:hover{background:rgba(23,50,58,.06);color:var(--teal)}
+.nav-right{display:flex;align-items:center;gap:10px}
+
+/* ---------- Buttons (button-in-button) ---------- */
+.btn{
+  --bg:var(--teal);--fg:var(--cream);--chip:rgba(247,243,234,.16);
+  display:inline-flex;align-items:center;gap:14px;cursor:pointer;border:0;
+  background:var(--bg);color:var(--fg);font-weight:600;font-size:.95rem;
+  padding:8px 8px 8px 22px;border-radius:999px;white-space:nowrap;
+  transition:transform .5s var(--ease),box-shadow .5s var(--ease),background .4s var(--ease);
+}
+.btn .chip{
+  width:34px;height:34px;border-radius:999px;background:var(--chip);
+  display:grid;place-items:center;flex:0 0 auto;
+  transition:transform .5s var(--ease),background .4s var(--ease);
+}
+.btn .chip svg{width:16px;height:16px}
+.btn:hover{box-shadow:var(--shadow-soft)}
+.btn:hover .chip{transform:translate(3px,-2px) scale(1.06)}
+.btn:active{transform:scale(.975)}
+.btn.gold{--bg:var(--gold);--fg:var(--teal);--chip:rgba(23,50,58,.12)}
+.btn.gold:hover{background:var(--gold-deep)}
+.btn.teal:hover{background:var(--teal-700)}
+.btn.plain{--bg:transparent;--fg:var(--teal);--chip:rgba(23,50,58,.08);border:1px solid var(--line-2);padding-left:21px}
+.btn.plain:hover{background:rgba(23,50,58,.04)}
+.btn.light{--bg:rgba(247,243,234,.1);--fg:var(--cream);--chip:rgba(247,243,234,.18);border:1px solid rgba(247,243,234,.2)}
+.btn.sm{font-size:.88rem;padding:6px 6px 6px 18px}
+.btn.sm .chip{width:30px;height:30px}
+
+.menu-btn{display:none;width:46px;height:46px;border-radius:999px;background:var(--teal);border:0;cursor:pointer;color:var(--cream);align-items:center;justify-content:center}
+.menu-btn svg{width:20px;height:20px}
+
+/* ---------- Eyebrow ---------- */
+.eyebrow{
+  display:inline-flex;align-items:center;gap:10px;font-size:.68rem;font-weight:600;
+  letter-spacing:.22em;text-transform:uppercase;color:var(--teal-700);
+  padding:8px 15px;border-radius:999px;background:rgba(255,255,255,.55);
+  border:1px solid var(--line);box-shadow:0 1px 0 rgba(255,255,255,.6) inset;
+}
+.eyebrow.on-dark{color:var(--gold);background:rgba(247,243,234,.06);border-color:rgba(247,243,234,.14)}
+.eyebrow .live{position:relative;width:7px;height:7px;border-radius:50%;background:var(--gold)}
+.eyebrow .live::after{content:"";position:absolute;inset:-5px;border-radius:50%;border:1.5px solid var(--gold);animation:ping 2.6s var(--ease-2) infinite}
+@keyframes ping{0%{transform:scale(.5);opacity:.9}100%{transform:scale(2);opacity:0}}
+
+/* ============================================================
+   HERO — Editorial split + Z-axis cascade
+   ============================================================ */
+.hero{position:relative;padding:148px 0 90px;overflow:hidden}
+.hero-bg{position:absolute;top:-10%;right:-12%;width:60vw;height:60vw;max-width:760px;max-height:760px;border-radius:50%;
+  background:radial-gradient(circle,rgba(244,201,93,.22),rgba(244,201,93,0) 64%);filter:blur(8px);z-index:0}
+.hero-grid{position:relative;z-index:2;display:grid;grid-template-columns:1.02fr .98fr;gap:46px;align-items:center}
+
+.hero h1{
+  font-family:'Fraunces',serif;font-weight:500;color:var(--teal);
+  font-size:clamp(3rem,6vw,5.4rem);line-height:.98;letter-spacing:-.025em;
+  margin:26px 0 0;text-wrap:balance;
+}
+.hero h1 .ital{font-style:italic;font-weight:400}
+.hero h1 .gld{color:var(--gold-deep)}
+.hero .lede{font-size:1.18rem;color:var(--muted);max-width:31rem;margin:26px 0 0;text-wrap:pretty}
+.hero-cta{display:flex;gap:14px;margin-top:36px;flex-wrap:wrap}
+.hero-meta{display:flex;gap:34px;margin-top:46px;flex-wrap:wrap}
+.hero-meta .m b{font-family:'Fraunces',serif;font-size:1.9rem;font-weight:600;color:var(--teal);letter-spacing:-.02em;display:block;line-height:1}
+.hero-meta .m span{font-size:.84rem;color:var(--muted);margin-top:6px;display:block}
+.hero-meta .sep{width:1px;background:var(--line-2)}
+
+/* Z-axis photo cascade */
+.cascade{position:relative;height:min(560px,72vw)}
+.shell{
+  position:absolute;background:var(--paper);padding:7px;border-radius:var(--r-xl);
+  border:1px solid rgba(255,255,255,.7);box-shadow:var(--shadow-amb);
+}
+.shell .core{border-radius:calc(var(--r-xl) - 7px);overflow:hidden;position:relative;height:100%}
+.shell img{width:100%;height:100%;object-fit:cover}
+.shell .core::after{content:"";position:absolute;inset:0;box-shadow:inset 0 1px 1px rgba(255,255,255,.35)}
+.ph-1{width:62%;height:78%;top:0;right:0;z-index:2;transform:rotate(2deg)}
+.ph-2{width:50%;height:56%;bottom:0;left:0;z-index:3;transform:rotate(-3deg)}
+.cap{position:absolute;left:12px;bottom:12px;right:12px;z-index:2;color:var(--cream)}
+.ph-1 .core::before,.ph-2 .core::before{content:"";position:absolute;inset:0;z-index:1;
+  background:linear-gradient(180deg,rgba(23,50,58,0) 45%,rgba(23,50,58,.72))}
+.cap .rt{font-size:.7rem;letter-spacing:.16em;text-transform:uppercase;opacity:.86;font-weight:600}
+.cap h3{font-family:'Fraunces',serif;font-weight:500;font-size:1.15rem;margin-top:2px}
+
+/* floating glass confirm chip */
+.confirm{
+  position:absolute;z-index:6;left:-14px;top:30px;
+  background:rgba(251,248,241,.82);backdrop-filter:blur(16px);
+  border:1px solid rgba(255,255,255,.7);border-radius:var(--r-md);
+  padding:13px 16px 13px 14px;box-shadow:var(--shadow-card);
+  display:flex;align-items:center;gap:12px;animation:bob 6.5s ease-in-out infinite;
+}
+@keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-9px)}}
+.confirm .ico{width:38px;height:38px;border-radius:11px;background:var(--gold);color:var(--teal);display:grid;place-items:center;flex:0 0 auto}
+.confirm .ico svg{width:20px;height:20px}
+.confirm b{display:block;font-size:.9rem;color:var(--teal);font-weight:700;line-height:1.1}
+.confirm span{display:block;font-size:.74rem;color:var(--muted)}
+
+.seats-chip{
+  position:absolute;z-index:6;right:-10px;bottom:36px;
+  background:var(--teal);color:var(--cream);border-radius:var(--r-md);
+  padding:14px 16px;box-shadow:var(--shadow-card);animation:bob 6.5s ease-in-out infinite;animation-delay:-3.2s;
+}
+.seats-chip .row{display:flex;align-items:center;gap:-6px}
+.avatars{display:flex}
+.avatars i{width:26px;height:26px;border-radius:50%;border:2px solid var(--teal);margin-left:-8px;
+  font-style:normal;font-size:.6rem;font-weight:700;display:grid;place-items:center;color:var(--cream);
+  background:linear-gradient(135deg,#3f7480,#27505b)}
+.avatars i:first-child{margin-left:0}
+.seats-chip b{font-family:'Fraunces',serif;font-size:1.3rem;font-weight:600;color:var(--gold);display:block;margin-top:9px;line-height:1}
+.seats-chip span{font-size:.74rem;opacity:.82}
+
+/* ---------- Trust marquee ---------- */
+.marquee{border-top:1px solid var(--line);border-bottom:1px solid var(--line);background:rgba(255,255,255,.34);overflow:hidden;padding:20px 0}
+.marquee .track{display:flex;gap:56px;width:max-content;animation:scrollx 34s linear infinite}
+.marquee:hover .track{animation-play-state:paused}
+@keyframes scrollx{to{transform:translateX(-50%)}}
+.marquee .item{display:flex;align-items:center;gap:13px;color:var(--teal-700);font-family:'Fraunces',serif;font-size:1.15rem;font-weight:500;opacity:.62;white-space:nowrap}
+.marquee .item svg{width:18px;height:18px;color:var(--gold-deep)}
+
+/* ============================================================
+   Section scaffold
+   ============================================================ */
+section.block{padding:120px 0}
+.head{max-width:46rem}
+.head .eyebrow{margin-bottom:22px}
+.head h2{font-family:'Fraunces',serif;font-weight:500;color:var(--teal);
+  font-size:clamp(2.2rem,4.4vw,3.5rem);line-height:1.04;letter-spacing:-.02em;text-wrap:balance}
+.head h2 .ital{font-style:italic}
+.head p{font-size:1.1rem;color:var(--muted);margin-top:18px;max-width:36rem;text-wrap:pretty}
+
+/* ============================================================
+   HOW IT WORKS — editorial numbered split
+   ============================================================ */
+.how{display:grid;grid-template-columns:1fr 1.1fr;gap:64px;align-items:start}
+.how-sticky{position:sticky;top:120px}
+.how-steps{display:flex;flex-direction:column}
+.hstep{display:grid;grid-template-columns:auto 1fr;gap:24px;padding:30px 0;border-top:1px solid var(--line-2)}
+.hstep:last-child{border-bottom:1px solid var(--line-2)}
+.hstep .idx{font-family:'Fraunces',serif;font-size:1.05rem;color:var(--gold-ink);font-weight:600;padding-top:3px}
+.hstep h3{font-family:'Fraunces',serif;font-weight:500;font-size:1.55rem;color:var(--teal);letter-spacing:-.01em}
+.hstep p{color:var(--muted);margin-top:8px;font-size:1rem}
+.how-card{
+  background:var(--paper);padding:8px;border-radius:var(--r-xl);border:1px solid rgba(255,255,255,.7);box-shadow:var(--shadow-amb);
+}
+.how-core{background:var(--teal);border-radius:calc(var(--r-xl) - 8px);padding:34px;color:var(--cream);position:relative;overflow:hidden}
+.how-core::before{content:"";position:absolute;top:-30%;right:-20%;width:280px;height:280px;border-radius:50%;background:radial-gradient(circle,rgba(244,201,93,.2),transparent 65%)}
+.how-core .lab{font-size:.68rem;letter-spacing:.22em;text-transform:uppercase;color:var(--gold);font-weight:600}
+.how-core h4{font-family:'Fraunces',serif;font-weight:500;font-size:1.5rem;margin-top:10px}
+.demo{margin-top:24px;background:rgba(247,243,234,.06);border:1px solid rgba(247,243,234,.12);border-radius:var(--r-md);padding:18px;position:relative;z-index:2}
+.demo .dt{display:flex;justify-content:space-between;align-items:center}
+.demo .dt b{font-weight:600;font-size:.98rem}
+.demo .dt .go{display:inline-flex;align-items:center;gap:7px;font-size:.66rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--teal);background:var(--gold);padding:5px 10px;border-radius:999px}
+.demo .dt .go .d{width:6px;height:6px;border-radius:50%;background:var(--teal)}
+.demo .av{display:flex;margin:16px 0 14px}
+.demo .av i{width:30px;height:30px;border-radius:50%;border:2px solid var(--teal);margin-left:-9px;font-style:normal;font-size:.62rem;font-weight:700;display:grid;place-items:center;color:var(--cream);background:linear-gradient(135deg,#3f7480,#27505b)}
+.demo .av i:first-child{margin-left:0}
+.demo .av i.empty{background:transparent;border:2px dashed rgba(247,243,234,.3);color:rgba(247,243,234,.5)}
+.demo .bar{height:8px;border-radius:999px;background:rgba(247,243,234,.12);overflow:hidden}
+.demo .bar i{display:block;height:100%;width:0;border-radius:999px;background:linear-gradient(90deg,var(--gold),var(--gold-deep));transition:width 1.6s var(--ease)}
+.demo .dm{display:flex;justify-content:space-between;font-size:.76rem;color:rgba(247,243,234,.72);margin-top:10px}
+.demo .dm b{color:var(--cream)}
+
+/* ============================================================
+   DEPARTURES — asymmetrical bento
+   ============================================================ */
+.dep-head{display:flex;justify-content:space-between;align-items:flex-end;gap:28px;flex-wrap:wrap;margin-bottom:46px}
+.tabs{display:flex;gap:8px;flex-wrap:wrap}
+.tab{font-size:.86rem;font-weight:500;color:var(--teal-700);background:rgba(255,255,255,.6);border:1px solid var(--line);border-radius:999px;padding:9px 17px;cursor:pointer;transition:all .4s var(--ease)}
+.tab:hover{border-color:var(--line-2)}
+.tab.on{background:var(--teal);color:var(--cream);border-color:var(--teal)}
+
+.dep-layout{display:grid;grid-template-columns:1.04fr .96fr;gap:24px;align-items:stretch}
+.card{
+  background:var(--paper);padding:8px;border-radius:var(--r-xl);border:1px solid rgba(255,255,255,.6);
+  box-shadow:var(--shadow-card);overflow:hidden;
+  transition:transform .6s var(--ease),box-shadow .6s var(--ease);
+}
+.card:hover{transform:translateY(-6px);box-shadow:var(--shadow-amb)}
+.card .core{position:relative;border-radius:calc(var(--r-xl) - 8px);overflow:hidden;height:100%;display:flex;flex-direction:column}
+.card .media{position:relative;overflow:hidden}
+.card .media img{width:100%;height:100%;object-fit:cover;transition:transform 1s var(--ease)}
+.card:hover .media img{transform:scale(1.06)}
+.card .media::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(23,50,58,.04),rgba(23,50,58,.34))}
+.badge{position:absolute;top:13px;left:13px;z-index:3;display:inline-flex;align-items:center;gap:7px;font-size:.66rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;padding:6px 11px;border-radius:999px;backdrop-filter:blur(8px)}
+.badge.go{background:var(--gold);color:var(--teal)}
+.badge.go .d{width:6px;height:6px;border-radius:50%;background:var(--teal)}
+.badge.form{background:rgba(23,50,58,.78);color:var(--cream)}
+.price{position:absolute;top:13px;right:13px;z-index:3;background:rgba(251,248,241,.92);backdrop-filter:blur(8px);color:var(--teal);border-radius:13px;padding:8px 12px;text-align:right}
+.price b{font-family:'Fraunces',serif;font-weight:600;font-size:1.02rem;letter-spacing:-.01em}
+.price small{display:block;font-size:.6rem;color:var(--muted);font-weight:500}
+
+.card .body{padding:20px 22px 22px;display:flex;flex-direction:column;flex:1;background:var(--paper)}
+.card .rt{font-size:.7rem;letter-spacing:.14em;text-transform:uppercase;color:var(--gold-ink);font-weight:700}
+.card h3{font-family:'Fraunces',serif;font-weight:500;font-size:1.4rem;color:var(--teal);letter-spacing:-.01em;margin-top:7px;line-height:1.12}
+.card .desc{color:var(--muted);font-size:.92rem;margin-top:9px}
+.card .info{display:flex;gap:16px;margin-top:14px;font-size:.82rem;color:var(--muted)}
+.card .info span{display:flex;align-items:center;gap:6px}
+.card .info svg{width:15px;height:15px;opacity:.65}
+
+.prog{margin-top:18px}
+.prog .pt{display:flex;justify-content:space-between;align-items:baseline;font-size:.82rem;margin-bottom:8px}
+.prog .pt b{color:var(--teal);font-weight:600}
+.prog .pt .st{color:var(--muted)}
+.prog .pt .st.ok{color:#2c7a57;font-weight:600}
+.pbar{height:8px;border-radius:999px;background:var(--paper-2);overflow:hidden}
+.pbar i{display:block;height:100%;width:0;border-radius:999px;transition:width 1.5s var(--ease)}
+.pbar.gold i{background:linear-gradient(90deg,var(--gold),var(--gold-deep))}
+.pbar.teal i{background:linear-gradient(90deg,#3f7480,var(--teal))}
+.card .foot{margin-top:auto;padding-top:20px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.card .when{font-size:.84rem;color:var(--muted)}
+.card .when b{display:block;color:var(--teal);font-weight:600;font-size:.94rem;font-family:'Fraunces',serif}
+.join{display:inline-flex;align-items:center;gap:9px;font-weight:600;color:var(--teal);font-size:.9rem}
+.join .c{width:30px;height:30px;border-radius:999px;background:rgba(23,50,58,.07);display:grid;place-items:center;transition:transform .5s var(--ease),background .4s var(--ease)}
+.join .c svg{width:14px;height:14px}
+.card:hover .join .c{background:var(--gold);transform:translate(3px,-2px)}
+
+/* ---- featured departure (left) ---- */
+.feature{display:flex;flex-direction:column}
+.feature .media{aspect-ratio:16/11}
+.feature h3{font-size:1.7rem}
+.feature .body{padding:24px 26px 26px}
+
+/* ---- live departure board (right) ---- */
+.board{background:var(--paper);padding:8px;border-radius:var(--r-xl);border:1px solid rgba(255,255,255,.6);box-shadow:var(--shadow-card);display:flex;flex-direction:column}
+.board-in{background:var(--paper);border-radius:calc(var(--r-xl) - 8px);overflow:hidden;display:flex;flex-direction:column;flex:1}
+.board-top{display:flex;align-items:center;justify-content:space-between;padding:20px 22px 16px}
+.board-top .bt{font-size:.7rem;letter-spacing:.18em;text-transform:uppercase;color:var(--gold-ink);font-weight:700;display:flex;align-items:center;gap:10px}
+.board-top .bt .live{position:relative;width:7px;height:7px;border-radius:50%;background:var(--gold)}
+.board-top .bt .live::after{content:"";position:absolute;inset:-5px;border-radius:50%;border:1.5px solid var(--gold);animation:ping 2.6s var(--ease-2) infinite}
+.board-top .cnt{font-size:.76rem;color:var(--muted);font-weight:500}
+.board-rows{display:flex;flex-direction:column;flex:1}
+.drow{display:grid;grid-template-columns:auto 1fr auto;gap:17px;align-items:center;padding:17px 22px;border-top:1px solid var(--line);cursor:pointer;position:relative;transition:background .45s var(--ease)}
+.drow:hover{background:rgba(23,50,58,.035)}
+.drow .thumb{width:76px;height:76px;border-radius:16px;overflow:hidden;position:relative;flex:0 0 auto}
+.drow .thumb img{width:100%;height:100%;object-fit:cover;transition:transform .9s var(--ease)}
+.drow:hover .thumb img{transform:scale(1.09)}
+.drow .thumb .gdot{position:absolute;top:7px;left:7px;width:14px;height:14px;border-radius:50%;background:var(--gold);border:2px solid var(--paper);box-shadow:0 0 0 1px rgba(23,50,58,.15)}
+.drow .mid{min-width:0}
+.drow .mid .rt{font-size:.64rem;letter-spacing:.13em;text-transform:uppercase;color:var(--gold-ink);font-weight:700}
+.drow .mid h4{font-family:'Fraunces',serif;font-weight:500;font-size:1.16rem;color:var(--teal);letter-spacing:-.01em;line-height:1.12;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.drow .mini{display:flex;align-items:center;gap:11px;margin-top:11px}
+.drow .mini .pbar{flex:0 1 110px;height:6px}
+.drow .mini .lab{font-size:.74rem;color:var(--muted);white-space:nowrap;font-weight:500}
+.drow .mini .lab b{color:var(--teal);font-weight:600}
+.drow .mini .lab.ok b,.drow .mini .lab.ok{color:#2c7a57}
+.drow .rt-col{display:flex;flex-direction:column;align-items:flex-end;gap:9px;flex:0 0 auto}
+.drow .pr{font-family:'Fraunces',serif;font-weight:600;font-size:1.12rem;color:var(--teal);letter-spacing:-.01em;line-height:1}
+.drow .pr small{display:block;font-size:.6rem;color:var(--muted);font-weight:500;text-align:right;margin-top:2px;font-family:'Plus Jakarta Sans',sans-serif}
+.drow .arr{width:30px;height:30px;border-radius:999px;background:rgba(23,50,58,.07);display:grid;place-items:center;transition:transform .5s var(--ease),background .4s var(--ease)}
+.drow .arr svg{width:14px;height:14px;color:var(--teal)}
+.drow:hover .arr{background:var(--gold);transform:translate(3px,-2px)}
+.board-foot{padding:16px 22px;border-top:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:12px;background:rgba(23,50,58,.025)}
+.board-foot span{font-size:.84rem;color:var(--muted)}
+.board-foot span b{color:var(--teal);font-weight:600}
+
+.dep-foot{display:flex;justify-content:center;margin-top:50px}
+
+/* ============================================================
+   THE PROMISE — dark band, symbol explained
+   ============================================================ */
+.band{background:var(--teal);color:var(--cream);position:relative;overflow:hidden}
+.band::before{content:"";position:absolute;bottom:-25%;left:-8%;width:520px;height:520px;border-radius:50%;background:radial-gradient(circle,rgba(244,201,93,.14),transparent 66%)}
+.promise-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:22px;margin-top:56px;position:relative;z-index:2}
+.psym{background:rgba(247,243,234,.04);border:1px solid rgba(247,243,234,.12);border-radius:var(--r-lg);padding:34px 30px;transition:transform .6s var(--ease),background .5s var(--ease)}
+.psym:hover{transform:translateY(-5px);background:rgba(247,243,234,.07)}
+.psym .gl{width:64px;height:64px;color:var(--cream)}
+.psym .gl .go{fill:var(--gold)}
+.psym h3{font-family:'Fraunces',serif;font-weight:500;font-size:1.45rem;margin-top:20px;color:var(--cream)}
+.psym h3.g{color:var(--gold)}
+.psym p{color:rgba(247,243,234,.68);font-size:.95rem;margin-top:9px}
+
+/* ============================================================
+   OPERATORS — split CTA panel
+   ============================================================ */
+.ops{display:grid;grid-template-columns:1fr 1fr;gap:60px;align-items:center}
+.ops-list{margin-top:30px;display:flex;flex-direction:column;gap:4px}
+.ops-list .it{display:grid;grid-template-columns:auto 1fr;gap:16px;padding:18px 0;border-top:1px solid var(--line)}
+.ops-list .it .ck{width:30px;height:30px;border-radius:10px;background:var(--gold);color:var(--teal);display:grid;place-items:center;flex:0 0 auto;margin-top:2px}
+.ops-list .it .ck svg{width:16px;height:16px}
+.ops-list .it b{color:var(--teal);font-family:'Fraunces',serif;font-weight:500;font-size:1.12rem}
+.ops-list .it p{color:var(--muted);font-size:.92rem;margin-top:3px}
+.ops-panel{background:var(--paper);padding:9px;border-radius:var(--r-xl);border:1px solid rgba(255,255,255,.7);box-shadow:var(--shadow-amb)}
+.ops-inner{background:var(--teal);border-radius:calc(var(--r-xl) - 9px);padding:38px 34px;color:var(--cream);position:relative;overflow:hidden}
+.ops-inner::before{content:"";position:absolute;top:-20%;left:-15%;width:260px;height:260px;border-radius:50%;background:radial-gradient(circle,rgba(244,201,93,.18),transparent 65%)}
+.ops-inner h3{font-family:'Fraunces',serif;font-weight:500;font-size:1.5rem;position:relative;z-index:2}
+.ops-inner > p{color:rgba(247,243,234,.72);margin-top:8px;font-size:.96rem;position:relative;z-index:2}
+.ostat{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:26px 0;position:relative;z-index:2}
+.ostat .s{background:rgba(247,243,234,.05);border:1px solid rgba(247,243,234,.12);border-radius:var(--r-md);padding:18px}
+.ostat .s b{font-family:'Fraunces',serif;font-size:2rem;font-weight:600;color:var(--gold);letter-spacing:-.02em;line-height:1;display:block}
+.ostat .s span{font-size:.78rem;color:rgba(247,243,234,.7);margin-top:7px;display:block}
+
+/* ============================================================
+   CTA
+   ============================================================ */
+.cta-wrap{padding:30px 0 130px}
+.cta{position:relative;overflow:hidden;border-radius:var(--r-xl);padding:9px;background:var(--paper);border:1px solid rgba(255,255,255,.7);box-shadow:var(--shadow-amb)}
+.cta-inner{position:relative;border-radius:calc(var(--r-xl) - 9px);overflow:hidden;padding:84px 40px;text-align:center}
+.cta-inner img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:0}
+.cta-inner::after{content:"";position:absolute;inset:0;z-index:1;background:linear-gradient(180deg,rgba(23,50,58,.72),rgba(23,50,58,.86))}
+.cta-inner .in{position:relative;z-index:2}
+.cta-inner .eyebrow{margin-bottom:22px}
+.cta-inner h2{font-family:'Fraunces',serif;font-weight:500;color:var(--cream);font-size:clamp(2.2rem,4.6vw,3.6rem);line-height:1.04;letter-spacing:-.02em;text-wrap:balance}
+.cta-inner h2 .ital{font-style:italic;color:var(--gold)}
+.cta-inner p{color:rgba(247,243,234,.78);font-size:1.12rem;margin:18px auto 0;max-width:34rem}
+.cta-inner .hero-cta{justify-content:center;margin-top:34px}
+
+/* ============================================================
+   Footer
+   ============================================================ */
+footer{background:var(--teal-800);color:var(--cream);padding:84px 0 36px}
+.fgrid{display:grid;grid-template-columns:1.7fr 1fr 1fr 1fr;gap:46px}
+footer .logo{color:var(--cream)}
+footer .logo .nm i{color:var(--gold)}
+.fblurb{color:rgba(247,243,234,.62);font-size:.95rem;margin-top:20px;max-width:25rem}
+.fcol h4{font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;color:var(--gold);margin-bottom:18px}
+.fcol a{display:block;color:rgba(247,243,234,.72);font-size:.94rem;padding:7px 0;transition:color .3s var(--ease)}
+.fcol a:hover{color:var(--cream)}
+.fbot{border-top:1px solid rgba(247,243,234,.13);margin-top:54px;padding-top:26px;display:flex;justify-content:space-between;align-items:center;gap:18px;flex-wrap:wrap;font-size:.85rem;color:rgba(247,243,234,.56)}
+.fbot .lks{display:flex;gap:22px}
+.fbot a{color:rgba(247,243,234,.56);transition:color .3s}
+.fbot a:hover{color:var(--cream)}
+.socials{display:flex;gap:11px}
+.socials a{width:38px;height:38px;border-radius:11px;border:1px solid rgba(247,243,234,.18);display:grid;place-items:center;transition:all .4s var(--ease)}
+.socials a:hover{background:var(--gold);color:var(--teal);border-color:var(--gold)}
+.socials svg{width:17px;height:17px}
+
+/* ---------- scroll reveal ---------- */
+.rv{opacity:0;transform:translateY(40px);filter:blur(8px);transition:opacity .9s var(--ease-2),transform .9s var(--ease-2),filter .9s var(--ease-2)}
+.rv.in{opacity:1;transform:none;filter:none}
+[data-d="1"]{transition-delay:.08s}[data-d="2"]{transition-delay:.16s}[data-d="3"]{transition-delay:.24s}[data-d="4"]{transition-delay:.32s}
+
+/* ---------- mobile overlay menu ---------- */
+.overlay{position:fixed;inset:0;z-index:70;background:rgba(23,50,58,.92);backdrop-filter:blur(24px);display:flex;flex-direction:column;justify-content:center;padding:0 32px;opacity:0;pointer-events:none;transition:opacity .5s var(--ease)}
+.overlay.open{opacity:1;pointer-events:auto}
+.overlay a{font-family:'Fraunces',serif;font-size:2rem;color:var(--cream);padding:14px 0;border-bottom:1px solid rgba(247,243,234,.12);transform:translateY(20px);opacity:0;transition:transform .6s var(--ease),opacity .6s var(--ease)}
+.overlay.open a{transform:none;opacity:1}
+.overlay.open a:nth-child(1){transition-delay:.1s}.overlay.open a:nth-child(2){transition-delay:.16s}.overlay.open a:nth-child(3){transition-delay:.22s}.overlay.open a:nth-child(4){transition-delay:.28s}
+.overlay .close{position:absolute;top:26px;right:26px;width:48px;height:48px;border-radius:999px;background:rgba(247,243,234,.1);border:0;color:var(--cream);cursor:pointer}
+.overlay .close svg{width:22px;height:22px}
+
+/* ============================================================
+   Responsive
+   ============================================================ */
+@media(max-width:960px){
+  .dep-layout{grid-template-columns:1fr;gap:20px}
+  .hero-grid{grid-template-columns:1fr;gap:50px}
+  .cascade{max-width:480px;margin:0 auto}
+  .how{grid-template-columns:1fr;gap:44px}
+  .how-sticky{position:static}
+  .ops{grid-template-columns:1fr;gap:40px}
+  .promise-grid{grid-template-columns:1fr}
+  .fgrid{grid-template-columns:1fr 1fr;gap:34px}
+}
+@media(max-width:760px){
+  .nav-links,.nav-right .btn{display:none}
+  .menu-btn{display:flex}
+  .hero{padding-top:128px}
+  section.block{padding:84px 0}
+  .drow{grid-template-columns:auto 1fr auto;gap:14px;padding:15px 16px}
+  .drow .thumb{width:62px;height:62px}
+  .drow .mini .pbar{flex-basis:80px}
+  .board-top,.board-foot{padding-left:16px;padding-right:16px}
+  .cta-inner{padding:56px 24px}
+  .fgrid{grid-template-columns:1fr;gap:30px}
+  .fbot{flex-direction:column;align-items:flex-start}
+  .ph-1,.ph-2{transform:none}
+}
+@media(prefers-reduced-motion:reduce){
+  *{animation:none!important;transition-duration:.01ms!important}
+  .rv{opacity:1;transform:none;filter:none}
+}
+</style>
+</head>
+<body>
+<div class="grain"></div>
+
+<!-- skip link -->
+<a href="#main" style="position:absolute;left:-999px;top:0;z-index:99;background:var(--teal);color:#fff;padding:10px 16px;border-radius:8px" onfocus="this.style.left='12px'" onblur="this.style.left='-999px'">Skip to content</a>
+
+<!-- ============ NAV ============ -->
+<div class="nav-shell">
+  <nav class="nav" id="nav" aria-label="Primary">
+    <a href="#" class="logo" aria-label="Sawa Tours home">
+      <svg class="mark" viewBox="0 0 100 100" aria-hidden="true">
+        <circle class="ring" cx="50" cy="50" r="36"/>
+        <path class="s" d="M62 34 C44 34 44 50 52 50 C60 50 60 66 38 66"/>
+        <circle class="dot" cx="23" cy="40" r="5.5"/><circle class="dot" cx="31" cy="74" r="5.5"/><circle class="dot" cx="70" cy="62" r="5.5"/>
+        <circle class="go" cx="74" cy="30" r="6.5"/>
+      </svg>
+      <span class="nm"><b>Sawa</b><i>Tours · Egypt</i></span>
+    </a>
+    <div class="nav-links">
+      <a href="#how">How it works</a>
+      <a href="departures.html">Departures</a>
+      <a href="#promise">The promise</a>
+      <a href="operators.html">For operators</a>
+    </div>
+    <div class="nav-right">
+      <a href="departures.html" class="btn gold sm">Find a departure
+        <span class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+      </a>
+      <button class="menu-btn" id="open" aria-label="Open menu">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+    </div>
+  </nav>
+</div>
+
+<!-- mobile overlay -->
+<div class="overlay" id="overlay">
+  <button class="close" id="close" aria-label="Close menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+  <a href="#how">How it works</a>
+  <a href="departures.html">Departures</a>
+  <a href="#promise">The promise</a>
+  <a href="operators.html">For operators</a>
+</div>
+
+<main id="main">
+
+<!-- ============ HERO ============ -->
+<section class="hero">
+  <div class="hero-bg"></div>
+  <div class="wrap hero-grid">
+    <div class="hero-copy rv">
+      <span class="eyebrow"><span class="live"></span>Shared departures across Egypt</span>
+      <h1>See Egypt the way<br>it's meant to be — <span class="ital gld">together</span>.</h1>
+      <p class="lede">Sawa pools travelers from verified Egyptian operators into one shared departure. Four travelers on the same route, and the trip is locked in. We call that moment the <strong>GoAhead</strong>.</p>
+      <div class="hero-cta">
+        <a href="departures.html" class="btn teal">Browse Egypt departures
+          <span class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+        </a>
+        <a href="#how" class="btn plain">How it works
+          <span class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg></span>
+        </a>
+      </div>
+      <div class="hero-meta">
+        <div class="m"><b class="tnum">1,940+</b><span>travelers matched<br>into real groups</span></div>
+        <div class="sep"></div>
+        <div class="m"><b class="tnum">72%</b><span>of listed dates<br>reach GoAhead</span></div>
+        <div class="sep"></div>
+        <div class="m"><b class="tnum">31</b><span>verified Egyptian<br>operators</span></div>
+      </div>
+    </div>
+
+    <div class="hero-visual rv" data-d="2">
+      <div class="cascade">
+        <div class="shell ph-1">
+          <div class="core">
+            <img src="https://picsum.photos/seed/sawagiza9/700/820" alt="The Pyramids of Giza glowing at sunrise" />
+            <div class="cap"><p class="rt">Cairo · Giza</p><h3>The Great Pyramids at dawn</h3></div>
+          </div>
+        </div>
+        <div class="shell ph-2">
+          <div class="core">
+            <img src="https://picsum.photos/seed/sawanile8/560/520" alt="A felucca sailing the Nile at golden hour" />
+            <div class="cap"><p class="rt">Aswan</p><h3>Felucca on the Nile</h3></div>
+          </div>
+        </div>
+
+        <div class="confirm">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div>
+          <div><b>GoAhead confirmed</b><span>Nile Cruise · departs 18 Sep</span></div>
+        </div>
+
+        <div class="seats-chip">
+          <div class="avatars"><i>HA</i><i>MK</i><i>SL</i><i>Rf</i><i>+2</i></div>
+          <b class="tnum">6 / 8</b>
+          <span>travelers joined — 2 seats left</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ MARQUEE ============ -->
+<div class="marquee" aria-hidden="true">
+  <div class="track">
+    <span class="item"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="5"/></svg>Giza &amp; Saqqara</span>
+    <span class="item"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="5"/></svg>Luxor &amp; Karnak</span>
+    <span class="item"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="5"/></svg>Abu Simbel</span>
+    <span class="item"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="5"/></svg>The White Desert</span>
+    <span class="item"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="5"/></svg>Siwa Oasis</span>
+    <span class="item"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="5"/></svg>Dahab &amp; the Blue Hole</span>
+    <span class="item"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="5"/></svg>Alexandria</span>
+    <!-- duplicate for seamless loop -->
+    <span class="item"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="5"/></svg>Giza &amp; Saqqara</span>
+    <span class="item"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="5"/></svg>Luxor &amp; Karnak</span>
+    <span class="item"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="5"/></svg>Abu Simbel</span>
+    <span class="item"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="5"/></svg>The White Desert</span>
+    <span class="item"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="5"/></svg>Siwa Oasis</span>
+    <span class="item"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="5"/></svg>Dahab &amp; the Blue Hole</span>
+    <span class="item"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="5"/></svg>Alexandria</span>
+  </div>
+</div>
+
+<!-- ============ HOW IT WORKS ============ -->
+<section class="block" id="how">
+  <div class="wrap how">
+    <div class="how-sticky rv">
+      <span class="eyebrow">How it works</span>
+      <h2 class="serif" style="font-family:'Fraunces',serif;font-weight:500;color:var(--teal);font-size:clamp(2.2rem,4.4vw,3.5rem);line-height:1.04;letter-spacing:-.02em;margin-top:22px">Find a trip, take a seat, and watch it <span class="ital" style="font-style:italic">confirm</span>.</h2>
+      <p style="font-size:1.1rem;color:var(--muted);margin-top:18px;max-width:30rem">No more joining a group that doesn't exist. You reserve for free, the seats fill in real time, and the moment four travelers commit to your date, the trip is locked in.</p>
+      <a href="#departures" class="btn teal" style="margin-top:32px">See open departures
+        <span class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+      </a>
+    </div>
+
+    <div>
+      <div class="how-steps">
+        <div class="hstep rv"><div class="idx tnum">01</div><div><h3>Find a departure that's forming</h3><p>Browse real routes from verified Egyptian operators — Giza, the Nile, the desert, the Red Sea — each with a live count of how close it is to going.</p></div></div>
+        <div class="hstep rv" data-d="1"><div class="idx tnum">02</div><div><h3>Take your seat — for free</h3><p>Reserve with no charge and watch the group fill in real time. You're pooled with travelers from across Egypt, all heading out on the same date.</p></div></div>
+        <div class="hstep rv" data-d="2"><div class="idx tnum">03</div><div><h3>Four travelers, and you're going</h3><p>The minute the date reaches four, the gold dot lights up: the trip is confirmed and only now are you charged. No cancelled trips, no solo surcharge.</p></div></div>
+      </div>
+
+      <div class="how-card rv" data-d="2" style="margin-top:28px">
+        <div class="how-core">
+          <span class="lab">Live departure</span>
+          <h4>Nile Cruise · Luxor to Aswan</h4>
+          <div class="demo">
+            <div class="dt"><b>5-day sailing · departs 18 Sep</b><span class="go"><span class="d"></span>GoAhead</span></div>
+            <div class="av"><i>HA</i><i>MK</i><i>SL</i><i>Rf</i><i>JD</i><i>+1</i><i class="empty">+2</i></div>
+            <div class="bar"><i data-fill="75%"></i></div>
+            <div class="dm"><span><b>6</b> of 8 joined</span><span>2 seats left</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ DEPARTURES (bento) ============ -->
+<section class="block" id="departures" style="padding-top:20px">
+  <div class="wrap">
+    <div class="dep-head rv">
+      <div class="head" style="margin-bottom:0">
+        <span class="eyebrow" style="margin-bottom:20px"><span class="live"></span>Open departures</span>
+        <h2 style="font-size:clamp(2rem,3.8vw,3rem)">Join a group that's already <span class="ital">forming</span>.</h2>
+      </div>
+      <div class="tabs" role="tablist">
+        <button class="tab on">All Egypt</button>
+        <button class="tab">Cairo &amp; Giza</button>
+        <button class="tab">Nile &amp; South</button>
+        <button class="tab">Desert &amp; oases</button>
+        <button class="tab">Red Sea</button>
+      </div>
+    </div>
+
+    <div class="dep-layout">
+
+      <!-- FEATURED departure (left) -->
+      <article class="card feature rv" onclick="location.href='tour.html'" style="cursor:pointer">
+        <div class="core">
+          <div class="media">
+            <img src="https://picsum.photos/seed/sawanilecruise/760/560" alt="A Nile river cruise boat moored beside palm-lined banks" />
+            <span class="badge go"><span class="d"></span>GoAhead · running</span>
+            <span class="price"><b class="tnum">$740</b><small>per person</small></span>
+          </div>
+          <div class="body">
+            <span class="rt">Featured · Nile &amp; South · 5 days</span>
+            <h3>Nile Cruise: Luxor to Aswan</h3>
+            <p class="desc">Karnak, the Valley of the Kings, Edfu and Kom Ombo by sail — temples by day, the river at night. Led by Nile Valley Travel.</p>
+            <div class="info">
+              <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>Departs 18 Sep</span>
+              <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>Nile Valley Travel</span>
+            </div>
+            <div class="prog">
+              <div class="pt"><b>6 of 8 joined</b><span class="st ok">Confirmed · running</span></div>
+              <div class="pbar gold"><i data-fill="75%"></i></div>
+            </div>
+            <div class="foot">
+              <div class="when">Almost full<b>2 seats left</b></div>
+              <a href="tour.html" class="join">Reserve a seat<span class="c"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></a>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <!-- LIVE BOARD (right) -->
+      <div class="board rv" data-d="1">
+        <div class="board-in">
+          <div class="board-top">
+            <span class="bt"><span class="live"></span>Forming now</span>
+            <span class="cnt tnum">14 departures open</span>
+          </div>
+
+          <div class="board-rows">
+
+            <a href="tour.html" class="drow">
+              <div class="thumb"><img src="https://picsum.photos/seed/sawadahab/200/200" alt="Turquoise water of the Red Sea at Dahab's Blue Hole" /></div>
+              <div class="mid">
+                <span class="rt">Red Sea · 5 days · 06 Oct</span>
+                <h4>Dahab &amp; the Blue Hole</h4>
+                <div class="mini"><span class="pbar teal"><i data-fill="75%"></i></span><span class="lab"><b>3</b>/4 · 1 to go</span></div>
+              </div>
+              <div class="rt-col">
+                <div class="pr tnum">$510<small>/ person</small></div>
+                <span class="arr"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+              </div>
+            </a>
+
+            <a href="tour.html" class="drow">
+              <div class="thumb"><img src="https://picsum.photos/seed/sawaabusimbel/200/200" alt="The colossal statues of Abu Simbel temple" /><span class="gdot"></span></div>
+              <div class="mid">
+                <span class="rt">Nile &amp; South · 4 days · 26 Sep</span>
+                <h4>Abu Simbel &amp; Nubian Aswan</h4>
+                <div class="mini"><span class="pbar gold"><i data-fill="70%"></i></span><span class="lab ok"><b>7</b>/10 · confirmed</span></div>
+              </div>
+              <div class="rt-col">
+                <div class="pr tnum">$420<small>/ person</small></div>
+                <span class="arr"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+              </div>
+            </a>
+
+            <a href="tour.html" class="drow">
+              <div class="thumb"><img src="https://picsum.photos/seed/sawagiza2/200/200" alt="The Sphinx and Great Pyramid of Giza" /></div>
+              <div class="mid">
+                <span class="rt">Cairo &amp; Giza · 3 days · 22 Sep</span>
+                <h4>Pyramids &amp; Old Cairo</h4>
+                <div class="mini"><span class="pbar teal"><i data-fill="50%"></i></span><span class="lab"><b>2</b>/4 · 2 to go</span></div>
+              </div>
+              <div class="rt-col">
+                <div class="pr tnum">$285<small>/ person</small></div>
+                <span class="arr"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+              </div>
+            </a>
+
+            <a href="tour.html" class="drow">
+              <div class="thumb"><img src="https://picsum.photos/seed/sawawhitedesert/200/200" alt="Chalk rock formations of Egypt's White Desert" /></div>
+              <div class="mid">
+                <span class="rt">Desert &amp; oases · 3 days · 02 Oct</span>
+                <h4>White Desert &amp; Bahariya</h4>
+                <div class="mini"><span class="pbar teal"><i data-fill="25%"></i></span><span class="lab"><b>1</b>/4 · be the spark</span></div>
+              </div>
+              <div class="rt-col">
+                <div class="pr tnum">$330<small>/ person</small></div>
+                <span class="arr"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+              </div>
+            </a>
+
+            <a href="tour.html" class="drow">
+              <div class="thumb"><img src="https://picsum.photos/seed/sawasiwa3/200/200" alt="Palm groves and salt lakes of Siwa Oasis" /></div>
+              <div class="mid">
+                <span class="rt">Desert &amp; oases · 4 days · 11 Oct</span>
+                <h4>Siwa Oasis Expedition</h4>
+                <div class="mini"><span class="pbar teal"><i data-fill="40%"></i></span><span class="lab"><b>2</b>/5 · 3 to go</span></div>
+              </div>
+              <div class="rt-col">
+                <div class="pr tnum">$465<small>/ person</small></div>
+                <span class="arr"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+              </div>
+            </a>
+
+          </div>
+
+          <div class="board-foot">
+            <span><b class="tnum">9</b> more forming this month</span>
+            <a href="departures.html" class="join">View board<span class="c"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></a>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="dep-foot rv">
+      <a href="departures.html" class="btn teal">See all Egypt departures
+        <span class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- ============ THE PROMISE ============ -->
+<section class="block band" id="promise">
+  <div class="wrap">
+    <div class="head rv">
+      <span class="eyebrow on-dark" style="margin-bottom:22px">The symbol, explained</span>
+      <h2 style="color:var(--cream)">Every part of the Sawa mark is a <span class="ital" style="font-style:italic;color:var(--gold)">promise</span>.</h2>
+      <p style="color:rgba(247,243,234,.72)">It isn't decoration. The circle, the route and the gold dot each stand for how a shared departure actually works.</p>
+    </div>
+
+    <div class="promise-grid">
+      <div class="psym rv">
+        <svg class="gl" viewBox="0 0 100 100" aria-hidden="true"><circle cx="32" cy="32" r="8" fill="currentColor"/><circle cx="68" cy="32" r="8" fill="currentColor"/><circle cx="32" cy="68" r="8" fill="currentColor"/><circle cx="68" cy="68" r="8" fill="currentColor"/></svg>
+        <h3>Four travelers</h3>
+        <p>The four dots are the minimum to confirm a departure. Below four it stays a plan — at four it becomes a trip.</p>
+      </div>
+      <div class="psym rv" data-d="1">
+        <svg class="gl" viewBox="0 0 100 100" aria-hidden="true"><path d="M68 30 C44 30 44 50 56 50 C68 50 68 70 38 70" fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round"/><circle cx="30" cy="34" r="6" fill="currentColor"/><circle cx="40" cy="72" r="6" fill="currentColor"/><circle cx="70" cy="58" r="6" fill="currentColor"/></svg>
+        <h3>One shared route</h3>
+        <p>The S-path is the single journey everyone is on. Different operators, different travelers — one road, one guide, one group.</p>
+      </div>
+      <div class="psym rv" data-d="2">
+        <svg class="gl" viewBox="0 0 100 100" aria-hidden="true"><path d="M68 30 C44 30 44 50 56 50 C68 50 68 70 38 70" fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round"/><circle cx="30" cy="34" r="6" fill="currentColor"/><circle cx="40" cy="72" r="6" fill="currentColor"/><circle class="go" cx="74" cy="28" r="8"/></svg>
+        <h3 class="g">GoAhead</h3>
+        <p>The single gold dot is the moment of truth. When it lights up, your tour is confirmed, paid and really running.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ OPERATOR HANDOFF BAND ============ -->
+<section class="block" id="operators" style="padding:70px 0">
+  <div class="wrap">
+    <div class="ops-panel rv">
+      <div class="ops-inner" style="padding:42px 44px;display:flex;align-items:center;justify-content:space-between;gap:34px;flex-wrap:wrap">
+        <div style="position:relative;z-index:2;max-width:38rem">
+          <span class="eyebrow on-dark" style="margin-bottom:16px">Run tours in Egypt?</span>
+          <h3 style="font-family:'Fraunces',serif;font-weight:500;font-size:clamp(1.6rem,3vw,2.1rem);color:var(--cream);line-height:1.1;letter-spacing:-.01em;margin-top:14px">Stop cancelling tours you <span style="font-style:italic;color:var(--gold)">almost</span> filled.</h3>
+          <p style="color:rgba(247,243,234,.72);margin-top:12px;font-size:1.02rem">List the departures you can't fill alone. Sawa pools demand across operators so the date runs — zero upfront cost, keep your brand and margin.</p>
+        </div>
+        <a href="operators.html" class="btn gold" style="position:relative;z-index:2;flex:0 0 auto">For operators
+          <span class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+        </a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ CTA ============ -->
+<section class="cta-wrap">
+  <div class="wrap">
+    <div class="cta rv">
+      <div class="cta-inner">
+        <img src="https://picsum.photos/seed/sawacta7/1400/640" alt="Camels resting before the pyramids at dusk" />
+        <div class="in">
+          <span class="eyebrow on-dark"><span class="live"></span>Shared departures, confirmed together</span>
+          <h2>Your Egypt trip is one<br>traveler <span class="ital">away</span>.</h2>
+          <p>Find an open departure, take a seat, and watch the gold dot light up.</p>
+          <div class="hero-cta">
+            <a href="#departures" class="btn gold">Find a departure
+              <span class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+            </a>
+            <a href="operators.html" class="btn light">List a tour
+              <span class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg></span>
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<!-- ============ FOOTER ============ -->
+<footer>
+  <div class="wrap">
+    <div class="fgrid">
+      <div>
+        <a href="#" class="logo">
+          <svg class="mark" viewBox="0 0 100 100" aria-hidden="true">
+            <circle class="ring" cx="50" cy="50" r="36"/>
+            <path class="s" d="M62 34 C44 34 44 50 52 50 C60 50 60 66 38 66"/>
+            <circle class="dot" cx="23" cy="40" r="5.5"/><circle class="dot" cx="31" cy="74" r="5.5"/><circle class="dot" cx="70" cy="62" r="5.5"/>
+            <circle class="go" cx="74" cy="30" r="6.5"/>
+          </svg>
+          <span class="nm"><b>Sawa</b><i>Tours · Egypt</i></span>
+        </a>
+        <p class="fblurb">Shared departures, confirmed together. Sawa pools travelers across verified Egyptian operators so the tours you want actually run — minimum four, and a gold dot you can trust.</p>
+      </div>
+      <div class="fcol">
+        <h4>Travel</h4>
+        <a href="#departures">Open departures</a>
+        <a href="#how">How it works</a>
+        <a href="trust.html">The GoAhead promise</a>
+        <a href="departures.html">Destinations in Egypt</a>
+      </div>
+      <div class="fcol">
+        <h4>Operators</h4>
+        <a href="operators.html">List a tour</a>
+        <a href="verify.html">Become verified</a>
+        <a href="pricing.html">Pricing</a>
+        <a href="contact.html">Operator login</a>
+      </div>
+      <div class="fcol">
+        <h4>Company</h4>
+        <a href="about.html">About Sawa</a>
+        <a href="contact.html">Support</a>
+        <a href="contact.html">Contact</a>
+        <a href="about.html">Careers</a>
+      </div>
+    </div>
+    <div class="fbot">
+      <span>© 2026 Sawa Tours. Shared departures, confirmed together.</span>
+      <div class="lks"><a href="#">Privacy</a><a href="#">Terms</a><a href="#">Cookies</a></div>
+      <div class="socials">
+        <a href="#" aria-label="Instagram"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none"/></svg></a>
+        <a href="#" aria-label="Facebook"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M14 9h3V6h-3c-2 0-3 1-3 3v2H9v3h2v6h3v-6h2.5l.5-3H14V9.5c0-.4.2-.5.6-.5Z"/></svg></a>
+        <a href="#" aria-label="WhatsApp"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-8.5 15.2L2 22l4.9-1.4A10 10 0 1 0 12 2Zm5.4 14.1c-.2.6-1.3 1.2-1.8 1.2-.5.1-1 .1-1.7-.1-.4-.1-.9-.3-1.6-.6a9 9 0 0 1-3.4-3c-.3-.4-.8-1.1-.8-2.1s.5-1.5.7-1.7c.2-.2.4-.3.6-.3h.4c.2 0 .4 0 .5.4l.7 1.6c.1.1 0 .3 0 .4l-.3.4c-.2.2-.3.3-.1.5.5.9 1 1.3 1.8 1.8.2.1.4.1.5 0l.5-.6c.2-.2.3-.2.5-.1l1.5.7c.2.1.4.2.4.3.1.1.1.6-.1 1Z"/></svg></a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script>
+  /* nav state */
+  const nav=document.getElementById('nav');
+  const onScroll=()=>nav.classList.toggle('tight',window.scrollY>20);
+  window.addEventListener('scroll',onScroll,{passive:true});onScroll();
+
+  /* mobile overlay */
+  const ov=document.getElementById('overlay');
+  document.getElementById('open').onclick=()=>{ov.classList.add('open');document.body.style.overflow='hidden'};
+  const closeMenu=()=>{ov.classList.remove('open');document.body.style.overflow=''};
+  document.getElementById('close').onclick=closeMenu;
+  ov.querySelectorAll('a').forEach(a=>a.onclick=closeMenu);
+
+  /* reveal + progress bars via IntersectionObserver */
+  const io=new IntersectionObserver((es)=>{
+    es.forEach(e=>{
+      if(!e.isIntersecting)return;
+      e.target.classList.add('in');
+      e.target.querySelectorAll('[data-fill]').forEach(b=>b.style.width=b.dataset.fill);
+      io.unobserve(e.target);
+    });
+  },{threshold:.16,rootMargin:'0px 0px -7% 0px'});
+  document.querySelectorAll('.rv').forEach(el=>io.observe(el));
+
+  /* fire hero/how demo bars early */
+  setTimeout(()=>document.querySelectorAll('.hero [data-fill],.how-core [data-fill]').forEach(b=>b.style.width=b.dataset.fill),500);
+
+  /* tab toggle (visual — wire to real data on your backend) */
+  document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
+    document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));
+    t.classList.add('on');
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Open departures across Egypt — Join a group that's forming | Sawa</title>
+<meta name="description" content="Browse live shared departures across Egypt. See how close each date is to confirming, reserve a seat free, and pay only when the group reaches GoAhead." />
+<meta property="og:title" content="Open departures across Egypt — Join a group that's forming | Sawa" />
+<meta property="og:description" content="Browse live shared departures across Egypt. See how close each date is to confirming, reserve a seat free, and pay only when the group reaches GoAhead." />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='24' fill='%2317323A'/%3E%3Ccircle cx='50' cy='50' r='30' fill='none' stroke='%23F7F3EA' stroke-width='5'/%3E%3Cpath d='M62 36 C46 36 46 50 54 50 C62 50 62 64 38 64' fill='none' stroke='%23F7F3EA' stroke-width='7' stroke-linecap='round'/%3E%3Ccircle cx='72' cy='32' r='7' fill='%23F4C95D'/%3E%3C/svg%3E" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="assets/sawa.css" />
+</head>
+<body>
+<div class="grain"></div>
+<a href="#main" style="position:absolute;left:-999px;top:0;z-index:99;background:var(--teal);color:#fff;padding:10px 16px;border-radius:8px" onfocus="this.style.left='12px'" onblur="this.style.left='-999px'">Skip to content</a>
+<div class="nav-shell">
+  <nav class="nav" id="nav" aria-label="Primary">
+    <a href="index.html" class="logo" aria-label="Sawa Tours home">
+      <svg class="mark" viewBox="0 0 100 100" aria-hidden="true">
+        <circle class="ring" cx="50" cy="50" r="36"/>
+        <path class="s" d="M62 34 C44 34 44 50 52 50 C60 50 60 66 38 66"/>
+        <circle class="dot" cx="23" cy="40" r="5.5"/><circle class="dot" cx="31" cy="74" r="5.5"/><circle class="dot" cx="70" cy="62" r="5.5"/>
+        <circle class="go" cx="74" cy="30" r="6.5"/>
+      </svg>
+      <span class="nm"><b>Sawa</b><i>Tours · Egypt</i></span>
+    </a>
+    <div class="nav-links"><a href="index.html#how">How it works</a><a href="departures.html" class="active">Departures</a><a href="trust.html">The GoAhead</a><a href="operators.html">For operators</a></div>
+    <div class="nav-right">
+      <a href="departures.html" class="btn gold sm">Find a departure <span class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></a>
+      <button class="menu-btn" id="open" aria-label="Open menu">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+    </div>
+  </nav>
+</div>
+<div class="overlay" id="overlay">
+  <button class="close" id="close" aria-label="Close menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+  <a href="index.html#how">How it works</a><a href="departures.html">Departures</a><a href="trust.html">The GoAhead</a><a href="operators.html">For operators</a>
+</div>
+<main id="main">
+
+<!-- HERO -->
+<section class="phero">
+  <div class="wrap">
+    <div class="crumbs rv"><a href="index.html">Home</a><span class="sep">/</span><span>Open departures</span></div>
+    <span class="eyebrow rv" style="margin-top:20px"><span class="live"></span>Forming now across Egypt</span>
+    <h1 class="rv">Join a group that's<br>already <span class="gld ital">forming</span>.</h1>
+    <p class="lede rv">Every departure below is a real route from a verified Egyptian operator. Reserve your seat for free and watch it fill — when four travelers commit, the gold dot lights up and your trip is confirmed.</p>
+    <div class="hero-meta rv" data-d="1" style="display:flex;gap:34px;margin-top:34px;flex-wrap:wrap">
+      <div><b class="serif tnum" style="font-family:'Fraunces',serif;font-size:1.8rem;color:var(--teal);display:block;line-height:1">14</b><span style="font-size:.84rem;color:var(--muted)">departures open</span></div>
+      <div><b class="serif tnum" style="font-family:'Fraunces',serif;font-size:1.8rem;color:var(--teal);display:block;line-height:1">5</b><span style="font-size:.84rem;color:var(--muted)">already at GoAhead</span></div>
+      <div><b class="serif tnum" style="font-family:'Fraunces',serif;font-size:1.8rem;color:var(--teal);display:block;line-height:1">$0</b><span style="font-size:.84rem;color:var(--muted)">to reserve a seat</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- FILTER + GRID -->
+<section class="block" style="padding-top:30px">
+  <div class="wrap">
+    <div class="dep-head rv" style="display:flex;justify-content:space-between;align-items:flex-end;gap:28px;flex-wrap:wrap;margin-bottom:40px">
+      <div class="tabs" data-tabs role="tablist">
+        <button class="tab on">All Egypt</button>
+        <button class="tab">Cairo &amp; Giza</button>
+        <button class="tab">Nile &amp; South</button>
+        <button class="tab">Desert &amp; oases</button>
+        <button class="tab">Red Sea</button>
+        <button class="tab">Alexandria</button>
+      </div>
+      <div class="tabs" data-tabs>
+        <button class="tab on">Closest to GoAhead</button>
+        <button class="tab">Soonest date</button>
+        <button class="tab">Lowest price</button>
+      </div>
+    </div>
+
+    <div class="grid g-3 early">
+      <article class="card rv" data-region="Nile & South" onclick="location.href='tour.html'" style="cursor:pointer">
+        <div class="core">
+          <div class="media">
+            <img src="https://picsum.photos/seed/sawanilecruise/600/440" alt="Nile Cruise: Luxor to Aswan" />
+            <span class="badge go"><span class="d"></span>GoAhead · running</span>
+            <span class="price-tag"><b class="tnum">$740</b><small>per person</small></span>
+          </div>
+          <div class="body">
+            <span class="rt">Nile & South · 5 days</span>
+            <h3>Nile Cruise: Luxor to Aswan</h3>
+            <p class="desc">Karnak, Valley of the Kings, Edfu and Kom Ombo by sail.</p>
+            <div class="info">
+              <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>Departs 18 Sep</span>
+              <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>Nile Valley Travel</span>
+            </div>
+            <div class="prog">
+              <div class="pt"><b>6 of 8 joined</b><span class="st ok">Confirmed · running</span></div>
+              <div class="pbar gold"><i data-fill="75%"></i></div>
+            </div>
+            <div class="foot">
+              <div class="when">Running<b>$740 / person</b></div>
+              <a href="tour.html" class="join">Join this trip<span class="c"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></a>
+            </div>
+          </div>
+        </div>
+      </article>
+      <article class="card rv" data-region="Red Sea" onclick="location.href='tour.html'" style="cursor:pointer">
+        <div class="core">
+          <div class="media">
+            <img src="https://picsum.photos/seed/sawadahab/600/440" alt="Dahab & the Blue Hole" />
+            <span class="badge form">Forming · 1 to go</span>
+            <span class="price-tag"><b class="tnum">$510</b><small>per person</small></span>
+          </div>
+          <div class="body">
+            <span class="rt">Red Sea · 5 days</span>
+            <h3>Dahab & the Blue Hole</h3>
+            <p class="desc">Snorkel the reefs, free-dive the Blue Hole, Bedouin dinners under the stars.</p>
+            <div class="info">
+              <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>Departs 06 Oct</span>
+              <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>Sinai Blue Co.</span>
+            </div>
+            <div class="prog">
+              <div class="pt"><b>3 of 4 joined</b><span class="st">1 seat to GoAhead</span></div>
+              <div class="pbar teal"><i data-fill="75%"></i></div>
+            </div>
+            <div class="foot">
+              <div class="when">Almost full<b>$510 / person</b></div>
+              <a href="tour.html" class="join">Reserve a seat<span class="c"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></a>
+            </div>
+          </div>
+        </div>
+      </article>
+      <article class="card rv" data-region="Nile & South" onclick="location.href='tour.html'" style="cursor:pointer">
+        <div class="core">
+          <div class="media">
+            <img src="https://picsum.photos/seed/sawaabusimbel/600/440" alt="Abu Simbel & Nubian Aswan" />
+            <span class="badge go"><span class="d"></span>GoAhead · running</span>
+            <span class="price-tag"><b class="tnum">$420</b><small>per person</small></span>
+          </div>
+          <div class="body">
+            <span class="rt">Nile & South · 4 days</span>
+            <h3>Abu Simbel & Nubian Aswan</h3>
+            <p class="desc">The colossal temples at dawn, a Nubian village stay, felucca on the Nile.</p>
+            <div class="info">
+              <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>Departs 26 Sep</span>
+              <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>Aswan Heritage Tours</span>
+            </div>
+            <div class="prog">
+              <div class="pt"><b>7 of 10 joined</b><span class="st ok">Confirmed · running</span></div>
+              <div class="pbar gold"><i data-fill="70%"></i></div>
+            </div>
+            <div class="foot">
+              <div class="when">Running<b>$420 / person</b></div>
+              <a href="tour.html" class="join">Join this trip<span class="c"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></a>
+            </div>
+          </div>
+        </div>
+      </article>
+      <article class="card rv" data-region="Cairo & Giza" onclick="location.href='tour.html'" style="cursor:pointer">
+        <div class="core">
+          <div class="media">
+            <img src="https://picsum.photos/seed/sawagiza2/600/440" alt="Pyramids & Old Cairo" />
+            <span class="badge form">Forming · 2 to go</span>
+            <span class="price-tag"><b class="tnum">$285</b><small>per person</small></span>
+          </div>
+          <div class="body">
+            <span class="rt">Cairo & Giza · 3 days</span>
+            <h3>Pyramids & Old Cairo</h3>
+            <p class="desc">Giza, the Sphinx, Saqqara and the Egyptian Museum with an Egyptologist.</p>
+            <div class="info">
+              <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>Departs 22 Sep</span>
+              <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>Cairo Compass</span>
+            </div>
+            <div class="prog">
+              <div class="pt"><b>2 of 4 joined</b><span class="st">2 seats to GoAhead</span></div>
+              <div class="pbar teal"><i data-fill="50%"></i></div>
+            </div>
+            <div class="foot">
+              <div class="when">Almost full<b>$285 / person</b></div>
+              <a href="tour.html" class="join">Reserve a seat<span class="c"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></a>
+            </div>
+          </div>
+        </div>
+      </article>
+      <article class="card rv" data-region="Desert & oases" onclick="location.href='tour.html'" style="cursor:pointer">
+        <div class="core">
+          <div class="media">
+            <img src="https://picsum.photos/seed/sawawhitedesert/600/440" alt="White Desert & Bahariya" />
+            <span class="badge form">Forming · 3 to go</span>
+            <span class="price-tag"><b class="tnum">$330</b><small>per person</small></span>
+          </div>
+          <div class="body">
+            <span class="rt">Desert & oases · 3 days</span>
+            <h3>White Desert & Bahariya</h3>
+            <p class="desc">Camp among the chalk formations, hot springs and a sea of dunes.</p>
+            <div class="info">
+              <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>Departs 02 Oct</span>
+              <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>Sahara Lines</span>
+            </div>
+            <div class="prog">
+              <div class="pt"><b>1 of 4 joined</b><span class="st">3 seats to GoAhead</span></div>
+              <div class="pbar teal"><i data-fill="25%"></i></div>
+            </div>
+            <div class="foot">
+              <div class="when">Forming now<b>$330 / person</b></div>
+              <a href="tour.html" class="join">Reserve a seat<span class="c"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></a>
+            </div>
+          </div>
+        </div>
+      </article>
+      <article class="card rv" data-region="Desert & oases" onclick="location.href='tour.html'" style="cursor:pointer">
+        <div class="core">
+          <div class="media">
+            <img src="https://picsum.photos/seed/sawasiwa3/600/440" alt="Siwa Oasis Expedition" />
+            <span class="badge form">Forming · 3 to go</span>
+            <span class="price-tag"><b class="tnum">$465</b><small>per person</small></span>
+          </div>
+          <div class="body">
+            <span class="rt">Desert & oases · 4 days</span>
+            <h3>Siwa Oasis Expedition</h3>
+            <p class="desc">Salt lakes, the Oracle temple, desert springs and Berber culture.</p>
+            <div class="info">
+              <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>Departs 11 Oct</span>
+              <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>Sahara Lines</span>
+            </div>
+            <div class="prog">
+              <div class="pt"><b>2 of 5 joined</b><span class="st">3 seats to GoAhead</span></div>
+              <div class="pbar teal"><i data-fill="40%"></i></div>
+            </div>
+            <div class="foot">
+              <div class="when">Forming now<b>$465 / person</b></div>
+              <a href="tour.html" class="join">Reserve a seat<span class="c"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></a>
+            </div>
+          </div>
+        </div>
+      </article>
+      <article class="card rv" data-region="Nile & South" onclick="location.href='tour.html'" style="cursor:pointer">
+        <div class="core">
+          <div class="media">
+            <img src="https://picsum.photos/seed/sawaluxor5/600/440" alt="Luxor in Depth" />
+            <span class="badge form">Forming · 2 to go</span>
+            <span class="price-tag"><b class="tnum">$240</b><small>per person</small></span>
+          </div>
+          <div class="body">
+            <span class="rt">Nile & South · 2 days</span>
+            <h3>Luxor in Depth</h3>
+            <p class="desc">East and West Bank, Karnak by night, Valley of the Kings and Hatshepsut.</p>
+            <div class="info">
+              <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>Departs 29 Sep</span>
+              <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>Nile Valley Travel</span>
+            </div>
+            <div class="prog">
+              <div class="pt"><b>4 of 6 joined</b><span class="st">2 seats to GoAhead</span></div>
+              <div class="pbar teal"><i data-fill="67%"></i></div>
+            </div>
+            <div class="foot">
+              <div class="when">Almost full<b>$240 / person</b></div>
+              <a href="tour.html" class="join">Reserve a seat<span class="c"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></a>
+            </div>
+          </div>
+        </div>
+      </article>
+      <article class="card rv" data-region="Red Sea" onclick="location.href='tour.html'" style="cursor:pointer">
+        <div class="core">
+          <div class="media">
+            <img src="https://picsum.photos/seed/sawaredsea7/600/440" alt="Hurghada Reef Week" />
+            <span class="badge form">Forming · 3 to go</span>
+            <span class="price-tag"><b class="tnum">$690</b><small>per person</small></span>
+          </div>
+          <div class="body">
+            <span class="rt">Red Sea · 6 days</span>
+            <h3>Hurghada Reef Week</h3>
+            <p class="desc">Daily boat dives, a desert quad safari and a night in El Gouna.</p>
+            <div class="info">
+              <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>Departs 14 Oct</span>
+              <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>Red Sea Quest</span>
+            </div>
+            <div class="prog">
+              <div class="pt"><b>3 of 6 joined</b><span class="st">3 seats to GoAhead</span></div>
+              <div class="pbar teal"><i data-fill="50%"></i></div>
+            </div>
+            <div class="foot">
+              <div class="when">Forming now<b>$690 / person</b></div>
+              <a href="tour.html" class="join">Reserve a seat<span class="c"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></a>
+            </div>
+          </div>
+        </div>
+      </article>
+      <article class="card rv" data-region="Alexandria" onclick="location.href='tour.html'" style="cursor:pointer">
+        <div class="core">
+          <div class="media">
+            <img src="https://picsum.photos/seed/sawaalex2/600/440" alt="Alexandria by the Sea" />
+            <span class="badge form">Forming · 3 to go</span>
+            <span class="price-tag"><b class="tnum">$215</b><small>per person</small></span>
+          </div>
+          <div class="body">
+            <span class="rt">Alexandria · 2 days</span>
+            <h3>Alexandria by the Sea</h3>
+            <p class="desc">The Citadel of Qaitbay, catacombs, the Library and Mediterranean seafood.</p>
+            <div class="info">
+              <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>Departs 05 Oct</span>
+              <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>Delta Routes</span>
+            </div>
+            <div class="prog">
+              <div class="pt"><b>1 of 4 joined</b><span class="st">3 seats to GoAhead</span></div>
+              <div class="pbar teal"><i data-fill="25%"></i></div>
+            </div>
+            <div class="foot">
+              <div class="when">Forming now<b>$215 / person</b></div>
+              <a href="tour.html" class="join">Reserve a seat<span class="c"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></a>
+            </div>
+          </div>
+        </div>
+      </article>
+    </div>
+
+    <div class="rv" style="display:flex;justify-content:center;margin-top:50px">
+      <a href="#" class="btn teal">Load more departures <span class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></a>
+    </div>
+  </div>
+</section>
+
+<!-- BE THE SPARK -->
+<section class="block band tight">
+  <div class="wrap two-col even" style="align-items:center">
+    <div class="rv">
+      <span class="eyebrow on-dark" style="margin-bottom:22px">Don't see your date?</span>
+      <h2 class="serif" style="font-family:'Fraunces',serif;font-weight:500;color:var(--cream);font-size:clamp(2rem,4vw,3rem);line-height:1.06;letter-spacing:-.02em">Be the <span class="ital" style="font-style:italic;color:var(--gold)">spark</span>.</h2>
+      <p style="font-size:1.08rem;color:rgba(247,243,234,.74);margin-top:16px;max-width:34rem">Reserve the first seat on a forming date and we'll surface it to every traveler looking at that route. You set it in motion — and pay nothing until three more join you.</p>
+      <a href="#" class="btn gold" style="margin-top:28px">Start a departure <span class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></a>
+    </div>
+    <div class="panel rv" data-d="1">
+      <div class="panel-in">
+        <span class="badge form">1 / 4 · be the spark</span>
+        <h3 class="serif" style="font-family:'Fraunces',serif;font-weight:500;font-size:1.4rem;color:var(--teal);margin-top:14px">White Desert &amp; Bahariya</h3>
+        <p style="font-size:.92rem;color:var(--muted);margin-top:6px">Desert &amp; oases · 3 days · 02 Oct</p>
+        <div class="pbar teal" style="margin-top:18px"><i data-fill="25%"></i></div>
+        <div style="display:flex;justify-content:space-between;font-size:.82rem;color:var(--muted);margin-top:10px"><span><strong style="color:var(--teal)">1</strong> joined</span><span>3 seats to GoAhead</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+</main>
+<footer>
+  <div class="wrap">
+    <div class="fgrid">
+      <div>
+        <a href="index.html" class="logo"><svg class="mark" viewBox="0 0 100 100" aria-hidden="true">
+        <circle class="ring" cx="50" cy="50" r="36"/>
+        <path class="s" d="M62 34 C44 34 44 50 52 50 C60 50 60 66 38 66"/>
+        <circle class="dot" cx="23" cy="40" r="5.5"/><circle class="dot" cx="31" cy="74" r="5.5"/><circle class="dot" cx="70" cy="62" r="5.5"/>
+        <circle class="go" cx="74" cy="30" r="6.5"/>
+      </svg><span class="nm"><b>Sawa</b><i>Tours · Egypt</i></span></a>
+        <p class="fblurb">Shared departures, confirmed together. Sawa pools travelers across verified Egyptian operators so the tours you want actually run — minimum four, and a gold dot you can trust.</p>
+      </div>
+      <div class="fcol">
+        <h4>Travel</h4>
+        <a href="departures.html">Open departures</a>
+        <a href="index.html#how">How it works</a>
+        <a href="trust.html">The GoAhead promise</a>
+        <a href="faq.html">FAQ</a>
+      </div>
+      <div class="fcol">
+        <h4>Operators</h4>
+        <a href="operators.html">List a tour</a>
+        <a href="verify.html">Become verified</a>
+        <a href="widget.html">Get the widget</a>
+        <a href="pricing.html">Pricing</a>
+      </div>
+      <div class="fcol">
+        <h4>Company</h4>
+        <a href="about.html">About Sawa</a>
+        <a href="contact.html">Support</a>
+        <a href="contact.html">Contact</a>
+        <a href="faq.html">FAQ</a>
+      </div>
+    </div>
+    <div class="fbot">
+      <span>© 2026 Sawa Tours. Shared departures, confirmed together.</span>
+      <div class="lks"><a href="#">Privacy</a><a href="#">Terms</a><a href="#">Refund policy</a></div>
+      <div class="socials">
+        <a href="#" aria-label="Instagram"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none"/></svg></a>
+        <a href="#" aria-label="Facebook"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M14 9h3V6h-3c-2 0-3 1-3 3v2H9v3h2v6h3v-6h2.5l.5-3H14V9.5c0-.4.2-.5.6-.5Z"/></svg></a>
+        <a href="#" aria-label="WhatsApp"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-8.5 15.2L2 22l4.9-1.4A10 10 0 1 0 12 2Zm5.4 14.1c-.2.6-1.3 1.2-1.8 1.2-.5.1-1 .1-1.7-.1-.4-.1-.9-.3-1.6-.6a9 9 0 0 1-3.4-3c-.3-.4-.8-1.1-.8-2.1s.5-1.5.7-1.7c.2-.2.4-.3.6-.3h.4c.2 0 .4 0 .5.4l.7 1.6c.1.1 0 .3 0 .4l-.3.4c-.2.2-.3.3-.1.5.5.9 1 1.3 1.8 1.8.2.1.4.1.5 0l.5-.6c.2-.2.3-.2.5-.1l1.5.7c.2.1.4.2.4.3.1.1.1.6-.1 1Z"/></svg></a>
+      </div>
+    </div>
+  </div>
+</footer>
+<script src="assets/sawa.js"></script>
+</body>
+</html>

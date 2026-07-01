@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>The Sawa widget — Embed shared departures on your site in minutes</title>
+<meta name="description" content="Add Sawa's shared-departure widget to your website with one line of code. Match your brand, let visitors join forming groups, and fill your own listed dates." />
+<meta property="og:title" content="The Sawa widget — Embed shared departures on your site in minutes" />
+<meta property="og:description" content="Add Sawa's shared-departure widget to your website with one line of code. Match your brand, let visitors join forming groups, and fill your own listed dates." />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='24' fill='%2317323A'/%3E%3Ccircle cx='50' cy='50' r='30' fill='none' stroke='%23F7F3EA' stroke-width='5'/%3E%3Cpath d='M62 36 C46 36 46 50 54 50 C62 50 62 64 38 64' fill='none' stroke='%23F7F3EA' stroke-width='7' stroke-linecap='round'/%3E%3Ccircle cx='72' cy='32' r='7' fill='%23F4C95D'/%3E%3C/svg%3E" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="assets/sawa.css" />
+</head>
+<body>
+<div class="grain"></div>
+<a href="#main" style="position:absolute;left:-999px;top:0;z-index:99;background:var(--teal);color:#fff;padding:10px 16px;border-radius:8px" onfocus="this.style.left='12px'" onblur="this.style.left='-999px'">Skip to content</a>
+<div class="nav-shell">
+  <nav class="nav" id="nav" aria-label="Primary">
+    <a href="index.html" class="logo" aria-label="Sawa Tours home">
+      <svg class="mark" viewBox="0 0 100 100" aria-hidden="true">
+        <circle class="ring" cx="50" cy="50" r="36"/>
+        <path class="s" d="M62 34 C44 34 44 50 52 50 C60 50 60 66 38 66"/>
+        <circle class="dot" cx="23" cy="40" r="5.5"/><circle class="dot" cx="31" cy="74" r="5.5"/><circle class="dot" cx="70" cy="62" r="5.5"/>
+        <circle class="go" cx="74" cy="30" r="6.5"/>
+      </svg>
+      <span class="nm"><b>Sawa</b><i>Tours · Egypt</i></span>
+    </a>
+    <div class="nav-links"><a href="index.html#how">How it works</a><a href="departures.html">Departures</a><a href="trust.html">The GoAhead</a><a href="operators.html" class="active">For operators</a></div>
+    <div class="nav-right">
+      <a href="departures.html" class="btn gold sm">Find a departure <span class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></a>
+      <button class="menu-btn" id="open" aria-label="Open menu">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+    </div>
+  </nav>
+</div>
+<div class="overlay" id="overlay">
+  <button class="close" id="close" aria-label="Close menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+  <a href="index.html#how">How it works</a><a href="departures.html">Departures</a><a href="trust.html">The GoAhead</a><a href="operators.html">For operators</a>
+</div>
+<main id="main">
+
+<!-- HERO -->
+<section class="phero early">
+  <div class="wrap">
+    <div class="crumbs rv"><a href="index.html">Home</a><span class="sep">/</span><a href="operators.html">Operators</a><span class="sep">/</span><span>The widget</span></div>
+    <span class="eyebrow rv" style="margin-top:20px"><span class="live"></span>Embed · one line of code</span>
+    <h1 class="rv">Put live departures<br>on your <span class="gld ital">own</span> site.</h1>
+    <p class="lede rv">The Sawa widget shows forming and confirmed departures right on your website, styled to match your brand. Visitors join a group without leaving your page — and every booking helps fill the dates you listed. No developer required.</p>
+    <div class="hero-cta rv" data-d="1">
+      <a href="#install" class="btn teal">Get your snippet <span class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></a>
+      <a href="#preview" class="btn plain">See it live <span class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg></span></a>
+    </div>
+  </div>
+</section>
+
+<!-- WHY -->
+<section class="block tight">
+  <div class="wrap">
+    <div class="grid g-3">
+      <div class="feat rv"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 18 22 12 16 6"/><path d="M8 6 2 12 8 18"/></svg></div><h3>One-paste install</h3><p>Copy a single snippet into your site — Wix, WordPress, Squarespace or hand-coded. It renders instantly, no build step.</p></div>
+      <div class="feat rv" data-d="1"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="13.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="10.5" r="2.5"/><circle cx="8.5" cy="7.5" r="2.5"/><circle cx="6.5" cy="12.5" r="2.5"/><path d="M12 2a10 10 0 1 0 0 20 2.5 2.5 0 0 0 2-4 2.5 2.5 0 0 1 2-4h2a4 4 0 0 0 4-4 10 10 0 0 0-10-8z"/></svg></div><h3>Your brand, your colors</h3><p>Set accent colors, radius and font to match your site. Travelers feel like they never left your world.</p></div>
+      <div class="feat rv" data-d="2"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg></div><h3>Fills your own dates first</h3><p>The widget prioritises the routes you listed, so the traffic you already have helps confirm your departures.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- PREVIEW -->
+<section class="block band" id="preview">
+  <div class="wrap two-col" style="align-items:center">
+    <div class="rv">
+      <span class="eyebrow on-dark" style="margin-bottom:22px">Live preview</span>
+      <h2 class="serif" style="font-family:'Fraunces',serif;font-weight:500;color:var(--cream);font-size:clamp(2rem,4vw,2.8rem);line-height:1.06;letter-spacing:-.02em">This is what your<br>visitors <span class="ital" style="font-style:italic;color:var(--gold)">see</span>.</h2>
+      <p style="font-size:1.08rem;color:rgba(247,243,234,.74);margin-top:16px;max-width:32rem">A clean, responsive panel of forming departures with live seat counters. Travelers reserve right inside it — free until the group confirms — and you get the booking.</p>
+      <div class="checks" style="margin-top:24px">
+        <div class="it" style="border-color:rgba(247,243,234,.14)"><span class="ck"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span><div><b style="color:var(--cream)">Mobile-responsive out of the box</b></div></div>
+        <div class="it" style="border-color:rgba(247,243,234,.14)"><span class="ck"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span><div><b style="color:var(--cream)">Filter by region, date or price</b></div></div>
+        <div class="it" style="border-color:rgba(247,243,234,.14)"><span class="ck"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span><div><b style="color:var(--cream)">Real-time seat counts &amp; GoAhead status</b></div></div>
+      </div>
+    </div>
+    <!-- mock widget -->
+    <div class="rv" data-d="1">
+      <div class="panel">
+        <div class="panel-in" style="padding:0;overflow:hidden">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;background:var(--paper-2)">
+            <span style="font-size:.7rem;letter-spacing:.16em;text-transform:uppercase;color:var(--gold-ink);font-weight:700;display:flex;align-items:center;gap:9px"><span class="eyebrow" style="all:unset;display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--gold)"></span>Forming now</span>
+            <span style="font-size:.74rem;color:var(--muted)">powered by Sawa</span>
+          </div>
+          <a href="tour.html" style="display:grid;grid-template-columns:auto 1fr auto;gap:14px;align-items:center;padding:16px 20px;border-top:1px solid var(--line)">
+            <div style="width:60px;height:60px;border-radius:14px;overflow:hidden"><img src="https://picsum.photos/seed/sawawdahab/160/160" alt="Dahab" style="width:100%;height:100%;object-fit:cover"/></div>
+            <div style="min-width:0"><span style="font-size:.62rem;letter-spacing:.12em;text-transform:uppercase;color:var(--gold-ink);font-weight:700">Red Sea · 06 Oct</span><h4 class="serif" style="font-family:'Fraunces',serif;font-weight:500;font-size:1.05rem;color:var(--teal);margin-top:2px">Dahab &amp; the Blue Hole</h4><div style="display:flex;align-items:center;gap:9px;margin-top:8px"><span class="pbar teal" style="flex:0 1 90px;height:6px"><i data-fill="75%"></i></span><span style="font-size:.72rem;color:var(--muted)"><b style="color:var(--teal)">3</b>/4</span></div></div>
+            <span class="serif tnum" style="font-family:'Fraunces',serif;font-weight:600;color:var(--teal)">$510</span>
+          </a>
+          <a href="tour.html" style="display:grid;grid-template-columns:auto 1fr auto;gap:14px;align-items:center;padding:16px 20px;border-top:1px solid var(--line)">
+            <div style="width:60px;height:60px;border-radius:14px;overflow:hidden"><img src="https://picsum.photos/seed/sawawabu/160/160" alt="Abu Simbel" style="width:100%;height:100%;object-fit:cover"/></div>
+            <div style="min-width:0"><span style="font-size:.62rem;letter-spacing:.12em;text-transform:uppercase;color:var(--gold-ink);font-weight:700">Nile &amp; South · 26 Sep</span><h4 class="serif" style="font-family:'Fraunces',serif;font-weight:500;font-size:1.05rem;color:var(--teal);margin-top:2px">Abu Simbel &amp; Aswan</h4><div style="display:flex;align-items:center;gap:9px;margin-top:8px"><span class="pbar gold" style="flex:0 1 90px;height:6px"><i data-fill="70%"></i></span><span style="font-size:.72rem;color:var(--ok);font-weight:600"><b>7</b>/10 ✓</span></div></div>
+            <span class="serif tnum" style="font-family:'Fraunces',serif;font-weight:600;color:var(--teal)">$420</span>
+          </a>
+          <div style="padding:14px 20px;border-top:1px solid var(--line);background:rgba(23,50,58,.025);text-align:center"><a href="departures.html" style="font-size:.84rem;font-weight:600;color:var(--teal)">View all departures →</a></div>
+        </div>
+      </div>
+      <p class="center" style="font-size:.78rem;color:rgba(247,243,234,.55);margin-top:14px">Illustrative preview · styled to your brand on install</p>
+    </div>
+  </div>
+</section>
+
+<!-- INSTALL -->
+<section class="block" id="install">
+  <div class="wrap">
+    <div class="head rv mx-auto center"><span class="eyebrow" style="margin-bottom:22px">Three steps to live</span><h2>Installed before your <span class="ital">coffee's</span> cold.</h2></div>
+    <div class="two-col" style="margin-top:50px;align-items:start">
+      <div class="steps rv">
+        <div class="step"><div class="idx">01</div><div><h3>Get your operator ID</h3><p>When your account is verified, you'll find a unique <code style="background:var(--paper-2);padding:2px 6px;border-radius:6px;font-size:.86em">operator-id</code> in your dashboard under <strong>Widget</strong>.</p></div></div>
+        <div class="step"><div class="idx">02</div><div><h3>Paste the snippet</h3><p>Drop the code on any page where you want departures to appear — a dedicated "Group tours" page works best.</p></div></div>
+        <div class="step"><div class="idx">03</div><div><h3>Style &amp; publish</h3><p>Set your accent color and default region in the dashboard. Save, publish, and you're collecting travelers.</p></div></div>
+      </div>
+      <div class="rv" data-d="1" style="display:flex;flex-direction:column;gap:18px">
+        <div class="panel"><div class="panel-in" style="padding:18px">
+          <div class="code"><button class="copy" data-copy="#snip2">Copy</button><span id="snip2"><span class="cm">&lt;!-- 1. Load Sawa once, before &lt;/body&gt; --&gt;</span>
+<span class="tg">&lt;script</span> <span class="at">src=</span>"https://embed.sawatours.com/v1.js" <span class="at">async</span><span class="tg">&gt;&lt;/script&gt;</span>
+
+<span class="cm">&lt;!-- 2. Drop this where departures should show --&gt;</span>
+<span class="tg">&lt;div</span> <span class="at">class=</span>"sawa-embed"
+     <span class="at">data-sawa-operator=</span>"your-id"
+     <span class="at">data-region=</span>"all"
+     <span class="at">data-accent=</span>"#17323A"
+     <span class="at">data-limit=</span>"6"<span class="tg">&gt;&lt;/div&gt;</span></span></div>
+        </div></div>
+        <div class="panel"><div class="panel-in">
+          <h3 class="serif" style="font-family:'Fraunces',serif;font-weight:500;font-size:1.15rem;color:var(--teal)">Options</h3>
+          <table class="cmp" style="margin-top:14px;box-shadow:none">
+            <tr><td><code>data-region</code></td><td style="color:var(--muted)">all · cairo · nile · desert · redsea</td></tr>
+            <tr><td><code>data-accent</code></td><td style="color:var(--muted)">any hex color for buttons &amp; bars</td></tr>
+            <tr><td><code>data-limit</code></td><td style="color:var(--muted)">how many departures to show</td></tr>
+            <tr><td><code>data-layout</code></td><td style="color:var(--muted)">list · grid · compact</td></tr>
+          </table>
+        </div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PLATFORMS + FAQ teaser -->
+<section class="block band tight">
+  <div class="wrap">
+    <div class="head rv mx-auto center"><span class="eyebrow on-dark" style="margin-bottom:22px">Works everywhere</span><h2>Any site, any <span class="ital">stack</span>.</h2><p style="margin-left:auto;margin-right:auto">If you can paste HTML, you can run Sawa. Guides available for the major builders.</p></div>
+    <div class="grid g-4 rv" style="margin-top:44px">
+      <div class="feat" style="background:rgba(247,243,234,.04);border-color:rgba(247,243,234,.12);text-align:center"><h3 style="color:var(--cream);font-size:1.15rem">WordPress</h3><p style="color:rgba(247,243,234,.7)">Custom HTML block or plugin.</p></div>
+      <div class="feat" style="background:rgba(247,243,234,.04);border-color:rgba(247,243,234,.12);text-align:center"><h3 style="color:var(--cream);font-size:1.15rem">Wix</h3><p style="color:rgba(247,243,234,.7)">Embed → Custom Code.</p></div>
+      <div class="feat" style="background:rgba(247,243,234,.04);border-color:rgba(247,243,234,.12);text-align:center"><h3 style="color:var(--cream);font-size:1.15rem">Squarespace</h3><p style="color:rgba(247,243,234,.7)">Code block, any section.</p></div>
+      <div class="feat" style="background:rgba(247,243,234,.04);border-color:rgba(247,243,234,.12);text-align:center"><h3 style="color:var(--cream);font-size:1.15rem">Custom / React</h3><p style="color:rgba(247,243,234,.7)">Script tag or npm package.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="cta-wrap">
+  <div class="wrap"><div class="cta rv"><div class="cta-inner">
+    <img src="https://picsum.photos/seed/sawawidgetcta/1400/640" alt="Egyptian desert at dusk" />
+    <div class="in">
+      <span class="eyebrow on-dark"><span class="live"></span>One line of code</span>
+      <h2>Turn your traffic into<br>confirmed <span class="ital">departures</span>.</h2>
+      <p>Get verified, grab your snippet, and let your own visitors fill your dates.</p>
+      <div class="hero-cta"><a href="verify.html" class="btn gold">Become verified <span class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></a><a href="contact.html" class="btn light">Talk to us <span class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></a></div>
+    </div>
+  </div></div></div>
+</section>
+
+</main>
+<footer>
+  <div class="wrap">
+    <div class="fgrid">
+      <div>
+        <a href="index.html" class="logo"><svg class="mark" viewBox="0 0 100 100" aria-hidden="true">
+        <circle class="ring" cx="50" cy="50" r="36"/>
+        <path class="s" d="M62 34 C44 34 44 50 52 50 C60 50 60 66 38 66"/>
+        <circle class="dot" cx="23" cy="40" r="5.5"/><circle class="dot" cx="31" cy="74" r="5.5"/><circle class="dot" cx="70" cy="62" r="5.5"/>
+        <circle class="go" cx="74" cy="30" r="6.5"/>
+      </svg><span class="nm"><b>Sawa</b><i>Tours · Egypt</i></span></a>
+        <p class="fblurb">Shared departures, confirmed together. Sawa pools travelers across verified Egyptian operators so the tours you want actually run — minimum four, and a gold dot you can trust.</p>
+      </div>
+      <div class="fcol">
+        <h4>Travel</h4>
+        <a href="departures.html">Open departures</a>
+        <a href="index.html#how">How it works</a>
+        <a href="trust.html">The GoAhead promise</a>
+        <a href="faq.html">FAQ</a>
+      </div>
+      <div class="fcol">
+        <h4>Operators</h4>
+        <a href="operators.html">List a tour</a>
+        <a href="verify.html">Become verified</a>
+        <a href="widget.html">Get the widget</a>
+        <a href="pricing.html">Pricing</a>
+      </div>
+      <div class="fcol">
+        <h4>Company</h4>
+        <a href="about.html">About Sawa</a>
+        <a href="contact.html">Support</a>
+        <a href="contact.html">Contact</a>
+        <a href="faq.html">FAQ</a>
+      </div>
+    </div>
+    <div class="fbot">
+      <span>© 2026 Sawa Tours. Shared departures, confirmed together.</span>
+      <div class="lks"><a href="#">Privacy</a><a href="#">Terms</a><a href="#">Refund policy</a></div>
+      <div class="socials">
+        <a href="#" aria-label="Instagram"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none"/></svg></a>
+        <a href="#" aria-label="Facebook"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M14 9h3V6h-3c-2 0-3 1-3 3v2H9v3h2v6h3v-6h2.5l.5-3H14V9.5c0-.4.2-.5.6-.5Z"/></svg></a>
+        <a href="#" aria-label="WhatsApp"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-8.5 15.2L2 22l4.9-1.4A10 10 0 1 0 12 2Zm5.4 14.1c-.2.6-1.3 1.2-1.8 1.2-.5.1-1 .1-1.7-.1-.4-.1-.9-.3-1.6-.6a9 9 0 0 1-3.4-3c-.3-.4-.8-1.1-.8-2.1s.5-1.5.7-1.7c.2-.2.4-.3.6-.3h.4c.2 0 .4 0 .5.4l.7 1.6c.1.1 0 .3 0 .4l-.3.4c-.2.2-.3.3-.1.5.5.9 1 1.3 1.8 1.8.2.1.4.1.5 0l.5-.6c.2-.2.3-.2.5-.1l1.5.7c.2.1.4.2.4.3.1.1.1.6-.1 1Z"/></svg></a>
+      </div>
+    </div>
+  </div>
+</footer>
+<script src="assets/sawa.js"></script>
+</body>
+</html>
