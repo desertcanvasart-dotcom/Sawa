@@ -1280,7 +1280,7 @@ app.post("/api/admin/departures/:id/cancel", requireAuth, requireRole("super_adm
 // Admin: upload a tour image (platform staff). Accepts JSON { filename, dataUrl }
 // where dataUrl is a base64 data URI. Returns the public URL.
 const uploadLimiter = rateLimit({ windowMs: 60_000, max: 40, standardHeaders: true, legacyHeaders: false });
-app.post("/api/admin/uploads", requireAuth, requireRole("super_admin", "ops_staff"), uploadLimiter, express.json({ limit: "8mb" }), h(async (req, res) => {
+app.post("/api/admin/uploads", requireAuth, requireRole("super_admin", "ops_staff", "agency_owner", "agency_agent"), uploadLimiter, express.json({ limit: "8mb" }), h(async (req, res) => {
   if (!supabaseAdmin) throw new AppError(500, "Storage is not configured.");
   const { filename, dataUrl } = req.body || {};
   if (!dataUrl || typeof dataUrl !== "string") throw new AppError(422, "No image provided.");

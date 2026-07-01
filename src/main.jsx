@@ -996,7 +996,7 @@ const SxLogoMark = () => (
 // Links point at the static editorial pages (served from /site) so the chrome is
 // identical across the whole site. Real <a href> = full navigation out of the SPA
 // back into the static pages; the SPA is only ever the tour-detail/booking body.
-const SX_NAV_LINKS = [["How it works", "/#how"], ["Departures", "/departures"], ["The GoAhead", "/trust"], ["For operators", "/operators"]];
+const SX_NAV_LINKS = [["How it works", "/how-it-works"], ["Departures", "/departures"], ["The GoAhead", "/trust"], ["For operators", "/operators"]];
 
 function SxNav({ cta = ["Find a departure", "/departures"] }) {
   const [tight, setTight] = useState(false);
@@ -1032,7 +1032,7 @@ function SxFooter() {
       <div className="wrap">
         <div className="fgrid">
           <div><a className="logo" href="/"><SxLogoMark /><span className="nm"><b>Sawa</b><i>Tours · Egypt</i></span></a><p className="fblurb">Shared departures, confirmed together. Sawa pools travellers across verified Egyptian operators so the tours you want actually run.</p></div>
-          <div className="fcol"><h4>Travel</h4><a href="/departures">Open departures</a><a href="/#how">How it works</a><a href="/trust">The GoAhead promise</a><a href="/faq">FAQ</a></div>
+          <div className="fcol"><h4>Travel</h4><a href="/departures">Open departures</a><a href="/how-it-works">How it works</a><a href="/trust">The GoAhead promise</a><a href="/faq">FAQ</a></div>
           <div className="fcol"><h4>Operators</h4><a href="/operators">List a tour</a><a href="/verify">Become verified</a><a href="/widget">Get the widget</a></div>
           <div className="fcol"><h4>Company</h4><a href="/about">About Sawa</a><a href="/contact">Support</a><a href="/contact">Contact</a></div>
         </div>
@@ -1715,13 +1715,16 @@ function PublicSite({
   const showDetail = routeTour || routePackage;
   const page = (path === "/" || path === "") ? "home" : (showDetail ? "detail" : pageFromPath(path));
 
-  // New editorial home page (own nav + footer), wired to live data.
+  // The home page is the single static editorial page served at "/". If the SPA
+  // ever lands on "home" (e.g. a client-side link), hard-redirect to it so there
+  // is only ever ONE home design.
   if (page === "home") {
-    return <PublicHomeV2 navigate={navigate} products={customerCalendars} summary={customerSummary} cities={cityStats} />;
+    if (typeof window !== "undefined") window.location.replace("/");
+    return null;
   }
 
-  // New editorial tour detail page (own nav + footer + booking rail).
-  if (routeTour) {
+  // Editorial detail page — day tours AND packages use the same design/booking.
+  if (routeTour || routePackage) {
     return (
       <TourDetailV2
         isSaving={isSaving}
@@ -1729,7 +1732,7 @@ function PublicSite({
         onBookPublicDeparture={onBookPublicDeparture}
         onCancelPublicBooking={onCancelPublicBooking}
         publicBooking={publicBooking}
-        tour={routeTour}
+        tour={routeTour || routePackage}
         allProducts={customerCalendars}
       />
     );
