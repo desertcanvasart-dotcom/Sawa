@@ -78,6 +78,16 @@ app.use("/api/", generalLimiter);
 // Attach req.user from the Supabase JWT (if present) on every request.
 app.use(attachUser);
 
+// Any successful API write can change the public catalogue (new booking seats,
+// approved listing, published date, price edit…), so drop the cached public
+// bootstrap on every non-GET so the next public load rebuilds fresh.
+app.use((req, res, next) => {
+  if (req.method !== "GET" && req.method !== "HEAD" && req.path.startsWith("/api/")) {
+    res.on("finish", () => { if (res.statusCode < 400) invalidatePublicBootstrap(); });
+  }
+  next();
+});
+
 class AppError extends Error {
   constructor(status, message) {
     super(message);
@@ -185,8 +195,22 @@ app.get("/api/me", requireAuth, h(async (req, res) => {
   res.json({ user: req.user, agency });
 }));
 
+// Anonymous visitors all get the identical, fully-redacted public catalogue, but
+// building it hits the DB for every product/departure/pledge (2–4s). Cache that
+// one payload briefly so tour pages open instantly instead of sitting on the
+// loading screen. Authenticated users (agency/admin) always build fresh — their
+// view is viewer-specific — and any catalogue write clears the cache immediately.
+const PUBLIC_BOOTSTRAP_TTL = 30_000;
+let publicBootstrapCache = { at: 0, payload: null };
+function invalidatePublicBootstrap() { publicBootstrapCache = { at: 0, payload: null }; }
+
 // Bootstrap — open to all; pledge detail redacted per viewer.
 app.get("/api/bootstrap", h(async (req, res) => {
+  res.set("Cache-Control", "no-store");
+  const anon = !req.user;
+  if (anon && publicBootstrapCache.payload && Date.now() - publicBootstrapCache.at < PUBLIC_BOOTSTRAP_TTL) {
+    return res.json(publicBootstrapCache.payload);
+  }
   // Platform staff see every product (incl. pending/rejected/archived) so they can
   // manage them. Everyone else — the public site and agencies browsing to book —
   // only sees live, approved listings. An agency's own pending/rejected listings
@@ -209,10 +233,7 @@ app.get("/api/bootstrap", h(async (req, res) => {
     byDep.get(p.departure_id).push(p);
   }
 
-  // Never let a browser/proxy serve a stale catalogue — admin edits must show
-  // on the next reload of the public site.
-  res.set("Cache-Control", "no-store");
-  res.json({
+  const payload = {
     // Only platform staff get the agency directory; agencies/public don't need it.
     agencies: isPlatform(req.user) ? agencies.rows.map(mapAgency) : [],
     cities: cities.rows.map(mapCity),
@@ -220,7 +241,9 @@ app.get("/api/bootstrap", h(async (req, res) => {
     departures: departures.rows.map((d) =>
       presentDeparture(enrichDeparture(mapDeparture(d, byDep.get(d.id) || [])), req.user)
     ),
-  });
+  };
+  if (anon) publicBootstrapCache = { at: Date.now(), payload };
+  res.json(payload);
 }));
 
 // Agency creates a custom day-tour pooling request (agency users only).
