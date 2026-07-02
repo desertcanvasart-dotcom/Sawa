@@ -489,7 +489,7 @@ function BlogEditor({ existing, onClose, onSaved }) {
           <Field label="Excerpt (card + meta fallback)" full><textarea rows={2} value={f.excerpt} onChange={set("excerpt")} placeholder="One or two sentences shown on the blog card and in search results." /></Field>
         </div>
         <ImageField label="Cover image" field="coverImage" hint="Recommended ~1600px wide, JPG." />
-        <Field label="Article body" full><RichText value={bodyHtml} onChange={setBodyHtml} placeholder="Write your article — headings, bold, lists, links…" /></Field>
+        <Field label="Article body" full asDiv><RichText value={bodyHtml} onChange={setBodyHtml} placeholder="Write your article — headings, bold, lists, links…" /></Field>
         <div className="form-grid">
           <Field label="Author"><input value={f.author} onChange={set("author")} placeholder="Sawa Tours" /></Field>
           <Field label="Author credentials (E-E-A-T)"><input value={f.authorCredentials} onChange={set("authorCredentials")} placeholder="Licensed Egyptologist · 10 years guiding" /></Field>
@@ -730,7 +730,7 @@ export function ProductEditor({ type: typeProp, existing, destinations = [], onC
                   </label>
                 </div>
               </Field>
-              <Field label="Overview" full><RichText value={overviewHtml} onChange={setOverviewHtml} placeholder="Describe the experience — what makes it special, what travellers will see and do." /></Field>
+              <Field label="Overview" full asDiv><RichText value={overviewHtml} onChange={setOverviewHtml} placeholder="Describe the experience — what makes it special, what travellers will see and do." /></Field>
               <RowList label="What's included" rows={included} setRows={setIncluded} placeholder="e.g. Licensed Egyptologist guide" />
               <RowList label="Not included" rows={notIncluded} setRows={setNotIncluded} placeholder="e.g. Entrance tickets" />
               <RowList label="What to bring" rows={whatToBring} setRows={setWhatToBring} placeholder="e.g. Sun hat, comfortable shoes" />
@@ -770,7 +770,7 @@ export function ProductEditor({ type: typeProp, existing, destinations = [], onC
                 </div>
                 <button type="button" className="btn-ghost sm" onClick={() => setMeetingPoints((l) => [...l, { point: "", note: "" }])}><Plus size={14} />Add custom meeting point</button>
               </Field>
-              <Field label="Cancellation & policies" full><RichText value={policiesHtml} onChange={setPoliciesHtml} placeholder="Free cancellation up to 48h before, etc." /></Field>
+              <Field label="Cancellation & policies" full asDiv><RichText value={policiesHtml} onChange={setPoliciesHtml} placeholder="Free cancellation up to 48h before, etc." /></Field>
             </div>
           )}
 
@@ -851,8 +851,12 @@ function RowList({ label, rows, setRows, placeholder }) {
   );
 }
 
-function Field({ label, children, full }) {
-  return <label className={`field ${full ? "field-full" : ""}`}><span>{label}</span>{children}</label>;
+// `asDiv` renders a <div> instead of a <label>. Required for rich-text editors:
+// a <label> forwards clicks to its first labelable descendant (the Bold toolbar
+// button), which steals focus from the contenteditable and blocks typing.
+function Field({ label, children, full, asDiv }) {
+  const Tag = asDiv ? "div" : "label";
+  return <Tag className={`field ${full ? "field-full" : ""}`}><span>{label}</span>{children}</Tag>;
 }
 
 /* ---------------- Listing requests (approval) ---------------- */
