@@ -3,7 +3,7 @@ import {
   LayoutDashboard, Package, CalendarDays, Users, ClipboardList, ScrollText,
   Plus, Check, X, Search, Archive, ArchiveRestore, CircleDollarSign, ShieldCheck,
   TrendingUp, AlertTriangle, MapPin, Hotel, ArrowUpRight, ArrowLeft, Trash2, Pencil,
-  Newspaper, Share2, Copy, Inbox,
+  Newspaper, Share2, Copy, Inbox, Eye, Clock3,
 } from "lucide-react";
 import { apiFetch, supabase, uploadImage } from "./supabaseClient";
 import { DashSidebar } from "./DashSidebar";
@@ -876,6 +876,7 @@ function ListingRequestsSection({ data, reload, flash }) {
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState("");
   const [err, setErr] = useState("");
+  const [preview, setPreview] = useState(null); // listing being viewed in full
 
   // Only agency-submitted listings enter this queue (agency_id present).
   const submitted = (data.tourProducts || []).filter((p) => p.agencyId);
@@ -951,17 +952,31 @@ function ListingRequestsSection({ data, reload, flash }) {
                 {p.status === "rejected" && p.rejectionReason ? (
                   <div className="listing-reject"><strong>Rejection reason</strong><br />{p.rejectionReason}</div>
                 ) : null}
-                {p.status !== "approved" && (
-                  <div className="listing-actions">
-                    <button className="btn-primary sm" disabled={busy === p.id} onClick={() => approve(p)}><Check size={15} />{busy === p.id ? "…" : "Approve & publish"}</button>
-                    <button className="btn-ghost sm danger" disabled={busy === p.id} onClick={() => { setRejecting(p); setReason(""); setErr(""); }}><X size={15} />Reject</button>
-                  </div>
-                )}
+                <div className="listing-actions">
+                  <button className="btn-ghost sm" onClick={() => setPreview(p)}><Eye size={15} />View details</button>
+                  {p.status !== "approved" && (
+                    <>
+                      <button className="btn-primary sm" disabled={busy === p.id} onClick={() => approve(p)}><Check size={15} />{busy === p.id ? "…" : "Approve & publish"}</button>
+                      <button className="btn-ghost sm danger" disabled={busy === p.id} onClick={() => { setRejecting(p); setReason(""); setErr(""); }}><X size={15} />Reject</button>
+                    </>
+                  )}
+                </div>
               </div>
             </article>
           );
         })}
       </div>
+
+      {preview && (
+        <ListingPreviewModal
+          p={preview}
+          agencyName={agencyName(preview.agencyId)}
+          busy={busy === preview.id}
+          onApprove={() => { const t = preview; setPreview(null); approve(t); }}
+          onReject={() => { setRejecting(preview); setReason(""); setErr(""); setPreview(null); }}
+          onClose={() => setPreview(null)}
+        />
+      )}
 
       {rejecting && (
         <div className="modal-overlay" onClick={() => setRejecting(null)}>
@@ -981,6 +996,148 @@ function ListingRequestsSection({ data, reload, flash }) {
         </div>
       )}
     </>
+  );
+}
+
+/* Full read-only view of a submitted listing so admins can review every field
+   (overview, itinerary, meeting points, policies, gallery…) before deciding. */
+function ListingPreviewModal({ p, agencyName, busy, onApprove, onReject, onClose }) {
+  const [gi, setGi] = useState(0);
+  const richHas = (s) => s && s.replace(/<[^>]*>/g, "").trim().length > 0;
+  const pkg = p.type === "package";
+  const imgs = (p.images || []).filter((i) => i?.url);
+  const hero = imgs[Math.min(gi, Math.max(0, imgs.length - 1))]?.url;
+  const meetPts = (p.meetingPoints || []).filter((m) => m && m.point);
+  const Row = ({ label, children }) => (
+    <div style={{ display: "flex", gap: 10, padding: "7px 0", borderBottom: "1px solid var(--d-line)", fontSize: 14 }}>
+      <span style={{ color: "var(--d-muted, #667)", minWidth: 150 }}>{label}</span>
+      <strong style={{ color: "var(--d-ink, #111)" }}>{children}</strong>
+    </div>
+  );
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 880, width: "94vw", maxHeight: "92vh", display: "flex", flexDirection: "column" }}>
+        <div className="modal-head">
+          <h2>{p.title || "Untitled listing"} {statusTag(p.status)}</h2>
+          <button className="icon-btn" onClick={onClose}><X size={18} /></button>
+        </div>
+
+        <div className="modal-body" style={{ overflowY: "auto" }}>
+          <p className="field-hint" style={{ marginTop: 0 }}>
+            {pkg ? "Multi-day package" : "Day tour"} · by <strong>{agencyName}</strong>{p.submittedAt ? ` · submitted ${fmtDate(p.submittedAt)}` : ""}
+          </p>
+
+          {hero && (
+            <>
+              <img src={hero} alt={p.title} style={{ width: "100%", height: 300, objectFit: "cover", borderRadius: 12, marginTop: 8 }} />
+              {imgs.length > 1 && (
+                <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
+                  {imgs.map((im, i) => (
+                    <button key={i} onClick={() => setGi(i)} style={{ width: 64, height: 48, borderRadius: 8, overflow: "hidden", border: i === gi ? "2px solid var(--d-accent, #c58b2e)" : "2px solid transparent", padding: 0, cursor: "pointer" }}>
+                      <img src={im.url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                    </button>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+
+          <div style={{ marginTop: 18 }}>
+            <Row label="Location">{pkg ? (p.cities || [p.city]).filter(Boolean).join(" → ") || "—" : p.city || "—"}</Row>
+            {p.duration ? <Row label="Duration">{p.duration}</Row> : null}
+            {pkg && p.nights ? <Row label="Nights">{p.nights}</Row> : null}
+            <Row label="Guide">{p.guide || "—"}</Row>
+            <Row label="Vehicle">{p.vehicle || "—"}</Row>
+            <Row label="GoAhead price">{money(p.publishedRate)} / person</Row>
+            {p.breakPrice ? <Row label="Full-group price">{money(p.breakPrice)} / person</Row> : null}
+            <Row label="Group size">min {p.minSeats} · max {p.maxSeats}</Row>
+            {p.depositPercent != null ? <Row label="Deposit">{p.depositPercent}%</Row> : null}
+            {p.bookingCutoffHours != null ? <Row label="Booking cutoff">{p.bookingCutoffHours}h before</Row> : null}
+          </div>
+
+          {p.description ? (
+            <section style={{ marginTop: 20 }}><h3 style={{ fontSize: 15, marginBottom: 6 }}>Short description</h3><p style={{ fontSize: 14, color: "var(--d-muted,#556)" }}>{p.description}</p></section>
+          ) : null}
+
+          {richHas(p.overviewHtml) ? (
+            <section style={{ marginTop: 20 }}><h3 style={{ fontSize: 15, marginBottom: 6 }}>Overview</h3><div className="rich" dangerouslySetInnerHTML={{ __html: p.overviewHtml }} /></section>
+          ) : null}
+
+          {(p.included?.length || p.notIncluded?.length) ? (
+            <section style={{ marginTop: 20, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+              <div>
+                <h3 style={{ fontSize: 15, marginBottom: 6 }}>What's included</h3>
+                {p.included?.length ? p.included.map((x, i) => <p key={i} style={{ fontSize: 14, display: "flex", gap: 6 }}><Check size={15} />{x}</p>) : <p className="field-hint">—</p>}
+              </div>
+              <div>
+                <h3 style={{ fontSize: 15, marginBottom: 6 }}>Not included</h3>
+                {p.notIncluded?.length ? p.notIncluded.map((x, i) => <p key={i} style={{ fontSize: 14, display: "flex", gap: 6 }}><X size={15} />{x}</p>) : <p className="field-hint">—</p>}
+              </div>
+            </section>
+          ) : null}
+
+          {p.whatToBring?.length ? (
+            <section style={{ marginTop: 20 }}><h3 style={{ fontSize: 15, marginBottom: 6 }}>What to bring</h3>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>{p.whatToBring.map((b, i) => <span key={i} className="tag">{b}</span>)}</div>
+            </section>
+          ) : null}
+
+          {meetPts.length ? (
+            <section style={{ marginTop: 20 }}><h3 style={{ fontSize: 15, marginBottom: 6 }}><MapPin size={14} /> Meeting &amp; pickup</h3>
+              <ul style={{ margin: 0, paddingLeft: 18, fontSize: 14 }}>
+                {meetPts.map((m, i) => <li key={i}><strong>{m.point}</strong>{m.note ? ` — ${m.note}` : ""}</li>)}
+              </ul>
+            </section>
+          ) : (p.meetingPoint ? (
+            <section style={{ marginTop: 20 }}><h3 style={{ fontSize: 15, marginBottom: 6 }}><MapPin size={14} /> Meeting &amp; pickup</h3>
+              <p style={{ fontSize: 14 }}>{p.meetingPoint}{p.pickupNote ? ` — ${p.pickupNote}` : ""}</p>
+            </section>
+          ) : null)}
+
+          {pkg && (p.itinerary || []).length ? (
+            <section style={{ marginTop: 20 }}><h3 style={{ fontSize: 15, marginBottom: 6 }}>Day-by-day itinerary</h3>
+              <ol style={{ margin: 0, paddingLeft: 18 }}>
+                {p.itinerary.map((d, i) => (
+                  <li key={i} style={{ marginBottom: 12 }}>
+                    <div style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: ".04em", color: "var(--d-accent,#c58b2e)" }}>Day {d.day || i + 1}{d.city ? ` · ${d.city}` : ""}</div>
+                    <strong style={{ fontSize: 14 }}>{d.title}</strong>
+                    {richHas(d.description) ? <div className="rich" dangerouslySetInnerHTML={{ __html: d.description }} /> : d.description ? <p style={{ fontSize: 14 }}>{d.description}</p> : null}
+                    {d.meals ? <small style={{ color: "var(--d-muted,#667)" }}>Meals: {d.meals}</small> : null}
+                  </li>
+                ))}
+              </ol>
+            </section>
+          ) : null}
+
+          {pkg && (p.accommodationTiers || []).length ? (
+            <section style={{ marginTop: 20 }}><h3 style={{ fontSize: 15, marginBottom: 6 }}><Hotel size={14} /> Hotel &amp; cruise tiers</h3>
+              {p.accommodationTiers.map((t, i) => (
+                <div key={i} style={{ fontSize: 14, padding: "4px 0" }}><strong>{t.name}</strong>{t.perPersonSupplement ? ` · +${money(t.perPersonSupplement)}/pp` : ""}{t.singleSupplement ? ` · single +${money(t.singleSupplement)}` : ""}</div>
+              ))}
+            </section>
+          ) : null}
+
+          {richHas(p.policiesHtml) ? (
+            <section style={{ marginTop: 20 }}><h3 style={{ fontSize: 15, marginBottom: 6 }}><ShieldCheck size={14} /> Cancellation &amp; policies</h3><div className="rich" dangerouslySetInnerHTML={{ __html: p.policiesHtml }} /></section>
+          ) : null}
+
+          {p.status === "rejected" && p.rejectionReason ? (
+            <div className="listing-reject" style={{ marginTop: 20 }}><strong>Rejection reason</strong><br />{p.rejectionReason}</div>
+          ) : null}
+        </div>
+
+        <div className="modal-foot">
+          <button className="btn-ghost" onClick={onClose}>Close</button>
+          {p.status !== "approved" && (
+            <>
+              <button className="btn-ghost danger" disabled={busy} onClick={onReject}><X size={15} /> Reject</button>
+              <button className="btn-primary" disabled={busy} onClick={onApprove}><Check size={15} /> {busy ? "…" : "Approve & publish"}</button>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 
