@@ -1250,15 +1250,17 @@ function PublishModal({ type, data, onClose, onDone }) {
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal modal-sm" onClick={(e) => e.stopPropagation()}>
         <div className="modal-head"><h2>{pkg ? "Publish package date" : "Publish tour date"}</h2><button className="icon-btn" onClick={onClose}><X size={18} /></button></div>
-        <form className="modal-body" onSubmit={go}>
-          <Field label={pkg ? "Package" : "Tour"} full>
-            <select value={productId} onChange={(e) => setProductId(e.target.value)}>
-              {products.map((p) => <option key={p.id} value={p.id}>{p.title}</option>)}
-            </select>
-          </Field>
-          <Field label={pkg ? "Start date" : "Date"} full><input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></Field>
-          {products.length === 0 && <p className="dash-empty">No active {pkg ? "packages" : "tours"}. Create one first.</p>}
-          {err && <div className="auth-error">{err}</div>}
+        <form onSubmit={go}>
+          <div className="modal-body">
+            <Field label={pkg ? "Package" : "Tour"} full>
+              <select value={productId} onChange={(e) => setProductId(e.target.value)}>
+                {products.map((p) => <option key={p.id} value={p.id}>{p.title}</option>)}
+              </select>
+            </Field>
+            <Field label={pkg ? "Start date" : "Date"} full><input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></Field>
+            {products.length === 0 && <p className="dash-empty">No active {pkg ? "packages" : "tours"}. Create one first.</p>}
+            {err && <div className="auth-error">{err}</div>}
+          </div>
           <div className="modal-foot">
             <button type="button" className="btn-ghost" onClick={onClose}>Cancel</button>
             <button type="submit" className="btn-primary" disabled={busy || !products.length}>{busy ? "Publishing…" : "Publish"}</button>
