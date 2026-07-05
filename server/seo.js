@@ -6,6 +6,7 @@
 // ============================================================
 import { pool } from "./db/index.js";
 import { BRAND, ORG_ID, SITE_ID, travelAgencySchema, websiteSchema } from "./brand.js";
+import { tourSlug } from "./slug.js";
 
 const esc = (s) => String(s == null ? "" : s)
   .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -52,8 +53,14 @@ const FAQ_SCHEMA = {
   ].map(([q, a]) => ({ "@type": "Question", name: q, acceptedAnswer: { "@type": "Answer", text: a } })),
 };
 
-async function tourSchema(id, url) {
-  const r = await pool.query("SELECT * FROM tour_products WHERE id=$1 AND active IS NOT FALSE LIMIT 1", [id]);
+async function tourSchema(idOrSlug, url) {
+  // Resolve by raw DB id first (back-compat), then by the derived SEO slug.
+  let r = await pool.query("SELECT * FROM tour_products WHERE id=$1 AND active IS NOT FALSE LIMIT 1", [idOrSlug]);
+  if (!r.rows.length) {
+    const all = await pool.query("SELECT * FROM tour_products WHERE active IS NOT FALSE");
+    const match = all.rows.find((row) => tourSlug(row) === idOrSlug);
+    if (match) r = { rows: [match] };
+  }
   if (!r.rows.length) return null;
   const p = r.rows[0];
   const img = abs((p.images && p.images[0] && p.images[0].url) || `/images/${String(p.city || "cairo").toLowerCase()}.jpg`);
@@ -217,8 +224,8 @@ export async function sitemapXml() {
   add("/", null, "weekly");
   ["/departures", "/trust", "/operators", "/verify", "/widget", "/about", "/contact", "/faq", "/blog", "/privacy", "/terms"].forEach((p) => add(p, null, "monthly"));
   try {
-    const tours = await pool.query("SELECT id, type FROM tour_products WHERE active IS NOT FALSE");
-    tours.rows.forEach((t) => add(`/${t.type === "package" ? "package" : "tour"}/${encodeURIComponent(t.id)}`, null, "weekly"));
+    const tours = await pool.query("SELECT id, title, city, type FROM tour_products WHERE active IS NOT FALSE");
+    tours.rows.forEach((t) => add(`/${t.type === "package" ? "package" : "tour"}/${encodeURIComponent(tourSlug(t))}`, null, "weekly"));
     const posts = await pool.query("SELECT slug, updated_at FROM blog_posts WHERE status='published'");
     posts.rows.forEach((p) => add(`/blog/${encodeURIComponent(p.slug)}`, p.updated_at instanceof Date ? p.updated_at.toISOString() : p.updated_at, "monthly"));
   } catch { /* DB optional */ }

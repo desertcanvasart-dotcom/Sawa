@@ -26,6 +26,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildHead, robotsTxt, sitemapXml, llmsTxt, llmsFullTxt } from "./seo.js";
+import { tourSlug } from "./slug.js";
 import { cleanHtml, cleanItinerary } from "./sanitize.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -1387,6 +1388,22 @@ if (existsSync(siteDir)) {
   // extensions:["html"] serves /operators from operators.html, etc.
   app.use(express.static(siteDir, { extensions: ["html"] }));
 }
+
+// ============================ LEGACY TOUR URL → SEO SLUG (301) ============================
+// Old ugly URLs (/tour/<db-id>) permanently redirect to the clean slug URL so any
+// existing links / search-engine index entries pass their value to the new URL.
+// Clean slug URLs (no tour_/pkg_ prefix) fall through to the SPA untouched.
+app.use(h(async (req, res, next) => {
+  if (req.method !== "GET") return next();
+  const m = req.path.match(/^\/(tour|package)\/([^/]+)\/?$/);
+  if (!m) return next();
+  const seg = decodeURIComponent(m[2]);
+  if (!/^(tour|pkg)_/.test(seg)) return next(); // already a clean slug
+  const r = await pool.query("SELECT id, title, city, type FROM tour_products WHERE id=$1 AND active IS NOT FALSE LIMIT 1", [seg]);
+  if (!r.rows.length) return next();
+  const kind = r.rows[0].type === "package" ? "package" : "tour";
+  return res.redirect(301, `/${kind}/${tourSlug(r.rows[0])}`);
+}));
 
 // ============================ STATIC SPA (production) ============================
 // Serve the built frontend from /dist. For HTML routes, inject a fully-formed

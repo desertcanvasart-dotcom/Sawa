@@ -4,3 +4,7 @@ dist/
 *.log
 public/images/tours/
 public/images/packages/
+# Never upload local env or dev-only preview data — production uses Railway's
+# own env vars and its live API. Uploading these would override real config.
+.env
+site/_dev_bootstrap.json

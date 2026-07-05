@@ -42,6 +42,7 @@ import {
 import "./styles.css";
 import "./redesign.css";
 import { supabase, apiFetch, API_BASE } from "./supabaseClient";
+import { tourSlug } from "../server/slug.js";
 // Lazy-loaded so the heavy authenticated portal (admin desk + TipTap editor)
 // is split out of the public bundle and never downloaded by visitors.
 const LoginGate = lazy(() => import("./LoginGate").then((m) => ({ default: m.LoginGate })));
@@ -264,9 +265,19 @@ function App() {
 
   async function loadBootstrap() {
     try {
-      const response = await apiFetch(`/bootstrap`);
-      if (!response.ok) throw new Error("Could not load portal data.");
-      const data = await response.json();
+      let data;
+      try {
+        const response = await apiFetch(`/bootstrap`);
+        if (!response.ok) throw new Error("api");
+        data = await response.json();
+      } catch (apiError) {
+        // Local dev has no database, so /api/bootstrap fails — fall back to a
+        // snapshot of live data so tour pages preview. In production the live
+        // API succeeds and this fallback is never used.
+        const snap = await fetch("/_dev_bootstrap.json");
+        if (!snap.ok) throw new Error("Could not load portal data.");
+        data = await snap.json();
+      }
       setAgencies(data.agencies || []);
       setCities(data.cities || []);
       setTourProducts(data.tourProducts || []);
@@ -401,10 +412,11 @@ function App() {
     };
   }, [visibleDepartures, visibleProducts]);
 
+  // Resolve by clean SEO slug OR the raw DB id (so old /tour/<id> links still work).
   const routeTourId = decodeURIComponent(path.match(/^\/tour\/([^/]+)/)?.[1] || "");
-  const routeTour = routeTourId ? customerCalendars.find((product) => product.id === routeTourId && !isPackage(product)) : null;
+  const routeTour = routeTourId ? customerCalendars.find((product) => !isPackage(product) && (product.id === routeTourId || tourSlug(product) === routeTourId)) : null;
   const routePackageId = decodeURIComponent(path.match(/^\/package\/([^/]+)/)?.[1] || "");
-  const routePackage = routePackageId ? customerCalendars.find((product) => product.id === routePackageId && isPackage(product)) : null;
+  const routePackage = routePackageId ? customerCalendars.find((product) => isPackage(product) && (product.id === routePackageId || tourSlug(product) === routePackageId)) : null;
 
   useEffect(() => {
     if (!dayTourProducts.length) return;
@@ -997,7 +1009,7 @@ const SxLogoMark = () => (
 // Links point at the static editorial pages (served from /site) so the chrome is
 // identical across the whole site. Real <a href> = full navigation out of the SPA
 // back into the static pages; the SPA is only ever the tour-detail/booking body.
-const SX_NAV_LINKS = [["How it works", "/how-it-works"], ["Departures", "/departures"], ["The GoAhead", "/trust"], ["For operators", "/operators"]];
+const SX_NAV_LINKS = [["How it works", "/how-it-works"], ["Departures", "/departures"], ["Destinations", "/destinations"]];
 
 function SxNav({ cta = ["Find a departure", "/departures"] }) {
   const [tight, setTight] = useState(false);
@@ -1076,7 +1088,7 @@ function PublicHomeV2({ navigate, products = [], summary = {}, cities = [] }) {
     .slice(0, 6);
   const tabNames = ["All Egypt", ...cities.map((c) => c.name)];
   const marquee = [...new Set([...cities.map((c) => c.name), ...model.flatMap((m) => m.cityList)])].filter(Boolean);
-  const linkOf = (m) => `/${isPackage(m.p) ? "package" : "tour"}/${m.p.id}`;
+  const linkOf = (m) => `/${isPackage(m.p) ? "package" : "tour"}/${tourSlug(m.p)}`;
   const depDate = (m) => (m?.lead ? formatDate(m.lead.startDate || m.lead.date) : "");
   const scrollTo = (id) => (e) => { e.preventDefault(); document.getElementById(id)?.scrollIntoView({ behavior: "smooth" }); };
 
@@ -2999,7 +3011,7 @@ function TourCard({ navigate, product }) {
         <div className="tour-card-foot">
           <span>{full ? "All dates full — check back soon" : `${pluralize(openDates(product).length, "open date")} · from $${breakPrice} at full group`}</span>
         </div>
-        <button className="departure-link" disabled={full} onClick={() => navigate(`/tour/${product.id}`)}>
+        <button className="departure-link" disabled={full} onClick={() => navigate(`/tour/${tourSlug(product)}`)}>
           {full ? "Fully booked" : "View tour"}
         </button>
       </div>
@@ -3043,7 +3055,7 @@ function PackageCard({ navigate, product }) {
         <div className="tour-card-foot">
           <span><Hotel size={13} />{(product.accommodationTiers || []).length || 1} hotel tier{((product.accommodationTiers || []).length || 1) > 1 ? "s" : ""} · from ${breakPrice}/pp</span>
         </div>
-        <button className="departure-link" disabled={full} onClick={() => navigate(`/package/${product.id}`)}>
+        <button className="departure-link" disabled={full} onClick={() => navigate(`/package/${tourSlug(product)}`)}>
           {full ? "Fully booked" : "View package"}
         </button>
       </div>
