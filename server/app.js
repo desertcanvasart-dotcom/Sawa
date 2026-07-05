@@ -1376,7 +1376,8 @@ if (existsSync(siteDir)) {
   // Canonicalize to clean, extensionless, SEO-friendly URLs: any /page.html
   // permanently redirects to /page. `index` -> /, and the two designed links
   // that have no page of their own map to real pages.
-  const htmlAlias = { index: "/", tour: "/departures", pricing: "/operators" };
+  // `trust` was renamed to `goahead-promise`; keep the old URL working.
+  const htmlAlias = { index: "/", tour: "/departures", pricing: "/operators", trust: "/goahead-promise" };
   app.use((req, res, next) => {
     if (req.method !== "GET") return next();
     const m = req.path.match(/^\/([a-z0-9-]+)\.html$/i);
@@ -1384,6 +1385,7 @@ if (existsSync(siteDir)) {
     const name = m[1].toLowerCase();
     return res.redirect(301, htmlAlias[name] || `/${name}`);
   });
+  app.get("/trust", (_req, res) => res.redirect(301, "/goahead-promise"));
   app.get("/", (_req, res) => res.sendFile(join(siteDir, "index.html")));
   // extensions:["html"] serves /operators from operators.html, etc.
   app.use(express.static(siteDir, { extensions: ["html"] }));

@@ -222,7 +222,7 @@ export async function sitemapXml() {
   const urls = [];
   const add = (loc, lastmod, freq) => urls.push({ loc: BRAND.url + loc, lastmod, freq });
   add("/", null, "weekly");
-  ["/departures", "/trust", "/operators", "/verify", "/widget", "/about", "/contact", "/faq", "/blog", "/privacy", "/terms"].forEach((p) => add(p, null, "monthly"));
+  ["/departures", "/goahead-promise", "/operators", "/verify", "/widget", "/about", "/contact", "/faq", "/blog", "/privacy", "/terms"].forEach((p) => add(p, null, "monthly"));
   try {
     const tours = await pool.query("SELECT id, title, city, type FROM tour_products WHERE active IS NOT FALSE");
     tours.rows.forEach((t) => add(`/${t.type === "package" ? "package" : "tour"}/${encodeURIComponent(tourSlug(t))}`, null, "weekly"));
