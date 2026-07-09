@@ -1581,10 +1581,18 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
                         const s = seatsTotal(d.pledges); const left = d.maxSeats - s; const on = Number(d.id) === Number(depId);
                         const ga = goAheadFor(d); const cf = d.status === "supplier_confirmed" || s >= ga;
                         return (
-                          <div className={`date-opt${on ? " on" : ""}`} key={d.id} onClick={() => left > 0 && setDepId(d.id)} style={left <= 0 ? { opacity: .5, cursor: "not-allowed" } : {}}>
+                          <button
+                            type="button"
+                            className={`date-opt${on ? " on" : ""}`}
+                            key={d.id}
+                            onClick={() => setDepId(d.id)}
+                            disabled={left <= 0}
+                            aria-pressed={on}
+                            aria-label={`${formatDate(d.date)}${d.time ? ` at ${d.time}` : ""} — ${s} of ${ga} joined${left <= 0 ? ", full" : ""}`}
+                          >
                             <div className="d-left"><b>{formatDate(d.date)}{d.time ? ` · ${d.time}` : ""}</b><span>{s} of {ga} joined</span></div>
                             <span className={`d-right ${cf ? "go" : "form"}`}>{cf ? "GoAhead" : left > 0 ? `${Math.max(0, ga - s)} to go` : "Full"}</span>
-                          </div>
+                          </button>
                         );
                       })}
                     </div>

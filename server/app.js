@@ -224,7 +224,14 @@ app.get("/api/me", requireAuth, h(async (req, res) => {
 // view is viewer-specific — and any catalogue write clears the cache immediately.
 const PUBLIC_BOOTSTRAP_TTL = 30_000;
 let publicBootstrapCache = { at: 0, payload: null };
-function invalidatePublicBootstrap() { publicBootstrapCache = { at: 0, payload: null }; }
+// The published-post list is read on every /blog view and never varies per
+// visitor, so cache it the same way. Both are dropped on any successful write.
+const PUBLIC_BLOG_TTL = 60_000;
+let publicBlogCache = { at: 0, payload: null };
+function invalidatePublicBootstrap() {
+  publicBootstrapCache = { at: 0, payload: null };
+  publicBlogCache = { at: 0, payload: null };
+}
 
 // Bootstrap — open to all; pledge detail redacted per viewer.
 app.get("/api/bootstrap", h(async (req, res) => {
@@ -869,8 +876,13 @@ const slugify = (s) => String(s || "").toLowerCase().trim().replace(/[^a-z0-9]+/
 
 // Public: published posts (list).
 app.get("/api/blog", h(async (_req, res) => {
+  if (publicBlogCache.payload && Date.now() - publicBlogCache.at < PUBLIC_BLOG_TTL) {
+    return res.json(publicBlogCache.payload);
+  }
   const r = await pool.query("SELECT * FROM blog_posts WHERE status='published' ORDER BY published_at DESC NULLS LAST, updated_at DESC");
-  res.json({ posts: r.rows.map(mapPost) });
+  const payload = { posts: r.rows.map(mapPost) };
+  publicBlogCache = { at: Date.now(), payload };
+  res.json(payload);
 }));
 
 // Public: a single published post by slug.
@@ -1386,6 +1398,9 @@ if (existsSync(siteDir)) {
     return res.redirect(301, htmlAlias[name] || `/${name}`);
   });
   app.get("/trust", (_req, res) => res.redirect(301, "/goahead-promise"));
+  // Serve the destinations index directly; otherwise express.static bounces
+  // /destinations -> /destinations/ with an extra 301 on a primary nav link.
+  app.get("/destinations", (_req, res) => res.sendFile(join(siteDir, "destinations", "index.html")));
   app.get("/", (_req, res) => res.sendFile(join(siteDir, "index.html")));
   // extensions:["html"] serves /operators from operators.html, etc.
   app.use(express.static(siteDir, { extensions: ["html"] }));
@@ -1415,11 +1430,13 @@ if (existsSync(distDir)) {
   const template = readFileSync(join(distDir, "index.html"), "utf8");
   const renderPage = async (req, res) => {
     try {
-      const { title, head } = await buildHead(req.path);
+      const { title, head, notFound } = await buildHead(req.path);
       const html = template
         .replace(/<title>[\s\S]*?<\/title>/, `<title>${title.replace(/</g, "&lt;")}</title>`)
         .replace("</head>", `${head}\n</head>`);
-      res.type("html").send(html);
+      // Unknown routes still render the SPA's 404 screen, but with a real 404
+      // status so crawlers and monitoring don't treat them as live pages.
+      res.status(notFound ? 404 : 200).type("html").send(html);
     } catch (e) {
       console.error("[seo] head injection failed for", req.path, "-", e.message);
       res.sendFile(join(distDir, "index.html"));

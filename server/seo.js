@@ -137,13 +137,20 @@ export async function buildHead(pathname) {
     // covers both. (Packages were previously falling through to "Page not found".)
     const res = await tourSchema(decodeURIComponent(path.split("/")[2]), url);
     if (res) { m = { ...m, ...res.meta }; graph.push(res.schema); crumbs.push({ name: "Tours", url: `${BRAND.url}/tours` }, { name: res.crumbName, url }); }
-    else m = { ...m, noindex: true, title: `Tour not found | ${BRAND.name}` };
+    else m = { ...m, noindex: true, notFound: true, title: `Tour not found | ${BRAND.name}` };
   } else if (/^\/blog\/[^/]+$/.test(path)) {
     const res = await postSchema(decodeURIComponent(path.split("/")[2]), url);
     if (res) { m = { ...m, ...res.meta }; res.schema.forEach((s) => graph.push(s)); crumbs.push({ name: "Blog", url: `${BRAND.url}/blog` }, { name: res.crumbName, url }); }
-    else m = { ...m, noindex: true, title: `Post not found | ${BRAND.name}` };
+    else m = { ...m, noindex: true, notFound: true, title: `Post not found | ${BRAND.name}` };
+  } else if (/^\/(admin|agency|portal)(\/|$)/.test(path)) {
+    // Real, working app routes — they must not read (or respond) as "not found".
+    m = { ...m, noindex: true, title: `Sign in | ${BRAND.name}`, description: "Sign in to your Sawa dashboard." };
+  } else if (/^\/embed(\/|$)/.test(path)) {
+    m = { ...m, noindex: true, title: `Shared departures | ${BRAND.name}` };
+  } else if (path === "/packages") {
+    m = { ...m, ...STATIC["/tours"] };
   } else {
-    m = { ...m, noindex: true, title: `Page not found | ${BRAND.name}` };
+    m = { ...m, noindex: true, notFound: true, title: `Page not found | ${BRAND.name}` };
   }
 
   if (crumbs.length > 1) graph.push(breadcrumb(crumbs));
@@ -168,7 +175,7 @@ export async function buildHead(pathname) {
     ldScript({ "@context": "https://schema.org", "@graph": graph }),
   ].join("\n");
 
-  return { title: m.title, head };
+  return { title: m.title, head, notFound: !!m.notFound };
 }
 
 // ---- robots.txt ----
