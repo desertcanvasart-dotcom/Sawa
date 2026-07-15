@@ -29,6 +29,7 @@ const NAV_GROUPS = [
       { id: "overview", label: "Overview", icon: LayoutDashboard },
       { id: "tours", label: "Tours & Packages", icon: Package },
       { id: "listings", label: "Listing requests", icon: Inbox, alert: (s) => s?.pendingListings || 0 },
+      { id: "daterequests", label: "Date requests", icon: Clock3 },
       { id: "destinations", label: "Destinations", icon: MapPin },
       { id: "blog", label: "Blog", icon: Newspaper },
       { id: "departures", label: "Departures", icon: CalendarDays, alert: (s) => s?.departureStatus?.readyToConfirm || 0 },
@@ -96,6 +97,7 @@ export function AdminDashboard({ user, agency, signOut, navigate }) {
             {section === "overview" && <Overview stats={stats} data={data} onGo={setSection} />}
             {section === "tours" && <ToursSection data={data} destinations={destinations} reload={loadAll} flash={flash} />}
             {section === "listings" && <ListingRequestsSection data={data} reload={loadAll} flash={flash} />}
+            {section === "daterequests" && <DateRequestsSection data={data} reload={loadAll} flash={flash} />}
             {section === "destinations" && <DestinationsSection destinations={destinations} reload={loadAll} flash={flash} />}
             {section === "blog" && <BlogSection posts={posts} reload={loadAll} flash={flash} />}
             {section === "departures" && <DeparturesSection data={data} reload={loadAll} flash={flash} />}
@@ -865,6 +867,101 @@ const LISTING_TABS = [
   { id: "rejected", label: "Rejected" },
   { id: "approved", label: "Approved" },
 ];
+// Traveler-requested departures awaiting review (addendum Phase A).
+// Approve -> departure opens on the public board; decline -> cancelled + email.
+function DateRequestsSection({ data, reload, flash }) {
+  const [declining, setDeclining] = useState(null); // departure being declined
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState("");
+  const [err, setErr] = useState("");
+
+  const pending = (data.departures || [])
+    .filter((d) => d.status === "pending_review")
+    .sort((a, b) => new Date(a.startDate || a.date) - new Date(b.startDate || b.date));
+  const seedOf = (d) => (d.pledges || []).find((p) => p.source === "public_request") || (d.pledges || [])[0];
+
+  async function act(dep, action, body) {
+    setBusy(dep.id); setErr("");
+    try {
+      const r = await apiFetch(`/admin/departure-requests/${dep.id}/${action}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body || {}),
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || `Could not ${action} this request.`);
+      flash(action === "approve"
+        ? `"${dep.route}" on ${fmtDate(dep.startDate || dep.date)} is now open — traveller emailed.`
+        : `Request declined — traveller emailed.`);
+      setDeclining(null); setReason(""); reload();
+    } catch (e) { setErr(e.message); } finally { setBusy(""); }
+  }
+
+  return (
+    <>
+      <PageHead title="Date requests" sub="Departures started by travellers on the public site. Nothing shows on the board until you approve it." />
+      {err && !declining && <div className="auth-error" role="alert">{err}</div>}
+      {!pending.length && <div className="dash-empty">No traveller-requested dates awaiting review right now.</div>}
+
+      <div className="listing-grid">
+        {pending.map((d) => {
+          const seed = seedOf(d) || {};
+          return (
+            <article className="listing-card" key={d.id}>
+              <div className="listing-body">
+                <div className="listing-top">
+                  <h3>{d.route}</h3>
+                  <span className="tag tag-ready"><Clock3 size={13} /> Awaiting review</span>
+                </div>
+                <p className="listing-agency">
+                  <strong>{fmtDate(d.startDate || d.date)}</strong>{d.time ? ` · ${d.time}` : ""} · {d.city}
+                </p>
+                <div className="listing-facts">
+                  <span><Users size={13} />{seed.seats || 1} seat{(seed.seats || 1) > 1 ? "s" : ""} pledged · min {d.minSeats} · max {d.maxSeats}</span>
+                  <span><ClipboardList size={13} />{seed.customers || "Traveller"}</span>
+                </div>
+                <p className="listing-desc">
+                  {seed.customerEmail || "no email"}{seed.customerPhone ? ` · ${seed.customerPhone}` : ""}
+                  {d.notes ? ` — ${d.notes}` : ""}
+                </p>
+                <div className="listing-actions">
+                  <button className="btn-primary" disabled={busy === d.id} onClick={() => act(d, "approve")}>
+                    <Check size={14} /> Approve &amp; open
+                  </button>
+                  <button className="btn-ghost danger" disabled={busy === d.id} onClick={() => { setDeclining(d); setReason(""); setErr(""); }}>
+                    <X size={14} /> Decline
+                  </button>
+                </div>
+              </div>
+            </article>
+          );
+        })}
+      </div>
+
+      {declining && (
+        <div className="modal-overlay" onClick={() => setDeclining(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-head">
+              <h3>Decline "{declining.route}" on {fmtDate(declining.startDate || declining.date)}?</h3>
+            </div>
+            <div className="modal-body">
+              <p>The traveller is emailed that the date couldn't be opened. A short reason helps them pick another date.</p>
+              <textarea value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Reason (optional, sent to the traveller)" rows={3} />
+              {err && <div className="auth-error" role="alert">{err}</div>}
+              <div className="listing-actions">
+                <button className="btn-ghost" onClick={() => setDeclining(null)}>Keep request</button>
+                <button className="btn-primary danger" disabled={busy === declining.id} onClick={() => act(declining, "decline", { reason: reason.trim() })}>
+                  Decline request
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 function statusTag(status) {
   if (status === "approved") return <span className="tag tag-on">Approved</span>;
   if (status === "rejected") return <span className="tag tag-off">Rejected</span>;

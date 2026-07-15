@@ -56,6 +56,12 @@ test("statusFor: open below min, minimum_reached at/above, terminal preserved", 
   assert.equal(statusFor({ ...dayTour, status: "supplier_confirmed" }, [{ seats: 1 }]), "supplier_confirmed");
   assert.equal(statusFor({ ...dayTour, status: "cancelled" }, [{ seats: 9 }]), "cancelled");
 });
+test("statusFor: pending_review never auto-advances from pledge counts", () => {
+  // Traveler-requested departures (addendum Phase A) stay pending until an
+  // admin approves them — even when the seed pledge already meets go-ahead.
+  assert.equal(statusFor({ ...dayTour, status: "pending_review" }, [{ seats: 1 }]), "pending_review");
+  assert.equal(statusFor({ ...dayTour, status: "pending_review" }, [{ seats: 6 }]), "pending_review");
+});
 test("packagePriceFor: base + tier + single supplement", () => {
   assert.equal(packagePriceFor(pkg, pkg, 4, { roomingType: "double", tierId: "superior" }), 660);
   assert.equal(packagePriceFor(pkg, pkg, 4, { roomingType: "single", tierId: "superior" }), 820);
