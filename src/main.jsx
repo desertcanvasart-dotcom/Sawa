@@ -1595,7 +1595,7 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
               <section className="sec rv" style={{ borderBottom: 0, marginBottom: 0 }}>
                 <h2>Good to know</h2>
                 <div className="faq">
-                  {[["When is the trip confirmed?", "The moment the minimum travellers join the same date — then it's confirmed and running (GoAhead)."], ["What if a date doesn't fill?", "You're never charged for a trip that doesn't run. If it doesn't reach GoAhead, you're refunded in full or moved to another date."], ["Who will I travel with?", "A small mix of travellers pooled from verified operators — a shared group with one licensed guide."], ["How do payments work?", "You hold a seat now and pay a deposit only once the date is confirmed. Funds release to the operator at GoAhead."]].map(([q, a]) => (
+                  {[["When is the trip confirmed?", "The moment the minimum travellers join the same date — then it's confirmed and running (GoAhead)."], ["Can I pick my own date?", "Yes — use 'start your own' in the dates list. Our team gives it a quick review, it opens for other travellers to join, and nothing is charged unless it reaches GoAhead."], ["What if a date doesn't fill?", "You're never charged for a trip that doesn't run. If it doesn't reach GoAhead, you're refunded in full or moved to another date."], ["Who will I travel with?", "A small mix of travellers pooled from verified operators — a shared group with one licensed guide."], ["How do payments work?", "You hold a seat now and pay a deposit only once the date is confirmed. Funds release to the operator at GoAhead."]].map(([q, a]) => (
                     <div className="q" key={q}><h4>{q}</h4><p>{a}</p></div>
                   ))}
                 </div>
@@ -1615,7 +1615,7 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
                   </div>
                   <form onSubmit={reserve}>
                     <div className="dates">
-                      <div className="lbl">Choose a departure</div>
+                      <div className="lbl">Live dates for this tour</div>
                       {tour.dates.map((d) => {
                         const s = seatsTotal(d.pledges); const left = d.maxSeats - s; const on = Number(d.id) === Number(depId);
                         const ga = goAheadFor(d); const cf = d.status === "supplier_confirmed" || s >= ga;
