@@ -1387,6 +1387,14 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
   const [phone, setPhone] = useState("");
   const [seats, setSeats] = useState(1);
   const [err, setErr] = useState("");
+  // Traveler-initiated date request (addendum Phase A): pick a date that
+  // isn't on the board; ops reviews it before it opens.
+  const [reqMode, setReqMode] = useState(false);
+  const [reqDate, setReqDate] = useState("");
+  const [reqBusy, setReqBusy] = useState(false);
+  const [reqErr, setReqErr] = useState("");
+  const [reqMatches, setReqMatches] = useState(null);
+  const [reqDone, setReqDone] = useState(null);
 
   const dep = tour.dates.find((d) => Number(d.id) === Number(depId)) || lead;
   const goAhead = goAheadFor(tour);
@@ -1430,6 +1438,37 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
     if (Number(seats) > remaining) return setErr(`Only ${remaining} seat${remaining === 1 ? "" : "s"} left on this date.`);
     onBookPublicDeparture({ departureId: dep.id, customerName: name.trim(), customerEmail: email.trim(), customerPhone: phone.trim(), seats: nSeats });
     setName(""); setEmail(""); setPhone(""); setSeats(1);
+  }
+
+  const reqIso = (days) => { const d = new Date(); d.setDate(d.getDate() + days); return d.toISOString().slice(0, 10); };
+
+  async function submitDateRequest(ignoreMatches = false) {
+    setReqErr(""); setReqMatches(null);
+    if (!reqDate) return setReqErr("Pick the date you want.");
+    if (name.trim().length < 2) return setReqErr("Enter the lead traveller's name.");
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return setReqErr("Enter a valid email — we'll confirm your date there.");
+    setReqBusy(true);
+    try {
+      const response = await fetch(`${API_BASE}/public/departure-requests`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tourProductId: tour.id, date: reqDate, customerName: name.trim(),
+          customerEmail: email.trim(), customerPhone: phone.trim(), seats: nSeats, ignoreMatches,
+        }),
+      });
+      const data = await response.json();
+      if (response.status === 409 && data.code === "near_matches") {
+        setReqMatches(data.nearMatches || []);
+        return;
+      }
+      if (!response.ok) throw new Error(data.error || "Could not request this date.");
+      setReqDone({ code: data.booking?.bookingCode, date: reqDate });
+    } catch (error) {
+      setReqErr(error.message);
+    } finally {
+      setReqBusy(false);
+    }
   }
 
   const navLinks = [["How it works", "/how-it-works"], ["All departures", "/tours"], ["FAQ", "/faq"], ["Contact", "/contact"]];
@@ -1595,6 +1634,50 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
                           </button>
                         );
                       })}
+
+                      {/* Traveler-initiated date request (Phase A) */}
+                      {reqDone ? (
+                        <div className="bk-ok" style={{ marginTop: 8 }}>
+                          Date request received for {formatDate(reqDone.date)}{reqDone.code ? ` — code ${reqDone.code}` : ""}. Our team reviews it and emails you shortly. Nothing is charged now.
+                        </div>
+                      ) : !reqMode ? (
+                        <button type="button" className="date-opt" style={{ justifyContent: "center" }} onClick={() => { setReqMode(true); setReqErr(""); }}>
+                          <b>{tour.dates.length ? "Don't see your date? Start your own" : "No open dates — start your own"}</b>
+                        </button>
+                      ) : (
+                        <div style={{ marginTop: 8 }}>
+                          <div className="lbl">Pick your date — fill your details below, then request it</div>
+                          <input
+                            type="date" value={reqDate} min={reqIso(3)} max={reqIso(90)}
+                            onChange={(e) => { setReqDate(e.target.value); setReqMatches(null); }}
+                            aria-label="Requested departure date"
+                          />
+                          {reqMatches && reqMatches.length > 0 && (
+                            <div style={{ marginTop: 8 }}>
+                              <div className="lbl">Departures already forming near that date — joining fills a group faster:</div>
+                              {reqMatches.map((m) => {
+                                const ms = seatsTotal(m.pledges); const mga = goAheadFor(m);
+                                return (
+                                  <button type="button" className="date-opt" key={m.id} onClick={() => { setDepId(m.id); setReqMode(false); setReqMatches(null); }}>
+                                    <div className="d-left"><b>{formatDate(m.date)}{m.time ? ` · ${m.time}` : ""}</b><span>{ms} of {mga} joined</span></div>
+                                    <span className="d-right form">Join this date</span>
+                                  </button>
+                                );
+                              })}
+                              <button type="button" className="btn light full" style={{ marginTop: 6 }} disabled={reqBusy} onClick={() => submitDateRequest(true)}>
+                                {reqBusy ? "Requesting…" : "None of these work — request my date"}
+                              </button>
+                            </div>
+                          )}
+                          {(!reqMatches || reqMatches.length === 0) && (
+                            <button type="button" className="btn gold full" style={{ marginTop: 8 }} disabled={reqBusy} onClick={() => submitDateRequest(false)}>
+                              {reqBusy ? "Requesting…" : "Request this date"}
+                            </button>
+                          )}
+                          {reqErr && <div className="bk-err">{reqErr}</div>}
+                          <div className="note" style={{ marginTop: 6 }}>Reviewed by our team before it opens — you pay nothing now.</div>
+                        </div>
+                      )}
                     </div>
                     <div className="bk">
                       <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Lead traveller name" aria-label="Lead traveller name" />

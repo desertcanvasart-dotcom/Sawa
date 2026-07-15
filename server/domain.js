@@ -38,7 +38,10 @@ export function livePriceFor(item, seats) {
 }
 
 export function statusFor(departure, pledges) {
-  if (["supplier_confirmed", "closed", "cancelled"].includes(departure.status)) {
+  // pending_review: traveler-requested, not yet approved by ops — never
+  // auto-advances from pledge counts (Phase A of the traveler-initiated
+  // departures addendum).
+  if (["pending_review", "supplier_confirmed", "closed", "cancelled"].includes(departure.status)) {
     return departure.status;
   }
   return seatsTotal(pledges) >= goAheadSeatsFor(departure) ? "minimum_reached" : "open";

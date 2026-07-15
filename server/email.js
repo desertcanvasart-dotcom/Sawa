@@ -109,6 +109,52 @@ export function bookingConfirmationEmail({ to, customerName, route, dateLabel, s
   return { to, subject, html, text, kind: "booking_confirmation" };
 }
 
+export function departureRequestReceivedEmail({ to, customerName, route, dateLabel, seats, bookingCode }) {
+  const subject = `Request received — ${route} on ${dateLabel}`;
+  const text =
+    `Hi ${customerName || ""},\n\nWe've received your request to start a shared departure for ${route} on ${dateLabel}.\n` +
+    `Seats: ${seats}\n${bookingCode ? `Booking code: ${bookingCode}\n` : ""}\n` +
+    `Our team reviews every requested date — you'll hear from us shortly. Nothing is charged at this stage.`;
+  const html = shell(
+    "Departure request received",
+    `<p>We've received your request to start a shared departure for <strong>${route}</strong> on ${dateLabel}.</p>
+     <p style="background:#f2ebdc;border-radius:10px;padding:14px">
+       Seats: <strong>${seats}</strong>${bookingCode ? `<br/>Booking code: <strong>${bookingCode}</strong>` : ""}
+     </p>
+     <p style="font-size:13px;color:#56524a">Our team reviews every requested date — you'll hear from us shortly. Nothing is charged at this stage.</p>`
+  );
+  return { to, subject, html, text, kind: "departure_request_received" };
+}
+
+export function departureRequestApprovedEmail({ to, customerName, route, dateLabel, bookingCode }) {
+  const subject = `Your date is live — ${route} on ${dateLabel}`;
+  const text =
+    `Hi ${customerName || ""},\n\nGood news — your requested departure for ${route} on ${dateLabel} is approved and now open for other travellers to join.\n` +
+    `${bookingCode ? `Booking code: ${bookingCode}\n` : ""}` +
+    `It's confirmed to run (GoAhead) once it reaches its minimum travellers — share the date to fill it faster.`;
+  const html = shell(
+    "Your requested date is live",
+    `<p>Good news — your requested departure for <strong>${route}</strong> on ${dateLabel} is <strong>approved</strong> and now open for other travellers to join.</p>
+     ${bookingCode ? `<p style="background:#f2ebdc;border-radius:10px;padding:14px">Booking code: <strong>${bookingCode}</strong></p>` : ""}
+     <p style="font-size:13px;color:#56524a">It's confirmed to run (GoAhead) once it reaches its minimum travellers — share the date to fill it faster.</p>`
+  );
+  return { to, subject, html, text, kind: "departure_request_approved" };
+}
+
+export function departureRequestDeclinedEmail({ to, customerName, route, dateLabel, reason }) {
+  const subject = `About your requested date — ${route}`;
+  const text =
+    `Hi ${customerName || ""},\n\nWe couldn't open your requested departure for ${route} on ${dateLabel}.` +
+    `${reason ? `\nReason: ${reason}` : ""}\n\nNothing was charged. Browse other departures at ${APP_URL}/departures — nearby dates for the same tour often need just a few more travellers.`;
+  const html = shell(
+    "We couldn't open this date",
+    `<p>We couldn't open your requested departure for <strong>${route}</strong> on ${dateLabel}.</p>
+     ${reason ? `<p style="background:#f2ebdc;border-radius:10px;padding:14px">${reason}</p>` : ""}
+     <p style="font-size:13px;color:#56524a">Nothing was charged. Nearby dates for the same tour often need just a few more travellers — <a href="${APP_URL}/departures">browse open departures</a>.</p>`
+  );
+  return { to, subject, html, text, kind: "departure_request_declined" };
+}
+
 export function goAheadEmail({ to, route, dateLabel }) {
   const subject = `Confirmed: ${route} is running`;
   const text = `Good news — ${route} on ${dateLabel} has reached its minimum travellers and is confirmed to run (GoAhead).`;

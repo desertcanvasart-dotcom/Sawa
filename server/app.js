@@ -21,6 +21,7 @@ import {
   sendEmail, emailMode,
   inviteEmail, bookingConfirmationEmail, goAheadEmail, cancellationEmail,
   listingApprovedEmail, listingRejectedEmail,
+  departureRequestReceivedEmail, departureRequestApprovedEmail, departureRequestDeclinedEmail,
 } from "./email.js";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -187,6 +188,28 @@ const createDepartureSchema = z.object({
   message: "Max seats cannot be less than min seats.",
 });
 
+// Traveler-initiated departure request (Phase A of the traveler-initiated
+// departures addendum). Email is required — approval/decline needs a channel.
+const publicDepartureRequestSchema = z.object({
+  tourProductId: z.string().trim().min(1, "Tour is required."),
+  date: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, "A valid date (YYYY-MM-DD) is required."),
+  customerName: z.string().trim().min(1, "Traveller name is required."),
+  customerEmail: z.string().trim().email("A valid email is required."),
+  customerPhone: z.string().trim().optional(),
+  seats: z.coerce.number().int().min(1).max(20),
+  note: z.string().trim().max(500).optional(),
+  roomingType: z.enum(["single", "double", "triple"]).optional(),
+  accommodationTier: z.string().optional(),
+  // Join-first rule: near-matches must be explicitly rejected client-side
+  // before a create is allowed through.
+  ignoreMatches: z.coerce.boolean().optional(),
+});
+
+// Eligibility fences for traveler-picked dates (addendum defaults).
+const REQUEST_MIN_LEAD_DAYS = 3;
+const REQUEST_MAX_HORIZON_DAYS = 90;
+const NEAR_MATCH_WINDOW_DAYS = 3;
+
 // Referral codes: lowercase, url-safe, capped. Returns "" if nothing usable.
 function cleanRefCode(raw) {
   return String(raw || "").toLowerCase().replace(/[^a-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 48);
@@ -267,9 +290,13 @@ app.get("/api/bootstrap", h(async (req, res) => {
     agencies: isPlatform(req.user) ? agencies.rows.map(mapAgency) : [],
     cities: cities.rows.map(mapCity),
     tourProducts: products.rows.map(mapProduct),
-    departures: departures.rows.map((d) =>
-      presentDeparture(enrichDeparture(mapDeparture(d, byDep.get(d.id) || [])), req.user)
-    ),
+    // pending_review = traveler-requested, awaiting ops approval. Only
+    // platform staff see them; the public board and agencies must not.
+    departures: departures.rows
+      .filter((d) => canSeeAll || d.status !== "pending_review")
+      .map((d) =>
+        presentDeparture(enrichDeparture(mapDeparture(d, byDep.get(d.id) || [])), req.user)
+      ),
   };
   if (anon) publicBootstrapCache = { at: Date.now(), payload };
   res.json(payload);
@@ -559,6 +586,7 @@ app.post("/api/departures/:id/pledges", requireAuth, requireRole("agency_owner",
     const dep = await loadDeparture(c, Number(req.params.id), { forUpdate: true });
     if (!dep) throw new AppError(404, "Departure not found.");
     if (dep.status === "cancelled") throw new AppError(409, "This departure has been cancelled.");
+    if (dep.status === "pending_review") throw new AppError(409, "This departure is awaiting review and not open for bookings yet.");
     if (seatsTotal(dep.pledges) + input.seats > dep.maxSeats) {
       throw new AppError(409, "This pledge exceeds capacity.");
     }
@@ -592,6 +620,7 @@ app.post("/api/public/departures/:id/bookings", writeLimiter, h(async (req, res)
     const dep = await loadDeparture(c, Number(req.params.id), { forUpdate: true });
     if (!dep) throw new AppError(404, "Departure not found.");
     if (dep.status === "cancelled") throw new AppError(409, "This departure has been cancelled.");
+    if (dep.status === "pending_review") throw new AppError(409, "This departure is awaiting review and not open for bookings yet.");
     if (seatsTotal(dep.pledges) + input.seats > dep.maxSeats) {
       throw new AppError(409, "This booking exceeds the remaining seats.");
     }
@@ -722,6 +751,166 @@ app.get("/api/public/bookings/:code", h(async (req, res) => {
 // ---- Referrals / affiliate tracking -----------------------------------------
 
 // Public: count a click-through from a partner widget. Fire-and-forget.
+// ---- Traveler-initiated departure requests (addendum Phase A) --------------
+// A traveler picks tour + date + contact; the departure lands as
+// `pending_review` with the traveler's seed pledge attached. Admin approves it
+// into `open` (or declines -> cancelled). No payment is taken in Phase A.
+app.post("/api/public/departure-requests", writeLimiter, h(async (req, res) => {
+  const input = parse(publicDepartureRequestSchema, req.body);
+
+  const today = new Date(); today.setHours(12, 0, 0, 0);
+  const picked = new Date(`${input.date}T12:00:00`);
+  if (isNaN(picked)) throw new AppError(422, "A valid date is required.");
+  const daysOut = Math.round((picked - today) / 86400000);
+  if (daysOut < REQUEST_MIN_LEAD_DAYS) {
+    throw new AppError(422, `Requested dates need at least ${REQUEST_MIN_LEAD_DAYS} days of lead time.`);
+  }
+  if (daysOut > REQUEST_MAX_HORIZON_DAYS) {
+    throw new AppError(422, `Requested dates can be at most ${REQUEST_MAX_HORIZON_DAYS} days out.`);
+  }
+
+  const result = await withTransaction(async (c) => {
+    const product = await loadProduct(c, input.tourProductId);
+    if (!product || product.active === false || product.status !== "approved") {
+      throw new AppError(404, "Tour not found.");
+    }
+
+    // Join-first rule: surface open departures for the same tour within the
+    // match window. The client must explicitly reject them (ignoreMatches)
+    // before a new departure is created — fragmenting demand kills pooling.
+    if (!input.ignoreMatches) {
+      const win = await c.query(
+        `SELECT id FROM departures
+         WHERE tour_product_id = $1 AND status = 'open'
+           AND COALESCE(start_date, date) BETWEEN ($2::date - $3::int) AND ($2::date + $3::int)
+         ORDER BY COALESCE(start_date, date) ASC`,
+        [product.id, input.date, NEAR_MATCH_WINDOW_DAYS]
+      );
+      const matches = [];
+      for (const row of win.rows) {
+        const d = await loadDeparture(c, row.id);
+        if (d && seatsTotal(d.pledges) < d.maxSeats) matches.push(presentDeparture(d, req.user));
+      }
+      if (matches.length > 0) {
+        return { nearMatches: matches };
+      }
+    }
+
+    const isPkg = product.type === "package";
+    let endDate = null;
+    if (isPkg && product.nights) {
+      const e = new Date(`${input.date}T12:00:00`);
+      e.setDate(e.getDate() + Number(product.nights));
+      endDate = e.toISOString().slice(0, 10);
+    }
+    const id = (await c.query("SELECT nextval('departures_id_seq') AS id")).rows[0].id;
+    await c.query(
+      `INSERT INTO departures
+        (id, type, tour_product_id, route, date, start_date, end_date, nights, cities, time,
+         city, guide, vehicle, min_seats, max_seats, base_cost, published_rate, break_price,
+         quality, cutoff, status, notes, deposit_percent, created_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,
+         $11,$12,$13,$14,$15,$16,$17,$18,$19,$20,'pending_review',$21,$22,'traveler')`,
+      [
+        id, product.type, product.id, product.title, input.date,
+        isPkg ? input.date : null, isPkg ? endDate : null, isPkg ? product.nights : null,
+        isPkg ? JSON.stringify(product.cities || []) : null, product.defaultTime,
+        product.city, product.guide, product.vehicle,
+        Number(product.minSeats), Number(product.maxSeats),
+        Number(product.baseCost || 0), Number(product.publishedRate),
+        Number(product.breakPrice || Math.round(product.publishedRate * 0.8)),
+        product.quality, "Open until 18:00",
+        input.note ? `Traveller request: ${input.note}` : "Traveller-requested date awaiting review.",
+        Number(product.depositPercent || defaultDepositFor(product)),
+      ]
+    );
+
+    const dep = await loadDeparture(c, id);
+    const pricing = computePledgePricing(dep, product, input);
+    const pledgeId = `pl_${id}_${Date.now()}`;
+    await insertPledge(c, id, {
+      id: pledgeId,
+      agencyId: "direct_customer",
+      agency: "Direct traveler",
+      seats: input.seats,
+      customers: input.customerName,
+      customerEmail: input.customerEmail,
+      customerPhone: input.customerPhone || null,
+      source: "public_request",
+      bookingCode: publicBookingCode(),
+      refCode: null,
+      ...pricing,
+    });
+    const departure = await loadDeparture(c, id);
+    const saved = await c.query(`SELECT * FROM pledges WHERE id=$1`, [pledgeId]);
+    return { departure, booking: mapPledge(saved.rows[0]) };
+  });
+
+  if (result.nearMatches) {
+    // Not an error for the traveler — the UI offers these to join instead.
+    return res.status(409).json({
+      error: "Open departures already exist near this date.",
+      code: "near_matches",
+      nearMatches: result.nearMatches,
+    });
+  }
+
+  await logAudit(req, {
+    action: "departure_request.create", entity: "departure", entityId: String(result.departure.id),
+    detail: { tourProductId: input.tourProductId, date: input.date, seats: input.seats, source: "public" },
+  });
+  const d = result.departure;
+  sendEmail(departureRequestReceivedEmail({
+    to: input.customerEmail, customerName: input.customerName, route: d.route,
+    dateLabel: d.startDate ? `${d.startDate} – ${d.endDate}` : d.date,
+    seats: input.seats, bookingCode: result.booking.bookingCode,
+  })).catch(() => {});
+  res.status(201).json({ departure: presentDeparture(result.departure, req.user), booking: result.booking });
+}));
+
+// Admin approves a traveler-requested departure into the open pool.
+app.post("/api/admin/departure-requests/:id/approve", requireAuth, requireRole("super_admin", "ops_staff"), h(async (req, res) => {
+  const departure = await withTransaction(async (c) => {
+    const dep = await loadDeparture(c, Number(req.params.id), { forUpdate: true });
+    if (!dep) throw new AppError(404, "Departure not found.");
+    if (dep.status !== "pending_review") throw new AppError(409, "This departure is not awaiting review.");
+    await c.query(`UPDATE departures SET status='open' WHERE id=$1`, [dep.id]);
+    return loadDeparture(c, dep.id);
+  });
+  await logAudit(req, { action: "departure_request.approve", entity: "departure", entityId: String(departure.id) });
+  const seed = departure.pledges.find((p) => p.source === "public_request");
+  if (seed?.customerEmail) {
+    sendEmail(departureRequestApprovedEmail({
+      to: seed.customerEmail, customerName: seed.customers, route: departure.route,
+      dateLabel: departure.startDate ? `${departure.startDate} – ${departure.endDate}` : departure.date,
+      bookingCode: seed.bookingCode,
+    })).catch(() => {});
+  }
+  res.json({ departure: presentDeparture(departure, req.user) });
+}));
+
+// Admin declines a traveler-requested departure (with an optional reason).
+app.post("/api/admin/departure-requests/:id/decline", requireAuth, requireRole("super_admin", "ops_staff"), h(async (req, res) => {
+  const reason = String(req.body?.reason || "").trim().slice(0, 300);
+  const departure = await withTransaction(async (c) => {
+    const dep = await loadDeparture(c, Number(req.params.id), { forUpdate: true });
+    if (!dep) throw new AppError(404, "Departure not found.");
+    if (dep.status !== "pending_review") throw new AppError(409, "This departure is not awaiting review.");
+    await c.query(`UPDATE departures SET status='cancelled' WHERE id=$1`, [dep.id]);
+    return loadDeparture(c, dep.id);
+  });
+  await logAudit(req, { action: "departure_request.decline", entity: "departure", entityId: String(departure.id), detail: { reason: reason || null } });
+  const seed = departure.pledges.find((p) => p.source === "public_request");
+  if (seed?.customerEmail) {
+    sendEmail(departureRequestDeclinedEmail({
+      to: seed.customerEmail, customerName: seed.customers, route: departure.route,
+      dateLabel: departure.startDate ? `${departure.startDate} – ${departure.endDate}` : departure.date,
+      reason: reason || undefined,
+    })).catch(() => {});
+  }
+  res.json({ departure: presentDeparture(departure, req.user) });
+}));
+
 app.post("/api/track/referral", h(async (req, res) => {
   const code = cleanRefCode((req.body || {}).code);
   if (!code) return res.status(204).end();
@@ -971,7 +1160,9 @@ async function insertPledge(c, departureId, p) {
 async function refreshStatus(c, departureId) {
   const dep = await c.query(`SELECT * FROM departures WHERE id=$1`, [departureId]);
   const row = dep.rows[0];
-  if (["supplier_confirmed", "closed", "cancelled"].includes(row.status)) return;
+  // pending_review must not auto-advance from pledge counts — only an admin
+  // approval moves it to 'open' (traveler-initiated departures, Phase A).
+  if (["pending_review", "supplier_confirmed", "closed", "cancelled"].includes(row.status)) return;
   // Cancelled pledges have freed their seats — exclude them from the count.
   const seats = (await c.query(
     `SELECT COALESCE(SUM(seats),0) AS s FROM pledges WHERE departure_id=$1 AND status <> 'cancelled'`,

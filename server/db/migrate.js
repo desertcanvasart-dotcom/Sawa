@@ -22,6 +22,7 @@ const MIGRATIONS = [
   { name: "011_referrals", file: "schema_011_referrals.sql" },
   { name: "012_referral_agency", file: "schema_012_referral_agency.sql" },
   { name: "013_tour_approval", file: "schema_013_tour_approval.sql" },
+  { name: "014_traveler_requests", file: "schema_014_traveler_requests.sql" },
 ];
 
 async function main() {
