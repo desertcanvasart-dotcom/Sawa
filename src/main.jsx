@@ -1442,9 +1442,30 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
 
   const reqIso = (days) => { const d = new Date(); d.setDate(d.getDate() + days); return d.toISOString().slice(0, 10); };
 
+  // Entering/leaving request mode collapses or restores ~800px of date cards
+  // inside a sticky rail — without help the reflow leaves the visitor staring
+  // below the widget. Keep the booking card pinned to their view on every
+  // mode change, and put the cursor in the date field when the panel opens.
+  const prevReqMode = useRef(reqMode);
+  useEffect(() => {
+    if (prevReqMode.current === reqMode) return; // skip initial mount
+    prevReqMode.current = reqMode;
+    const book = rootRef.current?.querySelector(".book");
+    if (book) book.scrollIntoView({ behavior: "smooth", block: "start" });
+    if (reqMode) setTimeout(() => rootRef.current?.querySelector(".req-date")?.focus(), 400);
+  }, [reqMode]);
+
+  const showDateField = () => {
+    const el = rootRef.current?.querySelector(".req-date");
+    if (el) { el.scrollIntoView({ behavior: "smooth", block: "center" }); el.focus(); }
+  };
+
   async function submitDateRequest(ignoreMatches = false) {
     setReqErr(""); setReqMatches(null);
-    if (!reqDate) return setReqErr("Pick the date you want.");
+    // The date field sits at the top of the panel and the CTA at the bottom —
+    // when the date is missing, bring the field to the visitor instead of
+    // leaving an error they can't see the cause of.
+    if (!reqDate) { setReqErr("Pick the date you want — we've highlighted the field."); showDateField(); return; }
     if (name.trim().length < 2) return setReqErr("Enter the lead traveller's name.");
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return setReqErr("Enter a valid email — we'll confirm your date there.");
     setReqBusy(true);
