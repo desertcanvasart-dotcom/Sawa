@@ -393,16 +393,23 @@ async function upsertTourProduct(c, body, review) {
   const publishedRate = Number(body.publishedRate || 0);
   const now = new Date().toISOString();
   const reviewedAt = review.status === "approved" ? now : null;
+  // Operating weekdays (0=Sun … 6=Sat): dedupe, bound, and treat "all 7" as
+  // unrestricted (null) so the traveler picker stays a free calendar.
+  const opDays = Array.isArray(body.operatingDays)
+    ? [...new Set(body.operatingDays.map(Number).filter((n) => Number.isInteger(n) && n >= 0 && n <= 6))].sort()
+    : null;
+  const operatingDays = opDays && opDays.length > 0 && opDays.length < 7 ? JSON.stringify(opDays) : null;
   await c.query(
     `INSERT INTO tour_products
       (id, type, title, city, cities, nights, duration, default_time, guide, vehicle,
        min_seats, max_seats, base_cost, published_rate, break_price, quality, deposit_percent,
        description, included, not_included, itinerary, accommodation_tiers,
        overview_html, policies_html, what_to_bring, meeting_point, pickup_note, booking_cutoff_hours, images,
-       meeting_points, status, agency_id, submitted_by, submitted_at, reviewed_by, reviewed_at, rejection_reason)
+       meeting_points, status, agency_id, submitted_by, submitted_at, reviewed_by, reviewed_at, rejection_reason, operating_days)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,
-       $23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37)
+       $23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38)
      ON CONFLICT (id) DO UPDATE SET
+       operating_days=EXCLUDED.operating_days,
        type=EXCLUDED.type, title=EXCLUDED.title, city=EXCLUDED.city, cities=EXCLUDED.cities,
        nights=EXCLUDED.nights, duration=EXCLUDED.duration,
        guide=EXCLUDED.guide, vehicle=EXCLUDED.vehicle, min_seats=EXCLUDED.min_seats,
@@ -438,7 +445,7 @@ async function upsertTourProduct(c, body, review) {
       JSON.stringify(body.images || []),
       JSON.stringify(Array.isArray(body.meetingPoints) ? body.meetingPoints : []),
       review.status, review.agencyId || null, review.submittedBy || null, now,
-      review.reviewedBy || null, reviewedAt, null,
+      review.reviewedBy || null, reviewedAt, null, operatingDays,
     ]
   );
   return loadProduct(c, id);
@@ -773,6 +780,19 @@ app.post("/api/public/departure-requests", writeLimiter, h(async (req, res) => {
     const product = await loadProduct(c, input.tourProductId);
     if (!product || product.active === false || product.status !== "approved") {
       throw new AppError(404, "Tour not found.");
+    }
+
+    // Operating days: a Nile cruise that sails Mondays must not accept a
+    // Tuesday request, whatever the client sent.
+    const opDays = Array.isArray(product.operatingDays) ? product.operatingDays : [];
+    if (opDays.length > 0) {
+      const dow = new Date(`${input.date}T12:00:00Z`).getUTCDay();
+      if (!opDays.includes(dow)) {
+        const DAY = ["Sundays", "Mondays", "Tuesdays", "Wednesdays", "Thursdays", "Fridays", "Saturdays"];
+        const list = opDays.map((d) => DAY[d]);
+        const label = list.length > 1 ? `${list.slice(0, -1).join(", ")} and ${list[list.length - 1]}` : list[0];
+        throw new AppError(422, `${product.title} departs only on ${label} — pick one of those days.`);
+      }
     }
 
     // Join-first rule: surface open departures for the same tour within the

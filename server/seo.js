@@ -314,7 +314,7 @@ export async function buildBody(pathname) {
     return wrapBody(`
 <article>
   <h1>${esc(p.title)}</h1>
-  <p>${esc(p.city || "Egypt")}${p.duration ? ` · ${esc(p.duration)}` : ""} · shared departure for ${Math.max(1, Number(p.min_seats) || 4)}–${Number(p.max_seats) || 12} travellers${from ? ` · from ${from} per person` : ""}</p>
+  <p>${esc(p.city || "Egypt")}${p.duration ? ` · ${esc(p.duration)}` : ""} · shared departure for ${Math.max(1, Number(p.min_seats) || 4)}–${Number(p.max_seats) || 12} travellers${from ? ` · from ${from} per person` : ""}${Array.isArray(p.operating_days) && p.operating_days.length ? ` · departs on ${p.operating_days.map((d) => ["Sundays", "Mondays", "Tuesdays", "Wednesdays", "Thursdays", "Fridays", "Saturdays"][d]).join(", ")}` : ""}</p>
   ${p.overview_html ? cleanHtml(p.overview_html) : `<p>${esc(p.description || "")}</p>`}
   <h2>Upcoming departures</h2>
   ${departureListHtml(deps)}

@@ -463,6 +463,10 @@
 .sx .date-opt.start-own .d-left b{color:var(--gold-ink)}
 .sx .req-date{width:100%;min-height:44px;border:1px solid var(--line);border-radius:12px;padding:0 13px;font-size:.95rem;font-family:inherit;background:#fff;color:var(--ink)}
 .sx .req-date:focus{outline:none;border-color:var(--teal);box-shadow:0 0 0 3px rgba(23,50,58,.1)}
+.sx .req-days{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.sx .req-day{border:1px solid var(--line);border-radius:12px;padding:10px 8px;background:#fff;color:var(--ink);font:inherit;font-size:.88rem;cursor:pointer;text-align:center;transition:border-color .25s var(--ease),background .25s var(--ease)}
+.sx .req-day:hover{border-color:var(--teal)}
+.sx .req-day.on{border-color:var(--gold-deep);background:rgba(217,171,69,.12);font-weight:600}
 .sx .req-back{background:none;border:none;padding:0;margin-top:12px;font:inherit;font-size:.85rem;color:var(--muted);cursor:pointer;text-decoration:underline;text-underline-offset:3px}
 .sx .req-back:hover{color:var(--teal)}
 .sx .date-opt:last-child{margin-bottom:0}
