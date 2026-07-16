@@ -2461,8 +2461,8 @@ function ToursPage({ navigate, customerCalendars, cityStats, selectedCity, setSe
     <div className="page-wrap">
       <PageHead
         eyebrow="Browse"
-        title="Find a departure that's going."
-        lead="Every tour shows live seats and whether the date is confirmed to run. Hold a seat for free — you only pay once it's GoAhead."
+        title="Find a departure that's going — or start your own."
+        lead="Every tour shows live seats and whether the date is confirmed to run. Hold a seat for free — you only pay once it's GoAhead. Don't see your day? Start it on any tour's page."
       />
 
       <div className="tours-toolbar reveal in">

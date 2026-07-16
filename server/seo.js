@@ -31,8 +31,8 @@ const STATIC = {
     title: `${BRAND.name} — ${BRAND.positioning}`,
     description: "Shared day tours and multi-day packages across Cairo, Luxor and Aswan. Hold a seat free; you only pay once your date is confirmed to run.",
   },
-  "/tours": { title: `Egypt Tours & Departures | ${BRAND.name}`, description: "Browse shared Egypt day tours and multi-day packages with live seat counts. Every date is confirmed before you pay.", crumb: "Tours" },
-  "/how-it-works": { title: `How Sawa Works — Guaranteed Shared Tours | ${BRAND.name}`, description: "How Sawa's GoAhead model works: hold a seat free, the group fills, and your departure is guaranteed before you pay a deposit.", crumb: "How it works" },
+  "/tours": { title: `Egypt Tours & Departures | ${BRAND.name}`, description: "Browse shared Egypt day tours and multi-day packages with live seat counts. Join a forming date or start your own — every date is confirmed before you pay.", crumb: "Tours" },
+  "/how-it-works": { title: `How Sawa Works — Guaranteed Shared Tours | ${BRAND.name}`, description: "How Sawa's GoAhead model works: join a forming date or start your own, the group fills, and your departure is guaranteed before you pay a deposit.", crumb: "How it works" },
   "/about": { title: `About Sawa Tours — Shared Departures in Egypt | ${BRAND.name}`, description: BRAND.description, crumb: "About" },
   "/contact": { title: `Contact ${BRAND.name}`, description: "Reach Sawa Tours on WhatsApp or email. We reply within two hours, 9am–9pm Cairo time.", crumb: "Contact" },
   "/faq": { title: `FAQ — Booking, GoAhead & Cancellations | ${BRAND.name}`, description: "Answers about holding a seat, what GoAhead means, payment, meeting points and cancellations for Sawa shared tours.", crumb: "FAQ" },
@@ -251,7 +251,7 @@ ${BRAND.description}
 ## Core pages
 
 - [Tours & departures](/tours): browse all shared day tours and multi-day packages with live seat counts.
-- [How it works](/how-it-works): the GoAhead model — hold a seat free, the group fills, the date is guaranteed before you pay.
+- [How it works](/how-it-works): the GoAhead model — join a forming date or start your own, hold a seat free, and the date is guaranteed before you pay.
 - [Blog](/blog): guides, history and travel tips for Egypt.
 - [About](/about): who Sawa is and why shared departures.
 - [Contact](/contact): WhatsApp and email; replies within two hours.
