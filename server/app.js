@@ -27,6 +27,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildHead, buildBody, robotsTxt, sitemapXml, llmsTxt, llmsFullTxt } from "./seo.js";
+import { emitDepartureSync, unavailableDates } from "./autoura-sync.js";
 import { tourSlug } from "./slug.js";
 import { cleanHtml, cleanItinerary } from "./sanitize.js";
 
@@ -338,6 +339,7 @@ app.post("/api/departures", requireAuth, requireRole("agency_owner", "agency_age
     return loadDeparture(c, id);
   });
 
+  emitDepartureSync(departure.id);
   res.status(201).json({ departure: presentDeparture(departure, req.user) });
 }));
 
@@ -379,6 +381,7 @@ app.post("/api/admin/departures", requireAuth, requireRole("super_admin", "ops_s
     );
     return loadDeparture(c, id);
   });
+  emitDepartureSync(departure.id);
   res.status(201).json({ departure: presentDeparture(departure, req.user) });
 }));
 
@@ -583,6 +586,7 @@ app.post("/api/admin/departures/:id/confirm", requireAuth, requireRole("super_ad
   for (const row of recips.rows) {
     sendEmail(goAheadEmail({ to: row.customer_email, route: departure.route, dateLabel })).catch(() => {});
   }
+  emitDepartureSync(departure.id);
   res.json({ departure: presentDeparture(departure, req.user) });
 }));
 
@@ -616,6 +620,7 @@ app.post("/api/departures/:id/pledges", requireAuth, requireRole("agency_owner",
     return loadDeparture(c, dep.id);
   });
   await logAudit(req, { action: "pledge.create", entity: "departure", entityId: Number(req.params.id), detail: { seats: input.seats, agencyId: req.user.agencyId } });
+  emitDepartureSync(departure.id);
   res.status(201).json({ departure: presentDeparture(departure, req.user) });
 }));
 
@@ -670,6 +675,7 @@ app.post("/api/public/departures/:id/bookings", writeLimiter, h(async (req, res)
     })).catch(() => {});
   }
   // The direct traveller gets their own booking receipt back in full.
+  emitDepartureSync(result.departure.id);
   res.status(201).json({ departure: presentDeparture(result.departure, req.user), booking: result.booking });
 }));
 
@@ -692,6 +698,7 @@ app.delete("/api/departures/:id/pledges/:pledgeId", requireAuth, requireRole("ag
     return loadDeparture(c, dep.id);
   });
   await logAudit(req, { action: "pledge.cancel", entity: "departure", entityId: Number(req.params.id), detail: { pledgeId: req.params.pledgeId } });
+  emitDepartureSync(departure.id);
   res.json({ departure: presentDeparture(departure, req.user) });
 }));
 
@@ -709,6 +716,7 @@ app.delete("/api/public/departures/:id/bookings/:pledgeId", writeLimiter, h(asyn
     await refreshStatus(c, dep.id);
     return loadDeparture(c, dep.id);
   });
+  emitDepartureSync(departure.id);
   res.json({ departure: presentDeparture(departure, req.user) });
 }));
 
@@ -758,6 +766,14 @@ app.get("/api/public/bookings/:code", h(async (req, res) => {
 // ---- Referrals / affiliate tracking -----------------------------------------
 
 // Public: count a click-through from a partner widget. Fire-and-forget.
+// Dates travelers must not start a departure on (operator blackouts, via the
+// Autoura capacity feed). Public and cache-friendly: dates only, no reasons.
+app.get("/api/public/unavailable-dates", h(async (_req, res) => {
+  const blocked = await unavailableDates();
+  res.set("Cache-Control", "public, max-age=300");
+  res.json({ dates: [...blocked].sort() });
+}));
+
 // ---- Traveler-initiated departure requests (addendum Phase A) --------------
 // A traveler picks tour + date + contact; the departure lands as
 // `pending_review` with the traveler's seed pledge attached. Admin approves it
@@ -774,6 +790,14 @@ app.post("/api/public/departure-requests", writeLimiter, h(async (req, res) => {
   }
   if (daysOut > REQUEST_MAX_HORIZON_DAYS) {
     throw new AppError(422, `Requested dates can be at most ${REQUEST_MAX_HORIZON_DAYS} days out.`);
+  }
+
+  // Operator blackouts (Autoura capacity feed): the weekly pattern may allow
+  // this weekday, but not THIS date if the operation is dark. Checked before
+  // the transaction — it may involve an HTTP fetch (cached 10 min).
+  const blocked = await unavailableDates();
+  if (blocked.has(input.date)) {
+    throw new AppError(422, "That day isn't available operationally — please pick another date.");
   }
 
   const result = await withTransaction(async (c) => {
@@ -906,6 +930,7 @@ app.post("/api/admin/departure-requests/:id/approve", requireAuth, requireRole("
       bookingCode: seed.bookingCode,
     })).catch(() => {});
   }
+  emitDepartureSync(departure.id);
   res.json({ departure: presentDeparture(departure, req.user) });
 }));
 
@@ -1551,6 +1576,7 @@ app.post("/api/admin/departures/:id/cancel", requireAuth, requireRole("super_adm
   const dateLabel = departure.startDate ? `${departure.startDate} – ${departure.endDate}` : departure.date;
   const recips = await pool.query(`SELECT DISTINCT customer_email FROM pledges WHERE departure_id=$1 AND customer_email IS NOT NULL`, [departure.id]);
   for (const row of recips.rows) sendEmail(cancellationEmail({ to: row.customer_email, route: departure.route, dateLabel })).catch(() => {});
+  emitDepartureSync(departure.id);
   res.json({ departure: presentDeparture(departure, req.user) });
 }));
 
