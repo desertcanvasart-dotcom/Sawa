@@ -1464,6 +1464,7 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
       }
       if (!response.ok) throw new Error(data.error || "Could not request this date.");
       setReqDone({ code: data.booking?.bookingCode, date: reqDate });
+      setReqMode(false);
     } catch (error) {
       setReqErr(error.message);
     } finally {
@@ -1607,16 +1608,18 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
                 <div className="book-in">
                   <div className="book-top">
                     <div className="book-price"><b className="tnum">${pp}</b><span>/ person</span></div>
-                    <div className="go-status"><span className={`pill${confirmed ? "" : " form"}`}><span className="d" />{confirmed ? "GoAhead" : "Forming"}</span> {confirmed ? "Confirmed — this date is running" : `${Math.max(0, goAhead - booked)} more to confirm`}</div>
+                    <div className="go-status">{reqMode
+                      ? (<><span className="pill form"><span className="d" />New date</span> Your day — travellers join you</>)
+                      : (<><span className={`pill${confirmed ? "" : " form"}`}><span className="d" />{confirmed ? "GoAhead" : "Forming"}</span> {confirmed ? "Confirmed — this date is running" : `${Math.max(0, goAhead - booked)} more to confirm`}</>)}</div>
                   </div>
-                  <div className="seats-block">
+                  {!reqMode && <div className="seats-block">
                     <div className="pbar"><i data-fill={`${seatPct}%`} /></div>
                     <div className="meta"><span><b className="tnum">{booked}</b> of {goAhead} joined</span><span><b className="tnum">{Math.max(0, remaining)}</b> seats left</span></div>
-                  </div>
+                  </div>}
                   <form onSubmit={reserve}>
                     <div className="dates">
-                      <div className="lbl">Live dates for this tour</div>
-                      {tour.dates.map((d) => {
+                      <div className="lbl">{reqMode ? "Start your own date" : "Live dates for this tour"}</div>
+                      {!reqMode && tour.dates.map((d) => {
                         const s = seatsTotal(d.pledges); const left = d.maxSeats - s; const on = Number(d.id) === Number(depId);
                         const ga = goAheadFor(d); const cf = d.status === "supplier_confirmed" || s >= ga;
                         return (
@@ -1641,20 +1644,24 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
                           Date request received for {formatDate(reqDone.date)}{reqDone.code ? ` — code ${reqDone.code}` : ""}. Our team reviews it and emails you shortly. Nothing is charged now.
                         </div>
                       ) : !reqMode ? (
-                        <button type="button" className="date-opt" style={{ justifyContent: "center" }} onClick={() => { setReqMode(true); setReqErr(""); }}>
-                          <b>{tour.dates.length ? "Don't see your date? Start your own" : "No open dates — start your own"}</b>
+                        <button type="button" className="date-opt start-own" onClick={() => { setReqMode(true); setReqErr(""); }} aria-label="Start your own date — pick any day, free to request">
+                          <span className="plus" aria-hidden="true">+</span>
+                          <div className="d-left">
+                            <b>{tour.dates.length ? "Start your own date" : "No open dates — start your own"}</b>
+                            <span>Pick any day — free to request</span>
+                          </div>
                         </button>
                       ) : (
-                        <div style={{ marginTop: 8 }}>
-                          <div className="lbl">Pick your date — fill your details below, then request it</div>
+                        <div style={{ marginTop: 4 }}>
                           <input
-                            type="date" value={reqDate} min={reqIso(3)} max={reqIso(90)}
+                            type="date" className="req-date" value={reqDate} min={reqIso(3)} max={reqIso(90)}
                             onChange={(e) => { setReqDate(e.target.value); setReqMatches(null); }}
                             aria-label="Requested departure date"
                           />
+                          <div className="note" style={{ marginTop: 8 }}>Any day from {formatDate(reqIso(3))} to {formatDate(reqIso(90))}. Our team reviews each new date before it opens.</div>
                           {reqMatches && reqMatches.length > 0 && (
-                            <div style={{ marginTop: 8 }}>
-                              <div className="lbl">Departures already forming near that date — joining fills a group faster:</div>
+                            <div style={{ marginTop: 10 }}>
+                              <div className="lbl">Groups already forming near that date — joining confirms a trip faster:</div>
                               {reqMatches.map((m) => {
                                 const ms = seatsTotal(m.pledges); const mga = goAheadFor(m);
                                 return (
@@ -1669,13 +1676,7 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
                               </button>
                             </div>
                           )}
-                          {(!reqMatches || reqMatches.length === 0) && (
-                            <button type="button" className="btn gold full" style={{ marginTop: 8 }} disabled={reqBusy} onClick={() => submitDateRequest(false)}>
-                              {reqBusy ? "Requesting…" : "Request this date"}
-                            </button>
-                          )}
-                          {reqErr && <div className="bk-err">{reqErr}</div>}
-                          <div className="note" style={{ marginTop: 6 }}>Reviewed by our team before it opens — you pay nothing now.</div>
+                          <button type="button" className="req-back" onClick={() => { setReqMode(false); setReqMatches(null); setReqErr(""); }}>← Back to open dates</button>
                         </div>
                       )}
                     </div>
@@ -1687,19 +1688,32 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
                       </div>
                       <input type="number" min="1" max={Math.max(1, remaining)} value={seats} onChange={(e) => setSeats(e.target.value)} aria-label="Seats" />
                     </div>
-                    <div className="bk-sum">
+                    {!reqMode && <div className="bk-sum">
                       <div className="r"><span>${pp} × {nSeats}</span><b>${total}</b></div>
                       <div className="r key"><span>Deposit today ({depositPct}%)</span><b>${deposit}</b></div>
                       <div className="r"><span>Balance</span><b>${balance}</b></div>
                       <div className="nt">Balance due {dep ? balanceDueDate(dep.date) : "before departure"}.</div>
-                    </div>
+                    </div>}
                     <div className="book-cta">
-                      <button className="btn gold full" type="submit" disabled={isSaving || !dep || remaining <= 0}>{isSaving ? "Holding…" : remaining <= 0 ? "Date full" : "Reserve a seat"}<span className="chip"><SxArrow /></span></button>
-                      {err && <div className="bk-err">{err}</div>}
-                      {publicBooking && Number(publicBooking.departureId) === Number(dep?.id) && (
-                        <div className="bk-ok">Seat held — {publicBooking.code}. {publicBooking.depositDue ? `$${publicBooking.depositDue} deposit due at GoAhead.` : ""} <a onClick={onCancelPublicBooking} style={{ textDecoration: "underline", cursor: "pointer" }}>Cancel</a></div>
+                      {reqMode ? (
+                        <>
+                          <button className="btn gold full" type="button" disabled={reqBusy || (reqMatches && reqMatches.length > 0)} onClick={() => submitDateRequest(false)}>
+                            {reqBusy ? "Requesting…" : reqMatches && reqMatches.length > 0 ? "Pick an option above" : "Request this date"}
+                            <span className="chip"><SxArrow /></span>
+                          </button>
+                          {reqErr && <div className="bk-err">{reqErr}</div>}
+                          <div className="note"><SxCheck />Free to request — nothing is charged unless it runs</div>
+                        </>
+                      ) : (
+                        <>
+                          <button className="btn gold full" type="submit" disabled={isSaving || !dep || remaining <= 0}>{isSaving ? "Holding…" : remaining <= 0 ? "Date full" : "Reserve a seat"}<span className="chip"><SxArrow /></span></button>
+                          {err && <div className="bk-err">{err}</div>}
+                          {publicBooking && Number(publicBooking.departureId) === Number(dep?.id) && (
+                            <div className="bk-ok">Seat held — {publicBooking.code}. {publicBooking.depositDue ? `$${publicBooking.depositDue} deposit due at GoAhead.` : ""} <a onClick={onCancelPublicBooking} style={{ textDecoration: "underline", cursor: "pointer" }}>Cancel</a></div>
+                          )}
+                          <div className="note"><SxCheck />Free hold — you only pay once the date confirms</div>
+                        </>
                       )}
-                      <div className="note"><SxCheck />Free hold — you only pay once the date confirms</div>
                     </div>
                   </form>
                 </div>

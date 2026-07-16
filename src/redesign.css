@@ -455,6 +455,16 @@
 .sx .dates{padding:22px 24px;border-bottom:1px solid var(--line)}
 .sx .dates .lbl{font-size:.7rem;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:600;margin-bottom:13px}
 .sx .date-opt{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 15px;border:1px solid var(--line);border-radius:14px;cursor:pointer;margin-bottom:10px;transition:border-color .35s var(--ease),background .35s var(--ease);width:100%;background:transparent;color:inherit;font:inherit;text-align:left}
+/* Traveler-initiated date request: the trigger must read as a distinct,
+   inviting action — dashed gold, plus mark — not another date row. */
+.sx .date-opt.start-own{justify-content:flex-start;border:1.5px dashed var(--gold-deep);background:rgba(217,171,69,.07)}
+.sx .date-opt.start-own:hover{background:rgba(217,171,69,.14);border-color:var(--gold-ink)}
+.sx .date-opt.start-own .plus{flex:0 0 auto;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;background:var(--gold);color:var(--teal);font-weight:700;font-size:1.15rem;line-height:1}
+.sx .date-opt.start-own .d-left b{color:var(--gold-ink)}
+.sx .req-date{width:100%;min-height:44px;border:1px solid var(--line);border-radius:12px;padding:0 13px;font-size:.95rem;font-family:inherit;background:#fff;color:var(--ink)}
+.sx .req-date:focus{outline:none;border-color:var(--teal);box-shadow:0 0 0 3px rgba(23,50,58,.1)}
+.sx .req-back{background:none;border:none;padding:0;margin-top:12px;font:inherit;font-size:.85rem;color:var(--muted);cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+.sx .req-back:hover{color:var(--teal)}
 .sx .date-opt:last-child{margin-bottom:0}
 .sx .date-opt:hover:not(:disabled){border-color:var(--line-2)}
 .sx .date-opt:focus-visible{outline:2px solid var(--teal);outline-offset:2px}
