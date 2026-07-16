@@ -1395,6 +1395,7 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
   const [reqErr, setReqErr] = useState("");
   const [reqMatches, setReqMatches] = useState(null);
   const [reqDone, setReqDone] = useState(null);
+  const [blockedDates, setBlockedDates] = useState(null); // operator blackouts (Autoura feed)
 
   const dep = tour.dates.find((d) => Number(d.id) === Number(depId)) || lead;
   const goAhead = goAheadFor(tour);
@@ -1457,10 +1458,21 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
     const out = [];
     for (let i = 3; i <= 90 && out.length < 12; i++) {
       const d = new Date(); d.setDate(d.getDate() + i);
-      if (opDays.includes(d.getDay())) out.push(d.toISOString().slice(0, 10));
+      const iso = d.toISOString().slice(0, 10);
+      if (opDays.includes(d.getDay()) && !(blockedDates && blockedDates.has(iso))) out.push(iso);
     }
     return out;
-  }, [tour.id]);
+  }, [tour.id, blockedDates]);
+
+  // Operator blackout dates load lazily the first time the request panel
+  // opens; eligible-date chips and the free calendar both respect them.
+  useEffect(() => {
+    if (!reqMode || blockedDates !== null) return;
+    fetch(`${API_BASE}/public/unavailable-dates`)
+      .then((r) => r.json())
+      .then((d) => setBlockedDates(new Set(d.dates || [])))
+      .catch(() => setBlockedDates(new Set()));
+  }, [reqMode, blockedDates]);
 
   // Entering/leaving request mode collapses or restores ~800px of date cards
   // inside a sticky rail — without help the reflow leaves the visitor staring
@@ -1711,7 +1723,11 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
                             <>
                               <input
                                 type="date" className="req-date" value={reqDate} min={reqIso(3)} max={reqIso(90)}
-                                onChange={(e) => { setReqDate(e.target.value); setReqMatches(null); }}
+                                onChange={(e) => {
+                                  const v = e.target.value;
+                                  setReqDate(v); setReqMatches(null);
+                                  setReqErr(blockedDates && blockedDates.has(v) ? "That day isn't available operationally — please pick another date." : "");
+                                }}
                                 aria-label="Requested departure date"
                               />
                               <div className="note" style={{ marginTop: 8 }}>Any day from {formatDate(reqIso(3))} to {formatDate(reqIso(90))}. Our team reviews each new date before it opens.</div>
