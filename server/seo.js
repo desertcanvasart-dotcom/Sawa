@@ -255,7 +255,11 @@ export async function sitemapXml() {
 // see it while every crawler gets the real content.
 
 const money = (n) => (Number.isFinite(Number(n)) && Number(n) > 0 ? `$${Math.round(Number(n))}` : null);
-const dateLabel = (d) => (d ? new Date(`${String(d).slice(0, 10)}T12:00:00Z`).toLocaleDateString("en", { month: "long", day: "numeric", year: "numeric", timeZone: "UTC" }) : "");
+const dateLabel = (d) => {
+  if (!d) return "";
+  const dt = d instanceof Date ? d : new Date(/^\d{4}-\d{2}-\d{2}$/.test(String(d)) ? `${d}T12:00:00Z` : d);
+  return isNaN(dt) ? "" : dt.toLocaleDateString("en", { month: "long", day: "numeric", year: "numeric", timeZone: "UTC" });
+};
 
 // Upcoming public departures (with live seat counts) for one tour or all.
 async function upcomingDepartures(tourProductId = null) {
