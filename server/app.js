@@ -26,7 +26,7 @@ import {
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { buildHead, robotsTxt, sitemapXml, llmsTxt, llmsFullTxt } from "./seo.js";
+import { buildHead, buildBody, robotsTxt, sitemapXml, llmsTxt, llmsFullTxt } from "./seo.js";
 import { tourSlug } from "./slug.js";
 import { cleanHtml, cleanItinerary } from "./sanitize.js";
 
@@ -1565,7 +1565,15 @@ app.use("/api", (_req, res) => res.status(404).json({ error: "Not found." }));
 // ============================ AI-readability files ============================
 app.get("/robots.txt", (_req, res) => res.type("text/plain").send(robotsTxt()));
 app.get("/llms.txt", (_req, res) => res.type("text/plain").send(llmsTxt()));
-app.get("/llms-full.txt", (_req, res) => res.type("text/plain").send(llmsFullTxt()));
+// llms-full.txt now embeds a live tours/departures snapshot; cache briefly so
+// crawler bursts don't turn into query storms.
+let llmsFullCache = { at: 0, body: "" };
+app.get("/llms-full.txt", h(async (_req, res) => {
+  if (Date.now() - llmsFullCache.at > 5 * 60 * 1000) {
+    llmsFullCache = { at: Date.now(), body: await llmsFullTxt() };
+  }
+  res.type("text/plain").send(llmsFullCache.body);
+}));
 app.get("/sitemap.xml", h(async (_req, res) => res.type("application/xml").send(await sitemapXml())));
 
 // ============================ MARKETING SITE (editorial) ============================
@@ -1619,14 +1627,29 @@ app.use(h(async (req, res, next) => {
 // engines read complete pages; the SPA still hydrates the body normally.
 if (existsSync(distDir)) {
   const template = readFileSync(join(distDir, "index.html"), "utf8");
+  // Rendered pages are cached briefly: crawlers (which never share browser
+  // cache) hit tour/blog routes in bursts, and each render costs DB queries.
+  const pageCache = new Map(); // path -> { at, status, html }
+  const PAGE_TTL = 60 * 1000;
   const renderPage = async (req, res) => {
     try {
+      const key = req.path;
+      const hit = pageCache.get(key);
+      if (hit && Date.now() - hit.at < PAGE_TTL) {
+        return res.status(hit.status).type("html").send(hit.html);
+      }
       const { title, head, notFound } = await buildHead(req.path);
+      // GEO: crawlers don't execute JS, so inject the route's real content
+      // inside #root. React's createRoot().render() replaces it on mount.
+      const body = notFound ? "" : await buildBody(req.path);
       const html = template
         .replace(/<title>[\s\S]*?<\/title>/, `<title>${title.replace(/</g, "&lt;")}</title>`)
-        .replace("</head>", `${head}\n</head>`);
+        .replace("</head>", () => `${head}\n</head>`)
+        .replace('<div id="root"></div>', () => `<div id="root">${body}</div>`);
       // Unknown routes still render the SPA's 404 screen, but with a real 404
       // status so crawlers and monitoring don't treat them as live pages.
+      if (pageCache.size > 500) pageCache.clear();
+      pageCache.set(key, { at: Date.now(), status: notFound ? 404 : 200, html });
       res.status(notFound ? 404 : 200).type("html").send(html);
     } catch (e) {
       console.error("[seo] head injection failed for", req.path, "-", e.message);
