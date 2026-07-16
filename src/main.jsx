@@ -1442,6 +1442,26 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
 
   const reqIso = (days) => { const d = new Date(); d.setDate(d.getDate() + days); return d.toISOString().slice(0, 10); };
 
+  // Operating days (0=Sun … 6=Sat): tours like Nile cruises depart only on
+  // fixed weekdays. Constrained tours offer the actual eligible dates as
+  // chips instead of a free calendar; the server enforces the same rule.
+  const opDays = Array.isArray(tour.operatingDays) ? tour.operatingDays : [];
+  const DAY_FULL = ["Sundays", "Mondays", "Tuesdays", "Wednesdays", "Thursdays", "Fridays", "Saturdays"];
+  const opDaysLabel = opDays.length
+    ? (opDays.length > 1
+        ? `${opDays.slice(0, -1).map((d) => DAY_FULL[d]).join(", ")} and ${DAY_FULL[opDays[opDays.length - 1]]}`
+        : DAY_FULL[opDays[0]])
+    : "";
+  const eligibleDates = useMemo(() => {
+    if (!opDays.length) return [];
+    const out = [];
+    for (let i = 3; i <= 90 && out.length < 12; i++) {
+      const d = new Date(); d.setDate(d.getDate() + i);
+      if (opDays.includes(d.getDay())) out.push(d.toISOString().slice(0, 10));
+    }
+    return out;
+  }, [tour.id]);
+
   // Entering/leaving request mode collapses or restores ~800px of date cards
   // inside a sticky rail — without help the reflow leaves the visitor staring
   // below the widget. Keep the booking card pinned to their view on every
@@ -1456,8 +1476,8 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
   }, [reqMode]);
 
   const showDateField = () => {
-    const el = rootRef.current?.querySelector(".req-date");
-    if (el) { el.scrollIntoView({ behavior: "smooth", block: "center" }); el.focus(); }
+    const el = rootRef.current?.querySelector(".req-date, .req-days");
+    if (el) { el.scrollIntoView({ behavior: "smooth", block: "center" }); el.focus?.(); }
   };
 
   async function submitDateRequest(ignoreMatches = false) {
@@ -1674,12 +1694,29 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
                         </button>
                       ) : (
                         <div style={{ marginTop: 4 }}>
-                          <input
-                            type="date" className="req-date" value={reqDate} min={reqIso(3)} max={reqIso(90)}
-                            onChange={(e) => { setReqDate(e.target.value); setReqMatches(null); }}
-                            aria-label="Requested departure date"
-                          />
-                          <div className="note" style={{ marginTop: 8 }}>Any day from {formatDate(reqIso(3))} to {formatDate(reqIso(90))}. Our team reviews each new date before it opens.</div>
+                          {opDays.length ? (
+                            <>
+                              <div className="note" style={{ marginBottom: 8 }}>This {isPackage(tour) ? "cruise" : "tour"} departs on <b>{opDaysLabel}</b> — pick a departure day:</div>
+                              <div className="req-days">
+                                {eligibleDates.map((d) => (
+                                  <button type="button" key={d} className={`req-day${reqDate === d ? " on" : ""}`} aria-pressed={reqDate === d}
+                                    onClick={() => { setReqDate(d); setReqMatches(null); }}>
+                                    {formatDate(d)}
+                                  </button>
+                                ))}
+                              </div>
+                              <div className="note" style={{ marginTop: 8 }}>Our team reviews each new date before it opens.</div>
+                            </>
+                          ) : (
+                            <>
+                              <input
+                                type="date" className="req-date" value={reqDate} min={reqIso(3)} max={reqIso(90)}
+                                onChange={(e) => { setReqDate(e.target.value); setReqMatches(null); }}
+                                aria-label="Requested departure date"
+                              />
+                              <div className="note" style={{ marginTop: 8 }}>Any day from {formatDate(reqIso(3))} to {formatDate(reqIso(90))}. Our team reviews each new date before it opens.</div>
+                            </>
+                          )}
                           {reqMatches && reqMatches.length > 0 && (
                             <div style={{ marginTop: 10 }}>
                               <div className="lbl">Groups already forming near that date — joining confirms a trip faster:</div>

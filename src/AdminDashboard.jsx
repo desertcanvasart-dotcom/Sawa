@@ -571,6 +571,7 @@ export function ProductEditor({ type: typeProp, existing, destinations = [], onC
     meetingPoint: existing?.meetingPoint || "",
     pickupNote: existing?.pickupNote || "",
     bookingCutoffHours: existing?.bookingCutoffHours ?? 24,
+    operatingDays: Array.isArray(existing?.operatingDays) ? existing.operatingDays : [],
   });
   const [meetingPoints, setMeetingPoints] = useState(() => {
     if (existing?.meetingPoints?.length) return existing.meetingPoints;
@@ -643,6 +644,7 @@ export function ProductEditor({ type: typeProp, existing, destinations = [], onC
         overviewHtml, policiesHtml,
         meetingPoints: meetingPoints.map((m) => ({ point: (m.point || "").trim(), note: (m.note || "").trim() })).filter((m) => m.point),
         meetingPoint: (meetingPoints[0]?.point || f.meetingPoint || "").trim(),
+        operatingDays: f.operatingDays,
         pickupNote: (meetingPoints[0]?.note || f.pickupNote || "").trim(),
         bookingCutoffHours: Number(f.bookingCutoffHours) || 0,
         images,
@@ -711,6 +713,20 @@ export function ProductEditor({ type: typeProp, existing, destinations = [], onC
               <Field label="Break price (full group)"><input type="number" min="1" value={f.breakPrice} onChange={set("breakPrice")} placeholder="auto = 80%" /></Field>
               <Field label="Deposit %"><input type="number" min="0" max="100" value={f.depositPercent} onChange={set("depositPercent")} /></Field>
               <Field label="Booking cutoff (hours before)"><input type="number" min="0" value={f.bookingCutoffHours} onChange={set("bookingCutoffHours")} /></Field>
+              <Field label="Departs on (empty = any day)" full>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d, i) => {
+                    const on = f.operatingDays.includes(i);
+                    return (
+                      <button type="button" key={d} aria-pressed={on}
+                        onClick={() => setF({ ...f, operatingDays: on ? f.operatingDays.filter((x) => x !== i) : [...f.operatingDays, i].sort() })}
+                        style={{ padding: "7px 12px", borderRadius: 999, border: on ? "1.5px solid #d9ab45" : "1px solid rgba(255,255,255,.25)", background: on ? "rgba(217,171,69,.2)" : "transparent", color: "inherit", font: "inherit", fontSize: ".82rem", fontWeight: on ? 700 : 400, cursor: "pointer" }}>
+                        {d}
+                      </button>
+                    );
+                  })}
+                </div>
+              </Field>
               <Field label="Short description (card)" full><textarea rows={2} value={f.description} onChange={set("description")} placeholder="One-line summary shown on the tour card." /></Field>
             </div>
           )}

@@ -44,6 +44,7 @@ export function mapProduct(r) {
     quality: num(r.quality),
     depositPercent: num(r.deposit_percent),
     description: r.description,
+    operatingDays: Array.isArray(r.operating_days) ? r.operating_days : [],
     included: r.included ?? [],
     notIncluded: r.not_included ?? [],
     active: r.active !== false,
