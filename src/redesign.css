@@ -438,7 +438,7 @@
 .sx .faq .q h4{font-size:1.02rem;color:var(--teal);font-weight:600}
 .sx .faq .q p{color:var(--muted);font-size:.92rem;margin-top:8px}
 .sx .rail{position:sticky;top:104px}
-.sx .book{background:var(--paper);padding:9px;border-radius:var(--r-xl);border:1px solid rgba(255,255,255,.7);box-shadow:var(--shadow-amb)}
+.sx .book{background:var(--paper);padding:9px;border-radius:var(--r-xl);border:1px solid rgba(255,255,255,.7);box-shadow:var(--shadow-amb);scroll-margin-top:96px}
 .sx .book-in{background:var(--paper);border-radius:calc(var(--r-xl) - 9px);overflow:hidden}
 .sx .book-top{padding:24px 24px 22px;border-bottom:1px solid var(--line)}
 .sx .book-price{display:flex;align-items:baseline;gap:8px}
