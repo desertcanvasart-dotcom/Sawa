@@ -4473,6 +4473,7 @@ button:disabled {
 
 /* ---- Cards with cover image ---- */
 .tour-card {
+  position: relative;
   display: flex; flex-direction: column;
   background: var(--surface);
   border: 1px solid var(--line);
@@ -4481,6 +4482,17 @@ button:disabled {
   box-shadow: var(--shadow-sm);
   transition: transform 0.4s cubic-bezier(0.16,1,0.3,1), box-shadow 0.4s ease;
 }
+/* Stretched link: the anchor sits on the card title for a meaningful accessible
+   name, while ::after covers the card so the whole thing stays clickable. */
+.card-link { color: inherit; text-decoration: none; }
+.card-link::after { content: ""; position: absolute; inset: 0; z-index: 2; }
+.card-link:hover { text-decoration: underline; text-underline-offset: 2px; }
+/* The overlay swallows the anchor's own outline, so draw focus on the card. */
+.tour-card:focus-within { outline: 2px solid var(--ink); outline-offset: 3px; }
+.card-link:focus-visible { outline: none; }
+/* Interactive controls inside a stretched-link card must sit above the overlay. */
+.tour-card .tour-card-flag,
+.tour-card .tour-card-city { z-index: 3; }
 .tour-card:hover { transform: translateY(-4px); box-shadow: var(--shadow-lg); }
 .tour-card.is-full { opacity: 0.92; }
 
@@ -4514,7 +4526,12 @@ button:disabled {
 .tour-card-sub { margin: 0; font-size: 13px; color: var(--ink-faint); }
 .tour-card-foot { font-size: 12.5px; color: var(--ink-faint); display: flex; align-items: center; gap: 6px; }
 .tour-card .departure-link { margin-top: auto; min-height: 44px; }
-.tour-card .departure-link:disabled { background: var(--sand-200); color: var(--ink-faint); cursor: not-allowed; box-shadow: none; transform: none; }
+/* .departure-link is now a decorative <span> under the card's stretched link,
+   so hover has to hang off the card — the overlay is the hovered element, not
+   the span — and "full" is a card class rather than a :disabled state. */
+.tour-card:hover .departure-link { transform: translateY(-2px); background: var(--accent-deep); }
+.tour-card.is-full .departure-link { background: var(--sand-200); color: var(--ink-faint); box-shadow: none; }
+.tour-card.is-full:hover .departure-link { transform: none; background: var(--sand-200); }
 
 /* ---- Detail page gallery ---- */
 .gallery { width: min(1180px, 100%); margin: 0 auto 20px; display: grid; gap: 10px; }
@@ -5949,11 +5966,15 @@ button:disabled {
    ============================================================ */
 .blog-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: clamp(18px, 2vw, 26px); }
 .blog-card {
+  position: relative;
   display: flex; flex-direction: column;
   background: var(--surface); border: 1px solid var(--line); border-radius: 22px;
-  overflow: hidden; cursor: pointer; box-shadow: var(--shadow-sm);
+  overflow: hidden; box-shadow: var(--shadow-sm);
   transition: transform 0.35s cubic-bezier(0.32,0.72,0,1), box-shadow 0.35s ease;
 }
+/* The card-level onClick is gone; the stretched title link carries the whole
+   hit area, so the pointer cursor comes from the anchor rather than the card. */
+.blog-card:focus-within { outline: 2px solid var(--accent); outline-offset: 3px; }
 .blog-card:hover { transform: translateY(-4px); box-shadow: var(--shadow-lg); }
 .blog-card-media {
   aspect-ratio: 16 / 10; background-size: cover; background-position: center;
@@ -5962,10 +5983,57 @@ button:disabled {
 .blog-card-body { display: flex; flex-direction: column; gap: 9px; padding: clamp(16px, 1.6vw, 22px); }
 .blog-card-tag { align-self: flex-start; font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #c79a35; }
 .blog-card-body h3 { margin: 0; font-family: var(--font-display); font-weight: 500; font-size: 19px; line-height: 1.2; letter-spacing: -0.01em; color: var(--ink); }
+/* The title is a real anchor (keyboard, crawlers, open-in-new-tab) but should
+   still read as part of the card, so it inherits rather than looking like a
+   standalone link. The focus ring is kept — it's the keyboard affordance. */
+.blog-card-body h3 a { color: inherit; text-decoration: none; }
+.blog-card-body h3 a:hover { text-decoration: underline; text-underline-offset: 2px; }
+.blog-card-body h3 a:focus-visible { outline: none; } /* drawn on .blog-card:focus-within */
 .blog-card-body p { margin: 0; color: var(--ink-soft); font-size: 14px; line-height: 1.55; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .blog-card-meta { margin-top: 2px; font-size: 12.5px; color: var(--ink-faint); }
 .blog-skel { aspect-ratio: 16 / 11; border-radius: 22px; background: linear-gradient(100deg, var(--sand-100) 30%, var(--sand-200) 50%, var(--sand-100) 70%); background-size: 200% 100%; animation: blogShimmer 1.3s linear infinite; }
 @keyframes blogShimmer { to { background-position: -200% 0; } }
+
+/* ---- Catalogue skeleton ----------------------------------------------------
+   Shown only when a route arrives without the server-inlined payload. The
+   shapes deliberately match the real tours grid so the layout doesn't jump when
+   the data lands. Everything here is aria-hidden; the announcement is a single
+   sr-only line, because a screen reader has no use for six placeholder cards. */
+.sr-only {
+  position: absolute; width: 1px; height: 1px;
+  padding: 0; margin: -1px; overflow: hidden;
+  clip-path: inset(50%); white-space: nowrap; border: 0;
+}
+.skel {
+  display: block; border-radius: 8px;
+  background: linear-gradient(100deg, var(--sand-100) 30%, var(--sand-200) 50%, var(--sand-100) 70%);
+  background-size: 200% 100%;
+  animation: blogShimmer 1.3s linear infinite;
+}
+.skel-head { display: grid; gap: 14px; margin: 8px 0 40px; }
+.skel-kicker { width: 90px; height: 12px; }
+.skel-title { width: min(560px, 80%); height: 46px; border-radius: 12px; }
+.skel-lede { width: min(460px, 70%); height: 18px; }
+.skel-grid {
+  display: grid; gap: 22px;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+}
+.skel-card {
+  display: grid; gap: 11px;
+  border: 1px solid var(--line); border-radius: var(--radius);
+  background: var(--surface); padding: 0 0 18px;
+  overflow: hidden;
+}
+.skel-media { height: 180px; border-radius: 0; }
+.skel-card .skel-line { height: 13px; margin: 0 18px; }
+.skel-card .skel-bar { height: 8px; margin: 4px 18px; border-radius: 999px; }
+.w70 { width: 70%; } .w60 { width: 60%; } .w45 { width: 45%; }
+/* Placeholder for a detail section whose data is still in flight. */
+.skel-lines { display: grid; gap: 10px; margin-top: 14px; }
+.skel-lines .skel-line { height: 13px; }
+@media (prefers-reduced-motion: reduce) {
+  .skel { animation: none; background: var(--sand-100); }
+}
 
 /* Article */
 .blog-post { max-width: 760px; }
@@ -6311,6 +6379,37 @@ button:disabled {
 .tdx-booking .primary.full { min-height: 48px; border-radius: 12px; font-size: 15px; }
 .tdx-dates { margin-top: 4px; }
 
+/* Payment timeline — shown wherever a deposit figure appears, so the charge
+   point is never left to inference. Rendered unscoped: the same component sits
+   inside both the .sx sidebar and the .tdx-deposit block. */
+.pay-timeline {
+  display: grid; grid-template-columns: repeat(4, 1fr);
+  gap: 6px; margin: 12px 0 0; padding: 0; list-style: none;
+  counter-reset: pay-step;
+}
+.pay-timeline li {
+  position: relative; display: grid; gap: 2px;
+  padding-top: 14px; font-size: 10px; line-height: 1.25;
+}
+/* The rule is the connector between steps; the dot marks each step on top. */
+.pay-timeline li::before {
+  content: ""; position: absolute; top: 4px; left: 0; right: -6px; height: 2px;
+  background: currentColor; opacity: .16;
+}
+.pay-timeline li:last-child::before { right: 0; }
+.pay-timeline li::after {
+  content: ""; position: absolute; top: 1px; left: 0;
+  width: 8px; height: 8px; border-radius: 50%;
+  background: currentColor; opacity: .38;
+}
+.pay-timeline li:nth-child(3)::after { opacity: 1; }
+.pay-timeline li b { font-size: 11px; font-weight: 650; }
+.pay-timeline li span { opacity: .7; }
+@media (max-width: 420px) {
+  .pay-timeline { grid-template-columns: repeat(2, 1fr); row-gap: 10px; }
+  .pay-timeline li:nth-child(2)::before { right: 0; }
+}
+
 /* ---- Responsive ---- */
 @media (max-width: 900px) {
   .tdx-grid { grid-template-columns: 1fr; }
@@ -6435,6 +6534,9 @@ button:disabled {
 
 /* ===== Bookings clarity (summary + by-tour fill) ===== */
 .bk-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 18px; }
+/* Shown only when the bookings list is a window over a larger set — a silent
+   cap on a financial view is worse than an ugly caveat. */
+.bk-trunc { margin: -6px 0 18px; padding: 10px 12px; border-left: 3px solid var(--gold); background: var(--sand-50); border-radius: 0 10px 10px 0; color: var(--ink-soft); font-size: 13px; line-height: 1.5; }
 .bk-kpi { background: #fff; border: 1px solid #ece5d8; border-radius: 14px; padding: 14px 16px; display: flex; flex-direction: column; gap: 2px; }
 .bk-kpi span { font-size: 12px; color: #6b6459; }
 .bk-kpi strong { font-size: 24px; color: #17323a; line-height: 1.1; font-variant-numeric: tabular-nums; }

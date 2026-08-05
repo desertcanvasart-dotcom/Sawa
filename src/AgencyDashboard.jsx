@@ -7,10 +7,14 @@ import {
 import { DashSidebar } from "./DashSidebar";
 import { apiFetch } from "./supabaseClient";
 import { ProductEditor } from "./AdminDashboard";
+// Date-only departure values need a local-noon anchor or they render a day
+// early west of UTC — see src/dates.js.
+import { fmtDate } from "./dates.js";
 
 const money = (n) => (n == null ? "—" : "$" + Number(n).toLocaleString());
-const fmtDate = (d) => (d ? new Intl.DateTimeFormat("en", { month: "short", day: "numeric", year: "numeric" }).format(new Date(d)) : "—");
-const seatsOf = (d) => (d.pledges || []).reduce((s, p) => s + Number(p.seats || 0), 0);
+// Cancelled pledges have released their seats — excluded so seats-left and
+// live pricing here match what the server (domain.js) will actually charge.
+const seatsOf = (d) => (d.pledges || []).reduce((s, p) => (p?.status === "cancelled" ? s : s + Number(p.seats || 0)), 0);
 const isPkg = (x) => x?.type === "package";
 const STOCK = {
   Cairo: "/images/cairo.jpg",
@@ -48,11 +52,14 @@ export function AgencyDashboard({ user, agency, signOut, navigate, departures, t
 
   const stats = useMemo(() => {
     const myDeps = departures.filter((d) => (d.pledges || []).some((p) => p.agencyId === agencyId));
-    const seats = myRows.reduce((s, r) => s + Number(r.seats || 0), 0);
+    // Cancelled bookings hold no seats and earn no revenue — keep them out of
+    // the headline numbers (the list below still shows them, tagged).
+    const live = myRows.filter((r) => r.status !== "cancelled");
+    const seats = live.reduce((s, r) => s + Number(r.seats || 0), 0);
     const confirmed = myDeps.filter((d) => d.status === "supplier_confirmed").length;
     const needsMore = myDeps.filter((d) => d.status !== "supplier_confirmed" && d.status !== "cancelled" && seatsOf(d) < (d.minSeats || 4));
-    const value = myRows.reduce((s, r) => s + Number(r.bookingTotal || 0), 0);
-    return { bookings: myRows.length, seats, confirmed, needsMore, value, departures: myDeps.length };
+    const value = live.reduce((s, r) => s + Number(r.bookingTotal || 0), 0);
+    return { bookings: live.length, seats, confirmed, needsMore, value, departures: myDeps.length };
   }, [departures, myRows, agencyId]);
 
   const navGroups = [
@@ -550,9 +557,9 @@ function TourBooking({ product, agencyId, agencyName, agencyPax = 0, onBack, onR
 
               <div className="tb-summary">
                 <div className="tb-sum-row"><span>${pp} × {nSeats} traveller{nSeats > 1 ? "s" : ""}</span><b>${total}</b></div>
-                <div className="tb-sum-row tb-sum-key"><span>Deposit today ({depositPct}%)</span><b>${deposit}</b></div>
+                <div className="tb-sum-row tb-sum-key"><span>Deposit at GoAhead ({depositPct}%)</span><b>${deposit}</b></div>
                 <div className="tb-sum-row"><span>Balance</span><b>${balance}</b></div>
-                <p className="tb-sum-note">Balance due {balanceDue}.</p>
+                <p className="tb-sum-note">Deposit falls due once the date reaches GoAhead. Balance due {balanceDue}.</p>
               </div>
 
               {err && <div className="auth-error">{err}</div>}

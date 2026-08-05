@@ -370,7 +370,9 @@ footer .logo .nm i{color:var(--gold)}
 .fbot a{color:rgba(247,243,234,.56);transition:color .3s}
 .fbot a:hover{color:var(--cream)}
 .socials{display:flex;gap:11px}
-.socials a{width:38px;height:38px;border-radius:11px;border:1px solid rgba(247,243,234,.18);display:grid;place-items:center;transition:all .4s var(--ease)}
+.socials a,.socials .soon{width:38px;height:38px;border-radius:11px;border:1px solid rgba(247,243,234,.18);display:grid;place-items:center;transition:all .4s var(--ease)}
+/* Inert placeholder until real profile URLs exist — muted so it doesn't read as a working link. */
+.socials .soon{opacity:.42;cursor:default}
 .socials a:hover{background:var(--gold);color:var(--teal);border-color:var(--gold)}
 .socials svg{width:17px;height:17px}
 
@@ -380,8 +382,13 @@ footer .logo .nm i{color:var(--gold)}
 [data-d="1"]{transition-delay:.08s}[data-d="2"]{transition-delay:.16s}[data-d="3"]{transition-delay:.24s}[data-d="4"]{transition-delay:.32s}
 
 /* mobile overlay */
-.overlay{position:fixed;inset:0;z-index:70;background:rgba(23,50,58,.92);backdrop-filter:blur(24px);display:flex;flex-direction:column;justify-content:center;padding:0 32px;opacity:0;pointer-events:none;transition:opacity .5s var(--ease)}
-.overlay.open{opacity:1;pointer-events:auto}
+/* opacity:0 + pointer-events:none hid the closed menu from sight and from the
+   mouse, but left its "Close menu" button and its four duplicate nav links in
+   the tab order and the accessibility tree — on every page, at every viewport.
+   visibility:hidden removes them from both; it's delayed by the transition
+   duration on close so the fade still plays out. */
+.overlay{position:fixed;inset:0;z-index:70;background:rgba(23,50,58,.92);backdrop-filter:blur(24px);display:flex;flex-direction:column;justify-content:center;padding:0 32px;opacity:0;pointer-events:none;visibility:hidden;transition:opacity .5s var(--ease),visibility 0s linear .5s}
+.overlay.open{opacity:1;pointer-events:auto;visibility:visible;transition:opacity .5s var(--ease),visibility 0s}
 .overlay a{font-family:'Fraunces',serif;font-size:2rem;color:var(--cream);padding:14px 0;border-bottom:1px solid rgba(247,243,234,.12);transform:translateY(20px);opacity:0;transition:transform .6s var(--ease),opacity .6s var(--ease)}
 .overlay.open a{transform:none;opacity:1}
 .overlay.open a:nth-child(2){transition-delay:.1s}.overlay.open a:nth-child(3){transition-delay:.16s}.overlay.open a:nth-child(4){transition-delay:.22s}.overlay.open a:nth-child(5){transition-delay:.28s}

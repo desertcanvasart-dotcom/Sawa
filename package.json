@@ -6,14 +6,13 @@
   "scripts": {
     "dev": "concurrently \"npm run api\" \"npm run web\"",
     "api": "node server/app.js",
-    "api:legacy": "node server/api.js",
     "web": "vite --host 0.0.0.0 --port 5173",
     "db:migrate": "node server/db/migrate.js",
     "db:seed": "node server/db/seed.js",
     "db:seed-users": "node server/db/seed-users.js",
     "db:reset": "node server/db/migrate.js && node server/db/seed.js && node server/db/seed-users.js",
     "db:sanitize-html": "node server/db/sanitize-existing-html.js",
-    "test": "node --test server/",
+    "test": "node --test server/ src/",
     "build": "vite build",
     "start": "node server/app.js",
     "preview": "vite preview --host 0.0.0.0"

@@ -13,10 +13,32 @@
   var open=document.getElementById('open');
   var close=document.getElementById('close');
   if(ov&&open){
-    open.onclick=function(){ov.classList.add('open');document.body.style.overflow='hidden';};
-    var closeMenu=function(){ov.classList.remove('open');document.body.style.overflow='';};
+    /* The overlay is always in the DOM. CSS visibility keeps a closed menu out
+       of the tab order; `inert` does the same for browsers that support it and
+       also blocks it from search-within-page. aria-expanded tells assistive
+       tech what the hamburger actually does, and focus is moved into and back
+       out of the menu so a keyboard user isn't stranded behind it. */
+    var setOpen=function(isOpen){
+      ov.classList.toggle('open',isOpen);
+      open.setAttribute('aria-expanded',isOpen?'true':'false');
+      if('inert' in HTMLElement.prototype)ov.inert=!isOpen;
+      document.body.style.overflow=isOpen?'hidden':'';
+    };
+    open.setAttribute('aria-expanded','false');
+    if('inert' in HTMLElement.prototype)ov.inert=true;
+    open.onclick=function(){setOpen(true);if(close)close.focus();};
+    /* Focus moves back to the hamburger BEFORE the overlay is hidden. Doing it
+       the other way round leaves activeElement on the close button inside an
+       inert, invisible container, and the next Tab restarts from the top of the
+       document. */
+    var closeMenu=function(){open.focus();setOpen(false);};
     if(close)close.onclick=closeMenu;
-    ov.querySelectorAll('a').forEach(function(a){a.onclick=closeMenu;});
+    /* Links navigate away, so returning focus to the hamburger would fight the
+       page load — just close, without the focus restore. */
+    ov.querySelectorAll('a').forEach(function(a){a.onclick=function(){setOpen(false);};});
+    document.addEventListener('keydown',function(e){
+      if(e.key==='Escape'&&ov.classList.contains('open'))closeMenu();
+    });
   }
 
   /* reveal + fill bars */
@@ -40,12 +62,22 @@
     document.querySelectorAll('.phero [data-fill],.early [data-fill]').forEach(function(b){b.style.width=b.dataset.fill;});
   },500);
 
-  /* tabs (visual) */
+  /* tabs — this file owns the visual state only. Pages that need a tab to DO
+     something listen for the 'tabchange' event it emits (see departures.html);
+     previously the highlight was all there was, so the departures filters and
+     sort controls looked interactive but changed nothing. */
   document.querySelectorAll('[data-tabs]').forEach(function(group){
-    group.querySelectorAll('.tab').forEach(function(t){
+    var tabs=group.querySelectorAll('.tab');
+    tabs.forEach(function(t){
+      if(!t.hasAttribute('role'))t.setAttribute('role','tab');
+      t.setAttribute('aria-selected',t.classList.contains('on')?'true':'false');
       t.onclick=function(){
-        group.querySelectorAll('.tab').forEach(function(x){x.classList.remove('on');});
-        t.classList.add('on');
+        tabs.forEach(function(x){x.classList.remove('on');x.setAttribute('aria-selected','false');});
+        t.classList.add('on');t.setAttribute('aria-selected','true');
+        group.dispatchEvent(new CustomEvent('tabchange',{
+          bubbles:true,
+          detail:{tab:t,value:t.getAttribute('data-value')||(t.textContent||'').trim()}
+        }));
       };
     });
   });
@@ -61,15 +93,41 @@
     };
   });
 
-  /* copy buttons */
+  /* copy buttons — the old version reported "Copied" unconditionally, even when
+     navigator.clipboard was absent (it only exists on secure origins) or when
+     writeText() rejected. So it could claim success with an empty clipboard.
+     Now the label only changes after the copy actually resolves, with a
+     execCommand fallback and an honest failure message. */
+  function legacyCopy(text){
+    var ta=document.createElement('textarea');
+    ta.value=text;
+    ta.setAttribute('readonly','');
+    ta.style.cssText='position:absolute;left:-9999px;top:0';
+    document.body.appendChild(ta);
+    var selection=document.getSelection();
+    var restore=selection.rangeCount>0?selection.getRangeAt(0):null;
+    ta.select();
+    var ok=false;
+    try{ok=document.execCommand('copy');}catch(e){ok=false;}
+    document.body.removeChild(ta);
+    if(restore){selection.removeAllRanges();selection.addRange(restore);}
+    return ok;
+  }
   document.querySelectorAll('[data-copy]').forEach(function(btn){
     btn.onclick=function(){
       var target=document.querySelector(btn.getAttribute('data-copy'));
       if(!target)return;
-      var text=target.innerText||target.textContent;
-      navigator.clipboard&&navigator.clipboard.writeText(text);
-      var old=btn.textContent;btn.textContent='Copied';
-      setTimeout(function(){btn.textContent=old;},1600);
+      var text=(target.innerText||target.textContent||'').trim();
+      var original=btn.textContent;
+      var settle=function(ok){
+        btn.textContent=ok?'Copied':'Press ⌘/Ctrl+C';
+        setTimeout(function(){btn.textContent=original;},ok?1600:2600);
+      };
+      if(navigator.clipboard&&navigator.clipboard.writeText){
+        navigator.clipboard.writeText(text).then(function(){settle(true);},function(){settle(legacyCopy(text));});
+      }else{
+        settle(legacyCopy(text));
+      }
     };
   });
 })();

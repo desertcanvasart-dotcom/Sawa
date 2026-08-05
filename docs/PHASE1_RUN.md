@@ -33,7 +33,6 @@ npm run web      # frontend on http://localhost:5173
 ## Useful
 
 - `npm run db:reset` — re-apply schema and reseed from `data/db.json`.
-- `npm run api:legacy` — the old JSON-file server (kept for reference only).
 - Health check: `GET http://localhost:8787/api/health` -> `{ "ok": true }`.
 
 ## What changed under the hood

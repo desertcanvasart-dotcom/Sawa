@@ -11,6 +11,8 @@
 <meta property="og:description" content="Shared departures, confirmed together. Real Egypt tours that actually run." />
 <meta property="og:image" content="https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/packages/egypt-nile-cruise-9d/sphinx-giza.jpg" />
 
+<link rel="canonical" href="https://sawatours.org/" />
+<meta property="og:url" content="https://sawatours.org/" />
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='24' fill='%2317323A'/%3E%3Ccircle cx='50' cy='50' r='30' fill='none' stroke='%23F7F3EA' stroke-width='5'/%3E%3Cpath d='M62 36 C46 36 46 50 54 50 C62 50 62 64 38 64' fill='none' stroke='%23F7F3EA' stroke-width='7' stroke-linecap='round'/%3E%3Ccircle cx='72' cy='32' r='7' fill='%23F4C95D'/%3E%3C/svg%3E" />
 
 <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -419,7 +421,9 @@ footer .logo .nm i{color:var(--gold)}
 .fbot a{color:rgba(247,243,234,.56);transition:color .3s}
 .fbot a:hover{color:var(--cream)}
 .socials{display:flex;gap:11px}
-.socials a{width:38px;height:38px;border-radius:11px;border:1px solid rgba(247,243,234,.18);display:grid;place-items:center;transition:all .4s var(--ease)}
+.socials a,.socials .soon{width:38px;height:38px;border-radius:11px;border:1px solid rgba(247,243,234,.18);display:grid;place-items:center;transition:all .4s var(--ease)}
+/* Inert placeholder until real profile URLs exist — muted so it doesn't read as a working link. */
+.socials .soon{opacity:.42;cursor:default}
 .socials a:hover{background:var(--gold);color:var(--teal);border-color:var(--gold)}
 .socials svg{width:17px;height:17px}
 
@@ -530,6 +534,15 @@ footer .logo .nm i{color:var(--gold)}
           <span class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg></span>
         </a>
       </div>
+      <!-- TODO(sawa): SOURCE OR REMOVE THESE TWO FIGURES. Both are hardcoded and
+           neither states what it measures or over what period, yet they sit in the
+           hero as fact. "72% of listed dates reach GoAhead" is a performance claim
+           about the core promise; "31 Ministry-licensed operators" is a countable
+           fact the database can answer. Either (a) add the measurement window to
+           the visible text — e.g. "of dates listed Jan–Jun 2026" — and keep the
+           operator count in step with the approved agencies in the DB, or (b) drop
+           the block. An unsourced performance percentage is the kind of claim
+           advertising regulators expect a business to be able to substantiate. -->
       <div class="hero-meta">
         <div class="m"><b class="tnum">72%</b><span>of listed dates<br>reach GoAhead</span></div>
         <div class="sep"></div>
@@ -552,9 +565,14 @@ footer .logo .nm i{color:var(--gold)}
           </div>
         </div>
 
+        <!-- Static artwork, not inventory: this named a specific cruise and date
+             as confirmed while the live catalogue showed that departure still
+             forming on a different date. It now reads as the illustration it is.
+             If you want a real confirmed departure here, pull it from
+             /api/bootstrap the way departures.html does. -->
         <div class="confirm">
           <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div>
-          <div><b>GoAhead confirmed</b><span>Nile Cruise · departs 01 Oct</span></div>
+          <div><b>GoAhead confirmed</b><span>How a confirmed departure looks</span></div>
         </div>
 
         <div class="seats-chip">
@@ -609,10 +627,13 @@ footer .logo .nm i{color:var(--gold)}
 
       <div class="how-card rv" data-d="2" style="margin-top:28px">
         <div class="how-core">
-          <span class="lab">Live departure</span>
+          <!-- Labelled "Live departure" but hardcoded — the seat count, date and
+               GoAhead state never changed and did not match the real catalogue.
+               Presented as a worked example instead. -->
+          <span class="lab">Example departure</span>
           <h4>Nile Cruise · Luxor to Aswan</h4>
           <div class="demo">
-            <div class="dt"><b>5-day sailing · departs 01 Oct</b><span class="go"><span class="d"></span>GoAhead</span></div>
+            <div class="dt"><b>5-day sailing · example dates</b><span class="go"><span class="d"></span>GoAhead</span></div>
             <div class="av"><i>HA</i><i>MK</i><i>SL</i><i>Rf</i><i class="empty">+8</i></div>
             <div class="bar"><i data-fill="33%"></i></div>
             <div class="dm"><span><b>4</b> of 12 joined</span><span>8 seats left</span></div>
@@ -782,10 +803,14 @@ footer .logo .nm i{color:var(--gold)}
     <div class="fbot">
       <span>© 2026 Sawa Tours. Shared departures, confirmed together.</span>
       <div class="lks"><a href="/privacy">Privacy policy</a><a href="/terms">Terms and conditions</a></div>
+      <!-- TODO(sawa): replace these three placeholders with real profile URLs
+           (<a href="https://instagram.com/..." ...>), or delete the block before
+           launch. They were href="#", which scroll-jumped to the top of the page
+           and announced as working links; they are now inert and visibly muted. -->
       <div class="socials">
-        <a href="#" aria-label="Instagram"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none"/></svg></a>
-        <a href="#" aria-label="Facebook"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M14 9h3V6h-3c-2 0-3 1-3 3v2H9v3h2v6h3v-6h2.5l.5-3H14V9.5c0-.4.2-.5.6-.5Z"/></svg></a>
-        <a href="#" aria-label="WhatsApp"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-8.5 15.2L2 22l4.9-1.4A10 10 0 1 0 12 2Zm5.4 14.1c-.2.6-1.3 1.2-1.8 1.2-.5.1-1 .1-1.7-.1-.4-.1-.9-.3-1.6-.6a9 9 0 0 1-3.4-3c-.3-.4-.8-1.1-.8-2.1s.5-1.5.7-1.7c.2-.2.4-.3.6-.3h.4c.2 0 .4 0 .5.4l.7 1.6c.1.1 0 .3 0 .4l-.3.4c-.2.2-.3.3-.1.5.5.9 1 1.3 1.8 1.8.2.1.4.1.5 0l.5-.6c.2-.2.3-.2.5-.1l1.5.7c.2.1.4.2.4.3.1.1.1.6-.1 1Z"/></svg></a>
+        <span class="soon" role="img" aria-label="Instagram — not yet available"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none"/></svg></span>
+        <span class="soon" role="img" aria-label="Facebook — not yet available"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M14 9h3V6h-3c-2 0-3 1-3 3v2H9v3h2v6h3v-6h2.5l.5-3H14V9.5c0-.4.2-.5.6-.5Z"/></svg></span>
+        <span class="soon" role="img" aria-label="WhatsApp — not yet available"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-8.5 15.2L2 22l4.9-1.4A10 10 0 1 0 12 2Zm5.4 14.1c-.2.6-1.3 1.2-1.8 1.2-.5.1-1 .1-1.7-.1-.4-.1-.9-.3-1.6-.6a9 9 0 0 1-3.4-3c-.3-.4-.8-1.1-.8-2.1s.5-1.5.7-1.7c.2-.2.4-.3.6-.3h.4c.2 0 .4 0 .5.4l.7 1.6c.1.1 0 .3 0 .4l-.3.4c-.2.2-.3.3-.1.5.5.9 1 1.3 1.8 1.8.2.1.4.1.5 0l.5-.6c.2-.2.3-.2.5-.1l1.5.7c.2.1.4.2.4.3.1.1.1.6-.1 1Z"/></svg></span>
       </div>
     </div>
   </div>
@@ -845,7 +870,10 @@ footer .logo .nm i{color:var(--gold)}
   /* SEO/GEO slug — must match server/slug.js and src/main.jsx */
   var SLUG_STOP={the:1,a:1,an:1,of:1,and:1,or:1},SLUG_CITY={Cairo:'cairo',Luxor:'luxor',Aswan:'aswan'};
   function slugify(s){return String(s==null?'':s).normalize('NFKD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/&/g,' ').replace(/[^a-z0-9]+/g,' ').trim().split(/\s+/).filter(function(w){return w&&!SLUG_STOP[w];}).join('-');}
-  function tourSlug(p){var isPkg=(p.type||'day_tour')==='package';var slug=slugify(p.title);if(!isPkg&&p.city){var c=SLUG_CITY[p.city]||slugify(p.city);if(c&&slug.indexOf(c)<0)slug+='-from-'+c;}return slug||String(p.id||'');}
+  // Mirrors server/slug.js — keep in sync. An empty title-slug must not gain a
+  // "-from-city" suffix, and must never fall back to the raw id (that produces
+  // an id-shaped URL, which the server 301-redirects to itself: a cached loop).
+  function tourSlug(p){var isPkg=(p.type||'day_tour')==='package';var slug=slugify(p.title);if(slug&&!isPkg&&p.city){var c=SLUG_CITY[p.city]||slugify(p.city);if(c&&slug.indexOf(c)<0)slug+='-from-'+c;}if(slug)return slug;return [slugify(p.city),isPkg?'package':'tour',slugify(String(p.id||'').replace(/^(tour|pkg)_/,''))].filter(Boolean).join('-')||'tour';}
   function loadData(){
     return fetch('/api/bootstrap',{headers:{'accept':'application/json'}})
       .then(function(r){if(!r.ok)throw 0;return r.json();})

@@ -29,11 +29,21 @@ export function slugify(s) {
 export function tourSlug(p) {
   const isPkg = (p.type || "day_tour") === "package";
   let slug = slugify(p.title);
-  if (!isPkg && p.city) {
+  // Qualify only a slug that actually exists. Appending to an empty one gives
+  // the malformed "-from-cairo" for any title that slugifies to nothing —
+  // an Arabic title, or one made entirely of stop-words.
+  if (slug && !isPkg && p.city) {
     const c = CITY_WORD[p.city] || slugify(p.city);
     if (c && slug.indexOf(c) < 0) slug += "-from-" + c;
   }
-  return slug || String(p.id || "");
+  if (slug) return slug;
+  // Falling back to the raw id emitted an id-shaped slug (tour_… / pkg_…), and
+  // the legacy-URL redirect in app.js rewrites exactly those to their slug —
+  // i.e. to themselves. That is a 301 loop, which browsers cache permanently.
+  // Every part below goes through slugify, which drops underscores, so the
+  // result can never be mistaken for an id again.
+  const idPart = slugify(String(p.id || "").replace(/^(tour|pkg)_/, ""));
+  return [slugify(p.city), isPkg ? "package" : "tour", idPart].filter(Boolean).join("-") || "tour";
 }
 
 export function tourPath(p) {

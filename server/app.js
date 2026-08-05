@@ -23,19 +23,41 @@ import {
   listingApprovedEmail, listingRejectedEmail,
   departureRequestReceivedEmail, departureRequestApprovedEmail, departureRequestDeclinedEmail,
 } from "./email.js";
+import { randomBytes, randomInt } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { buildHead, buildBody, robotsTxt, sitemapXml, llmsTxt, llmsFullTxt } from "./seo.js";
+import {
+  buildHead, buildBody, robotsTxt, sitemapXml, llmsTxt, llmsFullTxt,
+  inlineScriptJson, sliceBootstrapForRoute,
+} from "./seo.js";
 import { emitDepartureSync, unavailableDates } from "./autoura-sync.js";
 import { tourSlug } from "./slug.js";
 import { cleanHtml, cleanItinerary } from "./sanitize.js";
+import { canonicalRedirect } from "./canonical.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const distDir = join(__dirname, "..", "dist");
 
 const app = express();
 app.disable("x-powered-by");
+// Railway (like any managed host) terminates TLS at a proxy, so req.ip is the
+// proxy's own address unless Express is told how many hops to trust. Without
+// this every visitor lands in the SAME rate-limit bucket and a handful of users
+// 429s the whole site. TRUST_PROXY tunes the hop count for other hosting
+// setups ("false"/"0" disables it); local dev has no proxy, so nothing is
+// trusted there and a spoofed X-Forwarded-For can't shift anyone's bucket.
+const trustProxy = process.env.TRUST_PROXY ?? (process.env.NODE_ENV === "production" ? "1" : "false");
+if (trustProxy !== "false" && trustProxy !== "0") {
+  app.set("trust proxy", /^\d+$/.test(trustProxy) ? Number(trustProxy) : trustProxy);
+}
+// www.<domain> and the apex both resolve to this app, so collapse them onto one
+// canonical host before anything else runs — see server/canonical.js. No-op
+// until CANONICAL_HOST is set.
+app.use((req, res, next) => {
+  const target = canonicalRedirect(req.headers.host, req.originalUrl);
+  return target ? res.redirect(301, target) : next();
+});
 // In production we serve the SPA from the same origin, so relax CSP/CORP that
 // would otherwise block the bundled assets. API security is unaffected.
 app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
@@ -116,6 +138,9 @@ function viewPledges(pledges, user) {
       agencyId: p.agencyId,
       agency: p.agency,
       seats: p.seats,
+      // status must survive redaction: a cancelled pledge has released its
+      // seats, and without this the viewer counts it as still occupying them.
+      status: p.status,
       // redact customer + financial detail
       customers: null,
       createdAt: p.createdAt,
@@ -146,8 +171,35 @@ async function loadProduct(client, id) {
   return r.rows.length ? mapProduct(r.rows[0]) : null;
 }
 
+// A booking code is the ONLY credential on the public booking lookup, so it
+// needs real entropy: 8 symbols from a 31-character alphabet (~8.5e11
+// combinations) drawn with crypto randomInt, not Math.random. Ambiguous glyphs
+// (0/O, 1/I/L) are left out because travellers read these codes back to us.
+const CODE_ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
 function publicBookingCode() {
-  return `SAWA-${Math.random().toString(36).slice(2, 7).toUpperCase()}`;
+  let out = "";
+  for (let i = 0; i < 8; i++) out += CODE_ALPHABET[randomInt(CODE_ALPHABET.length)];
+  return `SAWA-${out}`;
+}
+
+// The unique index on UPPER(booking_code) is the real guarantee; this loop just
+// keeps a (vanishingly rare) collision from reaching the traveller as a failed
+// booking. Runs on the transaction's client so it sees uncommitted siblings.
+async function uniqueBookingCode(c) {
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const code = publicBookingCode();
+    const hit = await c.query(`SELECT 1 FROM pledges WHERE UPPER(booking_code) = $1`, [code]);
+    if (!hit.rowCount) return code;
+  }
+  throw new AppError(500, "Could not allocate a booking code.");
+}
+
+// Pledge ids are the primary key, and Date.now() alone collides when two
+// bookings land in the same millisecond — which the departure row-lock makes
+// likelier, not rarer, since it queues them back-to-back. A collision would
+// surface to the traveller as a generic 500 and lose the booking.
+function newPledgeId(departureId = "new") {
+  return `pl_${departureId}_${Date.now().toString(36)}${randomBytes(3).toString("hex")}`;
 }
 
 // ---- Validation ------------------------------------------------------------
@@ -252,23 +304,38 @@ let publicBootstrapCache = { at: 0, payload: null };
 // visitor, so cache it the same way. Both are dropped on any successful write.
 const PUBLIC_BLOG_TTL = 60_000;
 let publicBlogCache = { at: 0, payload: null };
+// The server-rendered page cache and llms-full.txt snapshot also go stale on a
+// write (they embed seat counts and prices), but they're defined further down —
+// the SPA one only exists when /dist is present. So they register a clearer here
+// instead, and every cache drops together.
+const cacheClearers = [];
 function invalidatePublicBootstrap() {
   publicBootstrapCache = { at: 0, payload: null };
   publicBlogCache = { at: 0, payload: null };
+  for (const clear of cacheClearers) clear();
 }
 
-// Bootstrap — open to all; pledge detail redacted per viewer.
-app.get("/api/bootstrap", h(async (req, res) => {
-  res.set("Cache-Control", "no-store");
-  const anon = !req.user;
-  if (anon && publicBootstrapCache.payload && Date.now() - publicBootstrapCache.at < PUBLIC_BOOTSTRAP_TTL) {
-    return res.json(publicBootstrapCache.payload);
+// The anonymous payload, memoised. Extracted so the server-rendered HTML can
+// embed exactly the same object the SPA would otherwise fetch (see renderPage):
+// one builder means the inlined data and the API can never disagree, which is
+// the whole point — a visitor must not watch the numbers change after load.
+async function publicBootstrapPayload() {
+  if (publicBootstrapCache.payload && Date.now() - publicBootstrapCache.at < PUBLIC_BOOTSTRAP_TTL) {
+    return publicBootstrapCache.payload;
   }
+  const payload = await buildBootstrap(undefined);
+  publicBootstrapCache = { at: Date.now(), payload };
+  return payload;
+}
+
+// `user` undefined means the anonymous view. Kept as one function so the
+// redaction rules below are applied identically to every caller.
+async function buildBootstrap(user) {
   // Platform staff see every product (incl. pending/rejected/archived) so they can
   // manage them. Everyone else — the public site and agencies browsing to book —
   // only sees live, approved listings. An agency's own pending/rejected listings
   // are served separately via GET /api/agency/tour-products.
-  const canSeeAll = req.user && (req.user.role === "super_admin" || req.user.role === "ops_staff");
+  const canSeeAll = user && (user.role === "super_admin" || user.role === "ops_staff");
   const productsSql = canSeeAll
     ? "SELECT * FROM tour_products ORDER BY id"
     : "SELECT * FROM tour_products WHERE active IS NOT FALSE AND status = 'approved' ORDER BY id";
@@ -286,9 +353,9 @@ app.get("/api/bootstrap", h(async (req, res) => {
     byDep.get(p.departure_id).push(p);
   }
 
-  const payload = {
+  return {
     // Only platform staff get the agency directory; agencies/public don't need it.
-    agencies: isPlatform(req.user) ? agencies.rows.map(mapAgency) : [],
+    agencies: isPlatform(user) ? agencies.rows.map(mapAgency) : [],
     cities: cities.rows.map(mapCity),
     tourProducts: products.rows.map(mapProduct),
     // pending_review = traveler-requested, awaiting ops approval. Only
@@ -296,11 +363,19 @@ app.get("/api/bootstrap", h(async (req, res) => {
     departures: departures.rows
       .filter((d) => canSeeAll || d.status !== "pending_review")
       .map((d) =>
-        presentDeparture(enrichDeparture(mapDeparture(d, byDep.get(d.id) || [])), req.user)
+        presentDeparture(enrichDeparture(mapDeparture(d, byDep.get(d.id) || [])), user)
       ),
   };
-  if (anon) publicBootstrapCache = { at: Date.now(), payload };
-  res.json(payload);
+}
+
+// Bootstrap — open to all; pledge detail redacted per viewer.
+app.get("/api/bootstrap", h(async (req, res) => {
+  // Still no-store: the response varies by viewer (an agency sees its own
+  // pledge detail), so it must never land in a shared cache. The anonymous
+  // copy is memoised server-side instead, and now also inlined into the HTML.
+  res.set("Cache-Control", "no-store");
+  if (!req.user) return res.json(await publicBootstrapPayload());
+  res.json(await buildBootstrap(req.user));
 }));
 
 // Agency creates a custom day-tour pooling request (agency users only).
@@ -334,7 +409,7 @@ app.post("/api/departures", requireAuth, requireRole("agency_owner", "agency_age
     await c.query(
       `INSERT INTO pledges (id, departure_id, agency_id, agency, seats, customers, created_by_user_id)
        VALUES ($1,$2,$3,$4,1,$5,$6)`,
-      [`pl_new_${Date.now()}`, id, agency.id, agency.name, body.customers || "Lead request", req.user.id]
+      [newPledgeId(id), id, agency.id, agency.name, body.customers || "Lead request", req.user.id]
     );
     return loadDeparture(c, id);
   });
@@ -607,7 +682,7 @@ app.post("/api/departures/:id/pledges", requireAuth, requireRole("agency_owner",
     const pricing = computePledgePricing(dep, product, input);
 
     await insertPledge(c, dep.id, {
-      id: `pl_${dep.id}_${Date.now()}`,
+      id: newPledgeId(dep.id),
       agencyId: agency.id,
       agency: agency.name,
       seats: input.seats,
@@ -645,7 +720,7 @@ app.post("/api/public/departures/:id/bookings", writeLimiter, h(async (req, res)
       // even if the click-through visit wasn't tracked.
       await c.query("INSERT INTO referrals (code) VALUES ($1) ON CONFLICT (code) DO NOTHING", [refCode]);
     }
-    const pledgeId = `pl_${dep.id}_${Date.now()}`;
+    const pledgeId = newPledgeId(dep.id);
     const booking = {
       id: pledgeId,
       agencyId: "direct_customer",
@@ -655,7 +730,7 @@ app.post("/api/public/departures/:id/bookings", writeLimiter, h(async (req, res)
       customerEmail: input.customerEmail || null,
       customerPhone: input.customerPhone || null,
       source: "public",
-      bookingCode: publicBookingCode(),
+      bookingCode: await uniqueBookingCode(c),
       refCode: refCode || null,
       ...pricing,
     };
@@ -871,7 +946,7 @@ app.post("/api/public/departure-requests", writeLimiter, h(async (req, res) => {
 
     const dep = await loadDeparture(c, id);
     const pricing = computePledgePricing(dep, product, input);
-    const pledgeId = `pl_${id}_${Date.now()}`;
+    const pledgeId = newPledgeId(id);
     await insertPledge(c, id, {
       id: pledgeId,
       agencyId: "direct_customer",
@@ -881,7 +956,7 @@ app.post("/api/public/departure-requests", writeLimiter, h(async (req, res) => {
       customerEmail: input.customerEmail,
       customerPhone: input.customerPhone || null,
       source: "public_request",
-      bookingCode: publicBookingCode(),
+      bookingCode: await uniqueBookingCode(c),
       refCode: null,
       ...pricing,
     });
@@ -1459,18 +1534,26 @@ app.get("/api/admin/audit", requireAuth, requireRole("super_admin", "ops_staff")
 app.get("/api/admin/stats", requireAuth, requireRole("super_admin", "ops_staff"), h(async (_req, res) => {
   const [deps, pledges, products, agencies] = await Promise.all([
     pool.query(`SELECT id, status, date, start_date, type, route, min_seats, max_seats FROM departures`),
-    pool.query(`SELECT departure_id, seats, booking_total, deposit_due, source, created_at FROM pledges`),
+    // status is needed to exclude cancelled bookings — without it these totals
+    // counted cancelled seats as booked and cancelled bookings as revenue, and
+    // seatsByDep (below) mis-drove readyToConfirm / atRisk. The Bookings tab
+    // already excluded them, so Overview and Bookings disagreed on the same
+    // figures. Same rule as domain.js seatsTotal().
+    pool.query(`SELECT departure_id, seats, booking_total, deposit_due, source, created_at, status FROM pledges`),
     pool.query(`SELECT id, type, active, status FROM tour_products`),
     pool.query(`SELECT id FROM agencies WHERE status='active'`),
   ]);
   const pendingListings = products.rows.filter((p) => p.status === "pending").length;
 
+  const livePledges = pledges.rows.filter((p) => p.status !== "cancelled");
   const seatsByDep = new Map();
-  let totalSeats = 0, totalRevenue = 0, totalDeposits = 0, bookingsCount = pledges.rows.length;
+  let totalSeats = 0, totalRevenue = 0, totalDeposits = 0;
+  const bookingsCount = livePledges.length;
+  const cancelledCount = pledges.rows.length - bookingsCount;
   const now = new Date();
   const weekAhead = new Date(now); weekAhead.setDate(now.getDate() + 7);
   let bookingsThisWeek = 0;
-  for (const p of pledges.rows) {
+  for (const p of livePledges) {
     seatsByDep.set(p.departure_id, (seatsByDep.get(p.departure_id) || 0) + Number(p.seats));
     totalSeats += Number(p.seats);
     totalRevenue += Number(p.booking_total || 0);
@@ -1500,6 +1583,7 @@ app.get("/api/admin/stats", requireAuth, requireRole("super_admin", "ops_staff")
       activeProducts: products.rows.filter((p) => p.active !== false).length,
       agencies: agencies.rows.length,
       bookings: bookingsCount,
+      cancelledBookings: cancelledCount,
       bookingsThisWeek,
       seatsPooled: totalSeats,
       revenue: totalRevenue,
@@ -1513,6 +1597,12 @@ app.get("/api/admin/stats", requireAuth, requireRole("super_admin", "ops_staff")
 // Admin: all bookings across the platform (platform staff).
 app.get("/api/admin/bookings", requireAuth, requireRole("super_admin", "ops_staff"), h(async (req, res) => {
   const limit = Math.min(Number(req.query.limit) || 200, 1000);
+  // Return the true row count alongside the page. The dashboard was computing
+  // its "Booking value" / "Seats booked" KPIs from whatever this returned and
+  // labelling them as platform totals, so past the limit the headline figures
+  // silently became "the most recent N" — and appeared to fall as older
+  // bookings dropped out of the window.
+  const totalRows = await pool.query(`SELECT COUNT(*)::int AS n FROM pledges`);
   const r = await pool.query(
     `SELECT p.id, p.departure_id, p.agency, p.agency_id, p.seats, p.customers, p.customer_email,
             p.customer_phone, p.status, p.price_per_person, p.deposit_percent,
@@ -1523,7 +1613,7 @@ app.get("/api/admin/bookings", requireAuth, requireRole("super_admin", "ops_staf
       ORDER BY p.created_at DESC LIMIT $1`,
     [limit]
   );
-  res.json({ bookings: r.rows.map((b) => ({
+  res.json({ total: totalRows.rows[0].n, limit, bookings: r.rows.map((b) => ({
     id: b.id, departureId: b.departure_id, route: b.route, type: b.type, city: b.city, time: b.time,
     date: b.start_date || b.date, endDate: b.end_date, departureStatus: b.departure_status,
     agency: b.agency, agencyId: b.agency_id, seats: Number(b.seats), customers: b.customers,
@@ -1614,6 +1704,7 @@ app.get("/llms.txt", (_req, res) => res.type("text/plain").send(llmsTxt()));
 // llms-full.txt now embeds a live tours/departures snapshot; cache briefly so
 // crawler bursts don't turn into query storms.
 let llmsFullCache = { at: 0, body: "" };
+cacheClearers.push(() => { llmsFullCache = { at: 0, body: "" }; });
 app.get("/llms-full.txt", h(async (_req, res) => {
   if (Date.now() - llmsFullCache.at > 5 * 60 * 1000) {
     llmsFullCache = { at: Date.now(), body: await llmsFullTxt() };
@@ -1664,7 +1755,12 @@ app.use(h(async (req, res, next) => {
   const r = await pool.query("SELECT id, title, city, type FROM tour_products WHERE id=$1 AND active IS NOT FALSE LIMIT 1", [seg]);
   if (!r.rows.length) return next();
   const kind = r.rows[0].type === "package" ? "package" : "tour";
-  return res.redirect(301, `/${kind}/${tourSlug(r.rows[0])}`);
+  const target = `/${kind}/${tourSlug(r.rows[0])}`;
+  // Never 301 a URL to itself. tourSlug can no longer return an id-shaped slug,
+  // but a 301 loop is cached by the browser and survives the server-side fix —
+  // so the cheap guard stays regardless of what the slug logic does later.
+  if (target === req.path) return next();
+  return res.redirect(301, target);
 }));
 
 // ============================ STATIC SPA (production) ============================
@@ -1677,25 +1773,66 @@ if (existsSync(distDir)) {
   // cache) hit tour/blog routes in bursts, and each render costs DB queries.
   const pageCache = new Map(); // path -> { at, status, html }
   const PAGE_TTL = 60 * 1000;
+  cacheClearers.push(() => pageCache.clear());
+  // Routes whose UI is driven by the public catalogue. The portal and the embed
+  // widget either need viewer-scoped data or none at all, so they don't get the
+  // payload — it would be dead weight on every dashboard load.
+  const needsCatalogue = (p) => !/^\/(admin|agency|portal|embed)(\/|$)/.test(p);
+
   const renderPage = async (req, res) => {
     try {
       const key = req.path;
       const hit = pageCache.get(key);
       if (hit && Date.now() - hit.at < PAGE_TTL) {
+        res.set("Cache-Control", hit.cacheControl);
         return res.status(hit.status).type("html").send(hit.html);
       }
       const { title, head, notFound } = await buildHead(req.path);
       // GEO: crawlers don't execute JS, so inject the route's real content
       // inside #root. React's createRoot().render() replaces it on mount.
       const body = notFound ? "" : await buildBody(req.path);
+      // The SPA used to mount, discard the server-rendered body, and only THEN
+      // fetch /api/bootstrap — so every visitor sat on a loading screen waiting
+      // for data this process already had in hand. Inlining it means the first
+      // render has the catalogue and there is no round-trip at all.
+      //
+      // INVARIANT: this must always be the ANONYMOUS payload. The page it lands
+      // in is served to everyone and is shared-cacheable, so a viewer-scoped
+      // build would leak one visitor's data to the next. publicBootstrapPayload
+      // passes no user, so viewPledges() redacts customer and financial detail
+      // and the agency directory comes back empty. Never swap in
+      // buildBootstrap(req.user) here — the API is the place for that.
+      // Sliced to the route: the cached full payload is built once and shared,
+      // then narrowed per path. Slicing here rather than in the builder keeps
+      // one cache entry for every route instead of one per URL.
+      const full = !notFound && needsCatalogue(req.path)
+        ? await publicBootstrapPayload().catch(() => null)
+        : null;
+      const bootstrap = full ? sliceBootstrapForRoute(full, req.path) : null;
+      const bootstrapTag = bootstrap
+        ? `<script>window.__SAWA_BOOTSTRAP__=${inlineScriptJson(bootstrap)}</script>`
+        : "";
       const html = template
         .replace(/<title>[\s\S]*?<\/title>/, `<title>${title.replace(/</g, "&lt;")}</title>`)
         .replace("</head>", () => `${head}\n</head>`)
-        .replace('<div id="root"></div>', () => `<div id="root">${body}</div>`);
+        .replace('<div id="root"></div>', () => `<div id="root">${body}</div>${bootstrapTag}`);
+      // The page now carries live seat counts in its inlined payload, so it is
+      // only cacheable in a shared cache for as long as those stay believable.
+      // stale-while-revalidate lets the CDN serve instantly and refresh behind
+      // the request, which is what makes a cold, uncached visit fast. Any
+      // catalogue write clears pageCache through cacheClearers, so an edge copy
+      // is the only thing that can lag, and only by s-maxage.
+      // Pages without a payload (portal, embed) must never be shared-cached.
+      const cacheControl = notFound
+        ? "no-store"
+        : bootstrap
+          ? "public, max-age=0, s-maxage=60, stale-while-revalidate=300"
+          : "no-store";
       // Unknown routes still render the SPA's 404 screen, but with a real 404
       // status so crawlers and monitoring don't treat them as live pages.
       if (pageCache.size > 500) pageCache.clear();
-      pageCache.set(key, { at: Date.now(), status: notFound ? 404 : 200, html });
+      pageCache.set(key, { at: Date.now(), status: notFound ? 404 : 200, html, cacheControl });
+      res.set("Cache-Control", cacheControl);
       res.status(notFound ? 404 : 200).type("html").send(html);
     } catch (e) {
       console.error("[seo] head injection failed for", req.path, "-", e.message);

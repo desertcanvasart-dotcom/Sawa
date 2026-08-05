@@ -176,6 +176,11 @@
 .sx .dep-layout{display:grid;grid-template-columns:1.04fr .96fr;gap:24px;align-items:stretch}
 .sx .card{background:var(--paper);padding:8px;border-radius:var(--r-xl);border:1px solid rgba(255,255,255,.6);box-shadow:var(--shadow-card);overflow:hidden;transition:transform .6s var(--ease),box-shadow .6s var(--ease)}
 .sx .card:hover{transform:translateY(-6px);box-shadow:var(--shadow-amb)}
+/* The title is a stretched link over .core (which is already positioned), so
+   the whole card stays clickable while exposing exactly one real link. */
+.sx .card:focus-within{outline:2px solid var(--teal);outline-offset:3px}
+.sx .card h3 .card-link{color:inherit;text-decoration:none}
+.sx .card:hover h3 .card-link{text-decoration:underline;text-underline-offset:2px}
 .sx .card .core{position:relative;border-radius:calc(var(--r-xl) - 8px);overflow:hidden;height:100%;display:flex;flex-direction:column}
 .sx .card .media{position:relative;overflow:hidden}
 .sx .card .media img{width:100%;height:100%;object-fit:cover;transition:transform 1s var(--ease)}
@@ -373,7 +378,8 @@
 .sx .icon-btn:hover{border-color:var(--line-2);background:#fff;color:var(--teal)}
 .sx .icon-btn svg{width:18px;height:18px}
 .sx .gallery{display:grid;grid-template-columns:2fr 1fr 1fr;grid-template-rows:1fr 1fr;gap:12px;height:min(520px,64vw)}
-.sx .gcell{position:relative;overflow:hidden;border-radius:var(--r-md);background:var(--teal);cursor:pointer}
+/* Not interactive — the gallery cells are images, so no pointer cursor. */
+.sx .gcell{position:relative;overflow:hidden;border-radius:var(--r-md);background:var(--teal)}
 .sx .gcell img{width:100%;height:100%;object-fit:cover;transition:transform .9s var(--ease)}
 .sx .gcell:hover img{transform:scale(1.06)}
 .sx .gcell.big{grid-row:span 2}
@@ -484,6 +490,11 @@
 .sx .bk select,.sx .bk input{width:100%;min-height:44px;border:1px solid var(--line);border-radius:12px;padding:0 13px;font-size:.95rem;font-family:inherit;background:#fff;color:var(--ink)}
 .sx .bk select:focus,.sx .bk input:focus{outline:none;border-color:var(--teal);box-shadow:0 0 0 3px rgba(23,50,58,.1)}
 .sx .bk .frow{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+/* Package-only: hotel tier + room type. Labelled rather than placeholder-only,
+   since these change the price and need to be unambiguous. */
+.sx .bk .bk-field{display:grid;gap:5px}
+.sx .bk .bk-field>span{font-size:.7rem;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.sx .bk .bk-field>span .opt{font-style:normal;letter-spacing:.06em;opacity:.7;font-weight:500}
 .sx .bk-sum{padding:18px 24px;border-bottom:1px solid var(--line);display:grid;gap:9px}
 .sx .bk-sum .r{display:flex;justify-content:space-between;align-items:center;font-size:.9rem;color:var(--muted)}
 .sx .bk-sum .r b{font-family:'Fraunces',serif;color:var(--teal);font-weight:600;font-size:1.05rem}
@@ -494,6 +505,10 @@
 .sx .book-cta .note svg{width:15px;height:15px;color:#2c7a57;flex:none}
 .sx .bk-ok{margin-top:14px;background:rgba(44,122,87,.1);border:1px solid rgba(44,122,87,.25);color:#1f5c3a;border-radius:12px;padding:12px 14px;font-size:.86rem;font-weight:600}
 .sx .bk-err{margin-top:14px;color:#a13a2c;font-size:.86rem;font-weight:600}
+/* Cancel is a real <button> for keyboard/AT reachability; strip the chrome so it
+   still reads as the inline link it looks like inside the "seat held" notice. */
+.sx .bk-cancel{background:none;border:0;padding:0;font:inherit;color:inherit;text-decoration:underline;cursor:pointer}
+.sx .bk-cancel:focus-visible{outline:2px solid currentColor;outline-offset:2px;border-radius:3px}
 .sx .assur{margin-top:18px;background:var(--paper);border:1px solid var(--line);border-radius:var(--r-lg);padding:18px 20px;display:flex;flex-direction:column;gap:13px}
 .sx .assur .a{display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:center}
 .sx .assur .a .ic{width:34px;height:34px;border-radius:10px;background:var(--paper-2);color:var(--teal);display:grid;place-items:center;flex:0 0 auto}
@@ -502,8 +517,15 @@
 .sx .assur .a span{font-size:.8rem;color:var(--muted)}
 .sx .related{padding:96px 0 120px}
 .sx .rel-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:22px;margin-top:38px}
-.sx .rcard{background:var(--paper);padding:8px;border-radius:var(--r-xl);border:1px solid rgba(255,255,255,.6);box-shadow:var(--shadow-card);overflow:hidden;cursor:pointer;transition:transform .6s var(--ease),box-shadow .6s var(--ease)}
+/* position:relative is load-bearing: the title's stretched .card-link::after is
+   inset:0 against its nearest POSITIONED ancestor, so without this the hit area
+   would escape the card and cover whatever is positioned further up the tree. */
+.sx .rcard{position:relative;background:var(--paper);padding:8px;border-radius:var(--r-xl);border:1px solid rgba(255,255,255,.6);box-shadow:var(--shadow-card);overflow:hidden;transition:transform .6s var(--ease),box-shadow .6s var(--ease)}
 .sx .rcard:hover{transform:translateY(-6px);box-shadow:var(--shadow-amb)}
+/* The overlay swallows the anchor's own ring, so the card carries focus. */
+.sx .rcard:focus-within{outline:2px solid var(--teal);outline-offset:3px}
+.sx .rcard h3 .card-link{color:inherit;text-decoration:none}
+.sx .rcard:hover h3 .card-link{text-decoration:underline;text-underline-offset:2px}
 .sx .rcard .core{border-radius:calc(var(--r-xl) - 8px);overflow:hidden}
 .sx .rcard .media{position:relative;aspect-ratio:16/11;overflow:hidden}
 .sx .rcard .media img{width:100%;height:100%;object-fit:cover;transition:transform 1s var(--ease)}

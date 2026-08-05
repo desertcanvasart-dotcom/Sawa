@@ -12,6 +12,21 @@ import { cleanHtml } from "./sanitize.js";
 const esc = (s) => String(s == null ? "" : s)
   .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 const ldScript = (obj) => `<script type="application/ld+json">${JSON.stringify(obj).replace(/</g, "\\u003c")}</script>`;
+
+// JSON destined for inside a <script> block, which is NOT the same as JSON in a
+// response body. The HTML parser ends the block at the first "</script>"
+// anywhere in the text — including inside a JSON string — so a tour titled
+// `</script><img onerror=...>` would break out and execute. Escaping "<" shuts
+// that off. U+2028/U+2029 are legal in JSON but are line terminators in JS
+// source, so leaving them raw is a syntax error that blanks the payload.
+// Tour titles, descriptions and blog excerpts are operator-supplied: this is
+// untrusted input, not a formality.
+export function inlineScriptJson(value) {
+  return JSON.stringify(value)
+    .replace(/</g, "\\u003c")
+    .replace(/\u2028/g, "\\u2028")
+    .replace(/\u2029/g, "\\u2029");
+}
 const meta = (attr, key, val) => (val ? `<meta ${attr}="${esc(key)}" content="${esc(val)}">` : "");
 const abs = (u) => (u && !u.startsWith("http") ? BRAND.url + (u.startsWith("/") ? "" : "/") + u : u);
 const clean = (p) => (p || "/").replace(/\/+$/, "") || "/";
@@ -55,10 +70,18 @@ const FAQ_SCHEMA = {
 };
 
 // Resolve by raw DB id first (back-compat), then by the derived SEO slug.
+//
+// status='approved' is REQUIRED here. An agency's listing is meant to stay
+// offline until a platform admin approves it, and /api/bootstrap enforces that
+// so the React app hides it — but this lookup didn't, so a pending or rejected
+// listing still rendered a fully-formed page (title, description, overview,
+// price) to any crawler or anyone with the URL. Users couldn't see it; Google
+// could. Same filter as app.js and the /tours listing below.
 async function findTourProduct(idOrSlug) {
-  let r = await pool.query("SELECT * FROM tour_products WHERE id=$1 AND active IS NOT FALSE LIMIT 1", [idOrSlug]);
+  const VISIBLE = "active IS NOT FALSE AND status = 'approved'";
+  let r = await pool.query(`SELECT * FROM tour_products WHERE id=$1 AND ${VISIBLE} LIMIT 1`, [idOrSlug]);
   if (!r.rows.length) {
-    const all = await pool.query("SELECT * FROM tour_products WHERE active IS NOT FALSE");
+    const all = await pool.query(`SELECT * FROM tour_products WHERE ${VISIBLE}`);
     const match = all.rows.find((row) => tourSlug(row) === idOrSlug);
     if (match) r = { rows: [match] };
   }
@@ -90,7 +113,6 @@ async function tourSchema(idOrSlug, url) {
       description: "Hold a seat free; pay only once the date is confirmed (GoAhead).",
     },
   };
-  if (p.city) trip.subjectOf = undefined, trip.touristType = "Small-group shared tour";
   if (itin.length) {
     trip.itinerary = {
       "@type": "ItemList",
@@ -183,48 +205,80 @@ export async function buildHead(pathname) {
   return { title: m.title, head, notFound: !!m.notFound };
 }
 
+// ---- Route-scoped bootstrap slice --------------------------------------
+// The inlined payload used to carry every product in full on every page. These
+// fields are the bulk of a product record and are read in exactly two places:
+// the detail page for the ONE product it is about, and the agency portal —
+// which never receives an inlined payload (see needsCatalogue in app.js). Cards,
+// filters, city stats and the summary counts read none of them.
+//
+// So every product except the one the visitor is actually looking at is sent
+// without them. Nothing that renders on first paint loses a field, which is the
+// constraint that matters: a slice that changed any visible number would just
+// reintroduce the flicker this whole change set exists to remove.
+const DETAIL_ONLY_PRODUCT_FIELDS = [
+  "overviewHtml", "itinerary", "included", "notIncluded", "policiesHtml",
+  "meetingPoint", "meetingPoints", "whatToBring", "pickupNote", "faq", "highlights",
+];
+
+// Cards use images[0] only (coverImage); the gallery is detail-page furniture.
+const CARD_IMAGE_COUNT = 1;
+
+export function sliceBootstrapForRoute(payload, pathname) {
+  if (!payload || !Array.isArray(payload.tourProducts)) return payload;
+  const path = clean(pathname);
+  const m = /^\/(tour|package)\/([^/]+)$/.exec(path);
+  // Accept the raw id as well as the slug, mirroring how the client resolves a
+  // route product — an old /tour/<id> link must still get its full record.
+  const focus = m ? decodeURIComponent(m[2]) : null;
+
+  let slimmed = 0;
+  const tourProducts = payload.tourProducts.map((p) => {
+    if (focus && (p.id === focus || tourSlug(p) === focus)) return p;
+    const slim = { ...p };
+    for (const field of DETAIL_ONLY_PRODUCT_FIELDS) delete slim[field];
+    if (Array.isArray(slim.images) && slim.images.length > CARD_IMAGE_COUNT) {
+      slim.images = slim.images.slice(0, CARD_IMAGE_COUNT);
+    }
+    // Marks the record as card-complete but detail-incomplete. The client uses
+    // this to tell "this tour genuinely lists nothing under Included" apart from
+    // "the detail hasn't arrived yet" — the two must not look the same.
+    slim.detailPending = true;
+    slimmed += 1;
+    return slim;
+  });
+
+  return { ...payload, tourProducts, partial: slimmed > 0 };
+}
+
 // ---- robots.txt ----
+// A crawler obeys ONLY the most specific User-agent group that matches it and
+// ignores "*" entirely. Every named group here previously held a bare
+// "Allow: /" with no Disallow lines, so the app internals were blocked for
+// nobody except unnamed crawlers — Googlebot, Bingbot and every AI crawler were
+// explicitly invited into /api/ and the dashboards, the exact opposite of the
+// intent. The disallow list is therefore repeated into each group.
+const CRAWLERS = [
+  // Search
+  "Googlebot", "Bingbot",
+  // AI search & training (allowed for discoverability)
+  "GPTBot", "OAI-SearchBot", "ChatGPT-User", "ClaudeBot", "Claude-Web",
+  "PerplexityBot", "Google-Extended", "CCBot",
+];
+// App internals: no crawler should spend budget here, and none of it is public.
+const DISALLOW = ["/api/", "/admin", "/agency", "/portal", "/embed"];
+
 export function robotsTxt() {
+  const group = (agent) =>
+    `User-agent: ${agent}\nAllow: /\n${DISALLOW.map((p) => `Disallow: ${p}`).join("\n")}\n`;
   return `# Sawa Tours — robots
-User-agent: Googlebot
-Allow: /
+# Every group repeats the same Disallow list on purpose: robots.txt gives a
+# crawler only its most specific matching group, so rules in "*" would not
+# reach any crawler named below.
 
-User-agent: Bingbot
-Allow: /
-
-# AI search & training crawlers (allowed for discoverability)
-User-agent: GPTBot
-Allow: /
-
-User-agent: OAI-SearchBot
-Allow: /
-
-User-agent: ChatGPT-User
-Allow: /
-
-User-agent: ClaudeBot
-Allow: /
-
-User-agent: Claude-Web
-Allow: /
-
-User-agent: PerplexityBot
-Allow: /
-
-User-agent: Google-Extended
-Allow: /
-
-User-agent: CCBot
-Allow: /
-
-# Default: allow public site, block app internals
-User-agent: *
-Allow: /
-Disallow: /api/
-Disallow: /admin
-Disallow: /agency
-Disallow: /portal
-
+${CRAWLERS.map(group).join("\n")}
+# Default for everyone else
+${group("*")}
 Sitemap: ${BRAND.url}/sitemap.xml
 `;
 }
@@ -234,9 +288,21 @@ export async function sitemapXml() {
   const urls = [];
   const add = (loc, lastmod, freq) => urls.push({ loc: BRAND.url + loc, lastmod, freq });
   add("/", null, "weekly");
-  ["/departures", "/goahead-promise", "/operators", "/verify", "/widget", "/about", "/contact", "/faq", "/blog", "/privacy", "/terms"].forEach((p) => add(p, null, "monthly"));
+  // /tours is the main catalogue and was missing entirely, as were
+  // /how-it-works and /booking — all three have real meta in STATIC above and
+  // are listed as core pages in llms.txt, so leaving them out of the sitemap
+  // was an oversight rather than a choice.
+  add("/tours", null, "daily");
+  ["/how-it-works", "/departures", "/goahead-promise", "/operators", "/verify", "/widget",
+   "/about", "/contact", "/faq", "/blog", "/booking", "/privacy", "/terms",
+   // The destination pages are real, linked from the primary nav, and now carry
+   // canonicals — but were absent from the sitemap entirely.
+   "/destinations", "/destinations/cairo", "/destinations/luxor", "/destinations/aswan",
+   "/destinations/siwa", "/destinations/abu-simbel"].forEach((p) => add(p, null, "monthly"));
   try {
-    const tours = await pool.query("SELECT id, title, city, type FROM tour_products WHERE active IS NOT FALSE");
+    // Only approved listings — a sitemap must never advertise a tour that the
+    // site itself refuses to show (see findTourProduct).
+    const tours = await pool.query("SELECT id, title, city, type FROM tour_products WHERE active IS NOT FALSE AND status = 'approved'");
     tours.rows.forEach((t) => add(`/${t.type === "package" ? "package" : "tour"}/${encodeURIComponent(tourSlug(t))}`, null, "weekly"));
     const posts = await pool.query("SELECT slug, updated_at FROM blog_posts WHERE status='published'");
     posts.rows.forEach((p) => add(`/blog/${encodeURIComponent(p.slug)}`, p.updated_at instanceof Date ? p.updated_at.toISOString() : p.updated_at, "monthly"));
@@ -244,7 +310,10 @@ export async function sitemapXml() {
   const body = urls.map((u) =>
     `  <url><loc>${esc(u.loc)}</loc>${u.lastmod ? `<lastmod>${esc(u.lastmod)}</lastmod>` : ""}${u.freq ? `<changefreq>${u.freq}</changefreq>` : ""}</url>`
   ).join("\n");
-  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemap.org/schemas/sitemap/0.9">\n${body}\n</urlset>`;
+  // NOTE: sitemapS.org — the protocol's namespace has an "s". It read
+  // "sitemap.org" here, which is not the sitemap namespace, so the whole
+  // document was invalid and search engines could reject it outright.
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${body}\n</urlset>`;
 }
 
 // ---- Server-rendered body content (GEO) ----------------------------------

@@ -3,46 +3,34 @@ import { createRoot } from "react-dom/client";
 import {
   ArrowLeft,
   ArrowRight,
-  ArrowUpRight,
   BadgeCheck,
-  Bell,
   CalendarDays,
-  Camera,
   Car,
   Check,
   ChevronDown,
-  ChevronRight,
-  CircleDollarSign,
   Clock3,
   Filter,
-  Flag,
-  Globe,
-  Handshake,
   Hotel,
   Mail,
   MapPin,
-  Menu,
   MessageCircle,
   Newspaper,
   Package,
-  Percent,
   Phone,
   Plus,
   Search,
-  Settings2,
   ShieldCheck,
   Sparkles,
   Star,
   Ticket,
   Trash2,
   Users,
-  Utensils,
-  X,
 } from "lucide-react";
 import "./styles.css";
 import "./redesign.css";
 import { supabase, apiFetch, API_BASE } from "./supabaseClient";
 import { tourSlug } from "../server/slug.js";
+import { toDate } from "./dates.js";
 // Lazy-loaded so the heavy authenticated portal (admin desk + TipTap editor)
 // is split out of the public bundle and never downloaded by visitors.
 const LoginGate = lazy(() => import("./LoginGate").then((m) => ({ default: m.LoginGate })));
@@ -137,27 +125,46 @@ function formingLabel(city) {
   return `${pluralize(city.departures, "date")} this week · forming`;
 }
 
-function formatDate(date) {
+// A departure board that runs past December showed "Fri, Jan 15" next to
+// "Sat, Nov 8" with nothing to say they were different years — and the same
+// bare format was used for the balance-due date, which is a payment deadline.
+// The year is added whenever the date is not in the current year, so the common
+// case stays short and the ambiguous case can't arise.
+function needsYear(date) {
+  return date.getFullYear() !== new Date().getFullYear();
+}
+
+function formatDate(date, { alwaysYear = false } = {}) {
+  const d = toDate(date);
   return new Intl.DateTimeFormat("en", {
     month: "short",
     day: "numeric",
     weekday: "short",
-  }).format(new Date(date));
+    ...(alwaysYear || needsYear(d) ? { year: "numeric" } : {}),
+  }).format(d);
 }
 
 function formatRange(start, end) {
   if (!end || end === start) return formatDate(start);
-  const startDate = new Date(start);
-  const endDate = new Date(end);
+  const startDate = toDate(start);
+  const endDate = toDate(end);
   const sameMonth = startDate.getMonth() === endDate.getMonth();
   const monthFmt = new Intl.DateTimeFormat("en", { month: "short" });
   const dayFmt = new Intl.DateTimeFormat("en", { day: "numeric" });
-  if (sameMonth) return `${monthFmt.format(startDate)} ${dayFmt.format(startDate)}–${dayFmt.format(endDate)}`;
-  return `${monthFmt.format(startDate)} ${dayFmt.format(startDate)} – ${monthFmt.format(endDate)} ${dayFmt.format(endDate)}`;
+  // Year goes on the end of the range, where it disambiguates both halves —
+  // unless the range itself straddles New Year, when each half needs its own.
+  const startYear = needsYear(startDate) && startDate.getFullYear() !== endDate.getFullYear()
+    ? ` ${startDate.getFullYear()}` : "";
+  const endYear = needsYear(endDate) ? ` ${endDate.getFullYear()}` : "";
+  if (sameMonth) return `${monthFmt.format(startDate)} ${dayFmt.format(startDate)}–${dayFmt.format(endDate)}${endYear}`;
+  return `${monthFmt.format(startDate)} ${dayFmt.format(startDate)}${startYear} – ${monthFmt.format(endDate)} ${dayFmt.format(endDate)}${endYear}`;
 }
 
+// Cancelled bookings have released their seats, so they must not count toward
+// capacity, live pricing, or GoAhead. Mirrors the server's rule in domain.js —
+// if this drifts, the price we show is not the price the server charges.
 function seatsTotal(pledges = []) {
-  return pledges.reduce((sum, pledge) => sum + Number(pledge.seats || 0), 0);
+  return pledges.reduce((sum, pledge) => (pledge?.status === "cancelled" ? sum : sum + Number(pledge.seats || 0)), 0);
 }
 
 function safePrice(value, fallback) {
@@ -216,10 +223,32 @@ function depositFor(total, percent = 10) {
   return Math.ceil(Number(total || 0) * (Number(percent || 10) / 100));
 }
 
+// Mirrors server/domain.js. Pure calendar arithmetic, done wholly in UTC: the
+// previous version stepped back a LOCAL day and then read the result back with
+// toISOString() (UTC), so a viewer at an offset beyond +12 — New Zealand, Fiji,
+// Samoa — was shown the balance falling due a day early.
 function balanceDueDate(date) {
-  const departureDate = new Date(`${date}T12:00:00`);
-  departureDate.setDate(departureDate.getDate() - 1);
-  return formatDate(departureDate.toISOString().slice(0, 10));
+  const departureDate = new Date(`${date}T00:00:00Z`);
+  if (Number.isNaN(departureDate.getTime())) return formatDate(date, { alwaysYear: true });
+  departureDate.setUTCDate(departureDate.getUTCDate() - 1);
+  // A payment deadline always carries its year, even for this calendar year.
+  return formatDate(departureDate.toISOString().slice(0, 10), { alwaysYear: true });
+}
+
+// The sidebar used to show a deposit figure directly above an enabled "Reserve
+// a seat" button, which reads as "you are about to be charged". Terms are
+// explicit that the deposit only falls due once the departure reaches GoAhead
+// and the booking is confirmed, so every surface that quotes a deposit shows
+// this alongside it: the four steps, in order, with the charge point named.
+function PaymentTimeline() {
+  return (
+    <ol className="pay-timeline" aria-label="When you pay">
+      <li><b>Reserve</b><span>Free — no card</span></li>
+      <li><b>GoAhead</b><span>Group reaches its minimum</span></li>
+      <li><b>Deposit</b><span>Charged after GoAhead</span></li>
+      <li><b>Balance</b><span>Due before departure</span></li>
+    </ol>
+  );
 }
 
 function statusFor(departure) {
@@ -231,14 +260,62 @@ function statusFor(departure) {
   return need === 1 ? "1 seat needed" : `${need} seats needed`;
 }
 
+// The server inlines the public catalogue into the page it renders (see
+// renderPage in server/app.js), so the very first render already has data and
+// there is no fetch to wait on. Read once, at module scope: it is a static
+// snapshot of the response, and re-reading it later would resurrect stale data
+// after the app has refreshed from the API.
+//
+// It is deliberately NOT deleted from window afterwards — a hydration-time
+// error that remounts the app would otherwise fall back to the loading screen
+// for no reason.
+// Long enough to ride out a slow mobile connection, short enough that a dead
+// backend doesn't read as an indefinite hang.
+const BOOTSTRAP_TIMEOUT_MS = 12_000;
+
+// The server sends every product except the current route's in card-complete
+// but detail-incomplete form (sliceBootstrapForRoute), flagged detailPending.
+// It normally never reaches a detail page: landing on /tour/x inlines x in
+// full. It shows up in exactly one window — a client-side click from the
+// catalogue to a tour before the background refresh has landed.
+//
+// Every detail section is guarded by `length > 0`, so a pending product would
+// silently omit them and then have them appear mid-read. Standing in a
+// placeholder keeps the page the right shape and says which parts are still
+// coming, instead of implying the tour simply has no itinerary.
+function DetailPending({ heading }) {
+  return (
+    <section className="sec rv" aria-busy="true">
+      <h2>{heading}</h2>
+      <span className="sr-only">Loading {heading.toLowerCase()}…</span>
+      <div className="skel-lines" aria-hidden="true">
+        <span className="skel skel-line w70" />
+        <span className="skel skel-line w45" />
+        <span className="skel skel-line w60" />
+      </div>
+    </section>
+  );
+}
+
+const INLINE_BOOTSTRAP = (() => {
+  try {
+    const data = typeof window !== "undefined" ? window.__SAWA_BOOTSTRAP__ : null;
+    // Guard the shape: a truncated or half-written payload should fall through
+    // to the normal fetch rather than render an empty catalogue as if it were real.
+    return data && Array.isArray(data.tourProducts) && Array.isArray(data.departures) ? data : null;
+  } catch {
+    return null;
+  }
+})();
+
 function App() {
   const [path, setPath] = useState(window.location.pathname);
-  const [agencies, setAgencies] = useState([]);
-  const [cities, setCities] = useState([]);
-  const [tourProducts, setTourProducts] = useState([]);
-  const [departures, setDepartures] = useState([]);
+  const [agencies, setAgencies] = useState(INLINE_BOOTSTRAP?.agencies || []);
+  const [cities, setCities] = useState(INLINE_BOOTSTRAP?.cities || []);
+  const [tourProducts, setTourProducts] = useState(INLINE_BOOTSTRAP?.tourProducts || []);
+  const [departures, setDepartures] = useState(INLINE_BOOTSTRAP?.departures || []);
   const [selectedCity, setSelectedCity] = useState("All cities");
-  const [selectedId, setSelectedId] = useState(null);
+  const [selectedId, setSelectedId] = useState(INLINE_BOOTSTRAP?.departures?.[0]?.id ?? null);
   const [query, setQuery] = useState("");
   const [agencyId, setAgencyId] = useState("");
   const [seatCount, setSeatCount] = useState(1);
@@ -247,11 +324,18 @@ function App() {
   const [tierId, setTierId] = useState("");
   const [newRoute, setNewRoute] = useState("");
   const [newSeats, setNewSeats] = useState(4);
-  const [scheduleProductId, setScheduleProductId] = useState("");
+  const [scheduleProductId, setScheduleProductId] = useState(
+    () => (INLINE_BOOTSTRAP?.tourProducts || []).find((p) => !isPackage(p))?.id || ""
+  );
   const [scheduleDate, setScheduleDate] = useState("2026-05-25");
-  const [schedulePackageId, setSchedulePackageId] = useState("");
+  const [schedulePackageId, setSchedulePackageId] = useState(
+    () => (INLINE_BOOTSTRAP?.tourProducts || []).find((p) => isPackage(p))?.id || ""
+  );
   const [schedulePackageDate, setSchedulePackageDate] = useState("2026-06-15");
-  const [isLoading, setIsLoading] = useState(true);
+  // With an inlined payload there is nothing to wait for, so the app renders
+  // content on first paint instead of gating the whole tree behind a spinner.
+  const [isLoading, setIsLoading] = useState(!INLINE_BOOTSTRAP);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [notice, setNotice] = useState("");
   const [publicBooking, setPublicBooking] = useState(null);
@@ -263,18 +347,27 @@ function App() {
     return () => window.removeEventListener("popstate", handlePop);
   }, []);
 
+  // Runs on mount and on every auth change. When the page arrived with an
+  // inlined payload this is a background refresh — it must never put the app
+  // back into a loading state, because content is already on screen.
   async function loadBootstrap() {
+    // A request that HANGS is the case that used to strand the page: a rejected
+    // fetch surfaced an error, but an open socket left the loader spinning with
+    // no timeout and nothing for the visitor to do. Abort turns a hang into a
+    // failure, which the retry screen can then act on.
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), BOOTSTRAP_TIMEOUT_MS);
     try {
       let data;
       try {
-        const response = await apiFetch(`/bootstrap`);
+        const response = await apiFetch(`/bootstrap`, { signal: controller.signal });
         if (!response.ok) throw new Error("api");
         data = await response.json();
       } catch (apiError) {
         // Local dev has no database, so /api/bootstrap fails — fall back to a
         // snapshot of live data so tour pages preview. In production the live
         // API succeeds and this fallback is never used.
-        const snap = await fetch("/_dev_bootstrap.json");
+        const snap = await fetch("/_dev_bootstrap.json", { signal: controller.signal });
         if (!snap.ok) throw new Error("Could not load portal data.");
         data = await snap.json();
       }
@@ -287,9 +380,15 @@ function App() {
       const firstPackage = (data.tourProducts || []).find((p) => isPackage(p));
       setScheduleProductId((prev) => prev || firstDayTour?.id || "");
       setSchedulePackageId((prev) => prev || firstPackage?.id || "");
+      setLoadFailed(false);
     } catch (error) {
-      setNotice(error.message);
+      // A failed background refresh must not blank a page that is already
+      // showing good data — only a cold load with nothing on screen is an error
+      // the visitor needs to see and act on.
+      if (tourProducts.length === 0) setLoadFailed(true);
+      else setNotice(error.message);
     } finally {
+      clearTimeout(timeout);
       setIsLoading(false);
     }
   }
@@ -592,7 +691,12 @@ function App() {
     }
   }
 
-  async function bookPublicDeparture({ departureId, customerName, customerEmail, seats, roomingType, accommodationTier }) {
+  // customerPhone was collected by the booking form but neither destructured
+  // here nor put in the body, so every phone number travellers typed was thrown
+  // away — even though the API accepts it, the column stores it, and the admin
+  // bookings table has a column for it. WhatsApp is the primary contact channel
+  // for these tours, so this was the operator's main way to reach a traveller.
+  async function bookPublicDeparture({ departureId, customerName, customerEmail, customerPhone, seats, roomingType, accommodationTier }) {
     if (isSaving) return;
     setIsSaving(true);
     setNotice("");
@@ -600,7 +704,7 @@ function App() {
       const response = await fetch(`${API_BASE}/public/departures/${departureId}/bookings`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ customerName, customerEmail, seats: Number(seats), roomingType, accommodationTier, refCode: getStoredRef() }),
+        body: JSON.stringify({ customerName, customerEmail, customerPhone, seats: Number(seats), roomingType, accommodationTier, refCode: getStoredRef() }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Could not request seats.");
@@ -660,11 +764,17 @@ function App() {
     return <EmbedWidget type={embedType} product={embedProduct} />;
   }
 
-  if (isLoading) {
-    return <LoadingScreen />;
+  const isPortalRoute = path.startsWith("/admin") || path.startsWith("/agency") || path.startsWith("/portal");
+
+  if (loadFailed && !isLoading) {
+    return <LoadErrorScreen onRetry={() => { setLoadFailed(false); setIsLoading(true); loadBootstrap(); }} />;
   }
 
-  const isPortalRoute = path.startsWith("/admin") || path.startsWith("/agency") || path.startsWith("/portal");
+  if (isLoading) {
+    // The portal is a different shape entirely, so the catalogue skeleton would
+    // be a lie there; it keeps the neutral loader.
+    return isPortalRoute ? <LoadingScreen /> : <CatalogueSkeleton />;
+  }
 
   if (!isPortalRoute) {
     return (
@@ -898,86 +1008,6 @@ function StaffPanel({ agencyName, currentUserId }) {
   );
 }
 
-// ---- Super admin: manage agencies + their owners ----
-function AgenciesPanel() {
-  const [agencies, setAgencies] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [form, setForm] = useState({ name: "", contactName: "", phone: "", ownerName: "", ownerEmail: "" });
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const [created, setCreated] = useState(null);
-
-  async function load() {
-    try {
-      const res = await apiFetch("/admin/agencies");
-      const data = await res.json();
-      if (res.ok) setAgencies(data.agencies || []);
-    } finally {
-      setLoading(false);
-    }
-  }
-  useEffect(() => { load(); }, []);
-
-  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
-
-  async function createAgency(e) {
-    e.preventDefault();
-    setBusy(true); setError(""); setCreated(null);
-    try {
-      const res = await apiFetch("/admin/agencies", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Could not create the agency.");
-      setCreated({ email: data.ownerEmail, tempPassword: data.tempPassword, name: data.agency.name });
-      setForm({ name: "", contactName: "", phone: "", ownerName: "", ownerEmail: "" });
-      load();
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <section className="panel agencies-panel admin-wide" id="agencies">
-      <div className="panel-header">
-        <div><h2>Agencies</h2><p>Create a partner agency and its owner login.</p></div>
-        <ShieldCheck size={20} />
-      </div>
-
-      <form className="agency-add" onSubmit={createAgency}>
-        <div className="field"><label>Agency name</label><input value={form.name} onChange={set("name")} placeholder="Nile Star Travel" /></div>
-        <div className="field"><label>Phone (optional)</label><input value={form.phone} onChange={set("phone")} placeholder="+20 …" /></div>
-        <div className="field"><label>Owner name</label><input value={form.ownerName} onChange={set("ownerName")} placeholder="Owner full name" /></div>
-        <div className="field"><label>Owner email</label><input type="email" value={form.ownerEmail} onChange={set("ownerEmail")} placeholder="owner@agency.com" /></div>
-        <button className="primary" type="submit" disabled={busy}><Plus size={17} />{busy ? "Creating…" : "Create agency"}</button>
-      </form>
-
-      {error && <div className="auth-error" role="alert">{error}</div>}
-      {created && (
-        <div className="temp-pass" role="status">
-          <strong>{created.name} created. Owner {created.email} can sign in.</strong>
-          <p>Share this one-time password — it won't be shown again:</p>
-          <code>{created.tempPassword}</code>
-        </div>
-      )}
-
-      <div className="agency-list">
-        {loading && <p className="field-hint">Loading agencies…</p>}
-        {!loading && agencies.map((a) => (
-          <div className="agency-row" key={a.id}>
-            <div><strong>{a.name}</strong><span>{a.contactName}{a.phone ? ` · ${a.phone}` : ""}</span></div>
-            <span className="agency-meta">{a.staffCount} {a.staffCount === 1 ? "member" : "members"}</span>
-            <span className={`team-status ${a.status === "active" ? "active" : "disabled"}`}>{a.status}</span>
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
-
 function pageFromPath(p) {
   const clean = (p || "/").replace(/\/+$/, "") || "/";
   if (clean === "/tours" || clean === "/packages") return "tours";
@@ -1066,313 +1096,6 @@ function SxChrome({ navigate, children }) {
   );
 }
 
-function PublicHomeV2({ navigate, products = [], summary = {}, cities = [] }) {
-  const rootRef = useRef(null);
-  const [tight, setTight] = useState(false);
-  const [menu, setMenu] = useState(false);
-  const [tab, setTab] = useState("All Egypt");
-
-  const model = (products || []).filter((p) => (p.dates || []).length).map((p) => {
-    const lead = openDates(p)[0] || p.dates[0];
-    const seats = lead ? seatsTotal(lead.pledges) : 0;
-    const goAhead = goAheadFor(p);
-    const price = lead ? livePriceFor({ ...p, ...lead }, seats) : livePriceFor(p, goAhead);
-    const pct = goAhead ? Math.min(100, Math.round((seats / goAhead) * 100)) : 0;
-    const confirmed = !!lead && (lead.status === "supplier_confirmed" || seats >= goAhead);
-    return { p, lead, seats, goAhead, price, pct, confirmed, full: productFullyBooked(p),
-      cityList: isPackage(p) ? (p.cities || [p.city]) : [p.city] };
-  });
-  const featured = model.find((m) => m.confirmed && !m.full) || model.find((m) => !m.full) || model[0];
-  const board = model.filter((m) => m !== featured)
-    .filter((m) => tab === "All Egypt" || m.cityList.includes(tab))
-    .slice(0, 6);
-  const tabNames = ["All Egypt", ...cities.map((c) => c.name)];
-  const marquee = [...new Set([...cities.map((c) => c.name), ...model.flatMap((m) => m.cityList)])].filter(Boolean);
-  const linkOf = (m) => `/${isPackage(m.p) ? "package" : "tour"}/${tourSlug(m.p)}`;
-  const depDate = (m) => (m?.lead ? formatDate(m.lead.startDate || m.lead.date) : "");
-  const scrollTo = (id) => (e) => { e.preventDefault(); document.getElementById(id)?.scrollIntoView({ behavior: "smooth" }); };
-
-  useEffect(() => {
-    const onScroll = () => setTight(window.scrollY > 20);
-    window.addEventListener("scroll", onScroll, { passive: true }); onScroll();
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
-  useEffect(() => {
-    const root = rootRef.current; if (!root) return;
-    const io = new IntersectionObserver((entries) => {
-      entries.forEach((e) => {
-        if (!e.isIntersecting) return;
-        e.target.classList.add("in");
-        e.target.querySelectorAll("[data-fill]").forEach((b) => { b.style.width = b.dataset.fill; });
-        io.unobserve(e.target);
-      });
-    }, { threshold: 0.16, rootMargin: "0px 0px -7% 0px" });
-    root.querySelectorAll(".rv").forEach((el) => io.observe(el));
-    const t = setTimeout(() => root.querySelectorAll(".hero [data-fill], .how-core [data-fill]").forEach((b) => { b.style.width = b.dataset.fill; }), 500);
-    return () => { io.disconnect(); clearTimeout(t); };
-  }, [board.length, tab, featured]);
-
-  const navLinks = [["How it works", "how"], ["Departures", "departures"], ["The promise", "promise"], ["For operators", "operators"]];
-  const Logo = (props) => (
-    <a className="logo" aria-label="Sawa Tours home" onClick={() => navigate("/")} {...props}><SxLogoMark /><span className="nm"><b>Sawa</b><i>Tours · Egypt</i></span></a>
-  );
-
-  return (
-    <div className="sx" ref={rootRef}>
-      <div className="grain" />
-      <SxNav navigate={navigate} />
-
-      <main>
-        {/* HERO */}
-        <section className="hero">
-          <div className="hero-bg" />
-          <div className="wrap hero-grid">
-            <div className="hero-copy rv">
-              <span className="eyebrow"><span className="live" />Shared departures across Egypt</span>
-              <h1>See Egypt the way<br />it's meant to be — <span className="ital gld">together</span>.</h1>
-              <p className="lede">Sawa pools travellers from verified Egyptian operators into one shared departure. A few travellers on the same route, and the trip is locked in. We call that moment the <strong>GoAhead</strong>.</p>
-              <div className="hero-cta">
-                <a href="#departures" className="btn teal" onClick={scrollTo("departures")}>Browse Egypt departures<span className="chip"><SxArrow /></span></a>
-                <a href="#how" className="btn plain" onClick={scrollTo("how")}>How it works<span className="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M12 5v14M5 12l7 7 7-7" /></svg></span></a>
-              </div>
-              <div className="hero-meta">
-                <div className="m"><b className="tnum">{summary.tours || model.length}</b><span>Egypt tours &amp;<br />packages live</span></div>
-                <div className="sep" />
-                <div className="m"><b className="tnum">{summary.goAheadDates || 0}</b><span>departures<br />confirmed &amp; running</span></div>
-                <div className="sep" />
-                <div className="m"><b className="tnum">{cities.length || 0}</b><span>destinations<br />across Egypt</span></div>
-              </div>
-            </div>
-            <div className="hero-visual rv" data-d="2">
-              <div className="cascade">
-                <div className="shell ph-1"><div className="core">
-                  <img src={coverImage(model[0]?.p || {})} alt={model[0]?.p?.title || "Egypt"} />
-                  <div className="cap"><p className="rt">{(model[0]?.cityList || ["Egypt"])[0]}</p><h3>{model[0]?.p?.title || "Egypt tours"}</h3></div>
-                </div></div>
-                <div className="shell ph-2"><div className="core">
-                  <img src={coverImage(model[1]?.p || model[0]?.p || {})} alt={model[1]?.p?.title || "Egypt"} />
-                  <div className="cap"><p className="rt">{(model[1]?.cityList || ["Egypt"])[0]}</p><h3>{model[1]?.p?.title || "Shared departures"}</h3></div>
-                </div></div>
-                {featured && (
-                  <div className="confirm">
-                    <div className="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg></div>
-                    <div><b>{featured.confirmed ? "GoAhead confirmed" : "Forming now"}</b><span>{featured.p.title.slice(0, 22)} · {depDate(featured)}</span></div>
-                  </div>
-                )}
-                {featured && (
-                  <div className="seats-chip">
-                    <div className="avatars"><i>HA</i><i>MK</i><i>SL</i><i>Rf</i><i>+{Math.max(0, featured.seats - 4)}</i></div>
-                    <b className="tnum">{featured.seats} / {featured.goAhead}</b>
-                    <span>travellers joined{featured.goAhead - featured.seats > 0 ? ` — ${featured.goAhead - featured.seats} to go` : " — confirmed"}</span>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* MARQUEE */}
-        <div className="marquee" aria-hidden="true">
-          <div className="track">
-            {[...marquee, ...marquee].map((name, i) => (
-              <span className="item" key={i}><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="5" /></svg>{name}</span>
-            ))}
-          </div>
-        </div>
-
-        {/* HOW IT WORKS */}
-        <section className="block" id="how">
-          <div className="wrap how">
-            <div className="how-sticky rv">
-              <span className="eyebrow">How Sawa works</span>
-              <h2 className="serif" style={{ fontWeight: 500, color: "var(--teal)", fontSize: "clamp(2.2rem,4.4vw,3.5rem)", lineHeight: 1.04, letterSpacing: "-.02em", marginTop: 22 }}>A departure no single operator could fill — built from <span className="ital" style={{ fontStyle: "italic" }}>everyone's</span> travellers.</h2>
-              <p style={{ fontSize: "1.1rem", color: "var(--muted)", marginTop: 18, maxWidth: "30rem" }}>Operators across Egypt post the routes they'd love to run. Travellers from anywhere join the same date. Sawa handles the matching, the count, and the confirmation.</p>
-              <a href="#departures" className="btn teal" style={{ marginTop: 32 }} onClick={scrollTo("departures")}>See open departures<span className="chip"><SxArrow /></span></a>
-            </div>
-            <div>
-              <div className="how-steps">
-                <div className="hstep rv"><div className="idx tnum">01</div><div><h3>Operators post a route</h3><p>A licensed Egyptian operator lists a date and itinerary they want to run but can't fill alone. No upfront risk — it only departs once the group forms.</p></div></div>
-                <div className="hstep rv" data-d="1"><div className="idx tnum">02</div><div><h3>Travellers join the same date</h3><p>Your two travellers, our four, another agency's three — all on one shared departure. Everyone watches the seats fill in real time.</p></div></div>
-                <div className="hstep rv" data-d="2"><div className="idx tnum">03</div><div><h3>The minimum is met, the gold dot turns on</h3><p>The group is confirmed, the date locks, and every traveller gets the GoAhead. Confirmed together — no cancelled trips, no solo surcharge.</p></div></div>
-              </div>
-              {featured && (
-                <div className="how-card rv" data-d="2" style={{ marginTop: 28 }}>
-                  <div className="how-core">
-                    <span className="lab">Live departure</span>
-                    <h4>{featured.p.title}</h4>
-                    <div className="demo">
-                      <div className="dt"><b>{depDate(featured)}</b>{featured.confirmed ? <span className="go"><span className="d" />GoAhead</span> : <span className="go" style={{ background: "rgba(247,243,234,.14)", color: "var(--cream)" }}>Forming</span>}</div>
-                      <div className="av"><i>HA</i><i>MK</i><i>SL</i><i>Rf</i><i>JD</i><i className="empty">+{Math.max(0, featured.goAhead - featured.seats)}</i></div>
-                      <div className="bar"><i data-fill={`${featured.pct}%`} /></div>
-                      <div className="dm"><span><b>{featured.seats}</b> of {featured.goAhead} joined</span><span>{Math.max(0, featured.goAhead - featured.seats)} seats left</span></div>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </section>
-
-        {/* DEPARTURES */}
-        <section className="block" id="departures" style={{ paddingTop: 20 }}>
-          <div className="wrap">
-            <div className="dep-head rv">
-              <div className="head" style={{ marginBottom: 0 }}>
-                <span className="eyebrow" style={{ marginBottom: 20 }}><span className="live" />Open departures</span>
-                <h2 style={{ fontSize: "clamp(2rem,3.8vw,3rem)" }}>Join a group that's already <span className="ital">forming</span>.</h2>
-              </div>
-              <div className="tabs" role="tablist">
-                {tabNames.map((t) => <button key={t} className={`tab${tab === t ? " on" : ""}`} onClick={() => setTab(t)}>{t}</button>)}
-              </div>
-            </div>
-
-            <div className="dep-layout">
-              {featured && (
-                <article className="card feature rv" onClick={() => navigate(linkOf(featured))} style={{ cursor: "pointer" }}>
-                  <div className="core">
-                    <div className="media">
-                      <img src={coverImage(featured.p)} alt={featured.p.title} />
-                      {featured.confirmed ? <span className="badge go"><span className="d" />GoAhead · running</span> : <span className="badge form">Forming now</span>}
-                      <span className="price"><b className="tnum">${featured.price}</b><small>per person</small></span>
-                    </div>
-                    <div className="body">
-                      <span className="rt">Featured · {featured.cityList.join(" → ")}{featured.p.duration ? ` · ${featured.p.duration}` : ""}</span>
-                      <h3>{featured.p.title}</h3>
-                      <p className="desc">{(featured.p.description || "A shared Sawa departure across Egypt.").slice(0, 130)}</p>
-                      <div className="info">
-                        <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /></svg>Departs {depDate(featured)}</span>
-                        <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /></svg>{featured.p.guide || "Licensed operator"}</span>
-                      </div>
-                      <div className="prog">
-                        <div className="pt"><b>{featured.seats} of {featured.goAhead} joined</b><span className={`st${featured.confirmed ? " ok" : ""}`}>{featured.confirmed ? "Confirmed · running" : `${Math.max(0, featured.goAhead - featured.seats)} to GoAhead`}</span></div>
-                        <div className="pbar gold"><i data-fill={`${featured.pct}%`} /></div>
-                      </div>
-                      <div className="foot">
-                        <div className="when">{featured.confirmed ? "Running" : "Forming"}<b>{Math.max(0, featured.goAhead - featured.seats) || featured.seats} {featured.confirmed ? "joined" : "seats to go"}</b></div>
-                        <span className="join">Reserve a seat<span className="c"><SxArrow /></span></span>
-                      </div>
-                    </div>
-                  </div>
-                </article>
-              )}
-
-              <div className="board rv" data-d="1">
-                <div className="board-in">
-                  <div className="board-top">
-                    <span className="bt"><span className="live" />Forming now</span>
-                    <span className="cnt tnum">{model.length} departures open</span>
-                  </div>
-                  <div className="board-rows">
-                    {board.map((m) => (
-                      <a key={m.p.id} className="drow" onClick={() => navigate(linkOf(m))}>
-                        <div className="thumb"><img src={coverImage(m.p)} alt={m.p.title} />{m.confirmed && <span className="gdot" />}</div>
-                        <div className="mid">
-                          <span className="rt">{m.cityList.join(" · ")}{m.p.duration ? ` · ${m.p.duration}` : ""}</span>
-                          <h4>{m.p.title}</h4>
-                          <div className="mini"><span className={`pbar ${m.confirmed ? "gold" : "teal"}`}><i data-fill={`${m.pct}%`} /></span><span className={`lab${m.confirmed ? " ok" : ""}`}><b>{m.seats}</b>/{m.goAhead} · {m.confirmed ? "confirmed" : `${Math.max(0, m.goAhead - m.seats)} to go`}</span></div>
-                        </div>
-                        <div className="rt-col">
-                          <div className="pr tnum">${m.price}<small>/ person</small></div>
-                          <span className="arr"><SxArrow /></span>
-                        </div>
-                      </a>
-                    ))}
-                    {board.length === 0 && <div style={{ padding: "30px 22px", color: "var(--muted)" }}>No departures in this filter yet.</div>}
-                  </div>
-                  <div className="board-foot">
-                    <span><b className="tnum">{model.length}</b> live across Egypt</span>
-                    <a className="join" onClick={() => navigate("/tours")}>View all<span className="c"><SxArrow /></span></a>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="dep-foot rv">
-              <a className="btn teal" onClick={() => navigate("/tours")}>See all Egypt departures<span className="chip"><SxArrow /></span></a>
-            </div>
-          </div>
-        </section>
-
-        {/* PROMISE */}
-        <section className="block band" id="promise">
-          <div className="wrap">
-            <div className="head rv">
-              <span className="eyebrow on-dark" style={{ marginBottom: 22 }}>The symbol, explained</span>
-              <h2 style={{ color: "var(--cream)" }}>Every part of the Sawa mark is a <span className="ital" style={{ fontStyle: "italic", color: "var(--gold)" }}>promise</span>.</h2>
-              <p style={{ color: "rgba(247,243,234,.72)" }}>It isn't decoration. The circle, the route and the gold dot each stand for how a shared departure actually works.</p>
-            </div>
-            <div className="promise-grid">
-              <div className="psym rv">
-                <svg className="gl" viewBox="0 0 100 100" aria-hidden="true"><circle cx="32" cy="32" r="8" fill="currentColor" /><circle cx="68" cy="32" r="8" fill="currentColor" /><circle cx="32" cy="68" r="8" fill="currentColor" /><circle cx="68" cy="68" r="8" fill="currentColor" /></svg>
-                <h3>A real group</h3><p>The dots are the travellers it takes to confirm a departure. Below the minimum it stays a plan — at the minimum it becomes a trip.</p>
-              </div>
-              <div className="psym rv" data-d="1">
-                <svg className="gl" viewBox="0 0 100 100" aria-hidden="true"><path d="M68 30 C44 30 44 50 56 50 C68 50 68 70 38 70" fill="none" stroke="currentColor" strokeWidth="8" strokeLinecap="round" /><circle cx="30" cy="34" r="6" fill="currentColor" /><circle cx="40" cy="72" r="6" fill="currentColor" /><circle cx="70" cy="58" r="6" fill="currentColor" /></svg>
-                <h3>One shared route</h3><p>The S-path is the single journey everyone is on. Different operators, different travellers — one road, one guide, one group.</p>
-              </div>
-              <div className="psym rv" data-d="2">
-                <svg className="gl" viewBox="0 0 100 100" aria-hidden="true"><path d="M68 30 C44 30 44 50 56 50 C68 50 68 70 38 70" fill="none" stroke="currentColor" strokeWidth="8" strokeLinecap="round" /><circle cx="30" cy="34" r="6" fill="currentColor" /><circle cx="40" cy="72" r="6" fill="currentColor" /><circle className="go" cx="74" cy="28" r="8" /></svg>
-                <h3 className="g">GoAhead</h3><p>The single gold dot is the moment of truth. When it lights up, your tour is confirmed, paid and really running.</p>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* OPERATORS */}
-        <section className="block" id="operators">
-          <div className="wrap ops">
-            <div className="rv">
-              <span className="eyebrow">For Egyptian operators &amp; agencies</span>
-              <h2 className="serif" style={{ fontWeight: 500, color: "var(--teal)", fontSize: "clamp(2rem,4vw,3rem)", lineHeight: 1.06, letterSpacing: "-.02em", marginTop: 22 }}>Stop cancelling tours you <span className="ital" style={{ fontStyle: "italic" }}>almost</span> filled.</h2>
-              <p style={{ fontSize: "1.08rem", color: "var(--muted)", marginTop: 16, maxWidth: "34rem" }}>List the departures you can't fill on your own. Sawa pools demand across operators so the date runs — and everyone's travellers ride together.</p>
-              <div className="ops-list">
-                {[["Zero-risk listings", "Post a date with no commitment. It only runs once the group confirms."], ["Fill from everyone's pipeline", "Your two travellers join ours and three other agencies' — the math finally works."], ["Keep your brand and margin", "You run the tour. Sawa handles matching, payments and the GoAhead confirmation."]].map(([b, p]) => (
-                  <div className="it" key={b}><span className="ck"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg></span><div><b>{b}</b><p>{p}</p></div></div>
-                ))}
-              </div>
-            </div>
-            <div className="ops-panel rv" data-d="1">
-              <div className="ops-inner">
-                <h3>Your tours, finally full</h3>
-                <p>Why operators bring their dates to Sawa.</p>
-                <div className="ostat">
-                  <div className="s"><b className="tnum">{summary.goAheadDates || 0}</b><span>departures running right now</span></div>
-                  <div className="s"><b className="tnum">{summary.tours || model.length}</b><span>tours &amp; packages listed</span></div>
-                  <div className="s"><b className="tnum">{cities.length || 0}</b><span>destinations across Egypt</span></div>
-                  <div className="s"><b className="tnum">$0</b><span>upfront cost to list a route</span></div>
-                </div>
-                <a className="btn gold" style={{ width: "100%", justifyContent: "space-between" }} onClick={() => navigate("/agency")}>Become a verified operator<span className="chip"><SxArrow /></span></a>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* CTA */}
-        <section className="cta-wrap">
-          <div className="wrap">
-            <div className="cta rv">
-              <div className="cta-inner">
-                <img src={coverImage(featured?.p || model[0]?.p || {})} alt="Egypt" />
-                <div className="in">
-                  <span className="eyebrow on-dark"><span className="live" />Shared departures, confirmed together</span>
-                  <h2>Your Egypt trip is one<br />traveller <span className="ital">away</span>.</h2>
-                  <p>Find an open departure, take a seat, and watch the gold dot light up.</p>
-                  <div className="hero-cta">
-                    <a href="#departures" className="btn gold" onClick={scrollTo("departures")}>Find a departure<span className="chip"><SxArrow /></span></a>
-                    <a className="btn light" onClick={() => navigate("/agency")}>List a tour<span className="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg></span></a>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-      </main>
-
-      <SxFooter navigate={navigate} />
-    </div>
-  );
-}
-
 const SxStar = () => <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l3 6 7 1-5 5 1 7-6-3-6 3 1-7-5-5 7-1z" /></svg>;
 const SxCheck = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>;
 const SxX = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M6 6l12 12M18 6 6 18" /></svg>;
@@ -1387,6 +1110,20 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
   const [phone, setPhone] = useState("");
   const [seats, setSeats] = useState(1);
   const [err, setErr] = useState("");
+  // Packages are priced per hotel tier and per room type, and the server always
+  // applies them (defaulting to the first tier + a double room). This page
+  // renders packages too, but offered neither control and sent neither field —
+  // so every package sold at the cheapest tier in a shared room, the Superior
+  // and Luxury upgrades were unreachable, and a solo traveller was silently
+  // booked into a double with no single supplement charged.
+  const pkgTiers = isPackage(tour) ? (tour.accommodationTiers || []) : [];
+  const [tierId, setTierId] = useState(pkgTiers[0]?.id || "");
+  const [roomingType, setRoomingType] = useState("double");
+  // Keep the selection valid if the tour (and therefore its tiers) changes.
+  useEffect(() => {
+    if (pkgTiers.length && !pkgTiers.some((t) => t.id === tierId)) setTierId(pkgTiers[0].id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tour.id]);
   // Traveler-initiated date request (addendum Phase A): pick a date that
   // isn't on the board; ops reviews it before it opens.
   const [reqMode, setReqMode] = useState(false);
@@ -1403,7 +1140,12 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
   const remaining = dep ? Math.max(0, dep.maxSeats - booked) : 0;
   const nSeats = Math.max(1, Number(seats || 1));
   const projected = dep ? Math.min(dep.maxSeats, booked + nSeats) : nSeats;
-  const pp = dep ? livePriceFor({ ...tour, ...dep }, projected) : livePriceFor(tour, goAhead);
+  // Packages must price through packagePriceFor so the tier and single-room
+  // supplements are included — otherwise the quoted price silently diverges
+  // from what computePledgePricing() charges on the server.
+  const pp = isPackage(tour)
+    ? packagePriceFor(tour, dep, dep ? projected : goAhead, { roomingType, tierId })
+    : dep ? livePriceFor({ ...tour, ...dep }, projected) : livePriceFor(tour, goAhead);
   const confirmed = !!dep && (dep.status === "supplier_confirmed" || booked >= goAhead);
   const depositPct = Number(dep?.depositPercent || tour.depositPercent || 10);
   const total = pp * nSeats;
@@ -1437,7 +1179,12 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
     if (name.trim().length < 2) return setErr("Enter the lead traveller's name.");
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return setErr("Enter a valid email.");
     if (Number(seats) > remaining) return setErr(`Only ${remaining} seat${remaining === 1 ? "" : "s"} left on this date.`);
-    onBookPublicDeparture({ departureId: dep.id, customerName: name.trim(), customerEmail: email.trim(), customerPhone: phone.trim(), seats: nSeats });
+    onBookPublicDeparture({
+      departureId: dep.id, customerName: name.trim(), customerEmail: email.trim(),
+      customerPhone: phone.trim(), seats: nSeats,
+      // Only meaningful for packages; the server ignores them for day tours.
+      ...(isPackage(tour) ? { roomingType, accommodationTier: tierId } : {}),
+    });
     setName(""); setEmail(""); setPhone(""); setSeats(1);
   }
 
@@ -1508,6 +1255,11 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
         body: JSON.stringify({
           tourProductId: tour.id, date: reqDate, customerName: name.trim(),
           customerEmail: email.trim(), customerPhone: phone.trim(), seats: nSeats, ignoreMatches,
+          // The seed pledge is priced on submission, so a traveller starting
+          // their own package date needs the same tier/room choice as one
+          // joining an existing date — otherwise it silently seeds at the
+          // cheapest tier in a shared room.
+          ...(isPackage(tour) ? { roomingType, accommodationTier: tierId } : {}),
         }),
       });
       const data = await response.json();
@@ -1535,7 +1287,10 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
       <main>
         <div className="wrap">
           <nav className="crumbs" aria-label="Breadcrumb">
-            <div className="row"><a onClick={() => navigate("/")}>Egypt</a><span className="sep">/</span><a onClick={() => navigate("/tours")}>Tours</a><span className="sep">/</span><b>{tour.title}</b></div>
+            {/* Breadcrumbs are the one navigation aid a crawler reads to
+                understand hierarchy, and the JSON-LD in seo.js already claims
+                this trail exists — so they have to be real links. */}
+            <div className="row"><SpaLink navigate={navigate} to="/">Egypt</SpaLink><span className="sep">/</span><SpaLink navigate={navigate} to="/tours">Tours</SpaLink><span className="sep">/</span><b>{tour.title}</b></div>
           </nav>
 
           <header className="thead">
@@ -1557,7 +1312,11 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
           </header>
 
           <section className="gallery rv" aria-label="Tour photos">
-            <div className="gcell big" onClick={() => navigate(`/${isPackage(tour) ? "package" : "tour"}/${tour.id}`)}>
+            {/* This carried an onClick to /tour/<id> — the page it is already
+                on, addressed by raw id, so a click 301'd and reloaded the
+                current page. It is a photo, not a control: the click is gone
+                rather than converted to a link to itself. */}
+            <div className="gcell big">
               {confirmed && <span className="go-badge"><span className="d" />GoAhead · confirmed</span>}
               <img src={gallery[0].url} alt={tour.title} />
             </div>
@@ -1587,6 +1346,7 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
                 </section>
               )}
 
+              {tour.detailPending && <DetailPending heading="Day by day" />}
               {itin.length > 0 && (
                 <section className="sec rv">
                   <h2>Day by day</h2>
@@ -1606,6 +1366,7 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
                 </section>
               )}
 
+              {tour.detailPending && <DetailPending heading="What's included" />}
               {(included.length > 0 || notIncluded.length > 0) && (
                 <section className="sec rv">
                   <h2>What's included</h2>
@@ -1629,7 +1390,7 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
                     <h3>{tour.guide || "Licensed Egyptian operator"}</h3>
                     <p>Vetted by Sawa · {tour.vehicle || "inspected transport"} · small shared groups</p>
                   </div>
-                  <a className="btn plain" onClick={() => navigate("/about")}>About Sawa<span className="chip"><SxArrow /></span></a>
+                  <SpaLink navigate={navigate} to="/about" className="btn plain">About Sawa<span className="chip" aria-hidden="true"><SxArrow /></span></SpaLink>
                 </div></div>
               </section>
 
@@ -1754,19 +1515,64 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
                         </div>
                       )}
                     </div>
+                    {/* Name and email were enforced only by the custom checks in reserve();
+                        native required/aria-required means assistive tech announces the
+                        requirement up front and the browser blocks an empty submit even if
+                        the handler doesn't run. autoComplete cuts the typing on mobile. */}
                     <div className="bk">
-                      <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Lead traveller name" aria-label="Lead traveller name" />
+                      {isPackage(tour) && pkgTiers.length > 0 && (
+                        <div className="frow">
+                          <label className="bk-field">
+                            <span>Hotel tier</span>
+                            <select value={tierId} onChange={(e) => setTierId(e.target.value)}>
+                              {pkgTiers.map((t) => (
+                                <option key={t.id} value={t.id}>
+                                  {t.name}{Number(t.perPersonSupplement) > 0 ? ` (+$${Number(t.perPersonSupplement)}/person)` : ""}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <label className="bk-field">
+                            <span>Room</span>
+                            <select value={roomingType} onChange={(e) => setRoomingType(e.target.value)}>
+                              <option value="double">Double / twin (shared)</option>
+                              <option value="triple">Triple (shared)</option>
+                              <option value="single">
+                                Single{Number(pkgTiers.find((t) => t.id === tierId)?.singleSupplement) > 0
+                                  ? ` (+$${Number(pkgTiers.find((t) => t.id === tierId).singleSupplement)})`
+                                  : ""}
+                              </option>
+                            </select>
+                          </label>
+                        </div>
+                      )}
+                      {/* Wrapping <label> rather than aria-label: the name stays on screen
+                          once the field has content, which a placeholder does not. */}
+                      <label className="bk-field">
+                        <span>Lead traveller name</span>
+                        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Amina Hassan" required aria-required="true" autoComplete="name" />
+                      </label>
                       <div className="frow">
-                        <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" aria-label="Email" />
-                        <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Phone" aria-label="Phone" />
+                        <label className="bk-field">
+                          <span>Email</span>
+                          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@email.com" required aria-required="true" autoComplete="email" />
+                        </label>
+                        <label className="bk-field">
+                          <span>Phone <i className="opt">(optional)</i></span>
+                          <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+20 1XX XXX XXXX" autoComplete="tel" />
+                        </label>
                       </div>
-                      <input type="number" min="1" max={Math.max(1, remaining)} value={seats} onChange={(e) => setSeats(e.target.value)} aria-label="Seats" />
+                      <label className="bk-field">
+                        <span>Seats</span>
+                        <input type="number" min="1" max={Math.max(1, remaining)} value={seats} onChange={(e) => setSeats(e.target.value)} required aria-required="true" />
+                      </label>
                     </div>
                     {!reqMode && <div className="bk-sum">
                       <div className="r"><span>${pp} × {nSeats}</span><b>${total}</b></div>
-                      <div className="r key"><span>Deposit today ({depositPct}%)</span><b>${deposit}</b></div>
+                      <div className="r key"><span>Deposit at GoAhead ({depositPct}%)</span><b>${deposit}</b></div>
                       <div className="r"><span>Balance</span><b>${balance}</b></div>
-                      <div className="nt">Balance due {dep ? balanceDueDate(dep.date) : "before departure"}.</div>
+                      <div className="nt">Nothing is charged today. Balance due {dep ? balanceDueDate(dep.date) : "before departure"}.</div>
+                      <PaymentTimeline />
                     </div>}
                     <div className="book-cta">
                       {reqMode ? (
@@ -1775,15 +1581,18 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
                             {reqBusy ? "Requesting…" : reqMatches && reqMatches.length > 0 ? "Pick an option above" : "Request this date"}
                             <span className="chip"><SxArrow /></span>
                           </button>
-                          {reqErr && <div className="bk-err">{reqErr}</div>}
+                          {reqErr && <div className="bk-err" role="alert">{reqErr}</div>}
                           <div className="note"><SxCheck />Free to request — nothing is charged unless it runs</div>
                         </>
                       ) : (
                         <>
                           <button className="btn gold full" type="submit" disabled={isSaving || !dep || remaining <= 0}>{isSaving ? "Holding…" : remaining <= 0 ? "Date full" : "Reserve a seat"}<span className="chip"><SxArrow /></span></button>
-                          {err && <div className="bk-err">{err}</div>}
+                          {err && <div className="bk-err" role="alert">{err}</div>}
                           {publicBooking && Number(publicBooking.departureId) === Number(dep?.id) && (
-                            <div className="bk-ok">Seat held — {publicBooking.code}. {publicBooking.depositDue ? `$${publicBooking.depositDue} deposit due at GoAhead.` : ""} <a onClick={onCancelPublicBooking} style={{ textDecoration: "underline", cursor: "pointer" }}>Cancel</a></div>
+                            // Cancelling a held seat is an action, not navigation, and it was an
+                            // <a> with no href: unreachable by keyboard and announced to screen
+                            // readers as plain text. A real <button> restores focus and Enter/Space.
+                            <div className="bk-ok" role="status">Seat held — {publicBooking.code}. {publicBooking.depositDue ? `$${publicBooking.depositDue} deposit due at GoAhead.` : ""} <button type="button" className="bk-cancel" onClick={onCancelPublicBooking}>Cancel</button></div>
                           )}
                           <div className="note"><SxCheck />Free hold — you only pay once the date confirms</div>
                         </>
@@ -1808,13 +1617,30 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
                 {related.map((p) => {
                   const ld = openDates(p)[0] || p.dates[0]; const s = ld ? seatsTotal(ld.pledges) : 0; const ga = goAheadFor(p);
                   const cf = ld && (ld.status === "supplier_confirmed" || s >= ga); const pr = ld ? livePriceFor({ ...p, ...ld }, s) : livePriceFor(p, ga);
+                  // Was an <a> with no href and an onClick to /tour/<raw id>:
+                  // not keyboard-reachable, no open-in-new-tab, invisible to
+                  // crawlers, and every click paid a 301 because the id-shaped
+                  // URL redirects to the slug. Now a real link straight to the
+                  // canonical slug, matching the catalogue cards.
+                  const href = `/${isPackage(p) ? "package" : "tour"}/${tourSlug(p)}`;
                   return (
-                    <a className="rcard" key={p.id} onClick={() => navigate(`/${isPackage(p) ? "package" : "tour"}/${p.id}`)}>
+                    <article className="rcard" key={p.id}>
                       <div className="core">
                         <div className="media"><img src={coverImage(p)} alt={p.title} />{cf ? <span className="badge go"><span className="d" />GoAhead</span> : <span className="badge form">Forming</span>}</div>
-                        <div className="body"><span className="rt">{(isPackage(p) ? (p.cities || [p.city]) : [p.city]).join(" · ")}{p.duration ? ` · ${p.duration}` : ""}</span><h3>{p.title}</h3><div className="foot"><span className="pr tnum">${pr} <small>/ person</small></span><span className="arr"><SxArrow /></span></div></div>
+                        <div className="body"><span className="rt">{(isPackage(p) ? (p.cities || [p.city]) : [p.city]).join(" · ")}{p.duration ? ` · ${p.duration}` : ""}</span>
+                          <h3>
+                            <SpaLink
+                              navigate={navigate}
+                              to={href}
+                              className="card-link"
+                              label={`View ${p.title} ${isPackage(p) ? "package" : "tour"}`}
+                            >
+                              {p.title}
+                            </SpaLink>
+                          </h3>
+                          <div className="foot"><span className="pr tnum">${pr} <small>/ person</small></span><span className="arr" aria-hidden="true"><SxArrow /></span></div></div>
                       </div>
-                    </a>
+                    </article>
                   );
                 })}
               </div>
@@ -2095,6 +1921,8 @@ function PublicSite({
               <div className="destination-strip">
                 {cityStats.map((city) => (
                   <button
+                    type="button"
+                    aria-pressed={selectedCity === city.name}
                     className={selectedCity === city.name ? "destination-chip active" : "destination-chip"}
                     key={city.name}
                     onClick={() => { setSelectedCity(city.name); document.getElementById("live-departures")?.scrollIntoView({ behavior: "smooth" }); }}
@@ -2137,28 +1965,6 @@ function PublicSite({
               </div>
             </section>
           </>
-        )}
-
-        {routeTour && (
-          <TourDetail
-            isSaving={isSaving}
-            navigate={navigate}
-            onBookPublicDeparture={onBookPublicDeparture}
-            onCancelPublicBooking={onCancelPublicBooking}
-            publicBooking={publicBooking}
-            tour={routeTour}
-          />
-        )}
-
-        {routePackage && (
-          <PackageDetail
-            isSaving={isSaving}
-            navigate={navigate}
-            onBookPublicDeparture={onBookPublicDeparture}
-            onCancelPublicBooking={onCancelPublicBooking}
-            publicBooking={publicBooking}
-            pkg={routePackage}
-          />
         )}
       </section>
     </SxChrome>
@@ -2215,6 +2021,59 @@ function LoadingScreen({ label = "Preparing your shared departures…" }) {
         </div>
         <SawaWordmark />
         <span className="app-loader-sub">{label}</span>
+      </div>
+    </main>
+  );
+}
+
+// A logo on an empty page says "something is happening somewhere" and nothing
+// else — after a few seconds it reads as broken. A skeleton in the shape of the
+// page that is coming says how much is coming and where, and it gives the eye
+// somewhere to rest. Only reached now when a page arrives without an inlined
+// payload (the SPA's own client-side route changes, or a cache miss).
+function CatalogueSkeleton() {
+  return (
+    <main className="page-wrap" aria-busy="true" aria-live="polite">
+      <span className="sr-only">Loading departures…</span>
+      <div className="skel-head" aria-hidden="true">
+        <span className="skel skel-kicker" />
+        <span className="skel skel-title" />
+        <span className="skel skel-lede" />
+      </div>
+      <div className="skel-grid" aria-hidden="true">
+        {Array.from({ length: 6 }, (_, i) => (
+          <div className="skel-card" key={i}>
+            <span className="skel skel-media" />
+            <span className="skel skel-line w70" />
+            <span className="skel skel-line w45" />
+            <span className="skel skel-bar" />
+            <span className="skel skel-line w60" />
+          </div>
+        ))}
+      </div>
+    </main>
+  );
+}
+
+// Terminal state for a cold load that never produced data. The previous
+// behaviour was to sit on the spinner indefinitely, which gave the visitor
+// nothing to do and no way to tell a slow network from an outage.
+function LoadErrorScreen({ onRetry }) {
+  return (
+    <main className="page-wrap page-404" role="alert">
+      <div>
+        <SawaMark size={48} />
+        <h1>We couldn't load the departures.</h1>
+        <p>
+          This is usually a connection blip rather than a problem with your booking.
+          Nothing you've done has been lost — no seat is held and nothing is charged.
+        </p>
+        <div className="page-404-actions">
+          <button type="button" className="btn-pill primary" onClick={onRetry}>
+            Try again
+          </button>
+          <a className="btn-pill" href="/contact">Contact us</a>
+        </div>
       </div>
     </main>
   );
@@ -2380,108 +2239,12 @@ function EmbedWidget({ type, product }) {
   );
 }
 
-const PUBLIC_LINKS = [
-  { label: "Tours", to: "/tours" },
-  { label: "How it works", to: "/how-it-works" },
-  { label: "Blog", to: "/blog" },
-  { label: "About", to: "/about" },
-  { label: "Contact", to: "/contact" },
-];
-
-function PublicNav({ navigate, path = "/" }) {
-  const [menuOpen, setMenuOpen] = useState(false);
-  const go = (to) => { setMenuOpen(false); navigate(to); };
-  const isActive = (to) => path === to || (to !== "/" && path.startsWith(to));
-
-  useEffect(() => {
-    document.body.style.overflow = menuOpen ? "hidden" : "";
-    return () => { document.body.style.overflow = ""; };
-  }, [menuOpen]);
-
-  return (
-    <>
-      <header className="public-nav">
-        <button className="public-brand" onClick={() => go("/")} aria-label="Sawa Tours home">
-          <SawaMark size={30} />
-          <SawaWordmark />
-        </button>
-        <nav className="public-nav-links">
-          {PUBLIC_LINKS.map((l) => (
-            <a
-              key={l.to}
-              href={l.to}
-              className={isActive(l.to) ? "active" : ""}
-              onClick={(e) => { e.preventDefault(); go(l.to); }}
-            >
-              {l.label}
-            </a>
-          ))}
-        </nav>
-        <div className="public-nav-right">
-          <button className="nav-cta" onClick={() => go("/tours")}>
-            Book now
-            <span className="nav-cta-icon"><ArrowRight size={15} /></span>
-          </button>
-          <button
-            className="nav-burger"
-            aria-label={menuOpen ? "Close menu" : "Open menu"}
-            aria-expanded={menuOpen}
-            onClick={() => setMenuOpen((v) => !v)}
-          >
-            {menuOpen ? <X size={22} /> : <Menu size={22} />}
-          </button>
-        </div>
-      </header>
-
-      {menuOpen && (
-        <div className="nav-overlay" role="dialog" aria-modal="true">
-          <nav className="nav-overlay-links">
-            {PUBLIC_LINKS.map((l, i) => (
-              <a
-                key={l.to}
-                href={l.to}
-                style={{ "--i": i }}
-                className={isActive(l.to) ? "active" : ""}
-                onClick={(e) => { e.preventDefault(); go(l.to); }}
-              >
-                {l.label}
-              </a>
-            ))}
-            <a href="/faq" style={{ "--i": PUBLIC_LINKS.length }} onClick={(e) => { e.preventDefault(); go("/faq"); }}>FAQ</a>
-          </nav>
-          <button className="nav-overlay-cta" onClick={() => go("/tours")}>
-            Book now <ArrowRight size={18} />
-          </button>
-        </div>
-      )}
-    </>
-  );
-}
-
 function SectionHeading({ kicker, title }) {
   return (
     <div className="section-heading">
       <p>{kicker}</p>
       <h2>{title}</h2>
     </div>
-  );
-}
-
-function PublicFooter({ navigate }) {
-  return (
-    <footer className="footer-bare">
-      <button className="footer-bare-brand" onClick={() => navigate("/")}>
-        <SawaMark size={24} />
-        <SawaWordmark />
-      </button>
-      <nav className="footer-bare-links">
-        <button onClick={() => navigate("/faq")}>FAQ</button>
-        <button onClick={() => navigate("/privacy")}>Privacy</button>
-        <button onClick={() => navigate("/terms")}>Terms</button>
-        <button onClick={() => navigate("/agency")}>Agency login</button>
-      </nav>
-      <span className="footer-bare-copy">© {new Date().getFullYear()} Sawa Tours</span>
-    </footer>
   );
 }
 
@@ -2554,10 +2317,16 @@ function ToursPage({ navigate, customerCalendars, cityStats, selectedCity, setSe
       />
 
       <div className="tours-toolbar reveal in">
-        <div className="tours-cities">
+        {/* Toggle buttons: which city is active was conveyed by colour alone,
+            so a screen-reader user heard a row of city names with no way to
+            tell which filter was on. aria-pressed is the state that matches a
+            toggle (aria-selected belongs to tabs/options). */}
+        <div className="tours-cities" role="group" aria-label="Filter tours by city">
           {cities.map((c) => (
             <button
               key={c}
+              type="button"
+              aria-pressed={selectedCity === c}
               className={selectedCity === c ? "chip on" : "chip"}
               onClick={() => setSelectedCity(c)}
             >
@@ -2573,7 +2342,7 @@ function ToursPage({ navigate, customerCalendars, cityStats, selectedCity, setSe
           </div>
           <label className="tours-search">
             <Search size={16} />
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search tours…" />
+            <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search tours…" aria-label="Search tours" />
           </label>
         </div>
       </div>
@@ -2859,7 +2628,7 @@ function BookingLookupPage({ navigate, path }) {
       <form className="booking-lookup reveal in" onSubmit={lookup}>
         <label className="field">
           <span>Booking code</span>
-          <input value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="e.g. SAWA-7K2QX" />
+          <input value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="e.g. SAWA-7K2QXM4T" />
         </label>
         <button className="btn-pill primary" type="submit" disabled={state.status === "loading"}>
           {state.status === "loading" ? "Checking…" : "Check status"} <Search size={16} />
@@ -2868,7 +2637,7 @@ function BookingLookupPage({ navigate, path }) {
 
       <div className="booking-result reveal in">
         {state.status === "notfound" && (
-          <div className="page-empty"><Ticket size={26} /><strong>No booking found with that code.</strong><p>Double-check the code in your confirmation email, or contact us.</p><button className="btn-pill" onClick={() => navigate("/contact")}>Contact us</button></div>
+          <div className="page-empty"><Ticket size={26} /><strong>No booking found with that code.</strong><p>Double-check the code in your confirmation email, or contact us.</p><SpaLink navigate={navigate} to="/contact" className="btn-pill">Contact us</SpaLink></div>
         )}
         {state.status === "error" && <div className="form-error">{state.error}</div>}
         {state.status === "found" && b && (
@@ -2905,9 +2674,12 @@ function NotFoundPage({ navigate }) {
         <SawaMark size={56} />
         <h1>This page wandered off.</h1>
         <p>The page you're looking for doesn't exist — but plenty of tours do.</p>
+        {/* These two go somewhere, so they are links, not buttons — the one
+            page where a visitor is most likely to want a new tab or to check
+            where a control leads before following it. */}
         <div className="page-404-actions">
-          <button className="btn-pill primary" onClick={() => navigate("/tours")}>Browse tours <ArrowRight size={16} /></button>
-          <button className="btn-pill" onClick={() => navigate("/")}>Back home</button>
+          <SpaLink navigate={navigate} to="/tours" className="btn-pill primary">Browse tours <ArrowRight size={16} /></SpaLink>
+          <SpaLink navigate={navigate} to="/" className="btn-pill">Back home</SpaLink>
         </div>
       </div>
     </div>
@@ -2981,7 +2753,7 @@ function resetMeta() {
   const s = document.getElementById("blog-jsonld");
   if (s) s.remove();
 }
-const blogDate = (d) => (d ? new Intl.DateTimeFormat("en", { day: "numeric", month: "long", year: "numeric" }).format(new Date(d)) : "");
+const blogDate = (d) => (d ? new Intl.DateTimeFormat("en", { day: "numeric", month: "long", year: "numeric" }).format(toDate(d)) : "");
 
 // ---- /blog : listing ----
 function BlogIndexPage({ navigate }) {
@@ -3003,13 +2775,22 @@ function BlogIndexPage({ navigate }) {
       ) : (
         <div className="blog-grid reveal in">
           {state.posts.map((p) => (
-            <article className="blog-card" key={p.id} onClick={() => navigate(`/blog/${p.slug}`)}>
+            // The card was an <article> with only an onClick: not focusable, not
+            // announced as interactive, invisible to crawlers, and no
+            // middle-click / open-in-new-tab. The title is now a real anchor —
+            // that carries the semantics — stretched over the whole card, so
+            // the card-level onClick is no longer needed to keep it clickable.
+            <article className="blog-card" key={p.id}>
               <div className="blog-card-media" style={p.coverImage ? { backgroundImage: `url(${p.coverImage})` } : undefined}>
                 {!p.coverImage && <Newspaper size={26} />}
               </div>
               <div className="blog-card-body">
                 {p.tags?.[0] && <span className="blog-card-tag">{p.tags[0]}</span>}
-                <h3>{p.title}</h3>
+                <h3>
+                  <CardLink navigate={navigate} to={`/blog/${p.slug}`} label={`Read: ${p.title}`}>
+                    {p.title}
+                  </CardLink>
+                </h3>
                 {p.excerpt && <p>{p.excerpt}</p>}
                 <div className="blog-card-meta">{p.author || "Sawa Tours"}{p.publishedAt ? ` · ${blogDate(p.publishedAt)}` : ""}</div>
               </div>
@@ -3083,28 +2864,6 @@ function RichBlock({ html, fallback }) {
   return null;
 }
 
-// Image gallery for a tour/package detail page (cover large + thumbnails).
-function Gallery({ product }) {
-  const imgs = (product.images || []).filter((i) => i?.url);
-  const [active, setActive] = useState(0);
-  if (!imgs.length) {
-    return <div className="detail-hero" style={{ backgroundImage: `url(${coverImage(product)})` }} />;
-  }
-  return (
-    <div className="gallery">
-      <div className="gallery-main" style={{ backgroundImage: `url(${imgs[Math.min(active, imgs.length - 1)].url})` }} />
-      {imgs.length > 1 && (
-        <div className="gallery-thumbs">
-          {imgs.map((im, i) => (
-            <button key={i} className={i === active ? "active" : ""} style={{ backgroundImage: `url(${im.url})` }}
-              onClick={() => setActive(i)} aria-label={`Image ${i + 1}`} />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
 // Meeting point, what-to-bring, and policies (only renders what's present).
 function TourExtras({ product }) {
   const bring = (product.whatToBring || []).filter(Boolean);
@@ -3150,6 +2909,39 @@ function TourExtras({ product }) {
   );
 }
 
+// Every catalogue card used <button onClick={navigate}>, which cost three
+// things a link gives for free: cmd/middle-click to open in a new tab, a
+// distinguishable accessible name (screen readers heard a run of identical
+// "View tour" buttons), and an href for crawlers. This renders a real anchor
+// and only hijacks the plain left click, so modified clicks fall through to the
+// browser. The ::after in CSS stretches the hit area over the whole card, so
+// there is exactly one link per card rather than a title/CTA duplicate pair.
+function SpaLink({ navigate, to, label, className, children, ...rest }) {
+  return (
+    <a
+      // rest is spread FIRST so a caller's styling props come through, but can
+      // never overwrite href/onClick and silently turn this back into a div.
+      {...rest}
+      className={className}
+      href={to}
+      aria-label={label}
+      onClick={(event) => {
+        // Modified and non-primary clicks are the browser's to handle: this is
+        // what makes cmd-click / middle-click open a new tab as users expect.
+        if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
+        event.preventDefault();
+        navigate(to);
+      }}
+    >
+      {children}
+    </a>
+  );
+}
+
+function CardLink(props) {
+  return <SpaLink {...props} className="card-link" />;
+}
+
 function TourCard({ navigate, product }) {
   const goAhead = goAheadFor(product);
   const goAheadDates = product.dates.filter((departure) => departure.status === "supplier_confirmed" || seatsTotal(departure.pledges) >= goAheadFor(departure)).length;
@@ -3171,7 +2963,15 @@ function TourCard({ navigate, product }) {
       </div>
       <div className="tour-card-body">
         <div className="tour-card-top">
-          <strong>{product.title}</strong>
+          <strong>
+            <CardLink
+              navigate={navigate}
+              to={`/tour/${tourSlug(product)}`}
+              label={full ? `${product.title} — fully booked, view dates` : `View ${product.title} tour`}
+            >
+              {product.title}
+            </CardLink>
+          </strong>
           <span className="tour-card-price">${livePrice}</span>
         </div>
         <p className="tour-card-sub">{product.duration || product.vehicle} · {product.guide}</p>
@@ -3190,9 +2990,11 @@ function TourCard({ navigate, product }) {
         <div className="tour-card-foot">
           <span>{full ? "All dates full — check back soon" : `${pluralize(openDates(product).length, "open date")} · from $${breakPrice} at full group`}</span>
         </div>
-        <button className="departure-link" disabled={full} onClick={() => navigate(`/tour/${tourSlug(product)}`)}>
-          {full ? "Fully booked" : "View tour"}
-        </button>
+        {/* Decorative: the whole card is already the link above, so exposing
+            this as a second control would just duplicate it in the tab order. */}
+        <span className="departure-link" aria-hidden="true">
+          {full ? "Fully booked — view dates" : "View tour"}
+        </span>
       </div>
     </article>
   );
@@ -3218,7 +3020,15 @@ function PackageCard({ navigate, product }) {
       </div>
       <div className="tour-card-body">
         <div className="tour-card-top">
-          <strong>{product.title}</strong>
+          <strong>
+            <CardLink
+              navigate={navigate}
+              to={`/package/${tourSlug(product)}`}
+              label={full ? `${product.title} — fully booked, view dates` : `View ${product.title} package`}
+            >
+              {product.title}
+            </CardLink>
+          </strong>
           <span className="tour-card-price">from ${livePrice}</span>
         </div>
         <p className="tour-card-sub">{cities.join(" → ")}</p>
@@ -3234,895 +3044,11 @@ function PackageCard({ navigate, product }) {
         <div className="tour-card-foot">
           <span><Hotel size={13} />{(product.accommodationTiers || []).length || 1} hotel tier{((product.accommodationTiers || []).length || 1) > 1 ? "s" : ""} · from ${breakPrice}/pp</span>
         </div>
-        <button className="departure-link" disabled={full} onClick={() => navigate(`/package/${tourSlug(product)}`)}>
-          {full ? "Fully booked" : "View package"}
-        </button>
+        <span className="departure-link" aria-hidden="true">
+          {full ? "Fully booked — view dates" : "View package"}
+        </span>
       </div>
     </article>
-  );
-}
-
-// Star rating row (filled to the rounded score) for the detail header.
-function Stars({ value = 5, size = 15 }) {
-  const full = Math.round(value);
-  return (
-    <span className="tdx-stars" aria-hidden="true">
-      {[1, 2, 3, 4, 5].map((n) => (
-        <Star key={n} size={size} className={n <= full ? "on" : ""} />
-      ))}
-    </span>
-  );
-}
-
-// Editorial gallery: one tall lead image + a 2x2 grid, opening a lightbox.
-function TourGallery({ product }) {
-  const imgs = (product.images || []).filter((i) => i?.url);
-  const [lightbox, setLightbox] = useState(-1);
-
-  if (!imgs.length) {
-    return <div className="tdx-gallery-solo" style={{ backgroundImage: `url(${coverImage(product)})` }} />;
-  }
-
-  const lead = imgs[0];
-  const rest = imgs.slice(1, 5);
-
-  return (
-    <>
-      <div className={`tdx-gallery ${rest.length ? "has-side" : "lead-only"}`}>
-        <button
-          className="tdx-gallery-lead"
-          style={{ backgroundImage: `url(${lead.url})` }}
-          onClick={() => setLightbox(0)}
-          aria-label="Open photo 1"
-        />
-        {rest.length > 0 && (
-          <div className="tdx-gallery-side">
-            {rest.map((im, i) => (
-              <button
-                key={i}
-                className="tdx-gallery-cell"
-                style={{ backgroundImage: `url(${im.url})` }}
-                onClick={() => setLightbox(i + 1)}
-                aria-label={`Open photo ${i + 2}`}
-              >
-                {i === rest.length - 1 && imgs.length > 5 && (
-                  <span className="tdx-gallery-more"><Camera size={16} />+{imgs.length - 5}</span>
-                )}
-              </button>
-            ))}
-          </div>
-        )}
-        {imgs.length > 1 && (
-          <button className="tdx-gallery-all" onClick={() => setLightbox(0)}>
-            <Camera size={15} />All {imgs.length} photos
-          </button>
-        )}
-      </div>
-      {lightbox >= 0 && (
-        <Lightbox imgs={imgs} index={lightbox} setIndex={setLightbox} onClose={() => setLightbox(-1)} />
-      )}
-    </>
-  );
-}
-
-// Full-screen photo viewer with keyboard + click navigation.
-function Lightbox({ imgs, index, setIndex, onClose }) {
-  useEffect(() => {
-    const onKey = (event) => {
-      if (event.key === "Escape") onClose();
-      if (event.key === "ArrowRight") setIndex((i) => (i + 1) % imgs.length);
-      if (event.key === "ArrowLeft") setIndex((i) => (i - 1 + imgs.length) % imgs.length);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [imgs.length, onClose, setIndex]);
-
-  const img = imgs[index];
-  return (
-    <div className="tdx-lightbox" role="dialog" aria-modal="true" onClick={onClose}>
-      <button className="tdx-lb-close" onClick={onClose} aria-label="Close photos"><X size={20} /></button>
-      <button
-        className="tdx-lb-nav prev"
-        onClick={(event) => { event.stopPropagation(); setIndex((i) => (i - 1 + imgs.length) % imgs.length); }}
-        aria-label="Previous photo"
-      ><ArrowLeft size={22} /></button>
-      <figure className="tdx-lb-stage" onClick={(event) => event.stopPropagation()}>
-        <img src={img.url} alt={img.alt || `Photo ${index + 1}`} />
-      </figure>
-      <button
-        className="tdx-lb-nav next"
-        onClick={(event) => { event.stopPropagation(); setIndex((i) => (i + 1) % imgs.length); }}
-        aria-label="Next photo"
-      ><ArrowRight size={22} /></button>
-      <span className="tdx-lb-count">{index + 1} / {imgs.length}</span>
-    </div>
-  );
-}
-
-// Long overview text, clamped with a "Read more" toggle to keep the page calm.
-function CollapsibleHtml({ html, fallback }) {
-  const ref = useRef(null);
-  const [expanded, setExpanded] = useState(false);
-  const [overflowing, setOverflowing] = useState(false);
-  const hasHtml = html && html.replace(/<[^>]*>/g, "").trim();
-  useEffect(() => {
-    if (ref.current) setOverflowing(ref.current.scrollHeight > 320);
-  }, [html, fallback]);
-  if (!hasHtml && !fallback) return null;
-  const clamped = overflowing && !expanded;
-  return (
-    <div className={`tdx-readmore ${clamped ? "is-clamped" : ""}`}>
-      <div className="tdx-readmore-body" ref={ref}>
-        {hasHtml
-          ? <div className="rich" dangerouslySetInnerHTML={{ __html: html }} />
-          : <p>{fallback}</p>}
-      </div>
-      {overflowing && (
-        <button type="button" className="tdx-readmore-btn" onClick={() => setExpanded((v) => !v)}>
-          {expanded ? "Show less" : "Read more"}
-          <ChevronDown size={16} aria-hidden="true" />
-        </button>
-      )}
-    </div>
-  );
-}
-
-// Collapsible day-by-day itinerary — one open at a time.
-function ItineraryAccordion({ items }) {
-  const [open, setOpen] = useState(0);
-  return (
-    <ol className="tdx-itin">
-      {items.map((day, i) => {
-        const isOpen = open === i;
-        return (
-          <li key={day.day || i} className={isOpen ? "open" : ""}>
-            <button
-              type="button"
-              className="tdx-itin-head"
-              aria-expanded={isOpen}
-              onClick={() => setOpen(isOpen ? -1 : i)}
-            >
-              <span className="tdx-itin-mark">{i + 1}</span>
-              <strong>{day.title || `Stop ${i + 1}`}</strong>
-              <ChevronDown size={18} className="tdx-itin-chev" aria-hidden="true" />
-            </button>
-            <div className="tdx-itin-body">
-              <div className="tdx-itin-inner">
-                {day.description && (/<\w+/.test(day.description)
-                  ? <div className="rich" dangerouslySetInnerHTML={{ __html: day.description }} />
-                  : <p>{day.description}</p>)}
-              </div>
-            </div>
-          </li>
-        );
-      })}
-    </ol>
-  );
-}
-
-// Live shared-price explainer: one price for everyone, dropping as the group
-// grows. Fully dynamic — the bar, cards and footer react to confirmed seats.
-function LiveSharedPrice({ currentSeats, goAhead, maxSeats, headlinePrice, nowPrice, bestPrice }) {
-  const cap = Math.max(Number(maxSeats) || 0, goAhead, 1);
-  const fillPct = Math.min(100, Math.round((currentSeats / cap) * 100));
-  const goPct = Math.min(98, Math.max(2, Math.round((goAhead / cap) * 100)));
-  const confirmed = currentSeats >= goAhead;
-  const needed = Math.max(0, goAhead - currentSeats);
-  return (
-    <div className="lsp">
-      <span className="lsp-label">Live shared price · per person</span>
-      <div className="lsp-now">
-        <strong>${headlinePrice.toLocaleString()}</strong>
-        <em>per person, today</em>
-      </div>
-      <p className="lsp-lead">Everyone on this departure pays the same price. As the group grows, it drops for all of you — early bookers are refunded the difference.</p>
-
-      <div className="lsp-track">
-        <div className="lsp-ends">
-          <span><Flag size={14} />Departs at {goAhead}</span>
-          <span><Percent size={14} />Best price at {maxSeats}</span>
-        </div>
-        <div className="lsp-bar">
-          <i style={{ width: `${fillPct}%` }} />
-          <span className="lsp-mark" style={{ left: `${goPct}%` }} />
-        </div>
-        <div className="lsp-scale">
-          <span className="lsp-s-mid" style={{ left: `${goPct}%` }}>{goAhead} · departure go</span>
-          <span className="lsp-s-right">{maxSeats} · full</span>
-        </div>
-      </div>
-
-      <div className="lsp-cards">
-        <div className="lsp-card">
-          <span>Now · {currentSeats} confirmed</span>
-          <strong>${nowPrice.toLocaleString()}</strong>
-        </div>
-        <div className="lsp-card is-best">
-          <span>Best · all {maxSeats} seats</span>
-          <strong>${bestPrice.toLocaleString()}</strong>
-        </div>
-      </div>
-
-      <p className="lsp-foot">
-        <Users size={15} />
-        {confirmed
-          ? "This departure is confirmed — each extra traveller lowers the price for everyone"
-          : `${needed} more confirm the departure · each extra traveller after that lowers the price for everyone`}
-      </p>
-    </div>
-  );
-}
-
-function TourDetail({ isSaving, navigate, onBookPublicDeparture, onCancelPublicBooking, publicBooking, tour }) {
-  const leadDeparture = tour.dates[0];
-  const [selectedDepartureId, setSelectedDepartureId] = useState(leadDeparture?.id || "");
-  const [travelerName, setTravelerName] = useState("");
-  const [travelerEmail, setTravelerEmail] = useState("");
-  const [travelerPhone, setTravelerPhone] = useState("");
-  const [travelerSeats, setTravelerSeats] = useState(1);
-  const [errors, setErrors] = useState({});
-  const selectedDeparture = tour.dates.find((departure) => Number(departure.id) === Number(selectedDepartureId)) || leadDeparture;
-  const goAhead = goAheadFor(tour);
-  const currentSeats = selectedDeparture ? seatsTotal(selectedDeparture.pledges) : 0;
-  const requestedSeats = Math.max(1, Number(travelerSeats || 1));
-  const projectedSeats = selectedDeparture ? Math.min(selectedDeparture.maxSeats, currentSeats + requestedSeats) : requestedSeats;
-  const currentPrice = selectedDeparture ? livePriceFor({ ...tour, ...selectedDeparture }, currentSeats) : livePriceFor(tour, goAhead);
-  const projectedPrice = selectedDeparture ? livePriceFor({ ...tour, ...selectedDeparture }, projectedSeats) : currentPrice;
-  const depositPercentValue = Number(selectedDeparture?.depositPercent || tour.depositPercent || 10);
-  const bookingTotal = projectedPrice * requestedSeats;
-  const depositDue = depositFor(bookingTotal, depositPercentValue);
-  const balanceDue = Math.max(0, bookingTotal - depositDue);
-  const breakPrice = safePrice(selectedDeparture?.breakPrice || tour.breakPrice, Math.round(tour.publishedRate * 0.8));
-  const remainingSeats = selectedDeparture ? Math.max(0, selectedDeparture.maxSeats - currentSeats) : goAhead;
-
-  const maxSelectable = Math.min(4, Math.max(0, remainingSeats));
-  const soldOut = remainingSeats <= 0;
-  const seatPct = goAhead ? Math.min(100, Math.round((currentSeats / goAhead) * 100)) : 0;
-  const itinerary = (tour.itinerary || []).filter((day) => day && (day.title || day.description));
-  const stops = routeStops[tour.id] || [tour.city, tour.title];
-
-  useEffect(() => {
-    setSelectedDepartureId(leadDeparture?.id || "");
-  }, [leadDeparture?.id]);
-
-  useEffect(() => {
-    setErrors({});
-  }, [selectedDepartureId]);
-
-  function validate() {
-    const next = {};
-    if (!travelerName.trim()) {
-      next.name = "Please enter the lead traveler's name.";
-    } else if (travelerName.trim().length < 2) {
-      next.name = "That name looks too short.";
-    }
-    if (travelerEmail.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(travelerEmail.trim())) {
-      next.email = "That email doesn't look right.";
-    }
-    const seatsNum = Number(travelerSeats);
-    if (!Number.isInteger(seatsNum) || seatsNum < 1) {
-      next.seats = "Choose at least 1 seat.";
-    } else if (seatsNum > maxSelectable) {
-      next.seats = maxSelectable === 0
-        ? "This date is full."
-        : `Only ${maxSelectable} seat${maxSelectable === 1 ? "" : "s"} left on this date.`;
-    }
-    return next;
-  }
-
-  function submitPublicBooking(event) {
-    event.preventDefault();
-    if (!selectedDeparture) return;
-    const next = validate();
-    setErrors(next);
-    if (Object.keys(next).length) return;
-    onBookPublicDeparture({
-      departureId: selectedDeparture.id,
-      customerName: travelerName.trim(),
-      customerEmail: travelerEmail.trim(),
-      customerPhone: travelerPhone.trim(),
-      seats: travelerSeats,
-    });
-    setTravelerName("");
-    setTravelerEmail("");
-    setTravelerPhone("");
-    setTravelerSeats(1);
-    setErrors({});
-  }
-
-  return (
-    <article className="tdx">
-      <button className="tdx-back" onClick={() => navigate("/tours")}>
-        <ArrowLeft size={17} />All tours
-      </button>
-
-      <TourGallery product={tour} />
-
-      <header className="tdx-head">
-        <div className="tdx-head-top">
-          <span className="tdx-eyebrow"><MapPin size={14} />{tour.city}, Egypt</span>
-          {tour.quality ? (
-            <span className="tdx-rating">
-              <Stars value={tour.quality} />
-              <b>{Number(tour.quality).toFixed(1)}</b>
-              <span>from confirmed travellers</span>
-            </span>
-          ) : null}
-        </div>
-        <h1>{tour.title}</h1>
-        <div className="tdx-facts">
-          {tour.duration && <span><Clock3 size={16} />{tour.duration}</span>}
-          <span><Users size={16} />Small group · max {tour.maxSeats}</span>
-          {tour.guide && <span><Globe size={16} />{tour.guide}</span>}
-          {tour.vehicle && <span><Car size={16} />{tour.vehicle}</span>}
-        </div>
-      </header>
-
-      <div className="tdx-grid">
-        <div className="tdx-content">
-          <section className="tdx-block">
-            <h2>About this tour</h2>
-            <CollapsibleHtml html={tour.overviewHtml} fallback={tour.description} />
-            {stops.length > 1 && (
-              <div className="tdx-route">
-                {stops.map((stop, i) => (
-                  <span key={stop}>
-                    {stop}{i < stops.length - 1 && <ChevronRight size={15} aria-hidden="true" />}
-                  </span>
-                ))}
-              </div>
-            )}
-          </section>
-
-          <section className="tdx-block">
-            <h2>What's included</h2>
-            <div className="tdx-incl">
-              <ul className="tdx-incl-yes">
-                {(tour.included || []).map((item) => <li key={item}><Check size={16} />{item}</li>)}
-                {!(tour.included || []).length && <li className="muted-line">Details on request.</li>}
-              </ul>
-              <ul className="tdx-incl-no">
-                {(tour.notIncluded || []).map((item) => <li key={item}><X size={15} />{item}</li>)}
-                {!(tour.notIncluded || []).length && <li className="muted-line">—</li>}
-              </ul>
-            </div>
-          </section>
-
-          {itinerary.length > 0 && (
-            <section className="tdx-block">
-              <h2>Your day, stop by stop</h2>
-              <ItineraryAccordion items={itinerary} />
-            </section>
-          )}
-
-          <TourExtras product={tour} />
-        </div>
-
-        <aside className="tdx-aside">
-        <div className="tdx-booking">
-          <LiveSharedPrice
-            currentSeats={currentSeats}
-            goAhead={goAhead}
-            maxSeats={selectedDeparture?.maxSeats || goAhead}
-            headlinePrice={projectedPrice}
-            nowPrice={currentPrice}
-            bestPrice={breakPrice}
-          />
-          <form className="public-booking-form" onSubmit={submitPublicBooking} noValidate>
-            <div className="field">
-              <label htmlFor="td-date">Date</label>
-              <select id="td-date" value={selectedDepartureId} onChange={(event) => setSelectedDepartureId(event.target.value)}>
-                {tour.dates.map((departure) => {
-                  const seats = seatsTotal(departure.pledges);
-                  return (
-                    <option key={departure.id} value={departure.id}>
-                      {formatDate(departure.date)} · {seats}/{goAheadFor(departure)} seats
-                    </option>
-                  );
-                })}
-              </select>
-            </div>
-            <div className="tdx-frow">
-              <div className="field tdx-fname">
-                <label htmlFor="td-name">Your name</label>
-                <input
-                  id="td-name"
-                  value={travelerName}
-                  onChange={(event) => {
-                    setTravelerName(event.target.value);
-                    if (errors.name) setErrors((e) => ({ ...e, name: undefined }));
-                  }}
-                  placeholder="e.g. Yara Mansour"
-                  aria-invalid={errors.name ? "true" : "false"}
-                  className={errors.name ? "input-error" : ""}
-                />
-                {errors.name && <span className="field-error" role="alert">{errors.name}</span>}
-              </div>
-              <div className="field tdx-fseats">
-                <label htmlFor="td-seats">Seats</label>
-                <input
-                  id="td-seats"
-                  min="1"
-                  max={Math.max(1, maxSelectable)}
-                  type="number"
-                  value={travelerSeats}
-                  onChange={(event) => {
-                    setTravelerSeats(event.target.value);
-                    if (errors.seats) setErrors((e) => ({ ...e, seats: undefined }));
-                  }}
-                  aria-invalid={errors.seats ? "true" : "false"}
-                  className={errors.seats ? "input-error" : ""}
-                  disabled={soldOut}
-                />
-                {errors.seats && <span className="field-error" role="alert">{errors.seats}</span>}
-              </div>
-            </div>
-            <div className="tdx-frow">
-              <div className="field">
-                <label htmlFor="td-email">Email <span className="field-opt">(optional)</span></label>
-                <input
-                  id="td-email"
-                  type="email"
-                  value={travelerEmail}
-                  onChange={(event) => {
-                    setTravelerEmail(event.target.value);
-                    if (errors.email) setErrors((e) => ({ ...e, email: undefined }));
-                  }}
-                  placeholder="you@email.com"
-                  aria-invalid={errors.email ? "true" : "false"}
-                  className={errors.email ? "input-error" : ""}
-                />
-                {errors.email && <span className="field-error" role="alert">{errors.email}</span>}
-              </div>
-              <div className="field">
-                <label htmlFor="td-phone">Phone <span className="field-opt">(optional)</span></label>
-                <input id="td-phone" type="tel" value={travelerPhone} onChange={(e) => setTravelerPhone(e.target.value)} placeholder="+20 1XX XXX XXXX" />
-              </div>
-            </div>
-            <div className="deposit-summary tdx-deposit">
-              <div><span>Deposit today</span><strong>${depositDue}</strong></div>
-              <div><span>Balance</span><strong>${balanceDue}</strong></div>
-              <p>{depositPercentValue}% confirms your seat · balance due {selectedDeparture ? balanceDueDate(selectedDeparture.date) : "before departure"}.</p>
-            </div>
-            <button className="primary full" disabled={isSaving || !selectedDeparture || soldOut} type="submit">
-              {isSaving ? "Updating seats..." : soldOut ? "Date full" : "Join this departure"}
-            </button>
-          </form>
-          {publicBooking && Number(publicBooking.departureId) === Number(selectedDeparture?.id) && (
-            <div className="booking-receipt">
-              <strong>Request added: {publicBooking.code}</strong>
-              <p>{publicBooking.seats} seat{publicBooking.seats > 1 ? "s" : ""} for {publicBooking.customerName}</p>
-              {publicBooking.depositDue && (
-                <p>${publicBooking.depositDue} deposit due now · ${publicBooking.balanceDue} balance due {publicBooking.balanceDueDate}</p>
-              )}
-              <button disabled={isSaving} onClick={onCancelPublicBooking}>Cancel this request</button>
-            </div>
-          )}
-        </div>
-        <ul className="tdx-assure">
-          <li><ShieldCheck size={16} />No payment until your group is confirmed</li>
-          <li><Users size={16} />Small shared groups, never crowded</li>
-          <li><BadgeCheck size={16} />Licensed guide &amp; vehicle on every date</li>
-        </ul>
-        </aside>
-      </div>
-
-      {leadDeparture && <LiveDepartureTimeline departure={leadDeparture} />}
-
-      <section className="tour-calendar tdx-dates">
-        <div className="tour-calendar-header">
-          <div>
-            <strong>Available dates</strong>
-            <p>Once minimum seats are booked, the date is GoAhead.</p>
-          </div>
-          <span className="pill"><CalendarDays size={15} />{tour.dates.length} date{tour.dates.length === 1 ? "" : "s"}</span>
-        </div>
-        <div className="calendar-days">
-          {tour.dates.length === 0 && <div className="empty-day">No dates published yet</div>}
-          {tour.dates.map((departure) => <CalendarDay departure={departure} key={departure.id} />)}
-        </div>
-      </section>
-    </article>
-  );
-}
-
-// Rich day-by-day accordion for packages: city + title header, then meals,
-// accommodation, included-today and optional activities on expand.
-function PackageItinerary({ items }) {
-  const [open, setOpen] = useState(0);
-  return (
-    <ol className="pitin">
-      {items.map((day, i) => {
-        const isOpen = open === i;
-        const included = (day.included || []).filter(Boolean);
-        const optional = (day.optional || []).filter(Boolean);
-        const dayNum = day.day || i + 1;
-        const meals = day.meals && day.meals !== "—" ? day.meals : "";
-        const last = i === items.length - 1;
-        return (
-          <li key={dayNum} className={`pitin-day${isOpen ? " open" : ""}${last ? " last" : ""}`}>
-            <div className="pitin-rail"><span className="pitin-node">{dayNum}</span></div>
-            <div className="pitin-card">
-              <button
-                type="button"
-                className="pitin-head"
-                aria-expanded={isOpen}
-                onClick={() => setOpen(isOpen ? -1 : i)}
-              >
-                <span className="pitin-headmain">
-                  <span className="pitin-eyebrow">Day {dayNum} · {day.city}</span>
-                  <strong className="pitin-title">{day.title}</strong>
-                </span>
-                {day.overnight && (
-                  <span className="pitin-overnight"><Hotel size={13} />{day.overnight}</span>
-                )}
-                <ChevronDown size={18} className="pitin-chev" aria-hidden="true" />
-              </button>
-              <div className="pitin-body">
-                <div className="pitin-inner">
-                  {day.description && <p className="pitin-desc">{day.description}</p>}
-                  {meals && (
-                    <div className="pitin-chips">
-                      <span className="pitin-chip"><Utensils size={13} />{meals}</span>
-                    </div>
-                  )}
-                  {included.length > 0 && (
-                    <ul className="pitin-incl">
-                      {included.map((x) => <li key={x}><Check size={15} />{x}</li>)}
-                    </ul>
-                  )}
-                  {optional.length > 0 && (
-                    <div className="pitin-opt">
-                      <span className="pitin-opt-tag">Optional</span>
-                      <ul>{optional.map((x) => <li key={x}>{x}</li>)}</ul>
-                    </div>
-                  )}
-                  {day.special && <p className="pitin-note"><Bell size={13} />{day.special}</p>}
-                </div>
-              </div>
-            </div>
-          </li>
-        );
-      })}
-    </ol>
-  );
-}
-
-function PackageDetail({ isSaving, navigate, onBookPublicDeparture, onCancelPublicBooking, publicBooking, pkg }) {
-  const leadDeparture = pkg.dates[0];
-  const [selectedDepartureId, setSelectedDepartureId] = useState(leadDeparture?.id || "");
-  const [travelerName, setTravelerName] = useState("");
-  const [travelerEmail, setTravelerEmail] = useState("");
-  const [travelerPhone, setTravelerPhone] = useState("");
-  const [travelerSeats, setTravelerSeats] = useState(2);
-  const tiers = pkg.accommodationTiers || [];
-  const [tierId, setTierId] = useState(tiers[0]?.id || "");
-  const [roomingType, setRoomingType] = useState("double");
-  const [errors, setErrors] = useState({});
-  const selectedDeparture = pkg.dates.find((d) => Number(d.id) === Number(selectedDepartureId)) || leadDeparture;
-  const goAhead = goAheadFor(pkg);
-  const currentSeats = selectedDeparture ? seatsTotal(selectedDeparture.pledges) : 0;
-  const requestedSeats = Math.max(1, Number(travelerSeats || 1));
-  const projectedSeats = selectedDeparture ? Math.min(selectedDeparture.maxSeats, currentSeats + requestedSeats) : Math.max(goAhead, requestedSeats);
-  const pricePerPerson = packagePriceFor(pkg, selectedDeparture, projectedSeats, { roomingType, tierId });
-  const depositPercentValue = Number(selectedDeparture?.depositPercent || pkg.depositPercent || 20);
-  const bookingTotal = pricePerPerson * requestedSeats;
-  const depositDue = depositFor(bookingTotal, depositPercentValue);
-  const balanceDue = Math.max(0, bookingTotal - depositDue);
-  const remainingSeats = selectedDeparture ? Math.max(0, selectedDeparture.maxSeats - currentSeats) : goAhead;
-  const soldOut = remainingSeats <= 0;
-  const basePrice = livePriceFor(selectedDeparture || pkg, currentSeats);
-  const projectedBase = livePriceFor(selectedDeparture || pkg, projectedSeats);
-  const breakBase = safePrice(pkg.breakPrice, Math.round(pkg.publishedRate * 0.8));
-  const seatPct = goAhead ? Math.min(100, Math.round((currentSeats / goAhead) * 100)) : 0;
-  const cities = pkg.cities || [pkg.city];
-  const itin = (pkg.itinerary || []).filter((day) => day && (day.title || day.description));
-
-  useEffect(() => {
-    setSelectedDepartureId(leadDeparture?.id || "");
-  }, [leadDeparture?.id]);
-
-  useEffect(() => {
-    setErrors({});
-  }, [selectedDepartureId]);
-
-  function validate() {
-    const next = {};
-    if (!travelerName.trim()) {
-      next.name = "Please enter the lead traveler's name.";
-    } else if (travelerName.trim().length < 2) {
-      next.name = "That name looks too short.";
-    }
-    if (!tierId) next.tier = "Choose a hotel tier.";
-    if (travelerEmail.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(travelerEmail.trim())) {
-      next.email = "That email doesn't look right.";
-    }
-    const seatsNum = Number(travelerSeats);
-    if (!Number.isInteger(seatsNum) || seatsNum < 1) {
-      next.seats = "Add at least 1 traveler.";
-    } else if (seatsNum > remainingSeats) {
-      next.seats = remainingSeats === 0
-        ? "This departure is full."
-        : `Only ${remainingSeats} place${remainingSeats === 1 ? "" : "s"} left on this departure.`;
-    }
-    return next;
-  }
-
-  function submitPublicBooking(event) {
-    event.preventDefault();
-    if (!selectedDeparture) return;
-    const next = validate();
-    setErrors(next);
-    if (Object.keys(next).length) return;
-    onBookPublicDeparture({
-      departureId: selectedDeparture.id,
-      customerName: travelerName.trim(),
-      customerEmail: travelerEmail.trim(),
-      customerPhone: travelerPhone.trim(),
-      seats: travelerSeats,
-      roomingType,
-      accommodationTier: tierId,
-    });
-    setTravelerName("");
-    setTravelerEmail("");
-    setTravelerPhone("");
-    setTravelerSeats(2);
-    setErrors({});
-  }
-
-  return (
-    <article className="tdx">
-      <button className="tdx-back" onClick={() => navigate("/tours")}>
-        <ArrowLeft size={17} />All tours
-      </button>
-
-      <TourGallery product={pkg} />
-
-      <header className="tdx-head">
-        <div className="tdx-head-top">
-          <span className="tdx-eyebrow"><Package size={14} />{pkg.duration} · multi-day package</span>
-          {pkg.quality ? (
-            <span className="tdx-rating">
-              <Stars value={pkg.quality} />
-              <b>{Number(pkg.quality).toFixed(1)}</b>
-              <span>from confirmed travellers</span>
-            </span>
-          ) : null}
-        </div>
-        <h1>{pkg.title}</h1>
-        <div className="tdx-facts">
-          <span><MapPin size={16} />{cities.join(" · ")}</span>
-          {pkg.nights ? <span><Hotel size={16} />{pkg.nights} nights</span> : null}
-          {pkg.guide && <span><Globe size={16} />{pkg.guide}</span>}
-          {pkg.vehicle && <span><Car size={16} />{pkg.vehicle}</span>}
-        </div>
-      </header>
-
-      <div className="tdx-grid">
-        <div className="tdx-content">
-          <section className="tdx-block">
-            <h2>About this trip</h2>
-            <CollapsibleHtml html={pkg.overviewHtml} fallback={pkg.description} />
-            {cities.length > 1 && (
-              <div className="tdx-route">
-                {cities.map((stop, i) => (
-                  <span key={stop}>
-                    {stop}{i < cities.length - 1 && <ChevronRight size={15} aria-hidden="true" />}
-                  </span>
-                ))}
-              </div>
-            )}
-          </section>
-
-          {itin.length > 0 && (
-            <section className="tdx-block">
-              <h2>Day-by-day itinerary</h2>
-              <PackageItinerary items={itin} />
-            </section>
-          )}
-
-          <section className="tdx-block">
-            <h2>What's included</h2>
-            <div className="tdx-incl">
-              <ul className="tdx-incl-yes">
-                {(pkg.included || []).map((item) => <li key={item}><Check size={16} />{item}</li>)}
-                {!(pkg.included || []).length && <li className="muted-line">Details on request.</li>}
-              </ul>
-              <ul className="tdx-incl-no">
-                {(pkg.notIncluded || []).map((item) => <li key={item}><X size={15} />{item}</li>)}
-                {!(pkg.notIncluded || []).length && <li className="muted-line">—</li>}
-              </ul>
-            </div>
-          </section>
-
-          <TourExtras product={pkg} />
-        </div>
-
-        <aside className="tdx-aside">
-          <div className="tdx-booking">
-            <LiveSharedPrice
-              currentSeats={currentSeats}
-              goAhead={goAhead}
-              maxSeats={selectedDeparture?.maxSeats || goAhead}
-              headlinePrice={projectedBase}
-              nowPrice={basePrice}
-              bestPrice={breakBase}
-            />
-            <p className="lsp-tier-note">Shared rate shown per person. Your hotel &amp; cruise tier and any single supplement are added on top — see the total below.</p>
-            <form className="public-booking-form" onSubmit={submitPublicBooking} noValidate>
-              <div className="field">
-                <label htmlFor="pk-date">Start date</label>
-                <select id="pk-date" value={selectedDepartureId} onChange={(event) => setSelectedDepartureId(event.target.value)}>
-                  {pkg.dates.map((d) => {
-                    const seats = seatsTotal(d.pledges);
-                    return (
-                      <option key={d.id} value={d.id}>
-                        {formatRange(d.startDate || d.date, d.endDate)} · {seats}/{goAheadFor(d)} seats
-                      </option>
-                    );
-                  })}
-                </select>
-              </div>
-              <div className="field">
-                <label htmlFor="pk-tier">Hotel &amp; cruise tier</label>
-                <select
-                  id="pk-tier"
-                  value={tierId}
-                  onChange={(event) => {
-                    setTierId(event.target.value);
-                    if (errors.tier) setErrors((e) => ({ ...e, tier: undefined }));
-                  }}
-                  aria-invalid={errors.tier ? "true" : "false"}
-                  className={errors.tier ? "input-error" : ""}
-                >
-                  {tiers.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name}{t.perPersonSupplement ? ` (+$${t.perPersonSupplement}/pp)` : ""}
-                    </option>
-                  ))}
-                </select>
-                {errors.tier && <span className="field-error" role="alert">{errors.tier}</span>}
-              </div>
-              <div className="field">
-                <label htmlFor="pk-room">Room type</label>
-                <select id="pk-room" value={roomingType} onChange={(event) => setRoomingType(event.target.value)}>
-                  <option value="single">Single (supplement applies)</option>
-                  <option value="double">Double / twin</option>
-                  <option value="triple">Triple</option>
-                </select>
-              </div>
-              <div className="tdx-frow">
-                <div className="field tdx-fname">
-                  <label htmlFor="pk-name">Your name</label>
-                  <input
-                    id="pk-name"
-                    value={travelerName}
-                    onChange={(event) => {
-                      setTravelerName(event.target.value);
-                      if (errors.name) setErrors((e) => ({ ...e, name: undefined }));
-                    }}
-                    placeholder="e.g. Tarek El-Sharkawy"
-                    aria-invalid={errors.name ? "true" : "false"}
-                    className={errors.name ? "input-error" : ""}
-                  />
-                  {errors.name && <span className="field-error" role="alert">{errors.name}</span>}
-                </div>
-                <div className="field tdx-fseats">
-                  <label htmlFor="pk-seats">Travelers</label>
-                  <input
-                    id="pk-seats"
-                    min="1"
-                    max={Math.max(1, remainingSeats)}
-                    type="number"
-                    value={travelerSeats}
-                    onChange={(event) => {
-                      setTravelerSeats(event.target.value);
-                      if (errors.seats) setErrors((e) => ({ ...e, seats: undefined }));
-                    }}
-                    aria-invalid={errors.seats ? "true" : "false"}
-                    className={errors.seats ? "input-error" : ""}
-                    disabled={soldOut}
-                  />
-                  {errors.seats && <span className="field-error" role="alert">{errors.seats}</span>}
-                </div>
-              </div>
-              <div className="tdx-frow">
-                <div className="field">
-                  <label htmlFor="pk-email">Email <span className="field-opt">(optional)</span></label>
-                  <input
-                    id="pk-email"
-                    type="email"
-                    value={travelerEmail}
-                    onChange={(event) => {
-                      setTravelerEmail(event.target.value);
-                      if (errors.email) setErrors((e) => ({ ...e, email: undefined }));
-                    }}
-                    placeholder="you@email.com"
-                    aria-invalid={errors.email ? "true" : "false"}
-                    className={errors.email ? "input-error" : ""}
-                  />
-                  {errors.email && <span className="field-error" role="alert">{errors.email}</span>}
-                </div>
-                <div className="field">
-                  <label htmlFor="pk-phone">Phone <span className="field-opt">(optional)</span></label>
-                  <input id="pk-phone" type="tel" value={travelerPhone} onChange={(e) => setTravelerPhone(e.target.value)} placeholder="+20 1XX XXX XXXX" />
-                </div>
-              </div>
-              <div className="deposit-summary tdx-deposit">
-                <div><span>Total</span><strong>${bookingTotal}</strong></div>
-                <div><span>Deposit today</span><strong>${depositDue}</strong></div>
-                <div><span>Balance</span><strong>${balanceDue}</strong></div>
-                <p>{depositPercentValue}% confirms the reservation · balance due {selectedDeparture ? balanceDueDate(selectedDeparture.startDate || selectedDeparture.date) : "before departure"}.</p>
-              </div>
-              <button className="primary full" disabled={isSaving || !selectedDeparture || soldOut} type="submit">
-                {isSaving ? "Updating seats..." : soldOut ? "Departure full" : "Join this package"}
-              </button>
-            </form>
-            {publicBooking && Number(publicBooking.departureId) === Number(selectedDeparture?.id) && (
-              <div className="booking-receipt">
-                <strong>Request added: {publicBooking.code}</strong>
-                <p>{publicBooking.seats} traveler{publicBooking.seats > 1 ? "s" : ""} · {publicBooking.tierName || "Standard"} · {publicBooking.roomingType || "double"} room</p>
-                {publicBooking.depositDue && (
-                  <p>${publicBooking.depositDue} deposit due now · ${publicBooking.balanceDue} balance due {publicBooking.balanceDueDate}</p>
-                )}
-                <button disabled={isSaving} onClick={onCancelPublicBooking}>Cancel this request</button>
-              </div>
-            )}
-          </div>
-          <ul className="tdx-assure">
-            <li><ShieldCheck size={16} />No payment until your group is confirmed</li>
-            <li><Users size={16} />Small shared groups, never crowded</li>
-            <li><BadgeCheck size={16} />Domestic flights, Nile cruise &amp; sightseeing included</li>
-          </ul>
-        </aside>
-      </div>
-
-      {leadDeparture && <LiveDepartureTimeline departure={leadDeparture} />}
-
-      <section className="tour-calendar tdx-dates">
-        <div className="tour-calendar-header">
-          <div>
-            <strong>Upcoming departures</strong>
-            <p>Once minimum travelers are booked, the package is GoAhead.</p>
-          </div>
-          <span className="pill"><CalendarDays size={15} />{pkg.dates.length} departure{pkg.dates.length === 1 ? "" : "s"}</span>
-        </div>
-        <div className="calendar-days">
-          {pkg.dates.length === 0 && <div className="empty-day">No departures published yet</div>}
-          {pkg.dates.map((d) => <PackageCalendarRow departure={d} key={d.id} />)}
-        </div>
-      </section>
-    </article>
-  );
-}
-
-function LiveDepartureTimeline({ departure }) {
-  const seats = seatsTotal(departure.pledges);
-  const goAhead = goAheadFor(departure);
-  const confidence = confidenceFor(seats, goAhead);
-  const steps = [
-    { label: "1 traveler joined", active: seats >= 1 },
-    { label: "Group growing", active: seats >= Math.max(2, Math.floor(goAhead / 2)) },
-    { label: seats >= goAhead - 1 ? "Likely to confirm" : "Waiting for momentum", active: seats >= goAhead - 1 },
-    { label: "GoAhead confirmed", active: seats >= goAhead },
-  ];
-
-  return (
-    <section className="signature-timeline" aria-label="Live departure timeline">
-      <div>
-        <p>Live departure timeline</p>
-        <h2>{departure.route}</h2>
-        <span>{departure.city} · {isPackage(departure) ? formatRange(departure.startDate || departure.date, departure.endDate) : formatDate(departure.date)} · {confidence.label}</span>
-      </div>
-      <ol>
-        {steps.map((step, index) => (
-          <li className={step.active ? "active" : ""} key={step.label}>
-            <b>{index + 1}</b>
-            <span>{step.label}</span>
-          </li>
-        ))}
-      </ol>
-    </section>
   );
 }
 
@@ -4390,259 +3316,6 @@ function AgencyDesk(props) {
         </div>
       </section>
     </>
-  );
-}
-
-function AdminDesk({
-  confirmDeparture, isSaving, scheduleAdminDeparture, scheduleDate, scheduleProductId, setScheduleDate, setScheduleProductId,
-  schedulePackageDeparture, schedulePackageId, setSchedulePackageId, schedulePackageDate, setSchedulePackageDate,
-  updateProductPricing, visibleDepartures, dayTourProducts, packageProducts,
-}) {
-  return (
-    <section className="admin-grid">
-      <div className="panel">
-        <div className="panel-header">
-          <div><h2>Day tour products</h2><p>Fixed day-tour products agencies and customers can trust.</p></div>
-          <Sparkles size={20} />
-        </div>
-        <div className="product-list">
-          {dayTourProducts.map((product) => (
-            <article className="product-card" key={product.id}>
-              <div><strong>{product.title}</strong><p>{product.description}</p></div>
-              <div className="product-meta">
-                <span>{product.duration}</span>
-                <span>GoAhead ${product.publishedRate}</span>
-                <span>Break ${product.breakPrice}</span>
-                <span>min {product.minSeats}</span>
-                <span>{product.depositPercent || 10}% deposit</span>
-              </div>
-              <PricingControls isSaving={isSaving} onSave={updateProductPricing} product={product} />
-            </article>
-          ))}
-          {dayTourProducts.length === 0 && <p className="empty-day">No day tours in this city.</p>}
-        </div>
-      </div>
-
-      <div className="panel">
-        <div className="panel-header">
-          <div><h2>Publish day tour date</h2><p>Make a popular day tour available for agencies to add clients.</p></div>
-          <CalendarDays size={20} />
-        </div>
-        <form className="join-form" onSubmit={scheduleAdminDeparture}>
-          <label>
-            Tour product
-            <select value={scheduleProductId} onChange={(event) => setScheduleProductId(event.target.value)}>
-              {dayTourProducts.map((product) => <option key={product.id} value={product.id}>{product.title}</option>)}
-            </select>
-          </label>
-          <label>
-            Date
-            <input type="date" value={scheduleDate} onChange={(event) => setScheduleDate(event.target.value)} />
-          </label>
-          <button className="primary full" type="submit" disabled={isSaving || !dayTourProducts.length}><Plus size={18} />{isSaving ? "Saving..." : "Publish date"}</button>
-        </form>
-      </div>
-
-      <div className="panel admin-wide">
-        <div className="panel-header">
-          <div><h2>Multi-day packages</h2><p>Multi-city itineraries with hotels and inter-city transport.</p></div>
-          <Package size={20} />
-        </div>
-        <div className="product-list">
-          {packageProducts.map((product) => (
-            <article className="product-card package-card" key={product.id}>
-              <div>
-                <strong><span className="type-badge"><Package size={11} />Package</span> {product.title}</strong>
-                <p>{product.description}</p>
-                <p className="package-sub">{(product.cities || [product.city]).join(" → ")} · {product.duration} · min {product.minSeats}</p>
-              </div>
-              <div className="product-meta">
-                <span>From ${product.publishedRate}/pp</span>
-                <span>Break ${product.breakPrice}/pp</span>
-                <span>{(product.accommodationTiers || []).length} tiers</span>
-                <span>{product.depositPercent || 20}% deposit</span>
-              </div>
-              {(product.accommodationTiers || []).length > 0 && (
-                <div className="tier-strip">
-                  {product.accommodationTiers.map((t) => (
-                    <span key={t.id}><Hotel size={12} />{t.name} (+${t.perPersonSupplement || 0}/pp · single +${t.singleSupplement || 0})</span>
-                  ))}
-                </div>
-              )}
-              <PricingControls isSaving={isSaving} onSave={updateProductPricing} product={product} />
-            </article>
-          ))}
-          {packageProducts.length === 0 && <p className="empty-day">No packages in this city yet. Add one in db.json or via the API.</p>}
-        </div>
-        <form className="join-form package-publish" onSubmit={schedulePackageDeparture}>
-          <label>
-            Package
-            <select value={schedulePackageId} onChange={(event) => setSchedulePackageId(event.target.value)}>
-              {packageProducts.map((product) => <option key={product.id} value={product.id}>{product.title}</option>)}
-            </select>
-          </label>
-          <label>
-            Start date
-            <input type="date" value={schedulePackageDate} onChange={(event) => setSchedulePackageDate(event.target.value)} />
-          </label>
-          <button className="primary full" type="submit" disabled={isSaving || !packageProducts.length}><Plus size={18} />{isSaving ? "Saving..." : "Publish package date"}</button>
-        </form>
-      </div>
-
-      <div className="panel admin-wide">
-        <div className="panel-header">
-          <div><h2>Go-ahead queue</h2><p>Confirm transport, hotels, and guide when enough travelers have booked.</p></div>
-          <BadgeCheck size={20} />
-        </div>
-        <div className="admin-queue">
-          {visibleDepartures.map((departure) => {
-            const seats = seatsTotal(departure.pledges);
-            const ga = goAheadFor(departure);
-            const ready = seats >= ga;
-            const dIsPackage = isPackage(departure);
-            return (
-              <div className="queue-row" key={departure.id}>
-                <div>
-                  <strong>
-                    {dIsPackage && <span className="type-badge"><Package size={11} />Package</span>}
-                    {departure.route}
-                  </strong>
-                  <p>
-                    {dIsPackage
-                      ? `${formatRange(departure.startDate || departure.date, departure.endDate)} · ${seats}/${ga} seats`
-                      : `${formatDate(departure.date)} at ${departure.time} · ${seats}/${ga} seats`}
-                  </p>
-                </div>
-                <span className={departure.status === "supplier_confirmed" ? "status ok" : ready ? "status ok" : "status"}>
-                  {departure.status === "supplier_confirmed" ? "Go-ahead" : ready ? "Ready to confirm" : "Pending demand"}
-                </span>
-                <button className="primary" disabled={!ready || departure.status === "supplier_confirmed" || isSaving} onClick={() => confirmDeparture(departure.id)}>
-                  <Check size={18} />Confirm
-                </button>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function PricingControls({ isSaving, onSave, product }) {
-  const [publishedRate, setPublishedRate] = useState(product.publishedRate);
-  const [breakPrice, setBreakPrice] = useState(product.breakPrice || Math.round(product.publishedRate * 0.8));
-
-  useEffect(() => {
-    setPublishedRate(product.publishedRate);
-    setBreakPrice(product.breakPrice || Math.round(product.publishedRate * 0.8));
-  }, [product.breakPrice, product.publishedRate]);
-
-  function savePricing(event) {
-    event.preventDefault();
-    onSave(product.id, {
-      publishedRate: Number(publishedRate),
-      breakPrice: Number(breakPrice),
-    });
-  }
-
-  return (
-    <form className="pricing-controls" onSubmit={savePricing}>
-      <label>
-        GoAhead price
-        <input min="1" type="number" value={publishedRate} onChange={(event) => setPublishedRate(event.target.value)} />
-      </label>
-      <label>
-        Max break price
-        <input min="1" max={publishedRate} type="number" value={breakPrice} onChange={(event) => setBreakPrice(event.target.value)} />
-      </label>
-      <button className="primary" disabled={isSaving} type="submit">
-        <CircleDollarSign size={17} />Save pricing
-      </button>
-    </form>
-  );
-}
-
-function CityControls({ cityStats, departures, selectedCity, setSelectedCity }) {
-  return (
-    <>
-      <section className="city-bar" aria-label="City filter">
-        <button className={selectedCity === "All cities" ? "active" : ""} onClick={() => setSelectedCity("All cities")}>
-          <MapPin size={17} /><span>All cities</span><b>{departures.length}</b>
-        </button>
-        {cityStats.map((city) => (
-          <button className={selectedCity === city.name ? "active" : ""} key={city.name} onClick={() => setSelectedCity(city.name)}>
-            <MapPin size={17} /><span>{city.name}</span><b>{city.departures}</b>
-          </button>
-        ))}
-      </section>
-      <section className="city-overview" aria-label="City overview">
-        {cityStats.map((city) => (
-          <button className={selectedCity === city.name ? "city-card active" : "city-card"} key={city.name} onClick={() => setSelectedCity(city.name)}>
-            <strong>{city.name}</strong>
-            <span>{city.products} tours</span>
-            <span>{city.departures} dates</span>
-            <span>{city.seats} seats</span>
-            <b>{city.goAhead} GoAhead</b>
-          </button>
-        ))}
-      </section>
-    </>
-  );
-}
-
-function CalendarDay({ departure }) {
-  const seats = seatsTotal(departure.pledges);
-  const goAhead = goAheadFor(departure);
-  const goAheadHit = departure.status === "supplier_confirmed" || seats >= goAhead;
-  const day = new Date(departure.date);
-  const price = livePriceFor(departure, seats);
-
-  return (
-    <button className={`calendar-day ${goAheadHit ? "go" : ""}`}>
-      <span>{new Intl.DateTimeFormat("en", { weekday: "short" }).format(day)}</span>
-      <strong>{new Intl.DateTimeFormat("en", { day: "2-digit" }).format(day)}</strong>
-      <small>{new Intl.DateTimeFormat("en", { month: "short" }).format(day)} · {departure.time}</small>
-      <b>{seats} booked</b>
-      <b>${price} live price</b>
-      <em>{goAheadHit ? "GoAhead" : `${goAhead - seats} to go`}</em>
-    </button>
-  );
-}
-
-function PackageCalendarRow({ departure }) {
-  const seats = seatsTotal(departure.pledges);
-  const goAhead = goAheadFor(departure);
-  const goAheadHit = departure.status === "supplier_confirmed" || seats >= goAhead;
-  const price = livePriceFor(departure, seats);
-
-  return (
-    <button className={`calendar-day package-day ${goAheadHit ? "go" : ""}`}>
-      <span>{formatRange(departure.startDate || departure.date, departure.endDate)}</span>
-      <strong>{departure.nights || "—"} nights</strong>
-      <b>{seats}/{goAhead} booked</b>
-      <b>from ${price}/pp</b>
-      <em>{goAheadHit ? "GoAhead" : `${goAhead - seats} to go`}</em>
-    </button>
-  );
-}
-
-function SummaryBox({ label, value }) {
-  return (
-    <div>
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </div>
-  );
-}
-
-function Metric({ icon: Icon, label, value, detail }) {
-  return (
-    <div className="metric">
-      <Icon size={22} />
-      <span>{label}</span>
-      <strong>{value}</strong>
-      <p>{detail}</p>
-    </div>
   );
 }
 
