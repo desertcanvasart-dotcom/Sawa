@@ -1,6 +1,14 @@
-// Seeds the database from data/db.json (the existing prototype data),
-// so Phase 1 starts with identical content. Re-runnable: it clears first.
+// Seeds the database from data/db.json, so a fresh environment starts with the
+// same catalogue the prototype had. Re-runnable: it clears first.
 // Run: npm run db:seed
+//
+// NOTE: data/db.json is a SEED FIXTURE, not a database. The name is a holdover
+// from the pre-Phase-1 prototype, where that file WAS the datastore and
+// server/api.js read and rewrote it on every request — hence the docs in /docs
+// describing it as the "database". That server is gone and Postgres is the only
+// datastore now, but this file is still the only source of the demo cities,
+// agencies, tour products and departures. Deleting it as "legacy" breaks
+// npm run db:seed and db:reset. Nothing writes to it at runtime.
 import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";

@@ -13,12 +13,28 @@ export function LoginGate({ children, onSession }) {
     try {
       const res = await apiFetch("/me");
       if (!res.ok) {
-        // Logged into Supabase but no app profile / disabled -> treat as out.
-        await supabase.auth.signOut();
-        setProfile(null);
-        setStatus("out");
-        onSession?.(null);
-        setError("This account is not set up for the portal. Contact your administrator.");
+        // Only 401/403 mean this account genuinely has no portal access. Any
+        // other failure — 429 from the rate limiter, 502/503 mid-deploy, a
+        // gateway timeout — is transient, and signing the user out over it
+        // destroyed a valid session and blamed their account for a server
+        // hiccup ("contact your administrator"). Keep them signed in and say
+        // what actually happened.
+        if (res.status === 401 || res.status === 403) {
+          await supabase.auth.signOut();
+          setProfile(null);
+          setStatus("out");
+          onSession?.(null);
+          setError("This account is not set up for the portal. Contact your administrator.");
+        } else {
+          setProfile(null);
+          setStatus("out");
+          onSession?.(null);
+          setError(
+            res.status === 429
+              ? "Too many requests just now. Wait a moment and sign in again."
+              : "The server is temporarily unavailable. Please try again in a moment."
+          );
+        }
         return;
       }
       const data = await res.json();
@@ -26,8 +42,12 @@ export function LoginGate({ children, onSession }) {
       setStatus("in");
       onSession?.(token || "in");
     } catch (e) {
-      setError("Could not reach the server.");
+      // Network-level failure (offline, DNS, CORS). The Supabase session is
+      // still valid, so don't sign out — just surface it.
+      setProfile(null);
       setStatus("out");
+      onSession?.(null);
+      setError("Could not reach the server. Check your connection and try again.");
     }
   }
 

@@ -8,15 +8,19 @@ import {
 import { apiFetch, supabase, uploadImage } from "./supabaseClient";
 import { DashSidebar } from "./DashSidebar";
 import { RichText } from "./RichText";
+// Date-only departure values need a local-noon anchor or they render a day
+// early west of UTC — see src/dates.js.
+import { fmtDate } from "./dates.js";
 
 const money = (n) => (n == null ? "—" : "$" + Number(n).toLocaleString());
-const fmtDate = (d) => (d ? new Intl.DateTimeFormat("en", { month: "short", day: "numeric", year: "numeric" }).format(new Date(d)) : "—");
 const isPkg = (x) => x?.type === "package";
 
 // Meeting points are now managed per-destination (Destinations section) and the
 // tour editor reads them from the selected destination.
 const samePoint = (a, b) => a.point === b.point && a.note === b.note;
-const seatsOf = (d) => (d.pledges || []).reduce((s, p) => s + Number(p.seats || 0), 0);
+// Cancelled pledges have released their seats — excluded here so the dashboard
+// agrees with the server (domain.js) and with the Bookings tab's own totals.
+const seatsOf = (d) => (d.pledges || []).reduce((s, p) => (p?.status === "cancelled" ? s : s + Number(p.seats || 0)), 0);
 const slugify = (s) => String(s || "").toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80);
 const csv = (s) => String(s || "").split(",").map((x) => x.trim()).filter(Boolean);
 
@@ -101,7 +105,7 @@ export function AdminDashboard({ user, agency, signOut, navigate }) {
             {section === "destinations" && <DestinationsSection destinations={destinations} reload={loadAll} flash={flash} />}
             {section === "blog" && <BlogSection posts={posts} reload={loadAll} flash={flash} />}
             {section === "departures" && <DeparturesSection data={data} reload={loadAll} flash={flash} />}
-            {section === "bookings" && <BookingsSection data={data} />}
+            {section === "bookings" && <BookingsSection data={data} stats={stats} />}
             {section === "referrals" && <ReferralsSection flash={flash} />}
             {section === "agencies" && <AgenciesSection flash={flash} />}
             {section === "team" && <OpsTeamSection flash={flash} currentUserId={user.id} />}
@@ -1407,26 +1411,42 @@ function depFillStatus(d) {
   if (seats >= min) return { key: "ready", label: "Ready to confirm", tone: "ready", seats, min };
   return { key: "forming", label: `${min - seats} more to GoAhead`, tone: "warn", seats, min };
 }
-function BookingsSection({ data }) {
+function BookingsSection({ data, stats }) {
   const [rows, setRows] = useState(null);
   const [q, setQ] = useState("");
   const [view, setView] = useState("list");   // list | tours
   const [filter, setFilter] = useState("all");
   const [open, setOpen] = useState(null); // selected booking
 
+  const [total, setTotal] = useState(0);
+
   async function load() {
-    const j = await apiFetch("/admin/bookings").then((r) => r.json()).catch(() => ({ bookings: [] }));
+    // Ask for the server's maximum. The list is still a window, so `total` below
+    // says how many exist and the UI admits when it isn't showing all of them.
+    const j = await apiFetch("/admin/bookings?limit=1000").then((r) => r.json()).catch(() => ({ bookings: [] }));
     setRows(j.bookings || []);
+    setTotal(Number(j.total) || (j.bookings || []).length);
     return j.bookings || [];
   }
   useEffect(() => { load(); }, []);
 
   const all = rows || [];
   const counts = all.reduce((m, b) => { m[b.status] = (m[b.status] || 0) + 1; return m; }, {});
-  const totals = all.reduce((m, b) => {
+  // Headline money/seat figures come from /admin/stats, which aggregates EVERY
+  // pledge server-side. Deriving them from `all` made them silently mean "the
+  // most recent page" once the platform passed the fetch limit. Fall back to the
+  // loaded rows only if stats hasn't arrived.
+  const loadedTotals = all.reduce((m, b) => {
     if (b.status !== "cancelled") { m.seats += Number(b.seats || 0); m.revenue += Number(b.bookingTotal || 0); m.deposits += Number(b.depositDue || 0); }
     return m;
   }, { seats: 0, revenue: 0, deposits: 0 });
+  const st = stats?.totals;
+  const totals = st
+    ? { seats: st.seatsPooled, revenue: st.revenue, deposits: st.depositsDue }
+    : loadedTotals;
+  const bookingCount = st ? st.bookings : all.filter((b) => b.status !== "cancelled").length;
+  const cancelledTotal = st ? st.cancelledBookings : (counts.cancelled || 0);
+  const truncated = total > all.length;
 
   const shown = all.filter((b) => {
     if (filter !== "all" && b.status !== filter) return false;
@@ -1477,11 +1497,17 @@ function BookingsSection({ data }) {
       {rows && (
         <>
           <div className="bk-summary">
-            <div className="bk-kpi"><span>Bookings</span><strong>{all.length}</strong><i>{counts.pending || 0} awaiting confirmation</i></div>
+            <div className="bk-kpi"><span>Bookings</span><strong>{bookingCount}</strong><i>{counts.pending || 0} awaiting confirmation</i></div>
             <div className="bk-kpi"><span>Seats booked</span><strong>{totals.seats}</strong><i>excludes cancelled</i></div>
             <div className="bk-kpi"><span>Booking value</span><strong>{money(totals.revenue)}</strong><i>{money(totals.deposits)} deposits due</i></div>
-            <div className="bk-kpi"><span>Confirmed</span><strong>{counts.confirmed || 0}</strong><i>{counts.paid || 0} paid · {counts.cancelled || 0} cancelled</i></div>
+            <div className="bk-kpi"><span>Confirmed</span><strong>{counts.confirmed || 0}</strong><i>{counts.paid || 0} paid · {cancelledTotal} cancelled</i></div>
           </div>
+          {truncated && (
+            <p className="bk-trunc" role="status">
+              Showing the {all.length.toLocaleString()} most recent of {total.toLocaleString()} bookings.
+              The figures above cover all bookings; the list, search and “By tour” view below cover only the ones loaded.
+            </p>
+          )}
 
           <div className="bk-controls">
             <div className="seg-tabs">

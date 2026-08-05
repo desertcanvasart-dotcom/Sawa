@@ -10,6 +10,8 @@
 <meta name="twitter:image" content="https://sawatours.org/images/hero.jpg" />
 <meta property="og:title" content="Open departures across Egypt — Join a group that's forming | Sawa" />
 <meta property="og:description" content="Browse live shared departures across Egypt. See how close each date is to confirming, reserve a seat free, and pay only when the group reaches GoAhead." />
+<link rel="canonical" href="https://sawatours.org/departures" />
+<meta property="og:url" content="https://sawatours.org/departures" />
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='24' fill='%2317323A'/%3E%3Ccircle cx='50' cy='50' r='30' fill='none' stroke='%23F7F3EA' stroke-width='5'/%3E%3Cpath d='M62 36 C46 36 46 50 54 50 C62 50 62 64 38 64' fill='none' stroke='%23F7F3EA' stroke-width='7' stroke-linecap='round'/%3E%3Ccircle cx='72' cy='32' r='7' fill='%23F4C95D'/%3E%3C/svg%3E" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -52,9 +54,15 @@
     <span class="eyebrow rv" style="margin-top:20px"><span class="live"></span>Forming now across Egypt</span>
     <h1 class="rv">Join a group that's<br>already <span class="gld ital">forming</span>.</h1>
     <p class="lede rv">Every departure below is a real route from a verified Egyptian operator. Reserve your seat for free and watch it fill — when four travelers commit, the gold dot lights up and your trip is confirmed.</p>
+    <!-- These two counters are filled from /api/bootstrap by the script at the
+         foot of this page. They used to ship as "14" and "5" — invented numbers
+         that rendered instantly and were then corrected to the real counts a
+         second later, so a visitor watched the headline statistics change in
+         front of them. An em dash is honest while loading and stays put if the
+         fetch fails, instead of leaving a fabricated figure on screen. -->
     <div class="hero-meta rv" data-d="1" style="display:flex;gap:34px;margin-top:34px;flex-wrap:wrap">
-      <div><b class="serif tnum" style="font-family:'Fraunces',serif;font-size:1.8rem;color:var(--teal);display:block;line-height:1">14</b><span style="font-size:.84rem;color:var(--muted)">departures open</span></div>
-      <div><b class="serif tnum" style="font-family:'Fraunces',serif;font-size:1.8rem;color:var(--teal);display:block;line-height:1">5</b><span style="font-size:.84rem;color:var(--muted)">already at GoAhead</span></div>
+      <div><b class="serif tnum" data-live-count aria-live="polite" style="font-family:'Fraunces',serif;font-size:1.8rem;color:var(--teal);display:block;line-height:1">—</b><span style="font-size:.84rem;color:var(--muted)">departures open</span></div>
+      <div><b class="serif tnum" data-live-count aria-live="polite" style="font-family:'Fraunces',serif;font-size:1.8rem;color:var(--teal);display:block;line-height:1">—</b><span style="font-size:.84rem;color:var(--muted)">already at GoAhead</span></div>
       <div><b class="serif tnum" style="font-family:'Fraunces',serif;font-size:1.8rem;color:var(--teal);display:block;line-height:1">$0</b><span style="font-size:.84rem;color:var(--muted)">to reserve a seat</span></div>
     </div>
   </div>
@@ -64,22 +72,22 @@
 <section class="block" id="board" style="padding-top:30px">
   <div class="wrap">
     <div class="dep-head rv" style="display:flex;justify-content:space-between;align-items:flex-end;gap:28px;flex-wrap:wrap;margin-bottom:40px">
-      <div class="tabs" data-tabs role="tablist">
-        <button class="tab on">All Egypt</button>
-        <button class="tab">Cairo &amp; Giza</button>
-        <button class="tab">Nile &amp; South</button>
-        <button class="tab">Desert &amp; oases</button>
-        <button class="tab">Red Sea</button>
-        <button class="tab">Alexandria</button>
+      <div class="tabs" data-tabs id="region-tabs" role="tablist" aria-label="Filter departures by region">
+        <button type="button" class="tab on" data-value="all">All Egypt</button>
+        <button type="button" class="tab" data-value="cairo">Cairo &amp; Giza</button>
+        <button type="button" class="tab" data-value="nile">Nile &amp; South</button>
+        <button type="button" class="tab" data-value="desert">Desert &amp; oases</button>
+        <button type="button" class="tab" data-value="redsea">Red Sea</button>
+        <button type="button" class="tab" data-value="alexandria">Alexandria</button>
       </div>
-      <div class="tabs" data-tabs>
-        <button class="tab on">Closest to GoAhead</button>
-        <button class="tab">Soonest date</button>
-        <button class="tab">Lowest price</button>
+      <div class="tabs" data-tabs id="sort-tabs" role="tablist" aria-label="Sort departures">
+        <button type="button" class="tab on" data-value="goahead">Closest to GoAhead</button>
+        <button type="button" class="tab" data-value="date">Soonest date</button>
+        <button type="button" class="tab" data-value="price">Lowest price</button>
       </div>
     </div>
 
-    <div class="grid g-3 early"></div>
+    <div class="grid g-3 early" aria-live="polite"></div>
   </div>
 </section>
 
@@ -143,10 +151,14 @@
     <div class="fbot">
       <span>© 2026 Sawa Tours. Shared departures, confirmed together.</span>
       <div class="lks"><a href="/privacy">Privacy policy</a><a href="/terms">Terms and conditions</a></div>
+      <!-- TODO(sawa): replace these three placeholders with real profile URLs
+           (<a href="https://instagram.com/..." ...>), or delete the block before
+           launch. They were href="#", which scroll-jumped to the top of the page
+           and announced as working links; they are now inert and visibly muted. -->
       <div class="socials">
-        <a href="#" aria-label="Instagram"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none"/></svg></a>
-        <a href="#" aria-label="Facebook"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M14 9h3V6h-3c-2 0-3 1-3 3v2H9v3h2v6h3v-6h2.5l.5-3H14V9.5c0-.4.2-.5.6-.5Z"/></svg></a>
-        <a href="#" aria-label="WhatsApp"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-8.5 15.2L2 22l4.9-1.4A10 10 0 1 0 12 2Zm5.4 14.1c-.2.6-1.3 1.2-1.8 1.2-.5.1-1 .1-1.7-.1-.4-.1-.9-.3-1.6-.6a9 9 0 0 1-3.4-3c-.3-.4-.8-1.1-.8-2.1s.5-1.5.7-1.7c.2-.2.4-.3.6-.3h.4c.2 0 .4 0 .5.4l.7 1.6c.1.1 0 .3 0 .4l-.3.4c-.2.2-.3.3-.1.5.5.9 1 1.3 1.8 1.8.2.1.4.1.5 0l.5-.6c.2-.2.3-.2.5-.1l1.5.7c.2.1.4.2.4.3.1.1.1.6-.1 1Z"/></svg></a>
+        <span class="soon" role="img" aria-label="Instagram — not yet available"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none"/></svg></span>
+        <span class="soon" role="img" aria-label="Facebook — not yet available"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M14 9h3V6h-3c-2 0-3 1-3 3v2H9v3h2v6h3v-6h2.5l.5-3H14V9.5c0-.4.2-.5.6-.5Z"/></svg></span>
+        <span class="soon" role="img" aria-label="WhatsApp — not yet available"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-8.5 15.2L2 22l4.9-1.4A10 10 0 1 0 12 2Zm5.4 14.1c-.2.6-1.3 1.2-1.8 1.2-.5.1-1 .1-1.7-.1-.4-.1-.9-.3-1.6-.6a9 9 0 0 1-3.4-3c-.3-.4-.8-1.1-.8-2.1s.5-1.5.7-1.7c.2-.2.4-.3.6-.3h.4c.2 0 .4 0 .5.4l.7 1.6c.1.1 0 .3 0 .4l-.3.4c-.2.2-.3.3-.1.5.5.9 1 1.3 1.8 1.8.2.1.4.1.5 0l.5-.6c.2-.2.3-.2.5-.1l1.5.7c.2.1.4.2.4.3.1.1.1.6-.1 1Z"/></svg></span>
       </div>
     </div>
   </div>
@@ -168,7 +180,53 @@
   /* SEO/GEO slug — must match server/slug.js and src/main.jsx */
   var SLUG_STOP={the:1,a:1,an:1,of:1,and:1,or:1},SLUG_CITY={Cairo:'cairo',Luxor:'luxor',Aswan:'aswan'};
   function slugify(s){return String(s==null?'':s).normalize('NFKD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/&/g,' ').replace(/[^a-z0-9]+/g,' ').trim().split(/\s+/).filter(function(w){return w&&!SLUG_STOP[w];}).join('-');}
-  function tourSlug(p){var isPkg=(p.type||'day_tour')==='package';var slug=slugify(p.title);if(!isPkg&&p.city){var c=SLUG_CITY[p.city]||slugify(p.city);if(c&&slug.indexOf(c)<0)slug+='-from-'+c;}return slug||String(p.id||'');}
+  // Mirrors server/slug.js — keep in sync. An empty title-slug must not gain a
+  // "-from-city" suffix, and must never fall back to the raw id (that produces
+  // an id-shaped URL, which the server 301-redirects to itself: a cached loop).
+  function tourSlug(p){var isPkg=(p.type||'day_tour')==='package';var slug=slugify(p.title);if(slug&&!isPkg&&p.city){var c=SLUG_CITY[p.city]||slugify(p.city);if(c&&slug.indexOf(c)<0)slug+='-from-'+c;}if(slug)return slug;return [slugify(p.city),isPkg?'package':'tour',slugify(String(p.id||'').replace(/^(tour|pkg)_/,''))].filter(Boolean).join('-')||'tour';}
+  /* ---- Region filter + sort -------------------------------------------
+     The tab strips used to be decoration: sawa.js toggled the highlight and
+     nothing else happened, so every card stayed visible in the original order
+     no matter what you clicked. Cards carry a city; the tabs offer regions, so
+     the two are bridged here. A city that isn't listed simply never matches a
+     region tab and shows only under "All Egypt" — better than guessing. */
+  var REGION={
+    'Cairo':'cairo','Giza':'cairo',
+    'Luxor':'nile','Aswan':'nile','Abu Simbel':'nile','Edfu':'nile','Kom Ombo':'nile',
+    'Esna':'nile','Dendera':'nile','Abydos':'nile','Nubia':'nile',
+    'Siwa':'desert','Bahariya':'desert','Farafra':'desert','White Desert':'desert','Fayoum':'desert',
+    'Hurghada':'redsea','Sharm El Sheikh':'redsea','Dahab':'redsea','Marsa Alam':'redsea',
+    'El Gouna':'redsea','Safaga':'redsea',
+    'Alexandria':'alexandria'
+  };
+  function regionOf(city){return REGION[String(city==null?'':city).trim()]||'';}
+  var allItems=[];
+  function activeValue(id,fallback){
+    var el=document.querySelector('#'+id+' .tab.on');
+    return (el&&el.getAttribute('data-value'))||fallback;
+  }
+  var SORTS={
+    goahead:function(a,b){return a.toGo-b.toGo||(a.date<b.date?-1:a.date>b.date?1:0);},
+    date:function(a,b){return a.date<b.date?-1:a.date>b.date?1:0;},
+    price:function(a,b){return a.price-b.price||(a.date<b.date?-1:1);}
+  };
+  function render(){
+    var region=activeValue('region-tabs','all');
+    var sort=activeValue('sort-tabs','goahead');
+    var shown=allItems.filter(function(it){return region==='all'||it.region===region;});
+    shown.sort(SORTS[sort]||SORTS.goahead);
+    grid.innerHTML=shown.length
+      ? shown.map(function(it){return it.html;}).join('')
+      : '<p class="desc" style="grid-column:1/-1;text-align:center;padding:48px 0;color:var(--muted)">'
+        +'No departures in this region yet. <a href="/tours" style="text-decoration:underline">Pick a tour and start your own date.</a></p>';
+  }
+  function wireTabs(){
+    ['region-tabs','sort-tabs'].forEach(function(id){
+      var el=document.getElementById(id);
+      if(el)el.addEventListener('tabchange',render);
+    });
+  }
+
   function loadData(){
     return fetch('/api/bootstrap',{headers:{'accept':'application/json'}})
       .then(function(r){if(!r.ok)throw 0;return r.json();})
@@ -183,7 +241,7 @@
     var today=new Date();today.setHours(0,0,0,0);
     var byProd={};
     deps.forEach(function(d){(byProd[d.tourProductId]=byProd[d.tourProductId]||[]).push(d);});
-    var cards=[],openCount=0,goCount=0;
+    var items=[],openCount=0,goCount=0;
     products.forEach(function(p){
       var isPkg=p.type==='package';
       var list=(byProd[p.id]||[]).slice().sort(function(a,b){return a.date<b.date?-1:1;});
@@ -206,7 +264,13 @@
         :'<span class="st">'+(toGo===1?'1 seat to GoAhead':toGo+' seats to GoAhead')+'</span>';
       var whenLbl=confirmed?'Running':(joined>0?'Almost full':'Forming now');
       var cta=confirmed?'Join this trip':'Reserve a seat';
-      cards.push(
+      items.push({
+        region: regionOf(p.city),
+        // Sort keys. Missing values sort last rather than to the front.
+        price: Number(price) > 0 ? Number(price) : Infinity,
+        date: (next && next.date) || '9999-12-31',
+        toGo: confirmed ? 0 : toGo,
+        html:
         '<article class="card rv in" data-region="'+esc(p.city)+'" onclick="location.href=\''+link+'\'" style="cursor:pointer">'
         +'<div class="core"><div class="media">'
         +'<img src="'+esc(img)+'" alt="'+esc(alt)+'" loading="lazy" />'
@@ -222,13 +286,19 @@
         +'<div class="foot"><div class="when">'+whenLbl+'<b>$'+price+' / person</b></div>'
         +'<a href="'+link+'" class="join">'+cta+ARR+'</a></div>'
         +'</div></div></article>'
-      );
+      });
     });
-    if(cards.length){grid.innerHTML=cards.join('');}
-    var stats=document.querySelectorAll('.hero-meta b');
+    if(items.length){
+      allItems=items;
+      render();
+      wireTabs();
+    }
+    /* Target the two counters explicitly: '.hero-meta b' also matched the "$0
+       to reserve a seat" figure, so the mapping depended on DOM order. */
+    var stats=document.querySelectorAll('.hero-meta [data-live-count]');
     if(stats[0])stats[0].textContent=openCount;
     if(stats[1])stats[1].textContent=goCount;
-  }).catch(function(){/* keep static demo cards on failure */});
+  }).catch(function(){/* Counters stay "—" rather than showing an invented number. */});
 })();
 </script>
 </body>

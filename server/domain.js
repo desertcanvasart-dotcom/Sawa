@@ -1,4 +1,6 @@
 // Pure business rules: pricing, status, deposits. No DB, no HTTP — easy to test.
+import { zonedDateTimeToUtc } from "./tz.js";
+
 export const DEFAULT_GO_AHEAD = 4;
 export const DEFAULT_DAY_TOUR_DEPOSIT = 10;
 export const DEFAULT_PACKAGE_DEPOSIT = 20;
@@ -62,9 +64,15 @@ export function packagePriceFor(product, departure, seats, { roomingType = "doub
   return Math.round(base + tierSupplement + singleSupplement);
 }
 
+// The day before departure. This is pure calendar arithmetic — no instant, no
+// zone — so it is done wholly in UTC. The previous version built a LOCAL noon
+// Date, stepped back a local day, then read it back with toISOString(), which
+// is UTC: at offsets beyond +12 local noon is already the previous day in UTC,
+// so the balance fell due a day early.
 export function balanceDueDate(date) {
-  const d = new Date(`${date}T12:00:00`);
-  d.setDate(d.getDate() - 1);
+  const d = new Date(`${date}T00:00:00Z`);
+  if (Number.isNaN(d.getTime())) return date;
+  d.setUTCDate(d.getUTCDate() - 1);
   return d.toISOString().slice(0, 10);
 }
 
@@ -87,10 +95,12 @@ export function bookingClosed(departure, product, nowMs = Date.now()) {
   const startStr = departure.startDate || departure.date;
   if (!startStr) return false;
   const cutoffHours = Number(product?.bookingCutoffHours ?? 24);
-  const time = departure.time && /^\d{2}:\d{2}/.test(departure.time) ? departure.time : "08:00";
-  const start = new Date(`${startStr}T${time}:00`);
-  if (isNaN(start)) return false;
-  const deadline = start.getTime() - cutoffHours * 3600 * 1000;
+  // A departure's date+time is Egyptian local time, NOT the server's — resolving
+  // it with `new Date(...)` made the cutoff depend on the host's timezone and
+  // fire hours late in production. See server/tz.js.
+  const start = zonedDateTimeToUtc(startStr, departure.time);
+  if (Number.isNaN(start)) return false;
+  const deadline = start - cutoffHours * 3600 * 1000;
   return nowMs > deadline;
 }
 

@@ -40,6 +40,19 @@ test("seatsTotal sums pledge seats", () => {
   assert.equal(seatsTotal([{ seats: 2 }, { seats: 3 }]), 5);
   assert.equal(seatsTotal([]), 0);
 });
+test("seatsTotal excludes cancelled pledges", () => {
+  // A cancelled booking has released its seats. Counting it would overstate
+  // capacity AND quote a cheaper live price than the server then charges, so
+  // every seat count — server or client — has to honour this.
+  assert.equal(seatsTotal([{ seats: 2 }, { seats: 3, status: "cancelled" }]), 2);
+  assert.equal(seatsTotal([{ seats: 4, status: "cancelled" }]), 0);
+  assert.equal(seatsTotal([{ seats: 2, status: "confirmed" }, { seats: 1, status: "paid" }]), 3);
+});
+test("cancelled pledges don't move the live price or the go-ahead status", () => {
+  const withCancelled = [{ seats: 3 }, { seats: 6, status: "cancelled" }];
+  assert.equal(livePriceFor(dayTour, seatsTotal(withCancelled)), livePriceFor(dayTour, 3));
+  assert.equal(statusFor({ ...dayTour, status: "open" }, withCancelled), "open");
+});
 test("livePriceFor: published at min, break at max, monotonic, bounded", () => {
   assert.equal(livePriceFor(dayTour, 4), 75);
   assert.equal(livePriceFor(dayTour, 10), 58);
@@ -70,6 +83,23 @@ test("packagePriceFor: base + tier + single supplement", () => {
 test("balanceDueDate is the day before", () => {
   assert.equal(balanceDueDate("2026-07-10"), "2026-07-09");
   assert.equal(balanceDueDate("2026-01-01"), "2025-12-31");
+  assert.equal(balanceDueDate("2026-03-01"), "2026-02-28"); // non-leap year
+  assert.equal(balanceDueDate("2028-03-01"), "2028-02-29"); // leap year
+});
+test("balanceDueDate does not shift with the host timezone", () => {
+  // Regression: local-noon arithmetic read back through toISOString() (UTC) put
+  // the balance a day early at offsets beyond +12 — and the frontend runs this
+  // in the VIEWER's timezone, so travellers in NZ/Fiji/Samoa saw the wrong date.
+  const previous = process.env.TZ;
+  try {
+    for (const tz of ["Africa/Cairo", "UTC", "America/Los_Angeles", "Pacific/Auckland", "Pacific/Kiritimati"]) {
+      process.env.TZ = tz;
+      assert.equal(balanceDueDate("2026-01-01"), "2025-12-31", `shifted under TZ=${tz}`);
+      assert.equal(balanceDueDate("2026-07-10"), "2026-07-09", `shifted under TZ=${tz}`);
+    }
+  } finally {
+    if (previous === undefined) delete process.env.TZ; else process.env.TZ = previous;
+  }
 });
 test("computePledgePricing day tour: total + 10% deposit", () => {
   const p = computePledgePricing({ ...dayTour }, null, { seats: 4 });
@@ -95,23 +125,63 @@ test("capacity boundary: max seats -> break price", () => {
 });
 
 // ---- Phase B: booking cutoff ----
+// These use explicit ...Z instants. The previous versions built `nowMs` with
+// `new Date("2026-07-10T06:00:00")` — the SAME machine-local parse the function
+// itself used, so they stayed self-consistent in any timezone and proved
+// nothing about when the cutoff actually fires.
 test("bookingClosed: open well before cutoff, closed inside it", () => {
   const dep = { date: "2026-07-10", time: "08:00", startDate: null };
   const product = { bookingCutoffHours: 24 };
-  // 5 days before -> open
-  assert.equal(bookingClosed(dep, product, new Date("2026-07-05T08:00:00").getTime()), false);
-  // 2 hours before start, cutoff 24h -> closed
-  assert.equal(bookingClosed(dep, product, new Date("2026-07-10T06:00:00").getTime()), true);
-  // exactly at the 24h deadline boundary - 1 min -> open
-  assert.equal(bookingClosed(dep, product, new Date("2026-07-09T07:59:00").getTime()), false);
+  // 08:00 Cairo on 2026-07-10 is 05:00Z (EEST, UTC+3); deadline is 2026-07-09T05:00Z.
+  assert.equal(bookingClosed(dep, product, Date.parse("2026-07-05T08:00:00Z")), false);
+  assert.equal(bookingClosed(dep, product, Date.parse("2026-07-09T04:59:00Z")), false);
+  assert.equal(bookingClosed(dep, product, Date.parse("2026-07-09T05:01:00Z")), true);
+  assert.equal(bookingClosed(dep, product, Date.parse("2026-07-10T03:00:00Z")), true);
+});
+test("bookingClosed: the cutoff is Egyptian local time, not the server's", () => {
+  // Regression: resolving the departure in the host's timezone made a UTC server
+  // (Railway's default) close bookings 3 hours late — 21h before an 08:00 Cairo
+  // departure under a 24h rule, inside the window reserved for the guide/vehicle.
+  const dep = { date: "2026-07-10", time: "08:00" };
+  const product = { bookingCutoffHours: 24 };
+  const justClosed = Date.parse("2026-07-09T05:01:00Z");
+  const stillOpen = Date.parse("2026-07-09T04:59:00Z");
+  const previous = process.env.TZ;
+  try {
+    for (const tz of ["Africa/Cairo", "UTC", "America/New_York", "Pacific/Auckland"]) {
+      process.env.TZ = tz;
+      assert.equal(bookingClosed(dep, product, justClosed), true, `should be closed under TZ=${tz}`);
+      assert.equal(bookingClosed(dep, product, stillOpen), false, `should be open under TZ=${tz}`);
+    }
+  } finally {
+    if (previous === undefined) delete process.env.TZ; else process.env.TZ = previous;
+  }
+});
+test("bookingClosed: winter departures use EET (+2), not a hardcoded offset", () => {
+  // Egypt reinstated DST in 2023, so the offset is +2 in January and +3 in July.
+  const dep = { date: "2026-01-15", time: "08:00" };
+  const product = { bookingCutoffHours: 24 };
+  // 08:00 Cairo in winter is 06:00Z; deadline 2026-01-14T06:00Z.
+  assert.equal(bookingClosed(dep, product, Date.parse("2026-01-14T05:59:00Z")), false);
+  assert.equal(bookingClosed(dep, product, Date.parse("2026-01-14T06:01:00Z")), true);
 });
 test("bookingClosed: zero cutoff allows up to start", () => {
   const dep = { date: "2026-07-10", time: "08:00" };
-  assert.equal(bookingClosed(dep, { bookingCutoffHours: 0 }, new Date("2026-07-10T07:00:00").getTime()), false);
-  assert.equal(bookingClosed(dep, { bookingCutoffHours: 0 }, new Date("2026-07-10T09:00:00").getTime()), true);
+  assert.equal(bookingClosed(dep, { bookingCutoffHours: 0 }, Date.parse("2026-07-10T04:00:00Z")), false);
+  assert.equal(bookingClosed(dep, { bookingCutoffHours: 0 }, Date.parse("2026-07-10T06:00:00Z")), true);
 });
 test("bookingClosed: package uses startDate", () => {
   const dep = { startDate: "2026-08-01", endDate: "2026-08-04", time: "09:00" };
-  assert.equal(bookingClosed(dep, { bookingCutoffHours: 48 }, new Date("2026-07-20T00:00:00").getTime()), false);
-  assert.equal(bookingClosed(dep, { bookingCutoffHours: 48 }, new Date("2026-07-31T00:00:00").getTime()), true);
+  assert.equal(bookingClosed(dep, { bookingCutoffHours: 48 }, Date.parse("2026-07-20T00:00:00Z")), false);
+  assert.equal(bookingClosed(dep, { bookingCutoffHours: 48 }, Date.parse("2026-07-31T00:00:00Z")), true);
+});
+test("bookingClosed: a malformed stored time falls back instead of failing open", () => {
+  // departures.time is free text and nothing validates it on write. An
+  // unparseable value used to build an invalid Date, and the NaN comparison
+  // returned false — bookings for that departure never closed at all.
+  const product = { bookingCutoffHours: 24 };
+  const wellPastAnyCutoff = Date.parse("2026-07-10T12:00:00Z");
+  for (const time of ["08:00:00", "8:00", "", null, undefined, "junk", "25:61"]) {
+    assert.equal(bookingClosed({ date: "2026-07-10", time }, product, wellPastAnyCutoff), true, `time=${time}`);
+  }
 });
