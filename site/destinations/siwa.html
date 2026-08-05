@@ -220,8 +220,12 @@ footer .logo .nm i{color:var(--gold)}
 .rv.in{opacity:1;transform:none;filter:none}
 [data-d="1"]{transition-delay:.08s}[data-d="2"]{transition-delay:.16s}
 
-.overlay{position:fixed;inset:0;z-index:70;background:rgba(23,50,58,.92);backdrop-filter:blur(24px);display:flex;flex-direction:column;justify-content:center;padding:0 32px;opacity:0;pointer-events:none;transition:opacity .5s var(--ease)}
-.overlay.open{opacity:1;pointer-events:auto}
+/* `visibility:hidden` (not just opacity) is what keeps the closed menu out of
+   the tab order and the accessibility tree; /assets/sawa.js adds `inert` on top
+   for browsers that support it. Without this a desktop screen-reader user still
+   met a "Close menu" button and a second copy of the nav links. */
+.overlay{position:fixed;inset:0;z-index:70;background:rgba(23,50,58,.92);backdrop-filter:blur(24px);display:flex;flex-direction:column;justify-content:center;padding:0 32px;opacity:0;pointer-events:none;visibility:hidden;transition:opacity .5s var(--ease),visibility 0s linear .5s}
+.overlay.open{opacity:1;pointer-events:auto;visibility:visible;transition:opacity .5s var(--ease),visibility 0s}
 .overlay a{font-family:'Fraunces',serif;font-size:2rem;color:var(--cream);padding:14px 0;border-bottom:1px solid rgba(247,243,234,.12)}
 .overlay .close{position:absolute;top:26px;right:26px;width:48px;height:48px;border-radius:999px;background:rgba(247,243,234,.1);border:0;color:var(--cream);cursor:pointer}
 .overlay .close svg{width:22px;height:22px}
@@ -393,11 +397,8 @@ footer .logo .nm i{color:var(--gold)}
   var nav=document.getElementById('nav');
   var onScroll=function(){nav.classList.toggle('on-hero',window.scrollY<window.innerHeight*0.6);};
   window.addEventListener('scroll',onScroll,{passive:true});onScroll();
-  var ov=document.getElementById('overlay');
-  document.getElementById('open').onclick=function(){ov.classList.add('open');document.body.style.overflow='hidden';};
-  var closeMenu=function(){ov.classList.remove('open');document.body.style.overflow='';};
-  document.getElementById('close').onclick=closeMenu;
-  ov.querySelectorAll('a').forEach(function(a){a.onclick=closeMenu;});
+  /* The mobile menu now lives in /assets/sawa.js — one implementation that also
+     applies inert, aria-expanded and focus handling when it opens and closes. */
   var io=new IntersectionObserver(function(es){es.forEach(function(e){if(!e.isIntersecting)return;e.target.classList.add('in');e.target.querySelectorAll('[data-fill]').forEach(function(b){b.style.width=b.dataset.fill;});io.unobserve(e.target);});},{threshold:.14,rootMargin:'0px 0px -6% 0px'});
   document.querySelectorAll('.rv').forEach(function(el){io.observe(el);});
 </script>
@@ -410,7 +411,7 @@ footer .logo .nm i{color:var(--gold)}
   var MO=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   var STOP={the:1,a:1,an:1,of:1,and:1,or:1},CITY={Cairo:'cairo',Luxor:'luxor',Aswan:'aswan'};
   function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
-  function fmt(d){var t=new Date(d+'T00:00:00');if(isNaN(t))return '';return t.getDate()+' '+MO[t.getMonth()];}
+  function fmt(d){var t=new Date(d+'T00:00:00');if(isNaN(t))return '';return t.getDate()+' '+MO[t.getMonth()]+' '+t.getFullYear();}
   function slugify(s){return String(s==null?'':s).normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/&/g,' ').replace(/[^a-z0-9]+/g,' ').trim().split(/\s+/).filter(function(w){return w&&!STOP[w];}).join('-');}
   function tourSlug(p){var isPkg=(p.type||'day_tour')==='package';var s=slugify(p.title);if(!isPkg&&p.city){var c=CITY[p.city]||slugify(p.city);if(c&&s.indexOf(c)<0)s+='-from-'+c;}return s||String(p.id||'');}
   function MATCH(p){ return false; }
@@ -422,7 +423,10 @@ footer .logo .nm i{color:var(--gold)}
     var cards=products.slice(0,3).map(function(p){
       var isPkg=p.type==='package';
       var list=(byP[p.id]||[]).slice().sort(function(a,b){return a.date<b.date?-1:1;});
-      var next=list.filter(function(d){return new Date(d.date+'T00:00:00')>=today;})[0]||list[0];
+      /* No `|| list[0]` fallback: when every date on a tour has passed, falling
+         back to the first one printed an expired departure as the next one.
+         With no upcoming date the card reads "Multiple dates" instead. */
+      var next=list.filter(function(d){return new Date(d.date+'T00:00:00')>=today;})[0]||null;
       var img=(p.images&&p.images[0]&&p.images[0].url)||'';
       var price=(next&&next.livePrice)||p.publishedRate||p.breakPrice||'';
       var min=(next&&next.minSeats)||p.minSeats||4;
@@ -432,12 +436,13 @@ footer .logo .nm i{color:var(--gold)}
       var link='/'+(isPkg?'package':'tour')+'/'+tourSlug(p);
       var badge=confirmed?'<span class="badge go"><span class="d"></span>GoAhead</span>':'<span class="badge form">'+(toGo===1?'1 to GoAhead':toGo+' to GoAhead')+'</span>';
       var st=confirmed?'<span class="st ok">Confirmed</span>':'<span class="st">'+(toGo===1?'1 more to confirm':toGo+' more to confirm')+'</span>';
-      return '<a href="'+link+'" class="tcard rv in"><div class="core"><div class="media"><img src="'+esc(img)+'" alt="'+esc(p.title)+'" loading="lazy" />'+badge+(price!==''?'<span class="price"><b class="tnum">$'+price+'</b><small>per person</small></span>':'')+'</div><div class="body"><span class="rt">'+esc(p.city)+' \u00b7 '+esc(p.duration||'')+'</span><h3>'+esc(p.title)+'</h3><div class="info"><span>'+CAL+(next?esc(fmt(next.date)):'Multiple dates')+'</span><span>'+USR+esc(p.guide||'Verified operator')+'</span></div><div class="prog"><div class="pt"><b>'+joined+' of '+min+' joined</b>'+st+'</div><div class="pbar '+(confirmed?'gold':'teal')+'"><i style="width:'+pct+'"></i></div></div><div class="foot"><div class="when">from<b>$'+price+' / person</b></div><span class="join">View'+JN+'</span></div></div></div></a>';
+      return '<a href="'+link+'" class="tcard rv in"><div class="core"><div class="media"><img src="'+esc(img)+'" alt="'+esc(p.title)+'" loading="lazy" />'+badge+(price!==''?'<span class="price"><b class="tnum">$'+price+'</b><small>USD &middot; per person</small></span>':'')+'</div><div class="body"><span class="rt">'+esc(p.city)+' \u00b7 '+esc(p.duration||'')+'</span><h3>'+esc(p.title)+'</h3><div class="info"><span>'+CAL+(next?esc(fmt(next.date)):'Multiple dates')+'</span><span>'+USR+esc(p.guide||'Verified operator')+'</span></div><div class="prog"><div class="pt"><b>'+joined+' of '+min+' joined</b>'+st+'</div><div class="pbar '+(confirmed?'gold':'teal')+'"><i style="width:'+pct+'"></i></div></div><div class="foot"><div class="when">from<b>$'+price+' USD / person</b></div><span class="join">View'+JN+'</span></div></div></div></a>';
     });
     if(cards.length){grid.innerHTML=cards.join('');}
     else{grid.innerHTML='<div class="notours"><p>No shared departures are forming here right now \u2014 be the first to start one.</p><a href="/departures" class="btn gold">Browse all Egypt departures <span class="chip">'+JN.replace('class="c"','').replace('</span>','')+'</span></a></div>';}
   }).catch(function(){});
 })();
 </script>
+<script src="/assets/sawa.js"></script>
 </body>
 </html>

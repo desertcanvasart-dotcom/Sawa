@@ -2,9 +2,20 @@
 // frontend already expects, so the API response stays byte-for-byte compatible
 // and no frontend changes are needed in Phase 1.
 
+// departures.date / start_date / end_date and pledges.balance_due_date are all
+// plain DATE columns — a calendar day, no instant and no zone. `pg` hands them
+// back as a Date at LOCAL midnight, so reading them with toISOString() (which is
+// UTC) moved every date one day earlier on any host east of UTC: a departure
+// stored as 2026-10-07 was published, priced and expired as 2026-10-06 on a
+// Cairo machine. Production runs UTC, where the two happen to agree, which is
+// why this stayed hidden. Read the local calendar fields instead — same fix as
+// balanceDueDate in domain.js, from the other direction.
 function isoDate(value) {
   if (!value) return value ?? null;
-  if (value instanceof Date) return value.toISOString().slice(0, 10);
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) return null;
+    return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
+  }
   return String(value).slice(0, 10);
 }
 

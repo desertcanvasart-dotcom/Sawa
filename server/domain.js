@@ -89,6 +89,21 @@ export function enrichDeparture(departure) {
   };
 }
 
+// Has this departure's start already come and gone? Nothing expired departures
+// off the public catalogue before, so a date that had already left showed up as
+// a live card with a seat counter and a "Reserve a seat" button — the cutoff in
+// bookingClosed() rejected the booking only after the visitor had filled the
+// form in. Egyptian local time, like every other date on a departure (tz.js).
+export function departureStarted(departure, nowMs = Date.now()) {
+  const startStr = departure.startDate || departure.date;
+  if (!startStr) return false;
+  const start = zonedDateTimeToUtc(startStr, departure.time);
+  // An unparseable date is left visible rather than silently disappearing —
+  // a bad row is an ops problem, not a reason to hide inventory.
+  if (Number.isNaN(start)) return false;
+  return nowMs >= start;
+}
+
 // Booking cutoff: returns true if bookings are CLOSED for this departure now.
 // cutoffHours comes from the tour product (default 24). nowMs lets tests inject time.
 export function bookingClosed(departure, product, nowMs = Date.now()) {

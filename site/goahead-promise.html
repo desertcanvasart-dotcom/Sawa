@@ -53,7 +53,7 @@
     <div class="crumbs on-dark rv"><a href="/">Home</a><span class="sep">/</span><span>The GoAhead promise</span></div>
     <span class="eyebrow on-dark rv" style="margin-top:20px"><span class="live"></span>No group, no charge</span>
     <h1 class="rv">Your trip only<br>costs you when it's <span class="gld ital">real</span>.</h1>
-    <p class="lede rv">Sawa was built to end one specific disappointment: paying for a group tour that never actually runs. So we made the rule simple. You reserve your seat for free. You're only charged when four travelers confirm the same date and the GoAhead lights up. If it never does, you pay nothing — and any hold is released in full.</p>
+    <p class="lede rv">Sawa was built to end one specific disappointment: paying for a group tour that never actually runs. So we made the rule simple. You reserve your seat for free. Payment only becomes due when four travelers confirm the same date and the GoAhead lights up — a deposit then, the balance before you travel. If the date never confirms, you pay nothing — and any hold is released in full. All prices are in US dollars (USD).</p>
     <div class="hero-cta rv" data-d="1">
       <a href="/departures" class="btn gold">Browse open departures <span class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></a>
       <a href="#flow" class="btn light">See how it's protected <span class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg></span></a>
@@ -73,7 +73,11 @@
       <div class="feat rv" data-d="1">
         <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div>
         <h3>Pay at GoAhead</h3>
-        <p>The moment a fourth traveler joins, the date locks and your card is charged — not a minute before. That's the only point money moves.</p>
+        <!-- This said "your card is charged" full stop, which reads as the whole
+             per-person price leaving your account at GoAhead. The booking
+             conditions take a deposit at GoAhead with the balance before
+             departure, so the two pages now describe the same thing. -->
+        <p>The moment a fourth traveler joins, the date locks and your deposit falls due — not a minute before. The balance follows before you travel, on the date shown on your confirmation.</p>
       </div>
       <div class="feat rv" data-d="2">
         <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9 9 0 0 0-6.4 2.6L3 8"/><path d="M3 3v5h5"/></svg></div>
@@ -94,24 +98,27 @@
     </div>
     <div class="two-col" style="margin-top:54px">
       <div class="steps rv">
-        <div class="step" style="border-color:rgba(247,243,234,.16)"><div class="idx" style="color:var(--gold)">01</div><div><h3 style="color:var(--cream)">You reserve a seat — €0 taken</h3><p style="color:rgba(247,243,234,.72)">You pick an open departure and reserve. We may place a temporary authorisation hold to confirm the card is valid, but <strong style="color:var(--cream)">no money leaves your account</strong>. You can cancel anytime while the group is still forming.</p></div></div>
+        <div class="step" style="border-color:rgba(247,243,234,.16)"><div class="idx" style="color:var(--gold)">01</div><div><h3 style="color:var(--cream)">You reserve a seat — $0 USD taken</h3><p style="color:rgba(247,243,234,.72)">You pick an open departure and reserve. We may place a temporary authorisation hold to confirm the card is valid, but <strong style="color:var(--cream)">no money leaves your account</strong>. You can cancel anytime while the group is still forming.</p></div></div>
         <div class="step" style="border-color:rgba(247,243,234,.16)"><div class="idx" style="color:var(--gold)">02</div><div><h3 style="color:var(--cream)">The group fills in real time</h3><p style="color:rgba(247,243,234,.72)">You watch the seat counter climb as travelers from across Sawa's operators join the same date. You'll get an email the moment it's one seat away.</p></div></div>
-        <div class="step" style="border-color:rgba(247,243,234,.16)"><div class="idx" style="color:var(--gold)">03</div><div><h3 style="color:var(--cream)">GoAhead — the date locks, you're charged</h3><p style="color:rgba(247,243,234,.72)">When the fourth traveler joins, the departure is confirmed. Only now is your card charged the per-person price you saw. The operator is notified to run the tour.</p></div></div>
+        <div class="step" style="border-color:rgba(247,243,234,.16)"><div class="idx" style="color:var(--gold)">03</div><div><h3 style="color:var(--cream)">GoAhead — the date locks, payment begins</h3><p style="color:rgba(247,243,234,.72)">When the fourth traveler joins, the departure is confirmed and the operator is notified to run the tour. Only now does payment become due: a deposit on the per-person price you saw — typically 10% on a day tour and 20% on a multi-day package — with the balance due before departure. If the date confirms within 30 days of departure, the full amount is due at confirmation. Your exact figures and balance date are shown before you reserve and on your confirmation.</p></div></div>
         <div class="step" style="border-color:rgba(247,243,234,.16)"><div class="idx" style="color:var(--gold)">04</div><div><h3 style="color:var(--cream)">It never fills? Auto-cancel, full refund</h3><p style="color:rgba(247,243,234,.72)">If the deadline passes without four travelers, the date is cancelled for everyone and any hold is released in full within your bank's normal window. You're free to join another departure.</p></div></div>
       </div>
       <div class="panel dark rv" data-d="1" style="position:sticky;top:120px">
         <div class="panel-in">
-          <span class="badge go" style="position:relative;z-index:2"><span class="d"></span>Live departure</span>
+          <!-- Labelled "Live departure" but every figure here is hardcoded — the
+               seat count, the date and the price never changed and did not match
+               the real catalogue. Presented as the worked example it is. -->
+          <span class="badge go" style="position:relative;z-index:2"><span class="d"></span>Example departure</span>
           <h3 class="serif" style="font-family:'Fraunces',serif;font-weight:500;font-size:1.5rem;margin-top:16px;position:relative;z-index:2">Nile Cruise · Luxor to Aswan</h3>
-          <p style="color:rgba(247,243,234,.72);font-size:.95rem;margin-top:6px;position:relative;z-index:2">Departs 01 Oct · led by Nile Valley Travel</p>
+          <p style="color:rgba(247,243,234,.72);font-size:.95rem;margin-top:6px;position:relative;z-index:2">Example dates · led by a verified operator</p>
           <div style="background:rgba(247,243,234,.06);border:1px solid rgba(247,243,234,.12);border-radius:var(--r-md);padding:20px;margin-top:22px;position:relative;z-index:2">
-            <div style="display:flex;justify-content:space-between;font-size:.86rem;color:rgba(247,243,234,.8)"><span>Your seat</span><strong style="color:var(--cream)">Reserved · €0 charged</strong></div>
+            <div style="display:flex;justify-content:space-between;font-size:.86rem;color:rgba(247,243,234,.8)"><span>Your seat</span><strong style="color:var(--cream)">Reserved · $0 USD charged</strong></div>
             <div class="pbar gold" style="margin-top:14px;height:8px"><i data-fill="75%"></i></div>
             <div style="display:flex;justify-content:space-between;font-size:.78rem;color:rgba(247,243,234,.7);margin-top:10px"><span><strong style="color:var(--cream)">3</strong> of 4 joined</span><span>1 seat to GoAhead</span></div>
           </div>
           <div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:20px;position:relative;z-index:2">
-            <span style="font-size:.86rem;color:rgba(247,243,234,.7)">Charged only at GoAhead</span>
-            <strong class="serif" style="font-family:'Fraunces',serif;font-size:1.6rem;color:var(--gold)">$740</strong>
+            <span style="font-size:.86rem;color:rgba(247,243,234,.7)">Due only from GoAhead</span>
+            <strong class="serif" style="font-family:'Fraunces',serif;font-size:1.6rem;color:var(--gold)">$740 USD</strong>
           </div>
         </div>
       </div>
@@ -175,7 +182,7 @@
     </div>
     <div class="rv" data-d="1">
       <div class="acc">
-        <div class="item"><button class="q">When exactly is my card charged?<span class="pm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span></button><div class="a"><p>Only at GoAhead — the moment the fourth traveler joins your date. Until then you've reserved for free, and you can cancel with one click.</p></div></div>
+        <div class="item"><button class="q">When exactly do I pay?<span class="pm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span></button><div class="a"><p>Not before GoAhead — the moment the fourth traveler joins your date. Payment then comes in two parts: a deposit at GoAhead (typically 10% on a day tour, 20% on a multi-day package) and the balance before departure. If your date confirms within 30 days of departure, the full amount is due at confirmation. Until GoAhead you've reserved for free, and you can cancel with one click. All amounts are in US dollars (USD).</p></div></div>
         <div class="item"><button class="q">What if the group never reaches four?<span class="pm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span></button><div class="a"><p>The departure auto-cancels at its deadline and you owe nothing. Any authorisation hold is released in full by your bank, and we'll suggest similar dates that are closer to confirming.</p></div></div>
         <div class="item"><button class="q">Can I get a refund after GoAhead?<span class="pm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span></button><div class="a"><p>Once a date is confirmed it follows the operator's cancellation policy, which is shown on every departure before you reserve. Most offer a full refund up to a set number of days before departure.</p></div></div>
         <div class="item"><button class="q">Who actually runs my tour?<span class="pm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span></button><div class="a"><p>An operator registered with the Egyptian Ministry of Tourism &amp; Antiquities that we've verified — name, licence and rating shown on the departure. Sawa coordinates the group and your payment; the operator delivers the experience on the ground.</p></div></div>
@@ -244,14 +251,14 @@
     <div class="fbot">
       <span>© 2026 Sawa Tours. Shared departures, confirmed together.</span>
       <div class="lks"><a href="/privacy">Privacy policy</a><a href="/terms">Terms and conditions</a></div>
-      <!-- TODO(sawa): replace these three placeholders with real profile URLs
-           (<a href="https://instagram.com/..." ...>), or delete the block before
-           launch. They were href="#", which scroll-jumped to the top of the page
-           and announced as working links; they are now inert and visibly muted. -->
+      <!-- Instagram and Facebook are not live yet, so they are simply absent.
+           A muted placeholder icon still lands in the accessibility tree as
+           something a screen reader reads out and a keyboard user passes over,
+           for a destination that does not exist. Add them back as real <a href>
+           links once the profiles are up. WhatsApp IS live and matches
+           BRAND.whatsapp in server/brand.js. -->
       <div class="socials">
-        <span class="soon" role="img" aria-label="Instagram — not yet available"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none"/></svg></span>
-        <span class="soon" role="img" aria-label="Facebook — not yet available"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M14 9h3V6h-3c-2 0-3 1-3 3v2H9v3h2v6h3v-6h2.5l.5-3H14V9.5c0-.4.2-.5.6-.5Z"/></svg></span>
-        <span class="soon" role="img" aria-label="WhatsApp — not yet available"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-8.5 15.2L2 22l4.9-1.4A10 10 0 1 0 12 2Zm5.4 14.1c-.2.6-1.3 1.2-1.8 1.2-.5.1-1 .1-1.7-.1-.4-.1-.9-.3-1.6-.6a9 9 0 0 1-3.4-3c-.3-.4-.8-1.1-.8-2.1s.5-1.5.7-1.7c.2-.2.4-.3.6-.3h.4c.2 0 .4 0 .5.4l.7 1.6c.1.1 0 .3 0 .4l-.3.4c-.2.2-.3.3-.1.5.5.9 1 1.3 1.8 1.8.2.1.4.1.5 0l.5-.6c.2-.2.3-.2.5-.1l1.5.7c.2.1.4.2.4.3.1.1.1.6-.1 1Z"/></svg></span>
+        <a href="https://wa.me/201092847613" rel="noopener" target="_blank" aria-label="Message Sawa Tours on WhatsApp"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 0 0-8.5 15.2L2 22l4.9-1.4A10 10 0 1 0 12 2Zm5.4 14.1c-.2.6-1.3 1.2-1.8 1.2-.5.1-1 .1-1.7-.1-.4-.1-.9-.3-1.6-.6a9 9 0 0 1-3.4-3c-.3-.4-.8-1.1-.8-2.1s.5-1.5.7-1.7c.2-.2.4-.3.6-.3h.4c.2 0 .4 0 .5.4l.7 1.6c.1.1 0 .3 0 .4l-.3.4c-.2.2-.3.3-.1.5.5.9 1 1.3 1.8 1.8.2.1.4.1.5 0l.5-.6c.2-.2.3-.2.5-.1l1.5.7c.2.1.4.2.4.3.1.1.1.6-.1 1Z"/></svg></a>
       </div>
     </div>
   </div>

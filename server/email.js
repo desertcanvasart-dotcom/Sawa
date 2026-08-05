@@ -206,6 +206,72 @@ export function listingRejectedEmail({ to, fullName, title, reason }) {
   return { to, subject, html, text, kind: "listing_rejected" };
 }
 
+// ---- Operator verification applications (site/verify.html) -----------------
+//
+// The application used to be handed to the visitor's own mail client via a
+// mailto: link, which meant an operator on a machine with no mail app
+// configured filled the whole form in — licence number included — and watched
+// it evaporate. It now posts over HTTPS and produces two emails: one to the
+// team, and a copy back to the applicant so they hold a record of what they
+// sent.
+
+// The plain-text body is shared by both emails and is also what the form offers
+// as a downloadable copy, so an applicant always ends up with the same document.
+export function operatorApplicationText(app) {
+  return [
+    `Company: ${app.company}`,
+    `Contact: ${app.contactName}`,
+    `City / base: ${app.city}`,
+    `Email: ${app.email}`,
+    `WhatsApp / phone: ${app.phone || "—"}`,
+    `Tourism licence: ${app.licence}`,
+    `Regions: ${app.regions || "—"}`,
+    "",
+    "About their tours:",
+    app.about || "—",
+  ].join("\n");
+}
+
+const applicationRows = (app) => `
+  <p style="background:#f2ebdc;border-radius:10px;padding:14px;font-size:14px;line-height:1.7">
+    <strong>Company:</strong> ${esc(app.company)}<br/>
+    <strong>Contact:</strong> ${esc(app.contactName)}<br/>
+    <strong>City / base:</strong> ${esc(app.city)}<br/>
+    <strong>Email:</strong> ${esc(app.email)}<br/>
+    <strong>WhatsApp / phone:</strong> ${esc(app.phone || "—")}<br/>
+    <strong>Tourism licence:</strong> ${esc(app.licence)}<br/>
+    <strong>Regions:</strong> ${esc(app.regions || "—")}
+  </p>
+  <p style="font-size:14px"><strong>About their tours</strong><br/>${esc(app.about || "—").replace(/\n/g, "<br/>")}</p>`;
+
+export function operatorApplicationEmail({ to, reference, ...app }) {
+  const subject = `Operator application — ${app.company} (${reference})`;
+  const text = `New operator application (${reference})\n\n${operatorApplicationText(app)}`;
+  const html = shell(
+    `Operator application — ${esc(app.company)}`,
+    `<p style="font-size:13px;color:#56524a">Reference ${esc(reference)}</p>${applicationRows(app)}`
+  );
+  return { to, subject, html, text, kind: "operator_application" };
+}
+
+export function operatorApplicationReceiptEmail({ to, reference, ...app }) {
+  const subject = `We've got your Sawa operator application (${reference})`;
+  const text =
+    `Hi ${app.contactName || ""},\n\nThanks — we've received your application to list on Sawa Tours. ` +
+    `Your reference is ${reference}. We verify licences with the Ministry of Tourism & Antiquities and ` +
+    `usually come back within 2–4 business days.\n\nHere's what you sent us:\n\n${operatorApplicationText(app)}\n\n` +
+    `If anything is wrong, just reply to this email.`;
+  const html = shell(
+    "Application received",
+    `<p>Thanks — we've received your application to list on Sawa Tours.</p>
+     <p>Your reference is <strong>${esc(reference)}</strong>. We verify licences with the Ministry of Tourism &amp; Antiquities and usually come back within <strong>2–4 business days</strong>.</p>
+     <p style="font-size:14px"><strong>Here's what you sent us</strong></p>
+     ${applicationRows(app)}
+     <p style="font-size:13px;color:#56524a">If anything is wrong, just reply to this email.</p>`
+  );
+  return { to, subject, html, text, kind: "operator_application_receipt" };
+}
+
 export function cancellationEmail({ to, route, dateLabel }) {
   const subject = `Cancellation — ${route}`;
   const text = `This confirms your booking for ${route} on ${dateLabel} has been cancelled.`;

@@ -25,6 +25,7 @@ const MIGRATIONS = [
   { name: "014_traveler_requests", file: "schema_014_traveler_requests.sql" },
   { name: "015_operating_days", file: "schema_015_operating_days.sql" },
   { name: "016_booking_code_unique", file: "schema_016_booking_code_unique.sql" },
+  { name: "017_operator_applications", file: "schema_017_operator_applications.sql" },
 ];
 
 async function main() {

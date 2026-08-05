@@ -319,9 +319,18 @@
 .sx .rv.in{opacity:1;transform:none;filter:none}
 .sx [data-d="1"]{transition-delay:.08s}.sx [data-d="2"]{transition-delay:.16s}.sx [data-d="3"]{transition-delay:.24s}.sx [data-d="4"]{transition-delay:.32s}
 
-/* mobile overlay */
-.sx .overlay{position:fixed;inset:0;z-index:70;background:rgba(23,50,58,.92);backdrop-filter:blur(24px);display:flex;flex-direction:column;justify-content:center;padding:0 32px;opacity:0;pointer-events:none;transition:opacity .5s var(--ease)}
-.sx .overlay.open{opacity:1;pointer-events:auto}
+/* Skip link — parked off-screen (not display:none, which would take it out of
+   the tab order entirely) and slid into view by SxNav's focus handler. */
+.sx .sx-skip{position:absolute;left:-999px;top:0;z-index:99;background:var(--teal);color:#fff;padding:10px 16px;border-radius:8px;font-weight:600}
+
+/* mobile overlay — `visibility:hidden` (not just opacity) is what takes the
+   closed menu out of the tab order and the accessibility tree in every browser;
+   `inert` in SxNav covers the same ground for browsers that support it. Without
+   this a desktop screen-reader user still met a "Close menu" button and a second
+   copy of the nav links. The visibility transition is delayed until the fade-out
+   finishes so the menu doesn't vanish mid-animation. */
+.sx .overlay{position:fixed;inset:0;z-index:70;background:rgba(23,50,58,.92);backdrop-filter:blur(24px);display:flex;flex-direction:column;justify-content:center;padding:0 32px;opacity:0;pointer-events:none;visibility:hidden;transition:opacity .5s var(--ease),visibility 0s linear .5s}
+.sx .overlay.open{opacity:1;pointer-events:auto;visibility:visible;transition:opacity .5s var(--ease),visibility 0s}
 .sx .overlay a{font-family:'Fraunces',serif;font-size:2rem;color:var(--cream);padding:14px 0;border-bottom:1px solid rgba(247,243,234,.12)}
 .sx .overlay .close{position:absolute;top:26px;right:26px;width:48px;height:48px;border-radius:999px;background:rgba(247,243,234,.1);border:0;color:var(--cream);cursor:pointer}
 .sx .overlay .close svg{width:22px;height:22px}
