@@ -219,8 +219,12 @@ footer .logo .nm i{color:var(--gold)}
 [data-d="1"]{transition-delay:.08s}[data-d="2"]{transition-delay:.16s}[data-d="3"]{transition-delay:.24s}
 
 /* overlay */
-.overlay{position:fixed;inset:0;z-index:70;background:rgba(23,50,58,.92);backdrop-filter:blur(24px);display:flex;flex-direction:column;justify-content:center;padding:0 32px;opacity:0;pointer-events:none;transition:opacity .5s var(--ease)}
-.overlay.open{opacity:1;pointer-events:auto}
+/* `visibility:hidden` (not just opacity) is what keeps the closed menu out of
+   the tab order and the accessibility tree; /assets/sawa.js adds `inert` on top
+   for browsers that support it. Without this a desktop screen-reader user still
+   met a "Close menu" button and a second copy of the nav links. */
+.overlay{position:fixed;inset:0;z-index:70;background:rgba(23,50,58,.92);backdrop-filter:blur(24px);display:flex;flex-direction:column;justify-content:center;padding:0 32px;opacity:0;pointer-events:none;visibility:hidden;transition:opacity .5s var(--ease),visibility 0s linear .5s}
+.overlay.open{opacity:1;pointer-events:auto;visibility:visible;transition:opacity .5s var(--ease),visibility 0s}
 .overlay a{font-family:'Fraunces',serif;font-size:2rem;color:var(--cream);padding:14px 0;border-bottom:1px solid rgba(247,243,234,.12)}
 .overlay .close{position:absolute;top:26px;right:26px;width:48px;height:48px;border-radius:999px;background:rgba(247,243,234,.1);border:0;color:var(--cream);cursor:pointer}
 .overlay .close svg{width:22px;height:22px}
@@ -309,7 +313,7 @@ footer .logo .nm i{color:var(--gold)}
     <div class="qstats">
       <div class="q"><b class="tnum">4</b><span>travelers minimum to confirm a departure</span></div>
       <div class="q"><b class="tnum">72%</b><span>of listed dates reach GoAhead</span></div>
-      <div class="q"><b class="tnum">$0</b><span>charged until your trip is confirmed</span></div>
+      <div class="q"><b class="tnum">$0 USD</b><span>charged until your trip is confirmed</span></div>
       <div class="q"><b class="tnum">31</b><span>Ministry-licensed Egyptian operators pooled</span></div>
     </div>
   </div>
@@ -551,11 +555,8 @@ footer .logo .nm i{color:var(--gold)}
 </footer>
 
 <script>
-  const ov=document.getElementById('overlay');
-  document.getElementById('open').onclick=()=>{ov.classList.add('open');document.body.style.overflow='hidden'};
-  const closeMenu=()=>{ov.classList.remove('open');document.body.style.overflow=''};
-  document.getElementById('close').onclick=closeMenu;
-  ov.querySelectorAll('a').forEach(a=>a.onclick=closeMenu);
+  /* The mobile menu now lives in /assets/sawa.js — one implementation that also
+     applies inert, aria-expanded and focus handling when it opens and closes. */
 
   const io=new IntersectionObserver((es)=>{
     es.forEach(e=>{
@@ -567,5 +568,6 @@ footer .logo .nm i{color:var(--gold)}
   },{threshold:.14,rootMargin:'0px 0px -6% 0px'});
   document.querySelectorAll('.rv').forEach(el=>io.observe(el));
 </script>
+<script src="/assets/sawa.js"></script>
 </body>
 </html>

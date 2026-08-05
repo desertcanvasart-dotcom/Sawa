@@ -134,6 +134,9 @@ function needsYear(date) {
   return date.getFullYear() !== new Date().getFullYear();
 }
 
+// `alwaysYear` is not just for payment deadlines: every date a traveller picks
+// from carries its year too. The catalogue already runs into the following
+// calendar year, and "Tue, Oct 7" beside a 2027 package is genuinely ambiguous.
 function formatDate(date, { alwaysYear = false } = {}) {
   const d = toDate(date);
   return new Intl.DateTimeFormat("en", {
@@ -205,9 +208,27 @@ function productFullyBooked(product) {
   return live.length > 0 && live.every(departureFull);
 }
 
-// Bookable dates only (not full, not cancelled).
+// Today in the visitor's own calendar, as "YYYY-MM-DD". Departure dates are
+// plain calendar dates, so they compare as strings.
+function todayIso() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+}
+
+// A date that has already left. The server drops these from the anonymous
+// bootstrap (see departureStarted in server/domain.js); this is the client-side
+// backstop that also covers the local dev snapshot and a signed-in agency
+// browsing the public catalogue. Deliberately coarser than the server rule —
+// only whole days that are already behind us — so the two can never disagree
+// about a departure leaving today.
+function departurePast(departure, today = todayIso()) {
+  const end = departure?.endDate || departure?.date;
+  return typeof end === "string" && end < today;
+}
+
+// Bookable dates only (not past, not full, not cancelled).
 function openDates(product) {
-  return (product.dates || []).filter((d) => d.status !== "cancelled" && !departureFull(d));
+  return (product.dates || []).filter((d) => d.status !== "cancelled" && !departureFull(d) && !departurePast(d));
 }
 
 function packagePriceFor(product, departure, seats, { roomingType = "double", tierId } = {}) {
@@ -495,6 +516,10 @@ function App() {
       ...product,
       dates: departures
         .filter((departure) => departure.tourProductId === product.id || (!isPackage(product) && departure.route === product.title))
+        // A departure that has already left is not a date anyone can join, and
+        // the tour page picks tour.dates[0] as its lead — so a stale row used to
+        // become the headline date on the detail page.
+        .filter((departure) => !departurePast(departure))
         .sort((a, b) => `${a.date}T${a.time || ""}`.localeCompare(`${b.date}T${b.time || ""}`)),
     }));
   }, [departures, visibleProducts]);
@@ -772,8 +797,12 @@ function App() {
 
   if (isLoading) {
     // The portal is a different shape entirely, so the catalogue skeleton would
-    // be a lie there; it keeps the neutral loader.
-    return isPortalRoute ? <LoadingScreen /> : <CatalogueSkeleton />;
+    // be a lie there; it keeps the neutral loader. So does any route that isn't
+    // going to render a catalogue at all — a mistyped URL used to announce
+    // "Loading departures…" and paint six tour-card skeletons on its way to the
+    // 404 page, promising a page that was never coming.
+    if (isPortalRoute || !showsCatalogue(path)) return <LoadingScreen label="Loading…" />;
+    return <CatalogueSkeleton />;
   }
 
   if (!isPortalRoute) {
@@ -1008,6 +1037,15 @@ function StaffPanel({ agencyName, currentUserId }) {
   );
 }
 
+// Which routes actually resolve to tour cards? Only these earn the catalogue
+// skeleton while the bootstrap loads — everything else (legal pages, the contact
+// page, a mistyped URL heading for the 404) gets a page-neutral loader.
+function showsCatalogue(p) {
+  const clean = (p || "/").replace(/\/+$/, "") || "/";
+  return clean === "/" || clean === "/tours" || clean === "/packages"
+    || clean.startsWith("/tour/") || clean.startsWith("/package/");
+}
+
 function pageFromPath(p) {
   const clean = (p || "/").replace(/\/+$/, "") || "/";
   if (clean === "/tours" || clean === "/packages") return "tours";
@@ -1039,31 +1077,82 @@ const SxLogoMark = () => (
 // Links point at the static editorial pages (served from /site) so the chrome is
 // identical across the whole site. Real <a href> = full navigation out of the SPA
 // back into the static pages; the SPA is only ever the tour-detail/booking body.
-const SX_NAV_LINKS = [["How it works", "/how-it-works"], ["Departures", "/departures"], ["Destinations", "/destinations"]];
+// Kept in step with the static pages' nav (site/*.html) — the detail page used to
+// drop "The Promise", so a visitor who arrived on a tour page lost the link to
+// the page that explains what they're being asked to trust.
+const SX_NAV_LINKS = [["How it works", "/how-it-works"], ["Departures", "/departures"], ["Destinations", "/destinations"], ["The Promise", "/goahead-promise"]];
+
+// The skip link the static pages all carry. It only becomes visible on focus,
+// and it targets the #main that SxChrome/TourDetailV2 put on their <main>.
+function SxSkipLink() {
+  return (
+    <a
+      className="sx-skip"
+      href="#main"
+      onFocus={(e) => { e.currentTarget.style.left = "12px"; }}
+      onBlur={(e) => { e.currentTarget.style.left = "-999px"; }}
+    >
+      Skip to content
+    </a>
+  );
+}
 
 function SxNav({ cta = ["Find a departure", "/departures"] }) {
   const [tight, setTight] = useState(false);
   const [menu, setMenu] = useState(false);
+  const overlayRef = useRef(null);
+  const openBtnRef = useRef(null);
+  const closeBtnRef = useRef(null);
   useEffect(() => {
     const onScroll = () => setTight(window.scrollY > 20);
     window.addEventListener("scroll", onScroll, { passive: true }); onScroll();
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
+  // The overlay is always in the DOM, so a closed menu has to be taken out of
+  // the tab order AND the accessibility tree — otherwise a desktop screen-reader
+  // user meets a "Close menu" button and a duplicate set of nav links that are
+  // nowhere on screen. CSS visibility does it everywhere; `inert` also blocks
+  // find-in-page where it's supported.
+  useEffect(() => {
+    const ov = overlayRef.current;
+    if (ov && "inert" in HTMLElement.prototype) ov.inert = !menu;
+    document.body.style.overflow = menu ? "hidden" : "";
+    return () => { document.body.style.overflow = ""; };
+  }, [menu]);
+  // Focus follows the menu: into it on open, back to the hamburger on close, so
+  // a keyboard user is never stranded behind an invisible layer. Escape closes.
+  useEffect(() => {
+    if (!menu) return;
+    closeBtnRef.current?.focus();
+    const onKey = (e) => { if (e.key === "Escape") closeMenu(); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [menu]);
+  // Focus moves back to the hamburger BEFORE the overlay goes inert — the other
+  // order leaves activeElement inside a hidden container and the next Tab
+  // restarts from the top of the document.
+  function closeMenu() {
+    openBtnRef.current?.focus();
+    setMenu(false);
+  }
   return (
     <>
+      <SxSkipLink />
       <div className="nav-shell">
         <nav className={`nav${tight ? " tight" : ""}`} aria-label="Primary">
           <a className="logo" href="/"><SxLogoMark /><span className="nm"><b>Sawa</b><i>Tours · Egypt</i></span></a>
           <div className="nav-links">{SX_NAV_LINKS.map(([l, to]) => <a key={to} href={to}>{l}</a>)}</div>
           <div className="nav-right">
             <a className="btn gold sm" href={cta[1]}>{cta[0]}<span className="chip"><SxArrow /></span></a>
-            <button className="menu-btn" aria-label="Open menu" onClick={() => setMenu(true)}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 7h16M4 12h16M4 17h16" /></svg></button>
+            <button ref={openBtnRef} className="menu-btn" aria-label="Open menu" aria-expanded={menu ? "true" : "false"} onClick={() => setMenu(true)}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 7h16M4 12h16M4 17h16" /></svg></button>
           </div>
         </nav>
       </div>
-      <div className={`overlay${menu ? " open" : ""}`}>
-        <button className="close" aria-label="Close menu" onClick={() => setMenu(false)}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg></button>
-        {SX_NAV_LINKS.map(([l, to]) => <a key={to} href={to}>{l}</a>)}
+      <div ref={overlayRef} className={`overlay${menu ? " open" : ""}`}>
+        <button ref={closeBtnRef} className="close" aria-label="Close menu" onClick={closeMenu}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg></button>
+        {/* Links navigate away, so just close — restoring focus would fight the
+            page load. */}
+        {SX_NAV_LINKS.map(([l, to]) => <a key={to} href={to} onClick={() => setMenu(false)}>{l}</a>)}
       </div>
     </>
   );
@@ -1090,7 +1179,7 @@ function SxChrome({ navigate, children }) {
   return (
     <>
       <div className="sx sx-chrome"><div className="grain" /><SxNav navigate={navigate} /></div>
-      <main className="public-shell sx-shell-body">{children}</main>
+      <main id="main" className="public-shell sx-shell-body">{children}</main>
       <div className="sx sx-chrome"><SxFooter navigate={navigate} /></div>
     </>
   );
@@ -1102,7 +1191,6 @@ const SxX = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" str
 
 function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPublicBooking, publicBooking, tour, allProducts = [] }) {
   const rootRef = useRef(null);
-  const [menu, setMenu] = useState(false);
   const lead = tour.dates[0];
   const [depId, setDepId] = useState(lead?.id || "");
   const [name, setName] = useState("");
@@ -1284,7 +1372,7 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
       <div className="grain" />
       <SxNav navigate={navigate} />
 
-      <main>
+      <main id="main">
         <div className="wrap">
           <nav className="crumbs" aria-label="Breadcrumb">
             {/* Breadcrumbs are the one navigation aid a crawler reads to
@@ -1421,7 +1509,7 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
               <div className="book rv">
                 <div className="book-in">
                   <div className="book-top">
-                    <div className="book-price"><b className="tnum">${pp}</b><span>/ person</span></div>
+                    <div className="book-price"><b className="tnum">${pp}</b><span>USD / person</span></div>
                     <div className="go-status">{reqMode
                       ? (<><span className="pill form"><span className="d" />New date</span> Your day — travellers join you</>)
                       : (<><span className={`pill${confirmed ? "" : " form"}`}><span className="d" />{confirmed ? "GoAhead" : "Forming"}</span> {confirmed ? "Confirmed — this date is running" : `${Math.max(0, goAhead - booked)} more to confirm`}</>)}</div>
@@ -1444,9 +1532,9 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
                             onClick={() => setDepId(d.id)}
                             disabled={left <= 0}
                             aria-pressed={on}
-                            aria-label={`${formatDate(d.date)}${d.time ? ` at ${d.time}` : ""} — ${s} of ${ga} joined${left <= 0 ? ", full" : ""}`}
+                            aria-label={`${formatDate(d.date, { alwaysYear: true })}${d.time ? ` at ${d.time}` : ""} — ${s} of ${ga} joined${left <= 0 ? ", full" : ""}`}
                           >
-                            <div className="d-left"><b>{formatDate(d.date)}{d.time ? ` · ${d.time}` : ""}</b><span>{s} of {ga} joined</span></div>
+                            <div className="d-left"><b>{formatDate(d.date, { alwaysYear: true })}{d.time ? ` · ${d.time}` : ""}</b><span>{s} of {ga} joined</span></div>
                             <span className={`d-right ${cf ? "go" : "form"}`}>{cf ? "GoAhead" : left > 0 ? `${Math.max(0, ga - s)} to go` : "Full"}</span>
                           </button>
                         );
@@ -1455,7 +1543,7 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
                       {/* Traveler-initiated date request (Phase A) */}
                       {reqDone ? (
                         <div className="bk-ok" style={{ marginTop: 8 }}>
-                          Date request received for {formatDate(reqDone.date)}{reqDone.code ? ` — code ${reqDone.code}` : ""}. Our team reviews it and emails you shortly. Nothing is charged now.
+                          Date request received for {formatDate(reqDone.date, { alwaysYear: true })}{reqDone.code ? ` — code ${reqDone.code}` : ""}. Our team reviews it and emails you shortly. Nothing is charged now.
                         </div>
                       ) : !reqMode ? (
                         <button type="button" className="date-opt start-own" onClick={() => { setReqMode(true); setReqErr(""); }} aria-label="Start your own date — pick any day, free to request">
@@ -1474,7 +1562,7 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
                                 {eligibleDates.map((d) => (
                                   <button type="button" key={d} className={`req-day${reqDate === d ? " on" : ""}`} aria-pressed={reqDate === d}
                                     onClick={() => { setReqDate(d); setReqMatches(null); }}>
-                                    {formatDate(d)}
+                                    {formatDate(d, { alwaysYear: true })}
                                   </button>
                                 ))}
                               </div>
@@ -1491,7 +1579,7 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
                                 }}
                                 aria-label="Requested departure date"
                               />
-                              <div className="note" style={{ marginTop: 8 }}>Any day from {formatDate(reqIso(3))} to {formatDate(reqIso(90))}. Our team reviews each new date before it opens.</div>
+                              <div className="note" style={{ marginTop: 8 }}>Any day from {formatDate(reqIso(3), { alwaysYear: true })} to {formatDate(reqIso(90), { alwaysYear: true })}. Our team reviews each new date before it opens.</div>
                             </>
                           )}
                           {reqMatches && reqMatches.length > 0 && (
@@ -1501,7 +1589,7 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
                                 const ms = seatsTotal(m.pledges); const mga = goAheadFor(m);
                                 return (
                                   <button type="button" className="date-opt" key={m.id} onClick={() => { setDepId(m.id); setReqMode(false); setReqMatches(null); }}>
-                                    <div className="d-left"><b>{formatDate(m.date)}{m.time ? ` · ${m.time}` : ""}</b><span>{ms} of {mga} joined</span></div>
+                                    <div className="d-left"><b>{formatDate(m.date, { alwaysYear: true })}{m.time ? ` · ${m.time}` : ""}</b><span>{ms} of {mga} joined</span></div>
                                     <span className="d-right form">Join this date</span>
                                   </button>
                                 );
@@ -1527,7 +1615,7 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
                             <select value={tierId} onChange={(e) => setTierId(e.target.value)}>
                               {pkgTiers.map((t) => (
                                 <option key={t.id} value={t.id}>
-                                  {t.name}{Number(t.perPersonSupplement) > 0 ? ` (+$${Number(t.perPersonSupplement)}/person)` : ""}
+                                  {t.name}{Number(t.perPersonSupplement) > 0 ? ` (+$${Number(t.perPersonSupplement)} USD/person)` : ""}
                                 </option>
                               ))}
                             </select>
@@ -1567,11 +1655,14 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
                         <input type="number" min="1" max={Math.max(1, remaining)} value={seats} onChange={(e) => setSeats(e.target.value)} required aria-required="true" />
                       </label>
                     </div>
+                    {/* "$" on its own reads as CAD, AUD or SGD to a good share of
+                        the people this page is for, so the booking summary — the
+                        one place a visitor commits to a number — says USD. */}
                     {!reqMode && <div className="bk-sum">
-                      <div className="r"><span>${pp} × {nSeats}</span><b>${total}</b></div>
-                      <div className="r key"><span>Deposit at GoAhead ({depositPct}%)</span><b>${deposit}</b></div>
-                      <div className="r"><span>Balance</span><b>${balance}</b></div>
-                      <div className="nt">Nothing is charged today. Balance due {dep ? balanceDueDate(dep.date) : "before departure"}.</div>
+                      <div className="r"><span>${pp} USD × {nSeats}</span><b>${total} USD</b></div>
+                      <div className="r key"><span>Deposit at GoAhead ({depositPct}%)</span><b>${deposit} USD</b></div>
+                      <div className="r"><span>Balance</span><b>${balance} USD</b></div>
+                      <div className="nt">All amounts in US dollars (USD). Nothing is charged today. Balance due {dep ? balanceDueDate(dep.date) : "before departure"}.</div>
                       <PaymentTimeline />
                     </div>}
                     <div className="book-cta">
@@ -1592,7 +1683,7 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
                             // Cancelling a held seat is an action, not navigation, and it was an
                             // <a> with no href: unreachable by keyboard and announced to screen
                             // readers as plain text. A real <button> restores focus and Enter/Space.
-                            <div className="bk-ok" role="status">Seat held — {publicBooking.code}. {publicBooking.depositDue ? `$${publicBooking.depositDue} deposit due at GoAhead.` : ""} <button type="button" className="bk-cancel" onClick={onCancelPublicBooking}>Cancel</button></div>
+                            <div className="bk-ok" role="status">Seat held — {publicBooking.code}. {publicBooking.depositDue ? `$${publicBooking.depositDue} USD deposit due at GoAhead.` : ""} <button type="button" className="bk-cancel" onClick={onCancelPublicBooking}>Cancel</button></div>
                           )}
                           <div className="note"><SxCheck />Free hold — you only pay once the date confirms</div>
                         </>
@@ -1638,7 +1729,7 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
                               {p.title}
                             </SpaLink>
                           </h3>
-                          <div className="foot"><span className="pr tnum">${pr} <small>/ person</small></span><span className="arr" aria-hidden="true"><SxArrow /></span></div></div>
+                          <div className="foot"><span className="pr tnum">${pr} <small>USD / person</small></span><span className="arr" aria-hidden="true"><SxArrow /></span></div></div>
                       </div>
                     </article>
                   );
@@ -2229,9 +2320,9 @@ function EmbedWidget({ type, product }) {
         </div>
         <strong className="embed-title">{product.title}</strong>
         <div className="embed-price">
-          <span>from</span><b>${livePrice.toLocaleString()}</b><span>/ person</span>
+          <span>from</span><b>${livePrice.toLocaleString()}</b><span>USD / person</span>
         </div>
-        <p className="embed-hook">Shared price — it drops as the group grows, down to ${breakPrice.toLocaleString()}/person.</p>
+        <p className="embed-hook">Shared price — it drops as the group grows, down to ${breakPrice.toLocaleString()} USD/person.</p>
         <span className="embed-cta">View &amp; book<ArrowRight size={16} /></span>
         <span className="embed-brand">Powered by <b>Sawa&nbsp;Tours</b></span>
       </div>
@@ -2493,8 +2584,8 @@ function ContactPage({ navigate }) {
             </div>
           ) : (
             <>
-              <label className="field"><span>Your name</span><input value={form.name} onChange={set("name")} required placeholder="Full name" /></label>
-              <label className="field"><span>Email</span><input type="email" value={form.email} onChange={set("email")} required placeholder="you@email.com" /></label>
+              <label className="field"><span>Your name</span><input value={form.name} onChange={set("name")} required autoComplete="name" placeholder="Full name" /></label>
+              <label className="field"><span>Email</span><input type="email" value={form.email} onChange={set("email")} required autoComplete="email" placeholder="you@email.com" /></label>
               <label className="field"><span>Message</span><textarea value={form.message} onChange={set("message")} required rows={5} placeholder="Which tour or date are you asking about?" /></label>
               <button className="btn-pill primary" type="submit">Send message <ArrowRight size={16} /></button>
             </>
@@ -2972,7 +3063,7 @@ function TourCard({ navigate, product }) {
               {product.title}
             </CardLink>
           </strong>
-          <span className="tour-card-price">${livePrice}</span>
+          <span className="tour-card-price">${livePrice} USD</span>
         </div>
         <p className="tour-card-sub">{product.duration || product.vehicle} · {product.guide}</p>
         <div className="route-line">
@@ -2988,7 +3079,7 @@ function TourCard({ navigate, product }) {
           </div>
         )}
         <div className="tour-card-foot">
-          <span>{full ? "All dates full — check back soon" : `${pluralize(openDates(product).length, "open date")} · from $${breakPrice} at full group`}</span>
+          <span>{full ? "All dates full — check back soon" : `${pluralize(openDates(product).length, "open date")} · from $${breakPrice} USD at full group`}</span>
         </div>
         {/* Decorative: the whole card is already the link above, so exposing
             this as a second control would just duplicate it in the tab order. */}
@@ -3029,7 +3120,7 @@ function PackageCard({ navigate, product }) {
               {product.title}
             </CardLink>
           </strong>
-          <span className="tour-card-price">from ${livePrice}</span>
+          <span className="tour-card-price">from ${livePrice} USD</span>
         </div>
         <p className="tour-card-sub">{cities.join(" → ")}</p>
         {!full && (
@@ -3042,7 +3133,7 @@ function PackageCard({ navigate, product }) {
           </div>
         )}
         <div className="tour-card-foot">
-          <span><Hotel size={13} />{(product.accommodationTiers || []).length || 1} hotel tier{((product.accommodationTiers || []).length || 1) > 1 ? "s" : ""} · from ${breakPrice}/pp</span>
+          <span><Hotel size={13} />{(product.accommodationTiers || []).length || 1} hotel tier{((product.accommodationTiers || []).length || 1) > 1 ? "s" : ""} · from ${breakPrice} USD/pp</span>
         </div>
         <span className="departure-link" aria-hidden="true">
           {full ? "Fully booked — view dates" : "View package"}

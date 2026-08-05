@@ -108,32 +108,110 @@
             <label class="consent"><input type="checkbox" name="consent" value="yes" required /><span>I confirm my company holds a valid Egyptian tourism licence and current insurance, and I agree to Sawa's operator terms.</span></label>
             <!-- Applicants are asked for a licence number before being told what
                  happens to it. This states the handling before they submit. -->
-            <p class="hint" style="margin-top:-4px">What happens to your details: this form opens your own email client and sends the application to hello@sawatours.org — nothing is stored on this website. We use your licence number only to confirm your registration with the Ministry of Tourism &amp; Antiquities, and we don't share it outside Sawa. See our <a href="/privacy" style="text-decoration:underline">privacy policy</a>.</p>
+            <p class="hint" style="margin-top:-4px">What happens to your details: this form is sent over an encrypted connection to Sawa, where your application is stored so we can review it. We email a copy to you and to hello@sawatours.org. We use your licence number only to confirm your registration with the Ministry of Tourism &amp; Antiquities, and we don't share it outside Sawa. See our <a href="/privacy" style="text-decoration:underline">privacy policy</a>.</p>
             <button class="btn gold block" type="submit">Submit application <span class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></button>
-            <div class="done" role="status" style="display:none;align-items:center;gap:10px;background:rgba(244,201,93,.14);border:1px solid rgba(217,171,69,.4);border-radius:14px;padding:14px;color:var(--teal);font-size:.9rem"><span style="color:var(--gold-ink)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>Thanks — your application is on its way to us. If your email client didn't open, send the details to <a href="mailto:hello@sawatours.org" style="text-decoration:underline">hello@sawatours.org</a> and we'll pick it up.</div>
+            <div class="err" role="alert" style="display:none;background:rgba(190,60,50,.08);border:1px solid rgba(190,60,50,.32);border-radius:14px;padding:14px;color:#8c2f27;font-size:.9rem"></div>
+            <div class="done" role="status" style="display:none;flex-direction:column;gap:8px;background:rgba(244,201,93,.14);border:1px solid rgba(217,171,69,.4);border-radius:14px;padding:14px;color:var(--teal);font-size:.9rem"></div>
           </form>
           <script>
-          /* Mirrors the contact form: build a readable mail body rather than
-             relying on the browser's raw enctype=text/plain rendering. */
+          /* The application used to be handed to the visitor's own mail client
+             via a mailto: URL. On a machine with no mail app configured — a
+             shared office desktop, plenty of phones — the click did nothing and
+             a completed application, licence number and all, was lost with a
+             confirmation on screen saying it had been sent.
+
+             It now posts to the API over HTTPS. The server stores the row first
+             and emails afterwards, so an application survives an email outage;
+             the applicant gets a reference, a copy by email, and a copy they can
+             download here and then. mailto is kept only as the fallback for a
+             failed request, and the form's own `action` still covers no-JS. */
           (function () {
             var f = document.getElementById('operator-form');
             if (!f) return;
+            var done = f.querySelector('.done');
+            var errBox = f.querySelector('.err');
+            var btn = f.querySelector('button[type="submit"]');
+            var val = function (id) { var el = document.getElementById(id); return el ? el.value.trim() : ''; };
+
+            function fields() {
+              return {
+                company: val('op-company'), contactName: val('op-contact'), city: val('op-city'),
+                email: val('op-email'), phone: val('op-phone'), licence: val('op-licence'),
+                regions: val('op-regions'), about: val('op-about'),
+                consent: !!f.querySelector('input[name="consent"]:checked')
+              };
+            }
+            function asText(d) {
+              return 'Company: ' + d.company +
+                '\nContact: ' + d.contactName +
+                '\nCity / base: ' + d.city +
+                '\nEmail: ' + d.email +
+                '\nWhatsApp / phone: ' + (d.phone || '—') +
+                '\nTourism licence: ' + d.licence +
+                '\nRegions: ' + (d.regions || '—') +
+                '\n\nAbout their tours:\n' + (d.about || '—');
+            }
+            function esc(s) {
+              return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) {
+                return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+              });
+            }
+            /* A data: URL rather than a Blob URL — nothing to revoke, and it
+               survives the visitor leaving the download for later. */
+            function copyLink(text, reference) {
+              return '<a download="sawa-operator-application-' + esc(reference) + '.txt" '
+                + 'href="data:text/plain;charset=utf-8,' + encodeURIComponent(text) + '" '
+                + 'style="color:var(--gold-ink);font-weight:600;text-decoration:underline">Download a copy of this application</a>';
+            }
+            function mailtoFallback(d) {
+              window.location.href = 'mailto:hello@sawatours.org'
+                + '?subject=' + encodeURIComponent('Operator application — ' + d.company)
+                + '&body=' + encodeURIComponent(asText(d));
+            }
+
             f.addEventListener('submit', function (e) {
               e.preventDefault();
-              var val = function (id) { var el = document.getElementById(id); return el ? el.value.trim() : ''; };
-              var body =
-                'Company: ' + val('op-company') +
-                '\nContact: ' + val('op-contact') +
-                '\nCity / base: ' + val('op-city') +
-                '\nEmail: ' + val('op-email') +
-                '\nWhatsApp / phone: ' + (val('op-phone') || '—') +
-                '\nTourism licence: ' + val('op-licence') +
-                '\nRegions: ' + val('op-regions') +
-                '\n\nAbout their tours:\n' + (val('op-about') || '—');
-              f.querySelector('.done').style.display = 'flex';
-              window.location.href = 'mailto:hello@sawatours.org'
-                + '?subject=' + encodeURIComponent('Operator application — ' + val('op-company'))
-                + '&body=' + encodeURIComponent(body);
+              if (typeof f.reportValidity === 'function' && !f.reportValidity()) return;
+              var d = fields();
+              errBox.style.display = 'none';
+              btn.disabled = true;
+              var original = btn.innerHTML;
+              btn.textContent = 'Sending…';
+
+              fetch('/api/operator-applications', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'accept': 'application/json' },
+                body: JSON.stringify(d)
+              }).then(function (r) {
+                return r.json().catch(function () { return {}; }).then(function (body) {
+                  if (!r.ok) throw new Error(body.error || 'We could not send your application.');
+                  return body;
+                });
+              }).then(function (body) {
+                var text = body.copy || asText(d);
+                f.querySelectorAll('.field, .f-row, .consent, button[type="submit"]').forEach(function (el) {
+                  el.style.display = 'none';
+                });
+                done.innerHTML =
+                  '<strong>Application received — reference ' + esc(body.reference || '') + '</strong>'
+                  + '<span>We verify licences with the Ministry of Tourism &amp; Antiquities and usually reply within 2–4 business days. '
+                  + 'A copy is on its way to ' + esc(d.email) + '.</span>'
+                  + '<span>' + copyLink(text, body.reference || 'copy') + '</span>';
+                /* role="status" on the box announces the confirmation without
+                   stealing focus. */
+                done.style.display = 'flex';
+              }).catch(function (error) {
+                btn.disabled = false;
+                btn.innerHTML = original;
+                /* Honest failure, and a route that still works: the details are
+                   never silently dropped. */
+                errBox.innerHTML = esc(error.message)
+                  + ' Your details are still in the form — <a href="#" data-mailto style="text-decoration:underline;color:inherit;font-weight:600">send them by email instead</a>, or write to '
+                  + '<a href="mailto:hello@sawatours.org" style="text-decoration:underline;color:inherit;font-weight:600">hello@sawatours.org</a>.';
+                errBox.style.display = 'block';
+                var link = errBox.querySelector('[data-mailto]');
+                if (link) link.onclick = function (ev) { ev.preventDefault(); mailtoFallback(fields()); };
+              });
             });
           })();
           </script>
@@ -195,14 +273,14 @@
     <div class="fbot">
       <span>© 2026 Sawa Tours. Shared departures, confirmed together.</span>
       <div class="lks"><a href="/privacy">Privacy policy</a><a href="/terms">Terms and conditions</a></div>
-      <!-- TODO(sawa): replace these three placeholders with real profile URLs
-           (<a href="https://instagram.com/..." ...>), or delete the block before
-           launch. They were href="#", which scroll-jumped to the top of the page
-           and announced as working links; they are now inert and visibly muted. -->
+      <!-- Instagram and Facebook are not live yet, so they are simply absent.
+           A muted placeholder icon still lands in the accessibility tree as
+           something a screen reader reads out and a keyboard user passes over,
+           for a destination that does not exist. Add them back as real <a href>
+           links once the profiles are up. WhatsApp IS live and matches
+           BRAND.whatsapp in server/brand.js. -->
       <div class="socials">
-        <span class="soon" role="img" aria-label="Instagram — not yet available"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none"/></svg></span>
-        <span class="soon" role="img" aria-label="Facebook — not yet available"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M14 9h3V6h-3c-2 0-3 1-3 3v2H9v3h2v6h3v-6h2.5l.5-3H14V9.5c0-.4.2-.5.6-.5Z"/></svg></span>
-        <span class="soon" role="img" aria-label="WhatsApp — not yet available"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-8.5 15.2L2 22l4.9-1.4A10 10 0 1 0 12 2Zm5.4 14.1c-.2.6-1.3 1.2-1.8 1.2-.5.1-1 .1-1.7-.1-.4-.1-.9-.3-1.6-.6a9 9 0 0 1-3.4-3c-.3-.4-.8-1.1-.8-2.1s.5-1.5.7-1.7c.2-.2.4-.3.6-.3h.4c.2 0 .4 0 .5.4l.7 1.6c.1.1 0 .3 0 .4l-.3.4c-.2.2-.3.3-.1.5.5.9 1 1.3 1.8 1.8.2.1.4.1.5 0l.5-.6c.2-.2.3-.2.5-.1l1.5.7c.2.1.4.2.4.3.1.1.1.6-.1 1Z"/></svg></span>
+        <a href="https://wa.me/201092847613" rel="noopener" target="_blank" aria-label="Message Sawa Tours on WhatsApp"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 0 0-8.5 15.2L2 22l4.9-1.4A10 10 0 1 0 12 2Zm5.4 14.1c-.2.6-1.3 1.2-1.8 1.2-.5.1-1 .1-1.7-.1-.4-.1-.9-.3-1.6-.6a9 9 0 0 1-3.4-3c-.3-.4-.8-1.1-.8-2.1s.5-1.5.7-1.7c.2-.2.4-.3.6-.3h.4c.2 0 .4 0 .5.4l.7 1.6c.1.1 0 .3 0 .4l-.3.4c-.2.2-.3.3-.1.5.5.9 1 1.3 1.8 1.8.2.1.4.1.5 0l.5-.6c.2-.2.3-.2.5-.1l1.5.7c.2.1.4.2.4.3.1.1.1.6-.1 1Z"/></svg></a>
       </div>
     </div>
   </div>

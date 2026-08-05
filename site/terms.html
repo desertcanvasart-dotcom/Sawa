@@ -116,6 +116,10 @@
       <p>As described on each tour. Every departure lists exactly what is included and excluded before you book.</p>
 
       <h2>Prices</h2>
+      <!-- "$" alone is ambiguous to an international customer — it reads as CAD,
+           AUD or SGD as readily as USD. Every price on the site and in these
+           conditions is US dollars, so the conditions say so once, plainly. -->
+      <p><strong>All prices, deposits, fees and refunds referred to on the Sawa Tours website and in these Booking Conditions are quoted and payable in United States dollars (USD), shown as &ldquo;$&rdquo; or &ldquo;US$&rdquo;.</strong> Your bank or card issuer may apply its own conversion rate and foreign-transaction fee if your account is held in another currency; those charges are outside our control and are not refundable by us.</p>
       <p>Our trip prices are based on currency exchange rates applicable at the time of listing. We reserve the right to impose surcharges up to 31 days before departure due to changes in exchange rates, increases in airfares or other transport costs, increases in local operator costs, taxes, or if government action requires us to do so. In such instances, we will be responsible for the first 50% of the additional costs and you will be responsible for the balance.</p>
 
       <h2>Age &amp; health requirements</h2>
@@ -200,14 +204,14 @@
     <div class="fbot">
       <span>© 2026 Sawa Tours. Shared departures, confirmed together.</span>
       <div class="lks"><a href="/privacy">Privacy policy</a><a href="/terms">Terms and conditions</a></div>
-      <!-- TODO(sawa): replace these three placeholders with real profile URLs
-           (<a href="https://instagram.com/..." ...>), or delete the block before
-           launch. They were href="#", which scroll-jumped to the top of the page
-           and announced as working links; they are now inert and visibly muted. -->
+      <!-- Instagram and Facebook are not live yet, so they are simply absent.
+           A muted placeholder icon still lands in the accessibility tree as
+           something a screen reader reads out and a keyboard user passes over,
+           for a destination that does not exist. Add them back as real <a href>
+           links once the profiles are up. WhatsApp IS live and matches
+           BRAND.whatsapp in server/brand.js. -->
       <div class="socials">
-        <span class="soon" role="img" aria-label="Instagram — not yet available"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none"/></svg></span>
-        <span class="soon" role="img" aria-label="Facebook — not yet available"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M14 9h3V6h-3c-2 0-3 1-3 3v2H9v3h2v6h3v-6h2.5l.5-3H14V9.5c0-.4.2-.5.6-.5Z"/></svg></span>
-        <span class="soon" role="img" aria-label="WhatsApp — not yet available"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-8.5 15.2L2 22l4.9-1.4A10 10 0 1 0 12 2Zm5.4 14.1c-.2.6-1.3 1.2-1.8 1.2-.5.1-1 .1-1.7-.1-.4-.1-.9-.3-1.6-.6a9 9 0 0 1-3.4-3c-.3-.4-.8-1.1-.8-2.1s.5-1.5.7-1.7c.2-.2.4-.3.6-.3h.4c.2 0 .4 0 .5.4l.7 1.6c.1.1 0 .3 0 .4l-.3.4c-.2.2-.3.3-.1.5.5.9 1 1.3 1.8 1.8.2.1.4.1.5 0l.5-.6c.2-.2.3-.2.5-.1l1.5.7c.2.1.4.2.4.3.1.1.1.6-.1 1Z"/></svg></span>
+        <a href="https://wa.me/201092847613" rel="noopener" target="_blank" aria-label="Message Sawa Tours on WhatsApp"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 0 0-8.5 15.2L2 22l4.9-1.4A10 10 0 1 0 12 2Zm5.4 14.1c-.2.6-1.3 1.2-1.8 1.2-.5.1-1 .1-1.7-.1-.4-.1-.9-.3-1.6-.6a9 9 0 0 1-3.4-3c-.3-.4-.8-1.1-.8-2.1s.5-1.5.7-1.7c.2-.2.4-.3.6-.3h.4c.2 0 .4 0 .5.4l.7 1.6c.1.1 0 .3 0 .4l-.3.4c-.2.2-.3.3-.1.5.5.9 1 1.3 1.8 1.8.2.1.4.1.5 0l.5-.6c.2-.2.3-.2.5-.1l1.5.7c.2.1.4.2.4.3.1.1.1.6-.1 1Z"/></svg></a>
       </div>
     </div>
   </div>

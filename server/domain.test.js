@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import {
   isPackage, goAheadSeatsFor, defaultDepositFor, seatsTotal, livePriceFor,
   statusFor, packagePriceFor, balanceDueDate, computePledgePricing, enrichDeparture,
-  bookingClosed,
+  bookingClosed, departureStarted,
 } from "./domain.js";
 
 const dayTour = {
@@ -183,5 +183,32 @@ test("bookingClosed: a malformed stored time falls back instead of failing open"
   const wellPastAnyCutoff = Date.parse("2026-07-10T12:00:00Z");
   for (const time of ["08:00:00", "8:00", "", null, undefined, "junk", "25:61"]) {
     assert.equal(bookingClosed({ date: "2026-07-10", time }, product, wellPastAnyCutoff), true, `time=${time}`);
+  }
+});
+
+// --- departureStarted: expiring past dates off the public catalogue ---------
+test("departureStarted: false before the start instant, true after", () => {
+  const dep = { date: "2026-07-10", time: "08:00" };
+  // 08:00 Cairo in July (EEST, UTC+3) is 05:00Z.
+  assert.equal(departureStarted(dep, Date.parse("2026-07-10T04:59:00Z")), false);
+  assert.equal(departureStarted(dep, Date.parse("2026-07-10T05:01:00Z")), true);
+});
+test("departureStarted: a package expires on its start date, not its end date", () => {
+  const dep = { startDate: "2026-08-01", endDate: "2026-08-04", date: "2026-08-01", time: "09:00" };
+  assert.equal(departureStarted(dep, Date.parse("2026-07-31T23:00:00Z")), false);
+  // Once it has left, nobody can join it — even though it runs for three more days.
+  assert.equal(departureStarted(dep, Date.parse("2026-08-02T00:00:00Z")), true);
+});
+test("departureStarted: a malformed row stays visible rather than vanishing", () => {
+  // A bad date is an ops problem. Hiding the departure would silently remove
+  // sellable inventory with nothing to show anyone why.
+  assert.equal(departureStarted({ date: "not-a-date", time: "08:00" }, Date.now()), false);
+  assert.equal(departureStarted({ time: "08:00" }, Date.now()), false);
+});
+test("departureStarted: an unparseable time falls back to 08:00 rather than never expiring", () => {
+  // Same trap bookingClosed had: NaN comparisons are false, so a junk time
+  // would have kept an expired departure on the board forever.
+  for (const time of ["junk", "", null, undefined, "25:61"]) {
+    assert.equal(departureStarted({ date: "2026-07-10", time }, Date.parse("2026-07-11T00:00:00Z")), true, `time=${time}`);
   }
 });

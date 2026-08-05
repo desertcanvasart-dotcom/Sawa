@@ -10,6 +10,7 @@ import {
   goAheadSeatsFor,
   defaultDepositFor,
   bookingClosed,
+  departureStarted,
   DEFAULT_GO_AHEAD,
 } from "./domain.js";
 import { attachUser, requireAuth, requireRole, isPlatform, isAgency, AuthError } from "./auth.js";
@@ -22,6 +23,7 @@ import {
   inviteEmail, bookingConfirmationEmail, goAheadEmail, cancellationEmail,
   listingApprovedEmail, listingRejectedEmail,
   departureRequestReceivedEmail, departureRequestApprovedEmail, departureRequestDeclinedEmail,
+  operatorApplicationEmail, operatorApplicationReceiptEmail, operatorApplicationText,
 } from "./email.js";
 import { randomBytes, randomInt } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
@@ -33,6 +35,7 @@ import {
 } from "./seo.js";
 import { emitDepartureSync, unavailableDates } from "./autoura-sync.js";
 import { tourSlug } from "./slug.js";
+import { BRAND } from "./brand.js";
 import { cleanHtml, cleanItinerary } from "./sanitize.js";
 import { canonicalRedirect } from "./canonical.js";
 
@@ -222,6 +225,23 @@ const publicBookingSchema = z.object({
   refCode: z.string().trim().max(60).optional(),
 });
 
+// Operator verification application (site/verify.html). Every field is bounded:
+// this endpoint is open to the internet and the values land in an email and an
+// ops table, so an unbounded `about` is a free megabyte per request.
+const operatorApplicationSchema = z.object({
+  company: z.string().trim().min(1, "Company name is required.").max(160),
+  contactName: z.string().trim().min(1, "Contact name is required.").max(160),
+  city: z.string().trim().min(1, "City is required.").max(120),
+  email: z.string().trim().email("A valid email is required.").max(200),
+  phone: z.string().trim().max(60).optional().or(z.literal("")),
+  licence: z.string().trim().min(1, "Tourism licence number is required.").max(120),
+  regions: z.string().trim().max(160).optional().or(z.literal("")),
+  about: z.string().trim().max(4000).optional().or(z.literal("")),
+  // The consent tick is required in the form's own markup; it is re-checked
+  // here so a scripted post can't create an application nobody agreed to.
+  consent: z.literal(true, { message: "Please confirm the licence and insurance declaration." }),
+});
+
 // Agency-created pooling request. Numeric fields are bounded so a malformed or
 // hostile body can't create a departure with negative seats or absurd pricing.
 const createDepartureSchema = z.object({
@@ -360,11 +380,16 @@ async function buildBootstrap(user) {
     tourProducts: products.rows.map(mapProduct),
     // pending_review = traveler-requested, awaiting ops approval. Only
     // platform staff see them; the public board and agencies must not.
+    //
+    // Departures whose start has passed are dropped from the anonymous payload
+    // — that is the public catalogue and the server-rendered HTML, where an
+    // expired date rendered as a joinable card. Signed-in agencies and staff
+    // keep the full list: their dashboards count past departures as history.
     departures: departures.rows
       .filter((d) => canSeeAll || d.status !== "pending_review")
-      .map((d) =>
-        presentDeparture(enrichDeparture(mapDeparture(d, byDep.get(d.id) || [])), user)
-      ),
+      .map((d) => mapDeparture(d, byDep.get(d.id) || []))
+      .filter((d) => user || !departureStarted(d))
+      .map((d) => presentDeparture(enrichDeparture(d), user)),
   };
 }
 
@@ -793,6 +818,33 @@ app.delete("/api/public/departures/:id/bookings/:pledgeId", writeLimiter, h(asyn
   });
   emitDepartureSync(departure.id);
   res.json({ departure: presentDeparture(departure, req.user) });
+}));
+
+// Public: an operator applies to be verified and list (site/verify.html).
+//
+// Open like the public booking route, behind the same stricter write limiter.
+// The row is written first and the two emails are sent afterwards, deliberately
+// in that order: an application must survive an email outage, and email delivery
+// runs in "log" mode until RESEND_API_KEY is set. The applicant gets a reference
+// back so a lost email is still traceable.
+app.post("/api/operator-applications", writeLimiter, h(async (req, res) => {
+  const input = parse(operatorApplicationSchema, req.body);
+  const reference = `OP-${randomBytes(3).toString("hex").toUpperCase()}`;
+  await pool.query(
+    `INSERT INTO operator_applications
+       (reference, company, contact_name, city, email, phone, licence, regions, about)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+    [reference, input.company, input.contactName, input.city, input.email,
+     input.phone || null, input.licence, input.regions || null, input.about || null]
+  );
+  await logAudit(req, {
+    action: "operator_application.create", entity: "operator_application", entityId: reference,
+    detail: { company: input.company, city: input.city },
+  });
+  const payload = { ...input, reference };
+  sendEmail(operatorApplicationEmail({ to: BRAND.email, ...payload })).catch(() => {});
+  sendEmail(operatorApplicationReceiptEmail({ to: input.email, ...payload })).catch(() => {});
+  res.status(201).json({ reference, copy: operatorApplicationText(input) });
 }));
 
 // Public: look up a booking by its code to see GoAhead status. No auth, no PII.
