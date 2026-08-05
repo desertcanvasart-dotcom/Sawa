@@ -8,8 +8,8 @@
 export const BRAND = {
   name: "Sawa Tours",
   alternateName: "Sawa Shared Tours",
-  url: "https://sawatours.org",
-  logo: "https://sawatours.org/images/hero.jpg", // TODO: replace with a real square logo image (PNG, ~512px)
+  url: "https://sawa.tours",
+  logo: "https://sawa.tours/images/hero.jpg", // TODO: replace with a real square logo image (PNG, ~512px)
   positioning: "Shared departures, confirmed together.",
   description:
     "Sawa is a Cairo-based shared-tour platform. We pool small bookings from independent travellers onto the same date, so day tours and multi-day packages across Egypt are guaranteed to run — you hold a seat for free and only pay once your departure is confirmed (GoAhead).",

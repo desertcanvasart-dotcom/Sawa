@@ -205,7 +205,7 @@ test("sitemap.xml: includes the commercially important routes", async () => {
   // have real meta and are advertised in llms.txt as core pages.
   const xml = await sitemapXml();
   for (const path of ["/tours", "/how-it-works", "/booking", "/faq", "/blog", "/contact"]) {
-    assert.ok(xml.includes(`<loc>https://sawatours.org${path}</loc>`), `sitemap missing ${path}`);
+    assert.ok(xml.includes(`<loc>https://sawa.tours${path}</loc>`), `sitemap missing ${path}`);
   }
 });
 

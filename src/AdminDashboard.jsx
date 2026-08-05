@@ -506,7 +506,7 @@ function BlogEditor({ existing, onClose, onSaved }) {
           <Field label="Meta title" full><input value={f.metaTitle} onChange={set("metaTitle")} placeholder="Defaults to the post title" /></Field>
           <Field label="Meta description" full><textarea rows={2} value={f.metaDescription} onChange={set("metaDescription")} placeholder="~150–160 characters for search snippets (defaults to the excerpt)." /></Field>
           <Field label="Focus keywords (comma-separated)"><input value={f.keywords} onChange={set("keywords")} placeholder="aswan day tour, philae temple" /></Field>
-          <Field label="Canonical URL"><input value={f.canonicalUrl} onChange={set("canonicalUrl")} placeholder="https://sawatours.org/blog/…" /></Field>
+          <Field label="Canonical URL"><input value={f.canonicalUrl} onChange={set("canonicalUrl")} placeholder="https://sawa.tours/blog/…" /></Field>
         </div>
         <ImageField label="Social share image (Open Graph)" field="ogImage" hint="Defaults to the cover image. ~1200×630." />
         <label className="dest-toggle"><input type="checkbox" checked={f.noindex} onChange={set("noindex")} /><span>Hide from search engines (noindex)</span></label>
@@ -1632,8 +1632,8 @@ function ReferralsSection({ flash }) {
   useEffect(() => { load(); }, []);
 
   const embedSnippet = (code) =>
-    `<iframe src="https://sawatours.org/embed?ref=${code}" style="width:100%;border:0;border-radius:18px;min-height:240px" loading="lazy" title="Sawa Tours"></iframe>`;
-  const linkFor = (code) => `https://sawatours.org/tours?ref=${code}`;
+    `<iframe src="https://sawa.tours/embed?ref=${code}" style="width:100%;border:0;border-radius:18px;min-height:240px" loading="lazy" title="Sawa Tours"></iframe>`;
+  const linkFor = (code) => `https://sawa.tours/tours?ref=${code}`;
 
   async function copy(text, label) {
     try { await navigator.clipboard.writeText(text); flash(`${label} copied to clipboard.`); }
