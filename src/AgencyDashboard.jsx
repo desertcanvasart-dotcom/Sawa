@@ -594,7 +594,7 @@ function WidgetSection({ tourProducts = [] }) {
     }).catch(() => setErr("Could not load your widget. Please retry."));
   }, []);
 
-  const SITE = "https://sawatours.org";
+  const SITE = "https://sawa.tours";
   const code = info?.code;
   const products = (tourProducts || []).filter((p) => p.active !== false);
   const prod = products.find((p) => p.id === productId);

@@ -2172,7 +2172,7 @@ function LoadErrorScreen({ onRetry }) {
 
 // Canonical public site — embed links always point here, wherever the widget
 // is hosted.
-const SITE_URL = "https://sawatours.org";
+const SITE_URL = "https://sawa.tours";
 
 // ---- Referral attribution (?ref=CODE) ----
 const REF_KEY = "sawa_ref";

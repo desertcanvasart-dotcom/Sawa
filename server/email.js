@@ -7,10 +7,20 @@
 // just adding two env vars — no code change.
 import "dotenv/config";
 import { pool } from "./db/index.js";
+import { BRAND } from "./brand.js";
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
 const EMAIL_FROM = process.env.EMAIL_FROM || "Sawa Tours <onboarding@resend.dev>";
 const APP_URL = process.env.APP_URL || "http://localhost:5173";
+
+// Where replies go. The sending domain and the receiving domain are not the
+// same thing: a domain is verified for SENDING by SPF/DKIM records on
+// subdomains, which says nothing about whether anything accepts mail for it.
+// sawa.tours resolves via a CNAME at the apex — that answers MX queries too, so
+// mail servers find no mailhost and every reply bounces. BRAND.email sits on the
+// domain that actually has MX records, so replies land in a real inbox
+// regardless of which address we send from.
+const REPLY_TO = process.env.EMAIL_REPLY_TO || BRAND.email;
 
 export const emailMode = RESEND_API_KEY ? "live" : "log";
 
@@ -41,7 +51,7 @@ export async function sendEmail({ to, subject, html, text, kind = "generic" }) {
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: { Authorization: `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ from: EMAIL_FROM, to, subject, html, text }),
+      body: JSON.stringify({ from: EMAIL_FROM, to, subject, html, text, reply_to: REPLY_TO }),
     });
     if (!res.ok) {
       const body = await res.text();
