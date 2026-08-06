@@ -6,7 +6,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 process.env.DATABASE_URL = process.env.DATABASE_URL || "postgres://u:p@127.0.0.1:1/none";
-const { robotsTxt, sitemapXml, llmsTxt, inlineScriptJson, sliceBootstrapForRoute } = await import("./seo.js");
+const { robotsTxt, sitemapXml, llmsTxt, inlineScriptJson, sliceBootstrapForRoute, iso } = await import("./seo.js");
 
 // ---- sliceBootstrapForRoute ------------------------------------------------
 // The payload is inlined into every rendered page, so it is sliced to what the
@@ -226,4 +226,36 @@ test("llms.txt: leads with the brand and lists the core pages", () => {
   for (const path of ["/tours", "/how-it-works", "/blog", "/contact", "/faq"]) {
     assert.ok(txt.includes(`(${path})`), `llms.txt missing a link to ${path}`);
   }
+});
+
+// ---- sitemap <lastmod> -----------------------------------------------------
+// Google ignores <changefreq> and reads <lastmod> — but only while it trusts
+// it. A malformed value invalidates the document; a fabricated one teaches the
+// crawler to disregard the field site-wide. iso() is the seam where both go
+// wrong, so it drops anything it cannot parse rather than emitting it.
+
+test("iso normalises a Date to W3C datetime", () => {
+  assert.equal(iso(new Date("2026-08-06T09:31:37.793Z")), "2026-08-06T09:31:37.793Z");
+});
+test("iso normalises a timestamp string", () => {
+  // pg returns a string rather than a Date depending on column type and parser.
+  assert.equal(iso("2026-08-06T09:31:37.793Z"), "2026-08-06T09:31:37.793Z");
+  assert.equal(iso("2026-08-06"), "2026-08-06T00:00:00.000Z");
+});
+test("iso drops absent values instead of guessing at 'now'", () => {
+  // A missing timestamp must produce NO <lastmod>. Substituting the current
+  // time would claim every page changed on every sitemap fetch.
+  for (const v of [null, undefined, ""]) assert.equal(iso(v), null);
+});
+test("iso drops unparseable values rather than emitting invalid XML content", () => {
+  for (const v of ["not-a-date", "0000-00-00", {}, NaN]) assert.equal(iso(v), null);
+});
+
+test("the static portion of the sitemap carries no lastmod", async () => {
+  // Nothing on disk gives an honest per-page modified date — a deploy rewrites
+  // every file mtime — so the marketing pages deliberately have none. Only
+  // database-backed URLs (tours, packages, posts) can claim one.
+  const xml = await sitemapXml();
+  assert.ok(xml.includes("<loc>"), "sitemap should still list the static pages");
+  assert.equal(xml.includes("<lastmod>"), false);
 });

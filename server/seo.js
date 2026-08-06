@@ -284,6 +284,16 @@ Sitemap: ${BRAND.url}/sitemap.xml
 }
 
 // ---- sitemap.xml (dynamic from DB) ----
+// A DATE column comes back from pg as a Date; a text column as a string. The
+// sitemap protocol wants W3C datetime, so normalise, and drop anything
+// unparseable rather than emitting a malformed <lastmod> that invalidates the
+// document.
+export function iso(value) {
+  if (!value) return null;
+  const d = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
+}
+
 export async function sitemapXml() {
   const urls = [];
   const add = (loc, lastmod, freq) => urls.push({ loc: BRAND.url + loc, lastmod, freq });
@@ -302,10 +312,26 @@ export async function sitemapXml() {
   try {
     // Only approved listings — a sitemap must never advertise a tour that the
     // site itself refuses to show (see findTourProduct).
-    const tours = await pool.query("SELECT id, title, city, type FROM tour_products WHERE active IS NOT FALSE AND status = 'approved'");
-    tours.rows.forEach((t) => add(`/${t.type === "package" ? "package" : "tour"}/${encodeURIComponent(tourSlug(t))}`, null, "weekly"));
+    //
+    // lastmod is GREATEST(the product's own updated_at, its newest departure).
+    // A tour page shows its bookable dates, so publishing a date genuinely
+    // changes the page and is worth a recrawl. Seat counts deliberately do NOT
+    // move it: a booking changes a number the crawler doesn't care about, and
+    // letting every pledge bump lastmod is how the field stops being believed.
+    const tours = await pool.query(`
+      SELECT p.id, p.title, p.city, p.type,
+             GREATEST(p.updated_at, COALESCE(MAX(d.created_at), p.updated_at)) AS lastmod
+        FROM tour_products p
+        LEFT JOIN departures d
+               ON d.tour_product_id = p.id
+              AND d.status NOT IN ('cancelled', 'pending_review')
+       WHERE p.active IS NOT FALSE AND p.status = 'approved'
+       GROUP BY p.id`);
+    tours.rows.forEach((t) =>
+      add(`/${t.type === "package" ? "package" : "tour"}/${encodeURIComponent(tourSlug(t))}`, iso(t.lastmod), "weekly")
+    );
     const posts = await pool.query("SELECT slug, updated_at FROM blog_posts WHERE status='published'");
-    posts.rows.forEach((p) => add(`/blog/${encodeURIComponent(p.slug)}`, p.updated_at instanceof Date ? p.updated_at.toISOString() : p.updated_at, "monthly"));
+    posts.rows.forEach((p) => add(`/blog/${encodeURIComponent(p.slug)}`, iso(p.updated_at), "monthly"));
   } catch { /* DB optional */ }
   const body = urls.map((u) =>
     `  <url><loc>${esc(u.loc)}</loc>${u.lastmod ? `<lastmod>${esc(u.lastmod)}</lastmod>` : ""}${u.freq ? `<changefreq>${u.freq}</changefreq>` : ""}</url>`
