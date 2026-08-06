@@ -5,6 +5,25 @@ export const DEFAULT_GO_AHEAD = 4;
 export const DEFAULT_DAY_TOUR_DEPOSIT = 10;
 export const DEFAULT_PACKAGE_DEPOSIT = 20;
 
+// The booking conditions say "every Sawa departure runs with a minimum of 4 and
+// a maximum of 12 travelers", and the how-it-works page says the same. That is
+// a term of the contract, not a default, so nothing may publish a date that
+// exceeds it. Changing this number means changing those pages too.
+export const MAX_GROUP_SIZE = 12;
+
+// Returns an error string, or null when the capacity is publishable.
+export function capacityError(minSeats, maxSeats) {
+  const min = Number(minSeats);
+  const max = Number(maxSeats);
+  if (!Number.isInteger(min) || min < 1) return "Minimum group size must be a whole number of at least 1.";
+  if (!Number.isInteger(max) || max < 1) return "Maximum group size must be a whole number of at least 1.";
+  if (max > MAX_GROUP_SIZE) {
+    return `Maximum group size is ${MAX_GROUP_SIZE} travellers — that is the limit stated in the booking conditions. Set ${max} lower, or change the terms first.`;
+  }
+  if (max < min) return `Maximum group size (${max}) cannot be below the minimum (${min}).`;
+  return null;
+}
+
 // How long before departure a date must have reached its minimum, or it is
 // cancelled. Packages get 30 days because travellers book flights around them
 // and operators hold hotels and boats; day tours get 7 because the travellers

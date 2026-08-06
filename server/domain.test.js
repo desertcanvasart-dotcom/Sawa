@@ -7,6 +7,7 @@ import {
   bookingClosed, departureStarted,
   confirmDeadlineDaysFor, confirmDeadlineAt, missedConfirmDeadline,
   priceFromTiers, validatePriceTiers, withPriceTiers,
+  capacityError, MAX_GROUP_SIZE,
 } from "./domain.js";
 
 const dayTour = {
@@ -354,4 +355,31 @@ test("computePledgePricing honours the table end to end", () => {
   // 6 already booked + 2 = 8 projected -> the 7+ band, $85.
   assert.equal(p.pricePerPerson, 85);
   assert.equal(p.bookingTotal, 170);
+});
+
+// --- the 12-traveller cap -------------------------------------------------
+// "Every Sawa departure runs with a minimum of 4 and a maximum of 12
+// travelers" is a term of the booking conditions, so nothing may publish past
+// it. The DB carries the same rule as a constraint; this is the layer that
+// explains why in words an operator can act on.
+
+test("capacityError: accepts everything within the stated range", () => {
+  assert.equal(capacityError(4, 12), null);
+  assert.equal(capacityError(4, 4), null);
+  assert.equal(capacityError(2, 8), null);
+  assert.equal(MAX_GROUP_SIZE, 12);
+});
+test("capacityError: refuses a group larger than the contract allows", () => {
+  const e = capacityError(4, 13);
+  assert.match(e, /Maximum group size is 12/);
+  assert.match(e, /booking conditions/);
+  assert.match(capacityError(4, 200), /Maximum group size is 12/);
+});
+test("capacityError: refuses a maximum below the minimum", () => {
+  assert.match(capacityError(8, 4), /cannot be below the minimum/);
+});
+test("capacityError: refuses non-integers and nonsense", () => {
+  for (const [min, max] of [[4, 4.5], ["x", 8], [4, 0], [0, 8], [4, null], [4, undefined]]) {
+    assert.ok(capacityError(min, max), `expected an error for ${min}/${max}`);
+  }
 });

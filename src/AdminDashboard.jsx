@@ -724,7 +724,7 @@ export function ProductEditor({ type: typeProp, existing, destinations = [], onC
               <Field label="Guide"><input value={f.guide} onChange={set("guide")} /></Field>
               <Field label="Vehicle"><input value={f.vehicle} onChange={set("vehicle")} /></Field>
               <Field label="Min seats (GoAhead)"><input type="number" min="1" value={f.minSeats} onChange={set("minSeats")} /></Field>
-              <Field label="Max seats (cap)"><input type="number" min="1" value={f.maxSeats} onChange={set("maxSeats")} /></Field>
+              <Field label="Max seats (cap)"><input type="number" min="1" max="12" value={f.maxSeats} onChange={set("maxSeats")} /></Field>
               <Field label={pkg ? "GoAhead price /person" : "GoAhead price"}><input type="number" min="1" value={f.publishedRate} onChange={set("publishedRate")} /></Field>
               <Field label="Break price (full group)"><input type="number" min="1" value={f.breakPrice} onChange={set("breakPrice")} placeholder="auto = 80%" /></Field>
               <PriceTierEditor

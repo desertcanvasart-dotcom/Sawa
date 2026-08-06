@@ -12,6 +12,8 @@ import {
   bookingClosed,
   departureStarted,
   validatePriceTiers,
+  capacityError,
+  MAX_GROUP_SIZE,
   DEFAULT_GO_AHEAD,
 } from "./domain.js";
 import { attachUser, requireAuth, requireRole, isPlatform, isAgency, AuthError } from "./auth.js";
@@ -261,8 +263,10 @@ const createDepartureSchema = z.object({
   city: z.string().trim().optional(),
   customers: z.string().trim().optional(),
   cutoff: z.string().trim().optional(),
-  minSeats: z.coerce.number().int().positive().max(200).optional(),
-  maxSeats: z.coerce.number().int().positive().max(200).optional(),
+  minSeats: z.coerce.number().int().positive().max(MAX_GROUP_SIZE).optional(),
+  maxSeats: z.coerce.number().int().positive().max(MAX_GROUP_SIZE, {
+    message: `Maximum group size is ${MAX_GROUP_SIZE} travellers — the limit stated in the booking conditions.`,
+  }).optional(),
   baseCost: z.coerce.number().min(0).max(1_000_000).optional(),
   publishedRate: z.coerce.number().positive().max(1_000_000).optional(),
   breakPrice: z.coerce.number().min(0).max(1_000_000).optional(),
@@ -466,6 +470,13 @@ app.post("/api/admin/departures", requireAuth, requireRole("super_admin", "ops_s
     const product = await loadProduct(c, body.tourProductId);
     if (!product) throw new AppError(404, "Tour product not found.");
 
+    // This endpoint lets a departure override the listing's capacity, so the
+    // contract limit has to be checked here too — not only on the listing.
+    const depMinSeats = Number(body.minSeats || product.minSeats);
+    const depMaxSeats = Number(body.maxSeats || product.maxSeats);
+    const capacityProblem = capacityError(depMinSeats, depMaxSeats);
+    if (capacityProblem) throw new AppError(422, capacityProblem);
+
     const isPkg = product.type === "package";
     const startDate = body.startDate || body.date || "2026-05-25";
     let endDate = body.endDate || null;
@@ -488,7 +499,7 @@ app.post("/api/admin/departures", requireAuth, requireRole("super_admin", "ops_s
         isPkg ? startDate : null, isPkg ? endDate : null, isPkg ? product.nights : null,
         isPkg ? JSON.stringify(product.cities || []) : null, body.time || product.defaultTime,
         product.city, product.guide, product.vehicle,
-        Number(body.minSeats || product.minSeats), Number(body.maxSeats || product.maxSeats),
+        depMinSeats, depMaxSeats,
         Number(body.baseCost || product.baseCost || 0), Number(body.publishedRate || product.publishedRate),
         Number(body.breakPrice || product.breakPrice || Math.round(product.publishedRate * 0.8)),
         product.quality, body.cutoff || "Open until 18:00", product.description,
@@ -518,6 +529,15 @@ async function upsertTourProduct(c, body, review) {
     ? [...new Set(body.operatingDays.map(Number).filter((n) => Number.isInteger(n) && n >= 0 && n <= 6))].sort()
     : null;
   const operatingDays = opDays && opDays.length > 0 && opDays.length < 7 ? JSON.stringify(opDays) : null;
+
+  // The contract limit, checked before anything is written. The DB carries the
+  // same rule as a constraint; this exists to say why in words an operator can
+  // act on rather than surfacing a constraint violation.
+  const capacityProblem = capacityError(
+    Number(body.minSeats || 4),
+    Number(body.maxSeats || MAX_GROUP_SIZE)
+  );
+  if (capacityProblem) throw new AppError(422, capacityProblem);
 
   // Optional per-headcount pricing. Rejected loudly rather than silently
   // dropped: a table the operator believes is saved but isn't would quietly
