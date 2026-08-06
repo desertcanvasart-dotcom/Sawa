@@ -13,13 +13,17 @@ const RESEND_API_KEY = process.env.RESEND_API_KEY;
 const EMAIL_FROM = process.env.EMAIL_FROM || "Sawa Tours <onboarding@resend.dev>";
 const APP_URL = process.env.APP_URL || "http://localhost:5173";
 
-// Where replies go. The sending domain and the receiving domain are not the
-// same thing: a domain is verified for SENDING by SPF/DKIM records on
-// subdomains, which says nothing about whether anything accepts mail for it.
-// sawa.tours resolves via a CNAME at the apex — that answers MX queries too, so
-// mail servers find no mailhost and every reply bounces. BRAND.email sits on the
-// domain that actually has MX records, so replies land in a real inbox
-// regardless of which address we send from.
+// Where replies go.
+//
+// This was a workaround: mail sent from noreply@/hello@sawa.tours while that
+// domain had a CNAME at its apex, which answers MX queries too, so mail servers
+// found no mailhost and every reply bounced. sawa.tours now has a proper ALIAS
+// apex and an MX pointing at Google Workspace, so the From address is a real
+// mailbox and this is no longer load-bearing.
+//
+// Kept anyway, because the From address is not always the one to reply to:
+// Supabase sends its auth mail from noreply@sawa.tours, and the two addresses
+// should not have to stay in step by coincidence. EMAIL_REPLY_TO overrides it.
 const REPLY_TO = process.env.EMAIL_REPLY_TO || BRAND.email;
 
 export const emailMode = RESEND_API_KEY ? "live" : "log";
@@ -242,7 +246,7 @@ ${preheaderBlock(preheader || title)}
           <td style="padding:24px 34px 0">
             <p style="margin:0 0 10px;font-family:${SANS};font-size:13px;line-height:1.7;color:${C.muted}">
               Questions? Reply to this email or write to
-              <a href="mailto:hello@sawatours.org" style="color:${C.goldInk};text-decoration:underline">hello@sawatours.org</a>.
+              <a href="mailto:${BRAND.email}" style="color:${C.goldInk};text-decoration:underline">${BRAND.email}</a>.
             </p>
             <p style="margin:0;font-family:${SANS};font-size:12px;line-height:1.65;color:#8a9294">
               Shared departures, confirmed together.<br/>

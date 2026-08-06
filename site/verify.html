@@ -92,7 +92,7 @@
                an operator filled in their licence number and contact details,
                saw a confirmation, and the data was discarded. -->
           <form class="form" id="operator-form" style="margin-top:24px"
-                action="mailto:hello@sawatours.org" method="post" enctype="text/plain">
+                action="mailto:hello@sawa.tours" method="post" enctype="text/plain">
             <div class="field"><label for="op-company">Company name <span class="req">*</span></label><input id="op-company" name="company" required autocomplete="organization" placeholder="e.g. Nile Valley Travel" /></div>
             <div class="f-row">
               <div class="field"><label for="op-contact">Contact name <span class="req">*</span></label><input id="op-contact" name="contactName" required autocomplete="name" placeholder="Full name" /></div>
@@ -108,7 +108,7 @@
             <label class="consent"><input type="checkbox" name="consent" value="yes" required /><span>I confirm my company holds a valid Egyptian tourism licence and current insurance, and I agree to Sawa's operator terms.</span></label>
             <!-- Applicants are asked for a licence number before being told what
                  happens to it. This states the handling before they submit. -->
-            <p class="hint" style="margin-top:-4px">What happens to your details: this form is sent over an encrypted connection to Sawa, where your application is stored so we can review it. We email a copy to you and to hello@sawatours.org. We use your licence number only to confirm your registration with the Ministry of Tourism &amp; Antiquities, and we don't share it outside Sawa. See our <a href="/privacy" style="text-decoration:underline">privacy policy</a>.</p>
+            <p class="hint" style="margin-top:-4px">What happens to your details: this form is sent over an encrypted connection to Sawa, where your application is stored so we can review it. We email a copy to you and to hello@sawa.tours. We use your licence number only to confirm your registration with the Ministry of Tourism &amp; Antiquities, and we don't share it outside Sawa. See our <a href="/privacy" style="text-decoration:underline">privacy policy</a>.</p>
             <button class="btn gold block" type="submit">Submit application <span class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></button>
             <div class="err" role="alert" style="display:none;background:rgba(190,60,50,.08);border:1px solid rgba(190,60,50,.32);border-radius:14px;padding:14px;color:#8c2f27;font-size:.9rem"></div>
             <div class="done" role="status" style="display:none;flex-direction:column;gap:8px;background:rgba(244,201,93,.14);border:1px solid rgba(217,171,69,.4);border-radius:14px;padding:14px;color:var(--teal);font-size:.9rem"></div>
@@ -164,7 +164,7 @@
                 + 'style="color:var(--gold-ink);font-weight:600;text-decoration:underline">Download a copy of this application</a>';
             }
             function mailtoFallback(d) {
-              window.location.href = 'mailto:hello@sawatours.org'
+              window.location.href = 'mailto:hello@sawa.tours'
                 + '?subject=' + encodeURIComponent('Operator application — ' + d.company)
                 + '&body=' + encodeURIComponent(asText(d));
             }
@@ -207,7 +207,7 @@
                    never silently dropped. */
                 errBox.innerHTML = esc(error.message)
                   + ' Your details are still in the form — <a href="#" data-mailto style="text-decoration:underline;color:inherit;font-weight:600">send them by email instead</a>, or write to '
-                  + '<a href="mailto:hello@sawatours.org" style="text-decoration:underline;color:inherit;font-weight:600">hello@sawatours.org</a>.';
+                  + '<a href="mailto:hello@sawa.tours" style="text-decoration:underline;color:inherit;font-weight:600">hello@sawa.tours</a>.';
                 errBox.style.display = 'block';
                 var link = errBox.querySelector('[data-mailto]');
                 if (link) link.onclick = function (ev) { ev.preventDefault(); mailtoFallback(fields()); };

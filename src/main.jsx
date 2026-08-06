@@ -2574,7 +2574,7 @@ function ContactPage({ navigate }) {
   const submit = (e) => {
     e.preventDefault();
     const body = encodeURIComponent(`From: ${form.name} (${form.email})\n\n${form.message}`);
-    window.location.href = `mailto:hello@sawatours.org?subject=${encodeURIComponent("Sawa enquiry")}&body=${body}`;
+    window.location.href = `mailto:hello@sawa.tours?subject=${encodeURIComponent("Sawa enquiry")}&body=${body}`;
     setSent(true);
   };
   return (
@@ -2590,9 +2590,9 @@ function ContactPage({ navigate }) {
             <MessageCircle size={20} />
             <div><strong>WhatsApp</strong><span>+20 109 284 7613</span></div>
           </a>
-          <a className="contact-card" href="mailto:hello@sawatours.org">
+          <a className="contact-card" href="mailto:hello@sawa.tours">
             <Mail size={20} />
-            <div><strong>Email</strong><span>hello@sawatours.org</span></div>
+            <div><strong>Email</strong><span>hello@sawa.tours</span></div>
           </a>
           <div className="contact-card static">
             <Clock3 size={20} />
@@ -2694,7 +2694,7 @@ function LegalPage({ kind, navigate }) {
             {s.p.map((para, i) => <p key={i}>{para}</p>)}
           </section>
         ))}
-        <p className="legal-contact">Questions about this policy? Email <a href="mailto:hello@sawatours.org">hello@sawatours.org</a>.</p>
+        <p className="legal-contact">Questions about this policy? Email <a href="mailto:hello@sawa.tours">hello@sawa.tours</a>.</p>
       </article>
     </div>
   );
