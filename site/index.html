@@ -538,19 +538,17 @@ footer .logo .nm i{color:var(--gold)}
           <span class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg></span>
         </a>
       </div>
-      <!-- TODO(sawa): SOURCE OR REMOVE THESE TWO FIGURES. Both are hardcoded and
-           neither states what it measures or over what period, yet they sit in the
-           hero as fact. "72% of listed dates reach GoAhead" is a performance claim
-           about the core promise; "31 Ministry-licensed operators" is a countable
-           fact the database can answer. Either (a) add the measurement window to
-           the visible text — e.g. "of dates listed Jan–Jun 2026" — and keep the
-           operator count in step with the approved agencies in the DB, or (b) drop
-           the block. An unsourced performance percentage is the kind of claim
-           advertising regulators expect a business to be able to substantiate. -->
+      <!-- These read "72% of listed dates reach GoAhead" and "31 Ministry-licensed
+           operators". Neither was true: no departure has ever reached GoAhead, so
+           the percentage had no data behind it at all, and there are 6 approved
+           agencies, not 31. Replaced with a count the API actually answers and the
+           product rule the brand is built on — both checkable. Any figure added
+           here later must be one of those two things: live from the database, or a
+           rule that is true by construction. -->
       <div class="hero-meta">
-        <div class="m"><b class="tnum">72%</b><span>of listed dates<br>reach GoAhead</span></div>
+        <div class="m"><b class="tnum" data-live-departures aria-live="polite">&mdash;</b><span>dates open<br>across Egypt</span></div>
         <div class="sep"></div>
-        <div class="m"><b class="tnum">31</b><span>Ministry-licensed<br>operators</span></div>
+        <div class="m"><b class="tnum">4</b><span>travelers confirm<br>a departure</span></div>
       </div>
     </div>
 
@@ -962,6 +960,10 @@ footer .logo .nm i{color:var(--gold)}
     var openCount=pool.length;
     var cntEl=document.querySelector('.board-top .cnt');
     if(cntEl)cntEl.textContent=openCount+' departure'+(openCount===1?'':'s')+' open';
+    /* Same number in the hero. Left as an em dash if the fetch fails — the
+       figure is only ever shown when it is real. */
+    var heroCount=document.querySelector('[data-live-departures]');
+    if(heroCount)heroCount.textContent=openCount;
     var moreN=Math.max(0,openCount-1-board.length);
     var footEl=document.querySelector('.board-foot span');
     if(footEl)footEl.innerHTML='<b class="tnum">'+moreN+'</b> more forming this month';
