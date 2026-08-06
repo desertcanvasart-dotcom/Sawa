@@ -6,6 +6,7 @@ import {
   statusFor, packagePriceFor, balanceDueDate, computePledgePricing, enrichDeparture,
   bookingClosed, departureStarted,
   confirmDeadlineDaysFor, confirmDeadlineAt, missedConfirmDeadline,
+  priceFromTiers, validatePriceTiers, withPriceTiers,
 } from "./domain.js";
 
 const dayTour = {
@@ -268,4 +269,89 @@ test("missedConfirmDeadline: a package uses its start date and the 30-day window
   // 09:00 Cairo on 2026-08-01 is 06:00Z; 30 days earlier is 2026-07-02T06:00Z.
   assert.equal(missedConfirmDeadline(dep, null, Date.parse("2026-07-02T05:59:00Z")), false);
   assert.equal(missedConfirmDeadline(dep, null, Date.parse("2026-07-02T06:01:00Z")), true);
+});
+
+// --- per-headcount price table -------------------------------------------
+// An optional override for the published/break interpolation. The server
+// charges what livePriceFor returns, so a wrong table is a wrong invoice.
+
+const tiered = { ...dayTour, minSeats: 4, maxSeats: 12,
+  priceTiers: [{ seats: 4, price: 110 }, { seats: 7, price: 85 }, { seats: 10, price: 60 }] };
+
+test("priceFromTiers: the last breakpoint at or below the headcount applies", () => {
+  const t = tiered.priceTiers;
+  assert.equal(priceFromTiers(t, 4), 110);
+  assert.equal(priceFromTiers(t, 6), 110); // still in the 4-6 band
+  assert.equal(priceFromTiers(t, 7), 85);  // band changes exactly on the breakpoint
+  assert.equal(priceFromTiers(t, 9), 85);
+  assert.equal(priceFromTiers(t, 10), 60);
+  assert.equal(priceFromTiers(t, 99), 60);
+});
+test("priceFromTiers: unsorted input is sorted, not trusted", () => {
+  const jumbled = [{ seats: 10, price: 60 }, { seats: 4, price: 110 }, { seats: 7, price: 85 }];
+  assert.equal(priceFromTiers(jumbled, 8), 85);
+});
+test("priceFromTiers: returns null when there is nothing usable, so pricing falls back", () => {
+  for (const t of [null, undefined, [], "nope", [{}], [{ seats: 0, price: 5 }], [{ seats: 4, price: 0 }]]) {
+    assert.equal(priceFromTiers(t, 6), null, JSON.stringify(t));
+  }
+});
+test("livePriceFor: a table overrides the interpolation", () => {
+  assert.equal(livePriceFor(tiered, 5), 110);
+  assert.equal(livePriceFor(tiered, 8), 85);
+  // Without the table the same item would interpolate 75 -> 58.
+  const { priceTiers, ...noTable } = tiered;
+  assert.notEqual(livePriceFor(noTable, 8), 85);
+});
+test("livePriceFor: a table is clamped to capacity like the curve is", () => {
+  // A party larger than the tour pays the largest band, not something invented.
+  assert.equal(livePriceFor(tiered, 40), 60);
+  // Below the minimum, the minimum's price — nobody pays less than the GoAhead rate.
+  assert.equal(livePriceFor(tiered, 1), 110);
+});
+test("livePriceFor: an unusable table falls back rather than throwing", () => {
+  assert.equal(livePriceFor({ ...dayTour, priceTiers: [{ seats: "x", price: "y" }] }, 4), 75);
+});
+
+const bounds = { minSeats: 4, maxSeats: 12 };
+test("validatePriceTiers: accepts a good table and normalises it", () => {
+  const r = validatePriceTiers([{ seats: 7, price: 85.4 }, { seats: 4, price: 110 }], bounds);
+  assert.equal(r.error, undefined);
+  assert.deepEqual(r.tiers, [{ seats: 4, price: 110 }, { seats: 7, price: 85 }]);
+});
+test("validatePriceTiers: empty means 'no table', not an error", () => {
+  assert.deepEqual(validatePriceTiers(null, bounds), { tiers: null });
+  assert.deepEqual(validatePriceTiers([], bounds), { tiers: null });
+});
+test("validatePriceTiers: rejects a price that rises as the group grows", () => {
+  // This would contradict the promise made on every page of the site.
+  const r = validatePriceTiers([{ seats: 4, price: 80 }, { seats: 6, price: 90 }], bounds);
+  assert.match(r.error, /must never go up/);
+});
+test("validatePriceTiers: requires a row at the minimum group size", () => {
+  // Otherwise the very first booking silently pays a larger group's rate.
+  const r = validatePriceTiers([{ seats: 6, price: 90 }], bounds);
+  assert.match(r.error, /must start at 4/);
+});
+test("validatePriceTiers: rejects out-of-range, duplicate, and non-numeric rows", () => {
+  assert.match(validatePriceTiers([{ seats: 4, price: 90 }, { seats: 99, price: 50 }], bounds).error, /outside/);
+  assert.match(validatePriceTiers([{ seats: 4, price: 90 }, { seats: 4, price: 80 }], bounds).error, /twice/);
+  assert.match(validatePriceTiers([{ seats: 4.5, price: 90 }], bounds).error, /whole number/);
+  assert.match(validatePriceTiers([{ seats: 4, price: -5 }], bounds).error, /greater than zero/);
+  assert.match(validatePriceTiers({ seats: 4 }, bounds).error, /list of/);
+});
+test("withPriceTiers: carries a listing's table onto its departure, and is a no-op without one", () => {
+  const dep = { id: 1, publishedRate: 75 };
+  assert.deepEqual(withPriceTiers(dep, { priceTiers: [{ seats: 4, price: 9 }] }).priceTiers, [{ seats: 4, price: 9 }]);
+  assert.equal(withPriceTiers(dep, null), dep);
+  assert.equal(withPriceTiers(dep, { priceTiers: null }), dep);
+});
+test("computePledgePricing honours the table end to end", () => {
+  // The seam that matters: what the traveller is actually invoiced.
+  const dep = { ...dayTour, minSeats: 4, maxSeats: 12, depositPercent: 10, pledges: [{ seats: 6 }] };
+  const product = { priceTiers: tiered.priceTiers };
+  const p = computePledgePricing(dep, product, { seats: 2 });
+  // 6 already booked + 2 = 8 projected -> the 7+ band, $85.
+  assert.equal(p.pricePerPerson, 85);
+  assert.equal(p.bookingTotal, 170);
 });

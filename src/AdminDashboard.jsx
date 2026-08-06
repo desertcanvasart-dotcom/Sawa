@@ -590,6 +590,10 @@ export function ProductEditor({ type: typeProp, existing, destinations = [], onC
   const [notIncluded, setNotIncluded] = useState(existing?.notIncluded?.length ? existing.notIncluded : [""]);
   const [whatToBring, setWhatToBring] = useState(existing?.whatToBring?.length ? existing.whatToBring : [""]);
   const [images, setImages] = useState(existing?.images || []);
+  // Off unless the listing already has a table. The two anchors handle most
+  // tours; this is for the ones whose costs step rather than slide.
+  const [useTiers, setUseTiers] = useState(Boolean(existing?.priceTiers?.length));
+  const [priceTiers, setPriceTiers] = useState(existing?.priceTiers || []);
   const [itinerary, setItinerary] = useState(
     existing?.itinerary?.length ? existing.itinerary
       : pkg ? [{ day: 1, city: "Cairo", title: "", description: "", meals: "Breakfast" }] : []
@@ -652,6 +656,14 @@ export function ProductEditor({ type: typeProp, existing, destinations = [], onC
         pickupNote: (meetingPoints[0]?.note || f.pickupNote || "").trim(),
         bookingCutoffHours: Number(f.bookingCutoffHours) || 0,
         images,
+        // null clears any existing table, so turning the toggle off actually
+        // reverts the listing to the interpolation rather than leaving a stale
+        // table in place.
+        priceTiers: useTiers
+          ? priceTiers
+              .filter((t) => String(t.price).trim() !== "")
+              .map((t) => ({ seats: Number(t.seats), price: Number(t.price) }))
+          : null,
       };
       if (editing) body.id = existing.id;
       if (pkg) {
@@ -715,6 +727,16 @@ export function ProductEditor({ type: typeProp, existing, destinations = [], onC
               <Field label="Max seats (cap)"><input type="number" min="1" value={f.maxSeats} onChange={set("maxSeats")} /></Field>
               <Field label={pkg ? "GoAhead price /person" : "GoAhead price"}><input type="number" min="1" value={f.publishedRate} onChange={set("publishedRate")} /></Field>
               <Field label="Break price (full group)"><input type="number" min="1" value={f.breakPrice} onChange={set("breakPrice")} placeholder="auto = 80%" /></Field>
+              <PriceTierEditor
+                on={useTiers}
+                setOn={setUseTiers}
+                rows={priceTiers}
+                setRows={setPriceTiers}
+                minSeats={Number(f.minSeats) || 4}
+                maxSeats={Number(f.maxSeats) || 12}
+                publishedRate={Number(f.publishedRate) || 0}
+                breakPrice={Number(f.breakPrice) || 0}
+              />
               <Field label="Deposit %"><input type="number" min="0" max="100" value={f.depositPercent} onChange={set("depositPercent")} /></Field>
               <Field label="Booking cutoff (hours before)"><input type="number" min="0" value={f.bookingCutoffHours} onChange={set("bookingCutoffHours")} /></Field>
               <Field label="Departs on (empty = any day)" full>
@@ -856,6 +878,94 @@ export function ProductEditor({ type: typeProp, existing, destinations = [], onC
           </div>
         </div>
     </div>
+  );
+}
+
+// Per-headcount pricing. Off by default: the GoAhead/break anchors above draw a
+// straight line between them, which suits most tours. This is for the ones
+// whose costs step — a seven-seater up to six travellers, a minibus beyond —
+// where a slope either overcharges the small group or undercharges the large.
+//
+// Every group size from the minimum to the cap gets a row, prefilled from the
+// straight line, so switching on changes nothing until a number is edited and
+// the operator can see exactly what each group pays.
+function PriceTierEditor({ on, setOn, rows, setRows, minSeats, maxSeats, publishedRate, breakPrice }) {
+  const sizes = [];
+  for (let s = minSeats; s <= maxSeats; s += 1) sizes.push(s);
+
+  // The interpolation, mirrored, purely to prefill and to label the default.
+  const straightLine = (seats) => {
+    const start = publishedRate || 80;
+    const brk = Math.min(start, breakPrice || Math.round(start * 0.8));
+    const steps = Math.max(1, maxSeats - minSeats);
+    return Math.round(start - (start - brk) * Math.min(1, Math.max(0, seats - minSeats) / steps));
+  };
+
+  function enable() {
+    setRows(sizes.map((s) => {
+      const existing = rows.find((r) => Number(r.seats) === s);
+      return { seats: s, price: existing ? existing.price : straightLine(s) };
+    }));
+    setOn(true);
+  }
+
+  const priceAt = (s) => {
+    const row = rows.find((r) => Number(r.seats) === s);
+    return row ? row.price : "";
+  };
+  const setPriceAt = (s, value) =>
+    setRows((list) => {
+      const next = list.filter((r) => Number(r.seats) !== s);
+      next.push({ seats: s, price: value });
+      return next.sort((a, b) => a.seats - b.seats);
+    });
+
+  // Mirrors the server's rule so the operator sees the problem before saving.
+  const numeric = rows.filter((r) => String(r.price).trim() !== "").sort((a, b) => a.seats - b.seats);
+  const rising = numeric.find((r, i) => i > 0 && Number(r.price) > Number(numeric[i - 1].price));
+
+  return (
+    <Field label="Price per group size" full asDiv>
+      {!on ? (
+        <div className="tier-off">
+          <p>
+            Prices slide evenly from <b>${publishedRate || 0}</b> at {minSeats} travellers to{" "}
+            <b>${breakPrice || Math.round((publishedRate || 0) * 0.8)}</b> at {maxSeats}.
+          </p>
+          <button type="button" className="btn-ghost sm" onClick={enable}>Set a price for each group size</button>
+        </div>
+      ) : (
+        <div className="tier-grid-wrap">
+          <div className="tier-grid">
+            {sizes.map((s) => (
+              <label className="tier-cell" key={s}>
+                <span>{s} {s === 1 ? "traveller" : "travellers"}{s === minSeats ? " · GoAhead" : ""}</span>
+                <div className="tier-input">
+                  <i>$</i>
+                  <input
+                    type="number" min="1" inputMode="numeric"
+                    value={priceAt(s)}
+                    onChange={(e) => setPriceAt(s, e.target.value)}
+                    aria-label={`Price per person for ${s} travellers`}
+                  />
+                </div>
+              </label>
+            ))}
+          </div>
+          {rising && (
+            <p className="tier-warn" role="alert">
+              The price goes up at {rising.seats} travellers. It has to fall, or stay level, as the group grows — that's the promise on every page of the site.
+            </p>
+          )}
+          <div className="tier-actions">
+            <span className="tier-note">Per person, USD. A traveller pays the price for the group size their booking reaches.</span>
+            <button type="button" className="btn-ghost sm" onClick={() => { setOn(false); setRows([]); }}>
+              Use the sliding price instead
+            </button>
+          </div>
+        </div>
+      )}
+    </Field>
   );
 }
 
