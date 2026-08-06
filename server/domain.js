@@ -11,11 +11,21 @@ export const DEFAULT_PACKAGE_DEPOSIT = 20;
 // exceeds it. Changing this number means changing those pages too.
 export const MAX_GROUP_SIZE = 12;
 
+// The other end of the same sentence. A date that confirms below four breaks
+// the promise in the direction that matters to a traveller: they booked
+// expecting to share the trip with at least three other people, and a minimum
+// of two would run it with one. A listing may require MORE than four — the
+// card shows "2 of 6 joined", so nothing is hidden — but never fewer.
+export const MIN_GROUP_SIZE = 4;
+
 // Returns an error string, or null when the capacity is publishable.
 export function capacityError(minSeats, maxSeats) {
   const min = Number(minSeats);
   const max = Number(maxSeats);
-  if (!Number.isInteger(min) || min < 1) return "Minimum group size must be a whole number of at least 1.";
+  if (!Number.isInteger(min)) return "Minimum group size must be a whole number.";
+  if (min < MIN_GROUP_SIZE) {
+    return `Minimum group size is ${MIN_GROUP_SIZE} travellers — that is what the booking conditions promise a departure confirms at. Set ${min} higher, or change the terms first.`;
+  }
   if (!Number.isInteger(max) || max < 1) return "Maximum group size must be a whole number of at least 1.";
   if (max > MAX_GROUP_SIZE) {
     return `Maximum group size is ${MAX_GROUP_SIZE} travellers — that is the limit stated in the booking conditions. Set ${max} lower, or change the terms first.`;
