@@ -15,7 +15,7 @@ export const BRAND = {
     "Sawa is a Cairo-based shared-tour platform. We pool small bookings from independent travellers onto the same date, so day tours and multi-day packages across Egypt are guaranteed to run — you hold a seat for free and only pay once your departure is confirmed (GoAhead).",
   foundingDate: "", // TODO e.g. "2024"
   founders: [], // TODO e.g. [{ name: "…", jobTitle: "Founder" }]
-  email: "hello@sawatours.org",
+  email: "hello@sawa.tours",
   telephone: "+20 109 284 7613",
   whatsapp: "https://wa.me/201092847613",
   address: {

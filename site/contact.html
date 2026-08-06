@@ -70,7 +70,7 @@
              disagree. If +20 109 284 7613 is NOT the live support line, change it in
              server/brand.js AND here — this page is static and cannot read brand.js. -->
         <div class="feat"><div class="ico"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-8.5 15.2L2 22l4.9-1.4A10 10 0 1 0 12 2Z"/></svg></div><h3 style="font-size:1.15rem">WhatsApp</h3><p>Fastest for travelers on the move.</p><a href="https://wa.me/201092847613" rel="noopener" style="font-weight:600;color:var(--gold-ink);font-size:.9rem">+20 109 284 7613</a></div>
-        <div class="feat"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 6L2 7"/></svg></div><h3 style="font-size:1.15rem">Email</h3><p>For details, documents and bookings.</p><a href="mailto:hello@sawatours.org" style="font-weight:600;color:var(--gold-ink);font-size:.9rem">hello@sawatours.org</a></div>
+        <div class="feat"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 6L2 7"/></svg></div><h3 style="font-size:1.15rem">Email</h3><p>For details, documents and bookings.</p><a href="mailto:hello@sawa.tours" style="font-weight:600;color:var(--gold-ink);font-size:.9rem">hello@sawa.tours</a></div>
         <div class="feat"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18"/><path d="M5 21V7l8-4v18"/><path d="M19 21V11l-6-4"/></svg></div><h3 style="font-size:1.15rem">Operators</h3><p>Partnerships &amp; listings.</p><a href="/verify" style="font-weight:600;color:var(--gold-ink);font-size:.9rem">Become verified →</a></div>
         <div class="feat"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg></div><h3 style="font-size:1.15rem">Help &amp; FAQ</h3><p>Quick answers, any hour.</p><a href="/faq" style="font-weight:600;color:var(--gold-ink);font-size:.9rem">Read the FAQ →</a></div>
       </div>
@@ -88,7 +88,7 @@
              inbox. Previously the fields were nameless and the form defaulted to
              GET against this page, so a JS failure silently discarded the enquiry. -->
         <form class="form" id="contact-form" style="margin-top:22px"
-              action="mailto:hello@sawatours.org" method="post" enctype="text/plain">
+              action="mailto:hello@sawa.tours" method="post" enctype="text/plain">
           <div class="f-row">
             <div class="field"><label for="cf-name">Name <span class="req">*</span></label><input id="cf-name" name="name" required autocomplete="name" placeholder="Your name" /></div>
             <div class="field"><label for="cf-email">Email <span class="req">*</span></label><input id="cf-email" name="email" type="email" required autocomplete="email" placeholder="you@email.com" /></div>
@@ -98,7 +98,7 @@
           <div class="field"><label for="cf-message">Message <span class="req">*</span></label><textarea id="cf-message" name="message" required placeholder="Tell us what you need."></textarea></div>
           <label class="consent"><input type="checkbox" name="consent" value="yes" required /><span>I agree to be contacted about my enquiry.</span></label>
           <button class="btn gold block" type="submit">Send message <span class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></button>
-          <div class="done" role="status" style="display:none;align-items:center;gap:10px;background:rgba(244,201,93,.14);border:1px solid rgba(217,171,69,.4);border-radius:14px;padding:14px;color:var(--teal);font-size:.9rem"><span style="color:var(--gold-ink)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>Opening your email app… if nothing happens, write to <a href="mailto:hello@sawatours.org" style="color:var(--gold-ink);font-weight:600">hello@sawatours.org</a>.</div>
+          <div class="done" role="status" style="display:none;align-items:center;gap:10px;background:rgba(244,201,93,.14);border:1px solid rgba(217,171,69,.4);border-radius:14px;padding:14px;color:var(--teal);font-size:.9rem"><span style="color:var(--gold-ink)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>Opening your email app… if nothing happens, write to <a href="mailto:hello@sawa.tours" style="color:var(--gold-ink);font-weight:600">hello@sawa.tours</a>.</div>
         </form>
         <script>
         (function () {
@@ -111,7 +111,7 @@
             var subject = v('cf-subject') || ('Sawa enquiry from ' + name);
             var body = 'Name: ' + name + '\nEmail: ' + email + '\nI am a: ' + role + '\n\n' + msg;
             f.querySelector('.done').style.display = 'flex';
-            window.location.href = 'mailto:hello@sawatours.org?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body);
+            window.location.href = 'mailto:hello@sawa.tours?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body);
           });
         })();
         </script>
