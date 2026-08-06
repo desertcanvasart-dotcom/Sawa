@@ -3,6 +3,13 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- This shell had no icon at all, so every SPA route — /tours, /blog and
+         every tour and package page — showed a blank tab and fell back to a
+         /favicon.ico that did not exist. The static pages carried their own
+         inline SVG; these are the real mark, shared by both. -->
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" type="image/png" href="/images/favicon.png" />
+    <link rel="apple-touch-icon" href="/images/favicon.png" />
     <title>Sawa Shared Tours</title>
   </head>
   <body>
