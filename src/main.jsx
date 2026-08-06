@@ -1663,6 +1663,16 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
                       <div className="r key"><span>Deposit at GoAhead ({depositPct}%)</span><b>${deposit} USD</b></div>
                       <div className="r"><span>Balance</span><b>${balance} USD</b></div>
                       <div className="nt">All amounts in US dollars (USD). Nothing is charged today. Balance due {dep ? balanceDueDate(dep.date) : "before departure"}.</div>
+                      {/* The deadline is the other half of the GoAhead promise:
+                          the date by which this either confirms or is cancelled
+                          and everyone refunded. Showing it before someone
+                          reserves is the point — a commitment nobody can see is
+                          not one they can rely on. */}
+                      {dep?.confirmDeadline && (
+                        <div className="nt">
+                          This date confirms or cancels by <b>{formatDate(dep.confirmDeadline, { alwaysYear: true })}</b> — {dep.confirmDeadlineDays} days before departure. If it hasn't reached {goAheadFor(dep)} travellers by then it's cancelled and you're charged nothing.
+                        </div>
+                      )}
                       <PaymentTimeline />
                     </div>}
                     <div className="book-cta">

@@ -5,6 +5,14 @@ export const DEFAULT_GO_AHEAD = 4;
 export const DEFAULT_DAY_TOUR_DEPOSIT = 10;
 export const DEFAULT_PACKAGE_DEPOSIT = 20;
 
+// How long before departure a date must have reached its minimum, or it is
+// cancelled. Packages get 30 days because travellers book flights around them
+// and operators hold hotels and boats; day tours get 7 because the travellers
+// are usually already in Egypt and a longer window would kill dates that would
+// have filled. Overridable per listing via tour_products.confirm_deadline_days.
+export const DEFAULT_PACKAGE_CONFIRM_DEADLINE_DAYS = 30;
+export const DEFAULT_DAY_TOUR_CONFIRM_DEADLINE_DAYS = 7;
+
 export function isPackage(item) {
   return item && item.type === "package";
 }
@@ -77,8 +85,12 @@ export function balanceDueDate(date) {
 }
 
 // Adds the computed livePrice + normalised fields to a departure for responses.
-export function enrichDeparture(departure) {
+export function enrichDeparture(departure, product = null) {
   const seats = seatsTotal(departure.pledges);
+  // The date this must confirm by, as a plain calendar day. A promise the
+  // traveller cannot see before reserving is not much of a promise, so it goes
+  // out with every departure rather than living only in the cancellation job.
+  const deadlineMs = confirmDeadlineAt(departure, product);
   return {
     ...departure,
     type: departure.type || "day_tour",
@@ -86,6 +98,8 @@ export function enrichDeparture(departure) {
     depositPercent: Number(departure.depositPercent || defaultDepositFor(departure)),
     livePrice: livePriceFor(departure, seats),
     status: statusFor(departure, departure.pledges),
+    confirmDeadline: Number.isNaN(deadlineMs) ? null : new Date(deadlineMs).toISOString().slice(0, 10),
+    confirmDeadlineDays: confirmDeadlineDaysFor(product, departure),
   };
 }
 
@@ -102,6 +116,51 @@ export function departureStarted(departure, nowMs = Date.now()) {
   // a bad row is an ops problem, not a reason to hide inventory.
   if (Number.isNaN(start)) return false;
   return nowMs >= start;
+}
+
+// How many days before departure this date must reach its minimum. A per-listing
+// value wins; otherwise the type default.
+export function confirmDeadlineDaysFor(product, departure) {
+  const raw = product?.confirmDeadlineDays;
+  // Not `Number(raw)`: the column is nullable and NULL is the normal case
+  // meaning "use the type default", but Number(null) is 0 — which would have
+  // silently given every listing a zero-day deadline and stopped the defaults
+  // below from ever applying. Empty strings coerce to 0 the same way.
+  const n =
+    typeof raw === "number" ? raw
+      : typeof raw === "string" && raw.trim() !== "" ? Number(raw)
+        : NaN;
+  if (Number.isFinite(n) && n >= 0) return n;
+  return isPackage(departure || product)
+    ? DEFAULT_PACKAGE_CONFIRM_DEADLINE_DAYS
+    : DEFAULT_DAY_TOUR_CONFIRM_DEADLINE_DAYS;
+}
+
+// The instant a date must be confirmed by, as UTC epoch ms. Anchored to the
+// departure's own start time in Egyptian local time (see tz.js) rather than to
+// midnight, so a deadline never drifts by the host's timezone.
+export function confirmDeadlineAt(departure, product) {
+  const startStr = departure?.startDate || departure?.date;
+  if (!startStr) return NaN;
+  const start = zonedDateTimeToUtc(startStr, departure.time);
+  if (Number.isNaN(start)) return NaN;
+  return start - confirmDeadlineDaysFor(product, departure) * 86400000;
+}
+
+// Should this date be cancelled for never reaching its minimum?
+//
+// Deliberately narrow. Only a date that is still `open` qualifies: anything at
+// or above its minimum has already advanced to minimum_reached, and
+// pending_review is waiting on a human, not on travellers. Terminal states are
+// left alone so a re-run can never resurrect or re-cancel a date.
+export function missedConfirmDeadline(departure, product, nowMs = Date.now()) {
+  if (departure?.status !== "open") return false;
+  if (seatsTotal(departure.pledges) >= goAheadSeatsFor(departure)) return false;
+  const deadline = confirmDeadlineAt(departure, product);
+  // An unparseable date is an ops problem; cancelling on it would destroy real
+  // inventory over a data error.
+  if (Number.isNaN(deadline)) return false;
+  return nowMs > deadline;
 }
 
 // Booking cutoff: returns true if bookings are CLOSED for this departure now.
