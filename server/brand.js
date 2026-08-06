@@ -9,7 +9,14 @@ export const BRAND = {
   name: "Sawa Tours",
   alternateName: "Sawa Shared Tours",
   url: "https://sawa.tours",
-  logo: "https://sawa.tours/images/hero.jpg", // TODO: replace with a real square logo image (PNG, ~512px)
+  // Square, transparent PNG. Google's logo guidance wants the mark itself, not
+  // a photograph — this used to point at hero.jpg, which made the brand's
+  // "logo" a picture of the pyramids.
+  logo: "https://sawa.tours/images/logo-sawa.png",
+  // Distinct from the logo on purpose: schema.org `image` is the picture that
+  // represents the business in a result card, where a photograph outperforms a
+  // wordmark on white.
+  image: "https://sawa.tours/images/hero.jpg",
   positioning: "Shared departures, confirmed together.",
   description:
     "Sawa is a Cairo-based shared-tour platform. We pool small bookings from independent travellers onto the same date, so day tours and multi-day packages across Egypt are guaranteed to run — you hold a seat for free and only pay once your departure is confirmed (GoAhead).",
@@ -49,7 +56,7 @@ export function travelAgencySchema() {
     alternateName: BRAND.alternateName || undefined,
     url: BRAND.url,
     logo: BRAND.logo || undefined,
-    image: BRAND.logo || undefined,
+    image: BRAND.image || BRAND.logo || undefined,
     description: BRAND.description,
     slogan: BRAND.positioning || undefined,
     email: BRAND.email || undefined,
