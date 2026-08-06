@@ -11,22 +11,16 @@ import { cleanHtml } from "./sanitize.js";
 
 const esc = (s) => String(s == null ? "" : s)
   .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-const ldScript = (obj) => `<script type="application/ld+json">${JSON.stringify(obj).replace(/</g, "\\u003c")}</script>`;
-
-// JSON destined for inside a <script> block, which is NOT the same as JSON in a
-// response body. The HTML parser ends the block at the first "</script>"
-// anywhere in the text — including inside a JSON string — so a tour titled
-// `</script><img onerror=...>` would break out and execute. Escaping "<" shuts
-// that off. U+2028/U+2029 are legal in JSON but are line terminators in JS
-// source, so leaving them raw is a syntax error that blanks the payload.
-// Tour titles, descriptions and blog excerpts are operator-supplied: this is
-// untrusted input, not a formality.
-export function inlineScriptJson(value) {
-  return JSON.stringify(value)
-    .replace(/</g, "\\u003c")
-    .replace(/\u2028/g, "\\u2028")
-    .replace(/\u2029/g, "\\u2029");
-}
+// Tour titles, descriptions and blog excerpts are operator-supplied, so the
+// JSON-LD graph and the bootstrap payload are both inlining untrusted input
+// into a <script> block. ldScript used to escape only "<" and leave
+// U+2028/U+2029 raw — those are legal in JSON but are line terminators in JS
+// source, so a single one anywhere in a tour title is a syntax error that
+// blanks the entire graph. The bootstrap escaper sitting next to it had always
+// handled that. There is one implementation now, shared with static-seo.js.
+// Re-exported because app.js imports inlineScriptJson from this module.
+import { ldScript } from "./inline-json.js";
+export { inlineScriptJson } from "./inline-json.js";
 const meta = (attr, key, val) => (val ? `<meta ${attr}="${esc(key)}" content="${esc(val)}">` : "");
 const abs = (u) => (u && !u.startsWith("http") ? BRAND.url + (u.startsWith("/") ? "" : "/") + u : u);
 const clean = (p) => (p || "/").replace(/\/+$/, "") || "/";
@@ -56,17 +50,6 @@ const STATIC = {
   "/terms": { title: `Terms of Service | ${BRAND.name}`, description: "The terms for booking shared tours with Sawa, including the GoAhead model, payment and cancellations.", crumb: "Terms" },
   "/booking": { title: `Check Your Booking | ${BRAND.name}`, description: "Enter your booking code to see whether your Sawa departure has reached GoAhead.", crumb: "Booking" },
   "/blog": { title: `Blog — Notes from the Nile | ${BRAND.name}`, description: "Guides, history and practical tips for travelling Egypt the shared way, from the people who run the tours.", crumb: "Blog" },
-};
-
-const FAQ_SCHEMA = {
-  "@type": "FAQPage",
-  mainEntity: [
-    ["Do I pay when I book?", "No. Holding a seat is free. You only pay a deposit once your date reaches GoAhead and is confirmed to run."],
-    ["What happens if the tour doesn't fill?", "If a date never reaches the minimum number of travellers it doesn't run and you're charged nothing. We help you move to another date."],
-    ["What does GoAhead mean?", "GoAhead means a date has reached the minimum travellers, so the guide and vehicle are booked and the departure is guaranteed to run."],
-    ["Where do we meet?", "Each tour lists its exact meeting point and time — for example the Egyptian Museum in Tahrir for Cairo tours. You receive details with your confirmation."],
-    ["Can I cancel my booking?", "Free holds can be released any time before confirmation. After GoAhead, each tour's cancellation policy applies and is shown on the tour page."],
-  ].map(([q, a]) => ({ "@type": "Question", name: q, acceptedAnswer: { "@type": "Answer", text: a } })),
 };
 
 // Resolve by raw DB id first (back-compat), then by the derived SEO slug.
@@ -156,7 +139,6 @@ export async function buildHead(pathname) {
 
   if (STATIC[path]) {
     m = { ...m, ...STATIC[path] };
-    if (path === "/faq") graph.push(FAQ_SCHEMA);
     if (STATIC[path].crumb) crumbs.push({ name: STATIC[path].crumb, url });
     if (path === "/") graph.push({ "@type": "WebPage", url, name: m.title, description: m.description, isPartOf: { "@id": SITE_ID } });
   } else if (/^\/(tour|package)\/[^/]+$/.test(path)) {
