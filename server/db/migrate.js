@@ -27,6 +27,7 @@ const MIGRATIONS = [
   { name: "016_booking_code_unique", file: "schema_016_booking_code_unique.sql" },
   { name: "017_operator_applications", file: "schema_017_operator_applications.sql" },
   { name: "018_tour_products_updated_at", file: "schema_018_tour_products_updated_at.sql" },
+  { name: "019_confirm_deadline", file: "schema_019_confirm_deadline.sql" },
 ];
 
 async function main() {

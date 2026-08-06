@@ -5,6 +5,7 @@ import {
   isPackage, goAheadSeatsFor, defaultDepositFor, seatsTotal, livePriceFor,
   statusFor, packagePriceFor, balanceDueDate, computePledgePricing, enrichDeparture,
   bookingClosed, departureStarted,
+  confirmDeadlineDaysFor, confirmDeadlineAt, missedConfirmDeadline,
 } from "./domain.js";
 
 const dayTour = {
@@ -211,4 +212,60 @@ test("departureStarted: an unparseable time falls back to 08:00 rather than neve
   for (const time of ["junk", "", null, undefined, "25:61"]) {
     assert.equal(departureStarted({ date: "2026-07-10", time }, Date.parse("2026-07-11T00:00:00Z")), true, `time=${time}`);
   }
+});
+
+// --- the GoAhead deadline -----------------------------------------------
+// The booking conditions promise a date is cancelled if it misses its minimum
+// by a deadline. These pin down which dates that rule may touch, because the
+// cost of a false positive is destroying real inventory.
+
+test("confirmDeadlineDaysFor: 30 for packages, 7 for day tours", () => {
+  assert.equal(confirmDeadlineDaysFor(null, pkg), 30);
+  assert.equal(confirmDeadlineDaysFor(null, dayTour), 7);
+  assert.equal(confirmDeadlineDaysFor({}, pkg), 30);
+});
+test("confirmDeadlineDaysFor: a per-listing value overrides the type default", () => {
+  assert.equal(confirmDeadlineDaysFor({ confirmDeadlineDays: 14 }, pkg), 14);
+  // 0 is a legitimate override — "accept bookings right up to departure".
+  assert.equal(confirmDeadlineDaysFor({ confirmDeadlineDays: 0 }, dayTour), 0);
+  // Junk falls back rather than producing a nonsense deadline.
+  for (const bad of [null, undefined, -3, "soon", NaN]) {
+    assert.equal(confirmDeadlineDaysFor({ confirmDeadlineDays: bad }, dayTour), 7, `bad=${bad}`);
+  }
+});
+test("confirmDeadlineAt is measured from the departure's own start time", () => {
+  // 08:00 Cairo on 2026-07-10 is 05:00Z; 7 days earlier is 2026-07-03T05:00Z.
+  const at = confirmDeadlineAt({ date: "2026-07-10", time: "08:00" }, null);
+  assert.equal(new Date(at).toISOString(), "2026-07-03T05:00:00.000Z");
+});
+test("missedConfirmDeadline: fires only after the deadline, and only under the minimum", () => {
+  const dep = { status: "open", date: "2026-07-10", time: "08:00", minSeats: 4, pledges: [{ seats: 2 }] };
+  assert.equal(missedConfirmDeadline(dep, null, Date.parse("2026-07-03T04:59:00Z")), false);
+  assert.equal(missedConfirmDeadline(dep, null, Date.parse("2026-07-03T05:01:00Z")), true);
+});
+test("missedConfirmDeadline: never touches a date that reached its minimum", () => {
+  // Belt and braces — such a date is already 'minimum_reached', but a stale
+  // status must not be enough to cancel a trip people are travelling on.
+  const full = { status: "open", date: "2026-07-10", time: "08:00", minSeats: 4, pledges: [{ seats: 4 }] };
+  assert.equal(missedConfirmDeadline(full, null, Date.parse("2026-07-09T00:00:00Z")), false);
+});
+test("missedConfirmDeadline: leaves every non-open status alone", () => {
+  const base = { date: "2026-07-10", time: "08:00", minSeats: 4, pledges: [{ seats: 1 }] };
+  const wellPast = Date.parse("2026-07-09T00:00:00Z");
+  for (const status of ["pending_review", "minimum_reached", "supplier_confirmed", "closed", "cancelled"]) {
+    assert.equal(missedConfirmDeadline({ ...base, status }, null, wellPast), false, status);
+  }
+});
+test("missedConfirmDeadline: a malformed date cancels nothing", () => {
+  // Cancelling on a parse failure would destroy sellable inventory over bad data.
+  const bad = { status: "open", date: "not-a-date", time: "08:00", minSeats: 4, pledges: [] };
+  assert.equal(missedConfirmDeadline(bad, null, Date.now()), false);
+  assert.equal(missedConfirmDeadline({ status: "open", minSeats: 4, pledges: [] }, null, Date.now()), false);
+});
+test("missedConfirmDeadline: a package uses its start date and the 30-day window", () => {
+  const dep = { status: "open", type: "package", startDate: "2026-08-01", date: "2026-08-01",
+                time: "09:00", minSeats: 4, pledges: [{ seats: 3 }] };
+  // 09:00 Cairo on 2026-08-01 is 06:00Z; 30 days earlier is 2026-07-02T06:00Z.
+  assert.equal(missedConfirmDeadline(dep, null, Date.parse("2026-07-02T05:59:00Z")), false);
+  assert.equal(missedConfirmDeadline(dep, null, Date.parse("2026-07-02T06:01:00Z")), true);
 });

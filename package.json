@@ -12,6 +12,7 @@
     "db:seed-users": "node server/db/seed-users.js",
     "db:reset": "node server/db/migrate.js && node server/db/seed.js && node server/db/seed-users.js",
     "db:sanitize-html": "node server/db/sanitize-existing-html.js",
+    "job:cancel-unconfirmed": "node server/jobs/cancel-unconfirmed.js",
     "test": "node --test server/ src/",
     "build": "vite build",
     "start": "node server/app.js",

@@ -106,7 +106,11 @@
       <p>In certain cases (for example where flights or non-refundable services have already been issued) a 100% cancellation fee may apply as soon as the booking is confirmed. Please ask for full details of cancellation charges at the time of booking. If you leave a trip for any reason after it has commenced, we are not obliged to make any refund for unused services.</p>
 
       <h2>Cancellation by Sawa</h2>
-      <p>If a departure does not reach its minimum of four travelers by its deadline, it is cancelled automatically and you pay nothing; any hold is released in full. We may also cancel a trip at any time up to 28 days before departure if, due to terrorism, natural disasters, political instability or other external events, it is not viable to operate the planned itinerary.</p>
+      <!-- The deadline was referred to but never stated, and until now nothing
+           enforced it. Both are fixed: the days are named here, and a daily job
+           cancels dates that miss them (server/jobs/cancel-unconfirmed.js). -->
+      <p><strong>The GoAhead deadline.</strong> Every departure must reach its minimum of four travelers by a deadline before it departs: <strong>30 days</strong> for multi-day packages and <strong>7 days</strong> for day tours. The exact date is shown on the departure before you reserve. An operator may set a longer or shorter deadline on a particular tour, in which case the deadline shown on that departure applies.</p>
+      <p>If a departure does not reach its minimum of four travelers by its deadline, it is cancelled automatically and you pay nothing; any hold is released in full. We notify you by email as soon as this happens. We may also cancel a trip at any time up to 28 days before departure if, due to terrorism, natural disasters, political instability or other external events, it is not viable to operate the planned itinerary.</p>
       <p>If we cancel your confirmed trip, you may transfer amounts paid to an alternative departure date or receive a full refund. Where the cancellation is due to external events beyond our control, refunds will be made less any unrecoverable costs. We are not responsible for incidental costs you may have incurred as a result of your booking, including visas, vaccinations, travel insurance or non-refundable flights.</p>
 
       <h2>Booking amendments</h2>

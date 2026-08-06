@@ -166,7 +166,14 @@ async function loadDeparture(client, id, { forUpdate = false } = {}) {
     `SELECT * FROM pledges WHERE departure_id = $1 ORDER BY created_at ASC, id ASC`,
     [id]
   );
-  return enrichDeparture(mapDeparture(dep.rows[0], pledges.rows));
+  // The product carries any per-listing confirm-deadline override; without it
+  // enrichDeparture falls back to the type default, which is right but ignores
+  // what the operator set.
+  const productRow = dep.rows[0].tour_product_id
+    ? await client.query(`SELECT * FROM tour_products WHERE id = $1`, [dep.rows[0].tour_product_id])
+    : null;
+  const product = productRow?.rows?.length ? mapProduct(productRow.rows[0]) : null;
+  return enrichDeparture(mapDeparture(dep.rows[0], pledges.rows), product);
 }
 
 async function loadProduct(client, id) {
@@ -373,11 +380,16 @@ async function buildBootstrap(user) {
     byDep.get(p.departure_id).push(p);
   }
 
+  // Mapped once and shared: the payload lists them, and each departure needs
+  // its own to resolve the confirm deadline.
+  const mappedProducts = products.rows.map(mapProduct);
+  const productsById = new Map(mappedProducts.map((p) => [p.id, p]));
+
   return {
     // Only platform staff get the agency directory; agencies/public don't need it.
     agencies: isPlatform(user) ? agencies.rows.map(mapAgency) : [],
     cities: cities.rows.map(mapCity),
-    tourProducts: products.rows.map(mapProduct),
+    tourProducts: mappedProducts,
     // pending_review = traveler-requested, awaiting ops approval. Only
     // platform staff see them; the public board and agencies must not.
     //
@@ -389,7 +401,9 @@ async function buildBootstrap(user) {
       .filter((d) => canSeeAll || d.status !== "pending_review")
       .map((d) => mapDeparture(d, byDep.get(d.id) || []))
       .filter((d) => user || !departureStarted(d))
-      .map((d) => presentDeparture(enrichDeparture(d), user)),
+      // productsById so each departure's confirm deadline honours any override
+      // on its listing rather than only the type default.
+      .map((d) => presentDeparture(enrichDeparture(d, productsById.get(d.tourProductId) || null), user)),
   };
 }
 
