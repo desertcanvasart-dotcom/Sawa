@@ -315,15 +315,37 @@ function BookTours({ tourProducts, departures, agencyId, agencyName, agencyPax =
 
   return (
     <>
+      {/* The title and its description keep the head to themselves; the filter
+          and search move to their own row below. Sharing one line meant a long
+          description squeezed the controls until "Day tours" wrapped onto two
+          lines inside its pill, and the two controls sat at different heights. */}
       <div className="dash-head">
         <div><h1>Book seats</h1><p>Browse tours and packages, open one to see full details, then add your travellers.</p></div>
-        <div className="head-actions">
-          <div className="seg">
-            {["all", "day", "pkg"].map((k) => (
-              <button key={k} className={type === k ? "active" : ""} onClick={() => setType(k)}>{k === "all" ? "All" : k === "day" ? "Day tours" : "Packages"}</button>
-            ))}
-          </div>
-          <div className="search-box"><Search size={16} /><input placeholder="Search tours…" value={q} onChange={(e) => setQ(e.target.value)} /></div>
+      </div>
+
+      <div className="catalog-toolbar">
+        <div className="seg" role="tablist" aria-label="Filter by tour type">
+          {["all", "day", "pkg"].map((k) => (
+            <button key={k} role="tab" aria-selected={type === k} className={type === k ? "active" : ""} onClick={() => setType(k)}>
+              {k === "all" ? "All" : k === "day" ? "Day tours" : "Packages"}
+            </button>
+          ))}
+        </div>
+        <div className="catalog-toolbar-right">
+          {/* Filtering gave no feedback at all before — with 13 tours and a
+              4-column grid you cannot tell at a glance what a filter did. */}
+          <span className="catalog-count" aria-live="polite">
+            {shown.length === catalog.length
+              ? `${catalog.length} tour${catalog.length === 1 ? "" : "s"}`
+              : `${shown.length} of ${catalog.length}`}
+          </span>
+          <label className="search-box">
+            <Search size={16} aria-hidden="true" />
+            <input placeholder="Search tours…" aria-label="Search tours" value={q} onChange={(e) => setQ(e.target.value)} />
+            {q && (
+              <button type="button" className="search-clear" aria-label="Clear search" onClick={() => setQ("")}>×</button>
+            )}
+          </label>
         </div>
       </div>
 

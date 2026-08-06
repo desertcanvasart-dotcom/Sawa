@@ -4104,8 +4104,47 @@ button:disabled {
 .seats.ok { color: var(--go); }
 
 .seg { display: inline-flex; gap: 3px; padding: 4px; background: var(--sand-200); border-radius: 999px; margin-bottom: 16px; }
-.seg button { border: 0; background: transparent; border-radius: 999px; padding: 7px 16px; font-size: 13px; font-weight: 600; color: var(--ink-soft); cursor: pointer; }
+/* nowrap: a segmented control's labels must stay on one line. "Day tours" was
+   breaking across two lines whenever the row got tight, which stretched the
+   pill and threw everything beside it out of alignment. */
+.seg button { border: 0; background: transparent; border-radius: 999px; padding: 7px 16px; font-size: 13px; font-weight: 600; color: var(--ink-soft); cursor: pointer; white-space: nowrap; }
 .seg button.active { background: var(--surface); color: var(--ink); box-shadow: var(--shadow-sm); }
+
+/* Catalogue toolbar (agency → Book seats). Its own row under the page title so
+   the controls aren't fighting the description for horizontal space. */
+.catalog-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+/* .seg carries a bottom margin for the standalone case (admin's filter row);
+   in a flex toolbar that margin is what pushed it out of line with the search. */
+.catalog-toolbar .seg { margin-bottom: 0; }
+/* Match the search box's 42px exactly: 32 button + 8 pill padding + 2 border. */
+.catalog-toolbar .seg button { min-height: 32px; display: inline-flex; align-items: center; }
+.catalog-toolbar-right { display: flex; align-items: center; gap: 12px; margin-left: auto; }
+.catalog-count {
+  color: var(--ink-faint);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.search-clear {
+  border: 0; background: none; cursor: pointer; padding: 0 2px;
+  font-size: 18px; line-height: 1; color: var(--ink-faint);
+}
+.search-clear:hover { color: var(--ink); }
+@media (max-width: 700px) {
+  /* Stacked: the search takes the full width rather than collapsing to a few
+     unusable characters. */
+  .catalog-toolbar-right { width: 100%; margin-left: 0; }
+  .catalog-toolbar-right .search-box { flex: 1; }
+  .dash .catalog-toolbar-right .search-box input { min-width: 0; }
+}
 
 .dash .search-box { display: inline-flex; align-items: center; gap: 8px; background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 0 14px; min-height: 42px; }
 .dash .search-box input { border: 0; outline: none; background: transparent; font-size: 14px; min-width: 220px; }
@@ -5716,6 +5755,7 @@ button:disabled {
   border: 0; background: transparent; cursor: pointer;
   padding: 7px 15px; border-radius: 999px;
   font-size: 13.5px; font-weight: 600; color: var(--ink-soft);
+  white-space: nowrap;
   transition: background 0.2s ease, color 0.2s ease;
 }
 .seg button.on { background: var(--surface); color: var(--ink); box-shadow: var(--shadow-sm); }
