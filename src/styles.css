@@ -3802,6 +3802,69 @@ button:disabled {
 }
 .auth-back:hover { color: var(--accent-deep); }
 
+/* The card is a plain container now that it holds three different views, so the
+   form carries the vertical rhythm the card used to. */
+.auth-form { display: grid; gap: 14px; }
+
+/* Password field + reveal toggle. The button sits inside the input's box, so
+   the input needs room on the right for it — otherwise long values slide
+   underneath. */
+.pw-wrap { position: relative; display: grid; }
+.auth-card .pw-wrap input { padding-right: 48px; }
+.pw-toggle {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  transform: translateY(-50%);
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--ink-faint);
+  cursor: pointer;
+  transition: color 0.2s ease, background 0.2s ease;
+}
+.pw-toggle svg { width: 19px; height: 19px; }
+.pw-toggle:hover { color: var(--ink-soft); background: rgba(31,95,122,0.08); }
+.pw-toggle:focus-visible {
+  outline: none;
+  color: var(--accent-deep);
+  box-shadow: 0 0 0 3px rgba(31,95,122,0.28);
+}
+
+/* Secondary actions that are buttons, not links — "Forgot your password?" and
+   "Back to sign in" both change view rather than navigate, so they must be
+   <button>s, and these styles keep them reading as links. */
+.auth-link {
+  border: 0;
+  background: none;
+  padding: 2px;
+  color: var(--ink-faint);
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.auth-link:hover { color: var(--accent-deep); }
+.auth-link:focus-visible {
+  outline: none;
+  color: var(--accent-deep);
+  box-shadow: 0 0 0 3px rgba(31,95,122,0.28);
+  border-radius: 6px;
+}
+
+.auth-note {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 13.5px;
+  line-height: 1.6;
+}
+
 /* Account card in sidebar */
 .account-card {
   display: grid;
