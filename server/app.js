@@ -523,7 +523,7 @@ async function upsertTourProduct(c, body, review) {
   // sell every seat at the interpolated price instead.
   const tierCheck = validatePriceTiers(body.priceTiers, {
     minSeats: Number(body.minSeats || 4),
-    maxSeats: Number(body.maxSeats || (type === "package" ? 12 : 10)),
+    maxSeats: Number(body.maxSeats || 12),
   });
   if (tierCheck.error) throw new AppError(422, tierCheck.error);
   const priceTiers = tierCheck.tiers ? JSON.stringify(tierCheck.tiers) : null;
@@ -559,8 +559,8 @@ async function upsertTourProduct(c, body, review) {
       type === "package" ? Number(body.nights || 3) : null,
       body.duration || (type === "package" ? `${Number(body.nights || 3) + 1} days · ${body.nights || 3} nights` : "4 hours"),
       body.defaultTime || "08:00", body.guide || "Licensed Egyptologist",
-      body.vehicle || (type === "package" ? "Private van + flights" : "Van, 10 seats"),
-      Number(body.minSeats || 4), Number(body.maxSeats || (type === "package" ? 12 : 10)),
+      body.vehicle || (type === "package" ? "Private van + flights" : "Van, 12 seats"),
+      Number(body.minSeats || 4), Number(body.maxSeats || 12),
       Number(body.baseCost || 0), publishedRate,
       Number(body.breakPrice || Math.round(publishedRate * 0.8)), Number(body.quality || 4.7),
       Number(body.depositPercent || (type === "package" ? 20 : 10)), body.description || "",
