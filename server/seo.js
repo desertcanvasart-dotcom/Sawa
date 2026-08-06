@@ -200,6 +200,10 @@ export async function buildHead(pathname) {
     meta("name", "twitter:image", ogImg),
     m.extraMeta || "",
     ldScript({ "@context": "https://schema.org", "@graph": graph }),
+    // Analytics. The same file the 18 static pages load, so the measurement ID
+    // lives in exactly one place (site/assets/analytics.js) rather than being
+    // pasted into every head on the site.
+    `<script src="/assets/analytics.js"></script>`,
   ].join("\n");
 
   return { title: m.title, head, notFound: !!m.notFound };

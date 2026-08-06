@@ -461,6 +461,15 @@ function App() {
     window.history.pushState({}, "", to);
     setPath(to);
     window.scrollTo({ top: 0, behavior: "smooth" });
+    // GA4 counts one page_view on load. Client-side routing never reloads, so
+    // without this every tour page a visitor opens after landing goes
+    // unrecorded and the whole SPA reads as a single-page session.
+    if (typeof window.gtag === "function") {
+      window.gtag("event", "page_view", {
+        page_path: to,
+        page_location: window.location.href,
+      });
+    }
   }
 
   const dayTourProducts = useMemo(() => tourProducts.filter((p) => !isPackage(p)), [tourProducts]);
