@@ -15,6 +15,7 @@
 // FOR UPDATE inside its own transaction and re-checked against the rule, so a
 // second runner finds it already cancelled and skips it.
 import "dotenv/config";
+import { pathToFileURL } from "node:url";
 import { pool, withTransaction } from "../db/index.js";
 import { mapDeparture, mapProduct } from "../db/mappers.js";
 import { missedConfirmDeadline, confirmDeadlineAt, seatsTotal, goAheadSeatsFor } from "../domain.js";
@@ -78,21 +79,24 @@ async function cancelOne({ dep, product }) {
   });
 }
 
-async function main() {
+// The work itself. Deliberately does not touch the pool or the process: the
+// scheduler inside the running server calls this too, and a job that closed the
+// connection pool or exited would take the website down with it.
+export async function runCancelUnconfirmed({ dryRun = false, log = console.log } = {}) {
   const candidates = await loadCandidates();
-  console.log(`${candidates.length} departure(s) past their GoAhead deadline${DRY_RUN ? " (dry run)" : ""}`);
+  log(`${candidates.length} departure(s) past their GoAhead deadline${dryRun ? " (dry run)" : ""}`);
 
   let cancelled = 0;
   let notified = 0;
   for (const candidate of candidates) {
-    const { dep, product } = candidate;
+    const { dep } = candidate;
     const seats = seatsTotal(dep.pledges);
     const line = `  #${dep.id} ${dateLabel(dep)} — ${seats}/${goAheadSeatsFor(dep)} seats — ${dep.route}`;
 
-    if (DRY_RUN) { console.log(line + "  [would cancel]"); continue; }
+    if (dryRun) { log(line + "  [would cancel]"); continue; }
 
     const result = await cancelOne(candidate);
-    if (result.skipped) { console.log(line + `  [skipped: ${result.skipped}]`); continue; }
+    if (result.skipped) { log(line + `  [skipped: ${result.skipped}]`); continue; }
     cancelled += 1;
 
     // Email never blocks the cancellation: the date is already cancelled and
@@ -103,14 +107,20 @@ async function main() {
       })).catch(() => ({ ok: false }));
       if (sent?.ok) notified += 1;
     }
-    console.log(line + `  [cancelled, ${result.recipients.length} traveller(s) emailed]`);
+    log(line + `  [cancelled, ${result.recipients.length} traveller(s) emailed]`);
   }
 
-  if (!DRY_RUN) console.log(`\ncancelled ${cancelled}, emails sent ${notified}`);
-  await pool.end();
+  if (!dryRun) log(`cancelled ${cancelled}, emails sent ${notified}`);
+  return { candidates: candidates.length, cancelled, notified };
 }
 
-main().catch((e) => {
-  console.error("cancel-unconfirmed failed:", e.message);
-  process.exit(1);
-});
+// Run as a script (npm run job:cancel-unconfirmed) rather than imported.
+const isCli = process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url;
+if (isCli) {
+  runCancelUnconfirmed({ dryRun: DRY_RUN })
+    .then(() => pool.end())
+    .catch((e) => {
+      console.error("cancel-unconfirmed failed:", e.message);
+      process.exit(1);
+    });
+}

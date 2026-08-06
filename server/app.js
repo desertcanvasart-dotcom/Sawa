@@ -37,6 +37,7 @@ import {
 import { emitDepartureSync, unavailableDates } from "./autoura-sync.js";
 import { tourSlug } from "./slug.js";
 import { BRAND } from "./brand.js";
+import { startJobScheduler } from "./jobs/scheduler.js";
 import { cleanHtml, cleanItinerary } from "./sanitize.js";
 import { canonicalRedirect } from "./canonical.js";
 
@@ -1937,4 +1938,9 @@ app.use((err, _req, res, _next) => {
 
 // Railway provides PORT; fall back to API_PORT for local dev.
 const port = Number(process.env.PORT || process.env.API_PORT || 8787);
-app.listen(port, "0.0.0.0", () => console.log(`Sawa listening on :${port}`));
+app.listen(port, "0.0.0.0", () => {
+  console.log(`Sawa listening on :${port}`);
+  // Started after the listener so a failure here can never stop the site from
+  // coming up, and so the healthcheck passes before any job touches the DB.
+  startJobScheduler();
+});
