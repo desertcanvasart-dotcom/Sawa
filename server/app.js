@@ -14,6 +14,7 @@ import {
   validatePriceTiers,
   capacityError,
   MAX_GROUP_SIZE,
+  MIN_GROUP_SIZE,
   DEFAULT_GO_AHEAD,
 } from "./domain.js";
 import { attachUser, requireAuth, requireRole, isPlatform, isAgency, AuthError } from "./auth.js";
@@ -263,7 +264,9 @@ const createDepartureSchema = z.object({
   city: z.string().trim().optional(),
   customers: z.string().trim().optional(),
   cutoff: z.string().trim().optional(),
-  minSeats: z.coerce.number().int().positive().max(MAX_GROUP_SIZE).optional(),
+  minSeats: z.coerce.number().int().min(MIN_GROUP_SIZE, {
+    message: `Minimum group size is ${MIN_GROUP_SIZE} travellers — what the booking conditions promise a departure confirms at.`,
+  }).max(MAX_GROUP_SIZE).optional(),
   maxSeats: z.coerce.number().int().positive().max(MAX_GROUP_SIZE, {
     message: `Maximum group size is ${MAX_GROUP_SIZE} travellers — the limit stated in the booking conditions.`,
   }).optional(),
