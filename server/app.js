@@ -30,8 +30,8 @@ import {
   operatorApplicationEmail, operatorApplicationReceiptEmail, operatorApplicationText,
 } from "./email.js";
 import { randomBytes, randomInt } from "node:crypto";
-import { existsSync, readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { existsSync, readFileSync, statSync } from "node:fs";
+import { dirname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   buildHead, buildBody, robotsTxt, sitemapXml, llmsTxt, llmsFullTxt,
@@ -43,6 +43,7 @@ import { BRAND } from "./brand.js";
 import { startJobScheduler } from "./jobs/scheduler.js";
 import { cleanHtml, cleanItinerary } from "./sanitize.js";
 import { canonicalRedirect } from "./canonical.js";
+import { injectStaticSchema } from "./static-seo.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const distDir = join(__dirname, "..", "dist");
@@ -1835,10 +1836,66 @@ if (existsSync(siteDir)) {
     return res.redirect(301, htmlAlias[name] || `/${name}`);
   });
   app.get("/trust", (_req, res) => res.redirect(301, "/goahead-promise"));
-  // Serve the destinations index directly; otherwise express.static bounces
-  // /destinations -> /destinations/ with an extra 301 on a primary nav link.
-  app.get("/destinations", (_req, res) => res.sendFile(join(siteDir, "destinations", "index.html")));
-  app.get("/", (_req, res) => res.sendFile(join(siteDir, "index.html")));
+
+  // These pages are hand-written HTML with no JSON-LD of their own, and
+  // buildHead() — which builds the graph for every SPA route — only runs for
+  // routes that reach the SPA handler. Serving them straight off disk
+  // therefore left 18 of the site's 35 indexed URLs carrying no structured
+  // data at all, "/" among them. That is the one page Google reads the
+  // Organization entity and its logo from, so the brand declared a logo on
+  // tour detail pages and nowhere that counted.
+  //
+  // Injecting on the way out keeps the graph single-sourced from brand.js
+  // rather than pasted into eighteen files that would immediately start to
+  // drift.
+  const siteRoot = resolve(siteDir);
+  // Keyed by file AND url path: /destinations and /destinations/index resolve
+  // to the same file but describe themselves differently. Validated by mtime,
+  // so this is one parse per file per deploy, not per request.
+  const schemaCache = new Map();
+
+  // Resolve a URL path to the file express.static would have served for it.
+  // The pattern admits no "." at all, so "..", dotfiles and encoded traversal
+  // never reach the filesystem; the containment check is the second lock on
+  // that door rather than the first.
+  const staticHtmlFor = (urlPath) => {
+    if (urlPath === "/") return join(siteRoot, "index.html");
+    if (!/^\/[a-z0-9][a-z0-9\-/]*$/i.test(urlPath)) return null;
+    const rel = urlPath.slice(1);
+    for (const candidate of [join(siteRoot, `${rel}.html`), join(siteRoot, rel, "index.html")]) {
+      const abs = resolve(candidate);
+      if (abs !== siteRoot && !abs.startsWith(siteRoot + sep)) continue;
+      if (existsSync(abs)) return abs;
+    }
+    return null;
+  };
+
+  app.use((req, res, next) => {
+    if (req.method !== "GET" && req.method !== "HEAD") return next();
+    let abs = null;
+    try { abs = staticHtmlFor(req.path); } catch { return next(); }
+    if (!abs) return next();
+    try {
+      const { mtimeMs } = statSync(abs);
+      const key = `${abs}|${req.path}`;
+      let hit = schemaCache.get(key);
+      if (!hit || hit.mtimeMs !== mtimeMs) {
+        hit = { mtimeMs, html: injectStaticSchema(readFileSync(abs, "utf8"), req.path) };
+        schemaCache.set(key, hit);
+      }
+      // Matches what express.static would have sent, so adding schema does not
+      // quietly change how these pages cache.
+      res.set("Cache-Control", "public, max-age=0");
+      res.set("Last-Modified", new Date(mtimeMs).toUTCString());
+      return res.type("html").send(hit.html);
+    } catch (e) {
+      // A page served without its schema beats a page not served at all.
+      console.error("[seo] static schema injection failed for", req.path, "-", e.message);
+      return next();
+    }
+  });
+
+  // Still the fallback for assets, images and anything the injector skipped.
   // extensions:["html"] serves /operators from operators.html, etc.
   app.use(express.static(siteDir, { extensions: ["html"] }));
 }
