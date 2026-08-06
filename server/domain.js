@@ -36,15 +36,89 @@ function clampPrice(value, fallback) {
   return Number.isFinite(price) && price > 0 ? price : fallback;
 }
 
+// Explicit per-headcount pricing, when an operator wants it.
+//
+// Stored as breakpoints rather than one row per traveller, because real costs
+// step rather than slide: a 7-seater up to six people, a minibus beyond. The
+// price for N travellers is the last breakpoint at or below N, so a sparse
+// table like 4→$110, 7→$85, 10→$60 prices every group size in between without
+// the operator typing each one.
+//
+// Returns null when there is no usable table, which is the signal to fall back
+// to the published/break interpolation.
+export function priceFromTiers(tiers, seats) {
+  if (!Array.isArray(tiers) || !tiers.length) return null;
+  const sorted = tiers
+    .map((t) => ({ seats: Number(t?.seats), price: Number(t?.price) }))
+    .filter((t) => Number.isFinite(t.seats) && Number.isFinite(t.price) && t.seats > 0 && t.price > 0)
+    .sort((a, b) => a.seats - b.seats);
+  if (!sorted.length) return null;
+  const n = Number(seats) || 0;
+  // Below the first breakpoint, the first breakpoint's price applies — the
+  // table is validated to start at the minimum group size, so this only comes
+  // up for a legacy row that predates that rule.
+  let match = sorted[0];
+  for (const t of sorted) if (n >= t.seats) match = t;
+  return Math.round(match.price);
+}
+
 export function livePriceFor(item, seats) {
   const goAhead = goAheadSeatsFor(item);
   const startPrice = clampPrice(item.publishedRate, 80);
   const breakPrice = Math.min(startPrice, clampPrice(item.breakPrice, Math.round(startPrice * 0.8)));
   const maxSeats = Math.max(Number(item.maxSeats || goAhead), goAhead);
   const effectiveSeats = Math.min(maxSeats, Math.max(goAhead, Number(seats || 0)));
+  // Clamped first: a party of 20 on a twelve-seat tour pays the twelve price,
+  // under the table exactly as under the curve.
+  const fromTable = priceFromTiers(item?.priceTiers, effectiveSeats);
+  if (fromTable != null) return fromTable;
   const steps = Math.max(1, maxSeats - goAhead);
   const progress = Math.min(1, Math.max(0, effectiveSeats - goAhead) / steps);
   return Math.round(startPrice - (startPrice - breakPrice) * progress);
+}
+
+// Validates an operator-supplied table. Returns { tiers } or { error }.
+//
+// The rules exist because a bad table is a mispriced booking, and the server
+// charges what this returns.
+export function validatePriceTiers(raw, { minSeats, maxSeats } = {}) {
+  if (raw == null || (Array.isArray(raw) && raw.length === 0)) return { tiers: null };
+  if (!Array.isArray(raw)) return { error: "Price table must be a list of { seats, price } rows." };
+
+  const min = Math.max(1, Number(minSeats) || DEFAULT_GO_AHEAD);
+  const max = Math.max(min, Number(maxSeats) || min);
+  const rows = [];
+  for (const t of raw) {
+    const seats = Number(t?.seats);
+    const price = Number(t?.price);
+    if (!Number.isInteger(seats)) return { error: `Group size "${t?.seats}" must be a whole number.` };
+    if (seats < min || seats > max) return { error: `Group size ${seats} is outside this tour's ${min}–${max} range.` };
+    if (!Number.isFinite(price) || price <= 0) return { error: `Price for ${seats} travellers must be greater than zero.` };
+    if (rows.some((r) => r.seats === seats)) return { error: `Group size ${seats} appears twice.` };
+    rows.push({ seats, price: Math.round(price) });
+  }
+  rows.sort((a, b) => a.seats - b.seats);
+
+  // The whole promise is that the price falls as the group grows. A table that
+  // rose would contradict every page on the site and surprise travellers who
+  // recruited someone else specifically to bring the price down.
+  for (let i = 1; i < rows.length; i += 1) {
+    if (rows[i].price > rows[i - 1].price) {
+      return { error: `Price rises from ${rows[i - 1].seats} to ${rows[i].seats} travellers. It must never go up as the group grows.` };
+    }
+  }
+  // Without a row at the minimum there is no defined GoAhead price, and the
+  // first booking would silently pay a larger group's rate.
+  if (rows[0].seats !== min) {
+    return { error: `The table must start at ${min} travellers — that is the group size a date confirms at.` };
+  }
+  return { tiers: rows };
+}
+
+// A departure carries its own copy of the rates, but the price table lives on
+// the listing. Merges it in so pricing reads one object.
+export function withPriceTiers(departure, product) {
+  return product?.priceTiers ? { ...departure, priceTiers: product.priceTiers } : departure;
 }
 
 export function statusFor(departure, pledges) {
@@ -65,7 +139,7 @@ export function findTier(product, tierId) {
 // Package price = seat-based shared rate + per-person tier supplement
 // + single supplement (only when rooming is "single").
 export function packagePriceFor(product, departure, seats, { roomingType = "double", tierId } = {}) {
-  const base = livePriceFor(departure || product, seats);
+  const base = livePriceFor(withPriceTiers(departure || product, product), seats);
   const tier = findTier(product, tierId);
   const tierSupplement = Number(tier?.perPersonSupplement || 0);
   const singleSupplement = roomingType === "single" ? Number(tier?.singleSupplement || 0) : 0;
@@ -96,7 +170,7 @@ export function enrichDeparture(departure, product = null) {
     type: departure.type || "day_tour",
     breakPrice: clampPrice(departure.breakPrice, Math.round(clampPrice(departure.publishedRate, 80) * 0.8)),
     depositPercent: Number(departure.depositPercent || defaultDepositFor(departure)),
-    livePrice: livePriceFor(departure, seats),
+    livePrice: livePriceFor(withPriceTiers(departure, product), seats),
     status: statusFor(departure, departure.pledges),
     confirmDeadline: Number.isNaN(deadlineMs) ? null : new Date(deadlineMs).toISOString().slice(0, 10),
     confirmDeadlineDays: confirmDeadlineDaysFor(product, departure),
@@ -190,7 +264,7 @@ export function computePledgePricing(departure, product, { seats, roomingType, a
     pricePerPerson = packagePriceFor(product, departure, projectedSeats, { roomingType: rooming, tierId: tier?.id });
     extra = { roomingType: rooming, accommodationTier: tier?.id || null, accommodationTierName: tier?.name || null };
   } else {
-    pricePerPerson = livePriceFor(departure, projectedSeats);
+    pricePerPerson = livePriceFor(withPriceTiers(departure, product), projectedSeats);
   }
   const bookingTotal = pricePerPerson * Number(seats);
   const depositDue = Math.ceil(bookingTotal * (depositPercent / 100));

@@ -23,11 +23,28 @@ const STOCK = {
 };
 const coverOf = (p) => (p.images && p.images[0]?.url) || STOCK[p.city] || STOCK.Cairo;
 const goAheadOf = (x) => Math.max(1, Number(x?.minSeats || 4));
+// Mirrors priceFromTiers / livePriceFor in server/domain.js. An agency quoting
+// one price while the server charges another is the failure to avoid here, so
+// these stay in step with the server implementation.
+function priceFromTiers(tiers, seats) {
+  if (!Array.isArray(tiers) || !tiers.length) return null;
+  const sorted = tiers
+    .map((t) => ({ seats: Number(t?.seats), price: Number(t?.price) }))
+    .filter((t) => Number.isFinite(t.seats) && Number.isFinite(t.price) && t.seats > 0 && t.price > 0)
+    .sort((a, b) => a.seats - b.seats);
+  if (!sorted.length) return null;
+  const n = Number(seats) || 0;
+  let match = sorted[0];
+  for (const t of sorted) if (n >= t.seats) match = t;
+  return Math.round(match.price);
+}
 function livePrice(item, seats) {
   const start = Number(item.publishedRate) || 80;
   const brk = Math.min(start, Number(item.breakPrice) || Math.round(start * 0.8));
   const ga = goAheadOf(item), max = Math.max(Number(item.maxSeats || ga), ga);
   const eff = Math.min(max, Math.max(ga, Number(seats || 0)));
+  const fromTable = priceFromTiers(item?.priceTiers, eff);
+  if (fromTable != null) return fromTable;
   const steps = Math.max(1, max - ga);
   return Math.round(start - (start - brk) * Math.min(1, Math.max(0, eff - ga) / steps));
 }

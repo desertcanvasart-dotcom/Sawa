@@ -76,6 +76,8 @@ export function mapProduct(r) {
     // NULL stays null: domain.js resolves it to the type default, so the policy
     // has exactly one home rather than being frozen into every row.
     confirmDeadlineDays: r.confirm_deadline_days == null ? null : num(r.confirm_deadline_days),
+    // NULL means "use the published/break interpolation" — see livePriceFor.
+    priceTiers: Array.isArray(r.price_tiers) && r.price_tiers.length ? r.price_tiers : null,
     images: r.images ?? [],
     itinerary: r.itinerary ?? [],
   };

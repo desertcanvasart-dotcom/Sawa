@@ -28,6 +28,7 @@ const MIGRATIONS = [
   { name: "017_operator_applications", file: "schema_017_operator_applications.sql" },
   { name: "018_tour_products_updated_at", file: "schema_018_tour_products_updated_at.sql" },
   { name: "019_confirm_deadline", file: "schema_019_confirm_deadline.sql" },
+  { name: "020_price_tiers", file: "schema_020_price_tiers.sql" },
 ];
 
 async function main() {

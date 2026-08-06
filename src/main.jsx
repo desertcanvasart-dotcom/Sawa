@@ -175,12 +175,31 @@ function safePrice(value, fallback) {
   return Number.isFinite(price) && price > 0 ? price : fallback;
 }
 
+// Mirror of priceFromTiers in server/domain.js. These two must agree exactly:
+// this one decides the price a traveller is shown, that one decides the price
+// they are charged, and a disagreement is a quote the server won't honour.
+function priceFromTiers(tiers, seats) {
+  if (!Array.isArray(tiers) || !tiers.length) return null;
+  const sorted = tiers
+    .map((t) => ({ seats: Number(t?.seats), price: Number(t?.price) }))
+    .filter((t) => Number.isFinite(t.seats) && Number.isFinite(t.price) && t.seats > 0 && t.price > 0)
+    .sort((a, b) => a.seats - b.seats);
+  if (!sorted.length) return null;
+  const n = Number(seats) || 0;
+  let match = sorted[0];
+  for (const t of sorted) if (n >= t.seats) match = t;
+  return Math.round(match.price);
+}
+
+// Mirror of livePriceFor in server/domain.js — same caveat as above.
 function livePriceFor(item, seats) {
   const goAhead = goAheadFor(item);
   const startPrice = safePrice(item.publishedRate, 80);
   const breakPrice = Math.min(startPrice, safePrice(item.breakPrice, Math.round(startPrice * 0.8)));
   const maxSeats = Math.max(Number(item.maxSeats || goAhead), goAhead);
   const effectiveSeats = Math.min(maxSeats, Math.max(goAhead, Number(seats || 0)));
+  const fromTable = priceFromTiers(item?.priceTiers, effectiveSeats);
+  if (fromTable != null) return fromTable;
   const steps = Math.max(1, maxSeats - goAhead);
   const progress = Math.min(1, Math.max(0, effectiveSeats - goAhead) / steps);
   return Math.round(startPrice - (startPrice - breakPrice) * progress);

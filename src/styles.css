@@ -3865,6 +3865,34 @@ button:disabled {
   line-height: 1.6;
 }
 
+/* Per-group-size price editor (admin listing form) */
+.tier-off { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.tier-off p { margin: 0; font-size: 13.5px; color: var(--ink-soft); }
+.tier-grid-wrap { display: grid; gap: 12px; }
+.tier-grid {
+  display: grid;
+  /* auto-fill so a 4-12 tour and a 2-30 one both lay out sensibly */
+  grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+  gap: 10px;
+}
+.tier-cell { display: grid; gap: 5px; }
+.tier-cell > span { font-size: 12px; font-weight: 600; color: var(--ink-soft); }
+.tier-input { position: relative; display: grid; }
+.tier-input i {
+  position: absolute; left: 11px; top: 50%; transform: translateY(-50%);
+  font-style: normal; font-size: 13px; color: var(--ink-faint); pointer-events: none;
+}
+/* `.field input` sets the padding shorthand later in this file at equal
+   specificity, so it wins over a bare `.tier-input input` and the $ collides
+   with the number. Scoped through .field to outrank it. */
+.field .tier-input input { padding-left: 26px; font-variant-numeric: tabular-nums; }
+.tier-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+.tier-note { font-size: 12.5px; color: var(--ink-faint); }
+.tier-warn {
+  margin: 0; padding: 9px 12px; border-radius: 10px; font-size: 13px; font-weight: 600;
+  background: #fdf2f2; border: 1px solid #f0c5c0; color: #b3261e;
+}
+
 /* Account card in sidebar */
 .account-card {
   display: grid;
