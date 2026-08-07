@@ -886,7 +886,7 @@ footer .logo .nm i{color:var(--gold)}
   }
   loadData().then(function(data){
     var byId={};
-    (data.tourProducts||[]).forEach(function(p){if(p.active!==false)byId[p.id]=p;});
+    (data.tourProducts||[]).forEach(function(p){if(p.active!==false&&(!p.status||p.status==='approved'))byId[p.id]=p;});
     var today=new Date();today.setHours(0,0,0,0);
     var withTravelers=[],starters=[];
     (data.departures||[]).forEach(function(d){

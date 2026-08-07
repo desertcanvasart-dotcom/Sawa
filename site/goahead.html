@@ -233,7 +233,7 @@
   }
   loadData().then(function(data){
     var byId={};
-    (data.tourProducts||[]).forEach(function(p){if(p.active!==false)byId[p.id]=p;});
+    (data.tourProducts||[]).forEach(function(p){if(p.active!==false&&(!p.status||p.status==='approved'))byId[p.id]=p;});
     var today=new Date();today.setHours(0,0,0,0);
     var deps=(data.departures||[]).filter(function(d){
       return byId[d.tourProductId]&&new Date((d.startDate||d.date)+'T00:00:00')>=today;

@@ -200,7 +200,14 @@ function Empty({ label }) { return <div className="dash-empty">{label}</div>; }
 /* ---------------- Tours & Packages ---------------- */
 function ToursSection({ data, destinations = [], reload, flash }) {
   const [editor, setEditor] = useState(null); // null | {type}
-  const products = data.tourProducts || [];
+  // Archived listings live behind their own tab rather than greyed out in the
+  // working list — mixing them in read as clutter, and made it look as if a
+  // cancelled tour was still on sale.
+  const [view, setView] = useState("active"); // "active" | "archived"
+  const all = data.tourProducts || [];
+  const activeProducts = all.filter((p) => p.active !== false);
+  const archivedProducts = all.filter((p) => p.active === false);
+  const products = view === "archived" ? archivedProducts : activeProducts;
 
   async function toggleActive(p) {
     const r = await apiFetch(`/admin/tour-products/${p.id}`, {
@@ -233,6 +240,15 @@ function ToursSection({ data, destinations = [], reload, flash }) {
           </div>
         } />
 
+      <div className="seg">
+        <button className={view === "active" ? "active" : ""} onClick={() => setView("active")}>
+          Active ({activeProducts.length})
+        </button>
+        <button className={view === "archived" ? "active" : ""} onClick={() => setView("archived")}>
+          Archive ({archivedProducts.length})
+        </button>
+      </div>
+
       <div className="table-wrap">
         <table className="dash-table">
           <thead><tr><th>Name</th><th>Type</th><th>City</th><th>GoAhead</th><th>Break</th><th>Min</th><th>Status</th><th></th></tr></thead>
@@ -254,7 +270,11 @@ function ToursSection({ data, destinations = [], reload, flash }) {
                 </td>
               </tr>
             ))}
-            {products.length === 0 && <tr><td colSpan={8}><Empty label="No products yet. Add your first tour or package." /></td></tr>}
+            {products.length === 0 && (
+              <tr><td colSpan={8}><Empty label={view === "archived"
+                ? "Nothing in the archive. Archiving a tour moves it here — customers never see it."
+                : "No products yet. Add your first tour or package."} /></td></tr>
+            )}
           </tbody>
         </table>
       </div>
