@@ -888,17 +888,17 @@ footer .logo .nm i{color:var(--gold)}
     var byId={};
     (data.tourProducts||[]).forEach(function(p){if(p.active!==false)byId[p.id]=p;});
     var today=new Date();today.setHours(0,0,0,0);
-    var model=[];
+    var withTravelers=[],starters=[];
     (data.departures||[]).forEach(function(d){
       var p=byId[d.tourProductId];
       if(!p)return;
       var start=d.startDate||d.date;
       if(new Date(start+'T00:00:00')<today)return;
+      if(d.status!=='open'&&d.status!=='minimum_reached'&&d.status!=='supplier_confirmed')return;
       var joined=seatsOf(d);
       var min=Number(d.minSeats||p.minSeats)||4;
       var confirmed=d.status==='minimum_reached'||d.status==='supplier_confirmed'
         ||(d.status==='open'&&joined>=min);
-      if(!confirmed&&!(d.status==='open'&&joined>=1))return;
       var isPkg=(d.type||p.type)==='package';
       var img=(p.images&&p.images[0]&&p.images[0].url)||'';
       var alt=(p.images&&p.images[0]&&p.images[0].alt)||p.title;
@@ -906,14 +906,30 @@ footer .logo .nm i{color:var(--gold)}
       var max=Number(d.maxSeats||p.maxSeats)||min;
       var toGo=Math.max(0,min-joined);
       var pct=Math.max(12,Math.min(100,Math.round(joined/min*100)))+'%';
-      model.push({p:p,isPkg:isPkg,next:d,hasNext:true,start:start,img:img,alt:alt,price:price,
+      var m={p:p,isPkg:isPkg,next:d,hasNext:true,start:start,img:img,alt:alt,price:price,
         min:min,max:max,joined:joined,confirmed:confirmed,toGo:toGo,pct:pct,
         link:'/'+(isPkg?'package':'tour')+'/'+tourSlug(p),
-        dateTxt:'Departs '+fmt(start)});
+        dateTxt:'Departs '+fmt(start)};
+      if(confirmed||joined>=1)withTravelers.push(m);else starters.push(m);
     });
-    model.sort(function(a,b){return a.start<b.start?-1:a.start>b.start?1:0;});
-    var pool=model;
-    if(!pool.length)return; // nothing real to show — keep the static demo cards
+    withTravelers.sort(function(a,b){return a.start<b.start?-1:a.start>b.start?1:0;});
+    starters.sort(function(a,b){return a.start<b.start?-1:a.start>b.start?1:0;});
+    /* Fallback, not fiction: when no date has a traveller aboard yet, the
+       section switches to the published dates and says so — "be the first" —
+       instead of rendering an empty card next to "Loading…". The strict
+       ≥1-traveller rule still governs the /departures board itself; the
+       homepage's job at zero bookings is to sell the FIRST seat. */
+    var starterMode=!withTravelers.length;
+    var pool=starterMode?starters:withTravelers;
+    if(!pool.length)return; // nothing at all — keep the static demo cards
+    if(starterMode){
+      var eb=document.querySelector('#departures .head .eyebrow');
+      if(eb)eb.innerHTML='<span class="live"></span>Start a departure';
+      var h2=document.querySelector('#departures .head h2');
+      if(h2)h2.innerHTML='Every trip needs a first traveler. <span class="ital">Be it.</span>';
+      var bt=document.querySelector('.board-top .bt');
+      if(bt)bt.innerHTML='<span class="live"></span>Ready to start';
+    }
     var featured=pool.filter(function(m){return m.confirmed;})[0]||pool[0];
     var board=pool.filter(function(m){return m!==featured;}).slice(0,5);
 
@@ -921,12 +937,15 @@ footer .logo .nm i{color:var(--gold)}
     var f=featured;
     var fBadge=f.confirmed
       ?'<span class="badge go"><span class="d"></span>GoAhead · running</span>'
+      :starterMode
+      ?'<span class="badge form">Be the first · '+f.toGo+' to go</span>'
       :'<span class="badge form">'+(f.toGo===1?'Forming · 1 to go':'Forming · '+f.toGo+' to go')+'</span>';
     var fSt=f.confirmed?'<span class="st ok">Confirmed · running</span>'
       :'<span class="st">'+(f.toGo===1?'1 seat to GoAhead':f.toGo+' seats to GoAhead')+'</span>';
     var seatsLeft=Math.max(0,f.max-f.joined);
-    var fWhenTop=f.confirmed?(seatsLeft>0?'Almost full':'Running'):'Forming now';
+    var fWhenTop=f.confirmed?(seatsLeft>0?'Almost full':'Running'):(starterMode?'Awaiting its first traveler':'Forming now');
     var fWhenB=(f.confirmed&&seatsLeft>0)?(seatsLeft+' seat'+(seatsLeft===1?'':'s')+' left'):('$'+f.price+' USD / person');
+    var fCta=starterMode?'Start this date':'Reserve a seat';
     featEl.setAttribute('onclick',"location.href='"+f.link+"'");
     featEl.innerHTML='<div class="core"><div class="media">'
       +'<img src="'+esc(f.img)+'" alt="'+esc(f.alt)+'" />'
@@ -940,7 +959,7 @@ footer .logo .nm i{color:var(--gold)}
       +'<div class="prog"><div class="pt"><b>'+f.joined+' of '+f.min+' joined</b>'+fSt+'</div>'
       +'<div class="pbar '+(f.confirmed?'gold':'teal')+'"><i style="width:'+f.pct+'"></i></div></div>'
       +'<div class="foot"><div class="when">'+fWhenTop+'<b>'+fWhenB+'</b></div>'
-      +'<a href="'+f.link+'" class="join">Reserve a seat'+JARR+'</a></div>'
+      +'<a href="'+f.link+'" class="join">'+fCta+JARR+'</a></div>'
       +'</div></div>';
 
     /* ---- live board (right) ---- */
@@ -949,6 +968,8 @@ footer .logo .nm i{color:var(--gold)}
         var rt=esc(m.p.city)+(m.p.duration?' · '+esc(m.p.duration):'')+' · '+esc(fmt(m.start));
         var lab=m.confirmed
           ?'<span class="lab ok"><b>'+m.joined+'</b>/'+m.min+' · confirmed</span>'
+          :starterMode
+          ?'<span class="lab"><b>'+m.joined+'</b>/'+m.min+' · be the first</span>'
           :'<span class="lab"><b>'+m.joined+'</b>/'+m.min+' · '+(m.toGo===1?'1 to go':m.toGo+' to go')+'</span>';
         return '<a href="'+m.link+'" class="drow">'
           +'<div class="thumb"><img src="'+esc(m.img)+'" alt="'+esc(m.alt)+'" loading="lazy" />'+(m.confirmed?'<span class="gdot"></span>':'')+'</div>'
@@ -962,14 +983,14 @@ footer .logo .nm i{color:var(--gold)}
     /* ---- counts ---- */
     var openCount=pool.length;
     var cntEl=document.querySelector('.board-top .cnt');
-    if(cntEl)cntEl.textContent=openCount+' departure'+(openCount===1?'':'s')+' open';
+    if(cntEl)cntEl.textContent=openCount+(starterMode?' date'+(openCount===1?'':'s')+' ready':' departure'+(openCount===1?'':'s')+' open');
     /* Same number in the hero. Left as an em dash if the fetch fails — the
        figure is only ever shown when it is real. */
     var heroCount=document.querySelector('[data-live-departures]');
     if(heroCount)heroCount.textContent=openCount;
     var moreN=Math.max(0,openCount-1-board.length);
     var footEl=document.querySelector('.board-foot span');
-    if(footEl)footEl.innerHTML='<b class="tnum">'+moreN+'</b> more forming this month';
+    if(footEl)footEl.innerHTML='<b class="tnum">'+moreN+'</b>'+(starterMode?' more dates you could start':' more forming this month');
   }).catch(function(){/* keep the static demo cards on failure */});
 })();
 </script>

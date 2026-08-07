@@ -57,7 +57,7 @@
     <p class="lede rv">Every departure on this page has reached four confirmed travelers — the GoAhead. These trips are guaranteed to run, and most still have seats: join one and the shared price keeps falling as the group grows. Still forming dates live on the <a href="/departures" style="text-decoration:underline;text-underline-offset:4px">departures board</a>.</p>
     <div class="hero-meta rv" data-d="1" style="display:flex;gap:34px;margin-top:34px;flex-wrap:wrap">
       <div><b class="serif tnum" data-live-count aria-live="polite" style="font-family:'Fraunces',serif;font-size:1.8rem;color:var(--teal);display:block;line-height:1">—</b><span style="font-size:.84rem;color:var(--muted)">departures at GoAhead</span></div>
-      <div><b class="serif tnum" data-live-count aria-live="polite" style="font-family:'Fraunces',serif;font-size:1.8rem;color:var(--teal);display:block;line-height:1">—</b><span style="font-size:.84rem;color:var(--muted)">seats still open</span></div>
+      <div><b class="serif tnum" data-live-count aria-live="polite" style="font-family:'Fraunces',serif;font-size:1.8rem;color:var(--teal);display:block;line-height:1">—</b><span style="font-size:.84rem;color:var(--muted)">forming — one push<br>from confirming</span></div>
       <div><b class="serif tnum" style="font-family:'Fraunces',serif;font-size:1.8rem;color:var(--teal);display:block;line-height:1">100%</b><span style="font-size:.84rem;color:var(--muted)">guaranteed to run</span></div>
     </div>
   </div>
@@ -214,7 +214,8 @@
       /* Local dev has no database — fall back to a snapshot of live data. */
       .catch(function(){return fetch('/_dev_bootstrap.json').then(function(r){return r.json();});});
   }
-  /* Mirrors isGoAheadDeparture in server/domain.js — keep in sync. */
+  /* Mirrors isGoAheadDeparture/isFormingDeparture in server/domain.js — keep
+     in sync. */
   function seatsOf(d){
     return (d.pledges||[]).reduce(function(s,x){
       return x&&x.status==='cancelled'?s:s+(Number(x.seats||x.pax)||1);
@@ -225,6 +226,11 @@
     if(d.status==='minimum_reached'||d.status==='supplier_confirmed')return true;
     return d.status==='open'&&seatsOf(d)>=minOf(d,p);
   }
+  function isForming(d,p){
+    if(d.status!=='open')return false;
+    var s=seatsOf(d);
+    return s>=1&&s<minOf(d,p);
+  }
   loadData().then(function(data){
     var byId={};
     (data.tourProducts||[]).forEach(function(p){if(p.active!==false)byId[p.id]=p;});
@@ -232,9 +238,10 @@
     var deps=(data.departures||[]).filter(function(d){
       return byId[d.tourProductId]&&new Date((d.startDate||d.date)+'T00:00:00')>=today;
     });
-    var items=[],seatsOpen=0;
+    var items=[],formingCount=0;
     deps.forEach(function(d){
       var p=byId[d.tourProductId];
+      if(isForming(d,p))formingCount++;
       if(!isGoAhead(d,p))return;
       var isPkg=(d.type||p.type)==='package';
       var img=(p.images&&p.images[0]&&p.images[0].url)||'';
@@ -243,7 +250,6 @@
       var joined=seatsOf(d);
       var max=Number(d.maxSeats||p.maxSeats)||12;
       var left=Math.max(0,max-joined);
-      seatsOpen+=left;
       var pct=Math.max(12,Math.min(100,Math.round(joined/max*100)))+'%';
       var link='/'+(isPkg?'package':'tour')+'/'+tourSlug(p);
       var start=d.startDate||d.date;
@@ -275,9 +281,12 @@
     allItems=items;
     render();
     wireTabs();
+    /* Second stat is the FORMING count on purpose: when this page is empty,
+       "0 seats still open" next to it read like a failing report card. The
+       forming number points the visitor at the live momentum instead. */
     var stats=document.querySelectorAll('.hero-meta [data-live-count]');
     if(stats[0])stats[0].textContent=items.length;
-    if(stats[1])stats[1].textContent=seatsOpen;
+    if(stats[1])stats[1].textContent=formingCount;
   }).catch(function(){/* Counters stay "—" rather than showing an invented number. */});
 })();
 </script>
