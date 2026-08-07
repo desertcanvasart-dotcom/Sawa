@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
   isPackage, goAheadSeatsFor, defaultDepositFor, seatsTotal, livePriceFor,
   statusFor, packagePriceFor, balanceDueDate, computePledgePricing, enrichDeparture,
+  isFormingDeparture, isGoAheadDeparture,
   bookingClosed, departureStarted,
   confirmDeadlineDaysFor, confirmDeadlineAt, missedConfirmDeadline,
   priceFromTiers, validatePriceTiers, withPriceTiers,
@@ -77,6 +78,31 @@ test("statusFor: pending_review never auto-advances from pledge counts", () => {
   // admin approves them — even when the seed pledge already meets go-ahead.
   assert.equal(statusFor({ ...dayTour, status: "pending_review" }, [{ seats: 1 }]), "pending_review");
   assert.equal(statusFor({ ...dayTour, status: "pending_review" }, [{ seats: 6 }]), "pending_review");
+});
+test("isFormingDeparture: on the board only with 1..min-1 real travellers", () => {
+  const open = { ...dayTour, status: "open" };
+  // Zero pledges = admin-published inventory, not a departure — off the board.
+  assert.equal(isFormingDeparture(open, []), false);
+  assert.equal(isFormingDeparture(open, [{ seats: 1 }]), true);
+  assert.equal(isFormingDeparture(open, [{ seats: 3 }]), true);
+  // At the minimum it belongs to /goahead, not /departures.
+  assert.equal(isFormingDeparture(open, [{ seats: 4 }]), false);
+  // Cancelling the only booking takes it back off the board.
+  assert.equal(isFormingDeparture(open, [{ seats: 2, status: "cancelled" }]), false);
+  // Hidden states never form publicly.
+  assert.equal(isFormingDeparture({ ...dayTour, status: "pending_review" }, [{ seats: 2 }]), false);
+  assert.equal(isFormingDeparture({ ...dayTour, status: "cancelled" }, [{ seats: 2 }]), false);
+});
+test("isGoAheadDeparture: confirmed states only, computed from live seats", () => {
+  const open = { ...dayTour, status: "open" };
+  assert.equal(isGoAheadDeparture(open, [{ seats: 4 }]), true);
+  assert.equal(isGoAheadDeparture(open, [{ seats: 3 }]), false);
+  assert.equal(isGoAheadDeparture({ ...dayTour, status: "supplier_confirmed" }, [{ seats: 1 }]), true);
+  // A cancellation that drops the count below minimum demotes it off /goahead.
+  assert.equal(isGoAheadDeparture(open, [{ seats: 4, status: "cancelled" }, { seats: 2 }]), false);
+  assert.equal(isGoAheadDeparture({ ...dayTour, status: "closed" }, [{ seats: 6 }]), false);
+  assert.equal(isGoAheadDeparture({ ...dayTour, status: "cancelled" }, [{ seats: 6 }]), false);
+  assert.equal(isGoAheadDeparture({ ...dayTour, status: "pending_review" }, [{ seats: 6 }]), false);
 });
 test("packagePriceFor: base + tier + single supplement", () => {
   assert.equal(packagePriceFor(pkg, pkg, 4, { roomingType: "double", tierId: "superior" }), 660);

@@ -1827,7 +1827,7 @@ if (existsSync(siteDir)) {
   // permanently redirects to /page. `index` -> /, and the two designed links
   // that have no page of their own map to real pages.
   // `trust` was renamed to `goahead-promise`; keep the old URL working.
-  const htmlAlias = { index: "/", tour: "/departures", pricing: "/operators", trust: "/goahead-promise" };
+  const htmlAlias = { index: "/", tour: "/itineraries", pricing: "/operators", trust: "/goahead-promise" };
   app.use((req, res, next) => {
     if (req.method !== "GET") return next();
     const m = req.path.match(/^\/([a-z0-9-]+)\.html$/i);
@@ -1836,6 +1836,14 @@ if (existsSync(siteDir)) {
     return res.redirect(301, htmlAlias[name] || `/${name}`);
   });
   app.get("/trust", (_req, res) => res.redirect(301, "/goahead-promise"));
+  // The catalogue moved from /tours to /itineraries (and /packages was only
+  // ever an alias of it). 301 so indexed links and old referral URLs
+  // (…/tours?ref=CODE) carry over, query string included.
+  const toItineraries = (req, res) => {
+    const qs = req.originalUrl.includes("?") ? req.originalUrl.slice(req.originalUrl.indexOf("?")) : "";
+    res.redirect(301, `/itineraries${qs}`);
+  };
+  app.get(["/tours", "/packages"], toItineraries);
 
   // These pages are hand-written HTML with no JSON-LD of their own, and
   // buildHead() — which builds the graph for every SPA route — only runs for

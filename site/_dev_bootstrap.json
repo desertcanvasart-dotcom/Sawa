@@ -1,1 +1,2624 @@
-{"tourProducts":[{"id":"tour_cairo_pyramids","type":"day_tour","title":"Giza Pyramids and Sphinx","city":"Cairo","duration":"4 hours","defaultTime":"08:30","guide":"Licensed Egyptologist","vehicle":"Van, 10 seats","minSeats":4,"maxSeats":10,"baseCost":230,"publishedRate":75,"quality":4.8,"description":"A high-demand Cairo classic for travelers who want a safe shared visit to the Pyramids and Sphinx.","included":["Shared air-conditioned vehicle","Licensed Egyptologist guide","Hotel pickup from central Cairo or Giza"],"notIncluded":["Entrance tickets","Lunch and drinks","Personal expenses"],"breakPrice":58,"depositPercent":10},{"id":"tour_luxor_east_bank","type":"day_tour","title":"Luxor East Bank temples","city":"Luxor","duration":"5 hours","defaultTime":"07:00","guide":"Senior guide","vehicle":"Minibus, 14 seats","minSeats":5,"maxSeats":14,"baseCost":520,"publishedRate":115,"quality":4.9,"description":"A popular shared Luxor program covering Karnak and Luxor Temple with one guide and shared vehicle.","included":["Shared air-conditioned vehicle","Senior guide","Hotel pickup in Luxor"],"notIncluded":["Entrance tickets","Lunch","Optional tipping"],"breakPrice":88,"depositPercent":10},{"id":"tour_cairo_museum","type":"day_tour","title":"Egyptian Museum and Khan el-Khalili","city":"Cairo","duration":"5 hours","defaultTime":"10:00","guide":"Licensed Egyptologist","vehicle":"Van, 10 seats","minSeats":4,"maxSeats":10,"baseCost":150,"publishedRate":58,"quality":4.7,"description":"A city culture day combining museum highlights, old Cairo atmosphere, and shared transport.","included":["Shared transport","Licensed guide","Museum and bazaar visit plan"],"notIncluded":["Entrance tickets","Meals","Shopping expenses"],"breakPrice":45,"depositPercent":10},{"id":"tour_luxor_west_bank","type":"day_tour","title":"Luxor West Bank highlights","city":"Luxor","duration":"6 hours","defaultTime":"08:00","guide":"Licensed Egyptologist","vehicle":"Van, 10 seats","minSeats":4,"maxSeats":10,"baseCost":310,"publishedRate":85,"quality":4.8,"description":"Valley of the Kings, Hatshepsut Temple, and Colossi in one shared guided program.","included":["Shared van","Licensed Egyptologist guide","Pickup from Luxor hotels"],"notIncluded":["Entrance tickets","Lunch","Optional tomb tickets"],"breakPrice":65,"depositPercent":10},{"id":"tour_aswan_philae","type":"day_tour","title":"Aswan Philae and High Dam","city":"Aswan","duration":"5 hours","defaultTime":"09:00","guide":"Licensed Egyptologist","vehicle":"Van, 10 seats","minSeats":4,"maxSeats":10,"baseCost":290,"publishedRate":78,"quality":4.7,"description":"A popular shared Aswan date for Philae Temple, the High Dam, and hotel pickup.","included":["Shared air-conditioned vehicle","Licensed guide","Hotel pickup in Aswan"],"notIncluded":["Boat ticket to Philae","Entrance tickets","Meals and drinks"],"breakPrice":60,"depositPercent":10},{"id":"pkg_cairo_luxor_4d","type":"package","title":"Cairo and Luxor 4-day discovery","city":"Cairo","cities":["Cairo","Luxor"],"nights":3,"duration":"4 days · 3 nights","defaultTime":"08:00","guide":"Licensed Egyptologist","vehicle":"Private van + domestic flight","minSeats":4,"maxSeats":12,"baseCost":780,"publishedRate":540,"breakPrice":460,"quality":4.8,"depositPercent":20,"description":"Cairo highlights and Luxor temples in four days with a domestic flight and shared guided program.","included":["3 nights hotel with breakfast","Domestic flight Cairo → Luxor","Licensed Egyptologist guide at all sites","All ground transport and airport transfers"],"notIncluded":["International flights","Entrance tickets","Lunches and dinners","Visa and travel insurance"],"itinerary":[{"day":1,"city":"Cairo","title":"Arrival and Old Cairo","description":"Airport pickup, hotel check-in, evening walk in Khan el-Khalili.","meals":"—"},{"day":2,"city":"Cairo","title":"Pyramids and Egyptian Museum","description":"Giza Plateau in the morning, Egyptian Museum after lunch.","meals":"Breakfast"},{"day":3,"city":"Luxor","title":"Fly to Luxor, East Bank","description":"Morning flight to Luxor, Karnak and Luxor Temple in the afternoon.","meals":"Breakfast"},{"day":4,"city":"Luxor","title":"West Bank and departure","description":"Valley of the Kings and Hatshepsut, then evening flight back to Cairo.","meals":"Breakfast"}],"accommodationTiers":[{"id":"standard","name":"Standard (3★)","perPersonSupplement":0,"singleSupplement":90},{"id":"superior","name":"Superior (4★)","perPersonSupplement":120,"singleSupplement":160},{"id":"luxury","name":"Luxury (5★)","perPersonSupplement":280,"singleSupplement":320}]},{"id":"pkg_classic_egypt_8d","type":"package","title":"Classic Egypt 8-day with Nile cruise","city":"Cairo","cities":["Cairo","Aswan","Luxor"],"nights":7,"duration":"8 days · 7 nights","defaultTime":"09:00","guide":"Licensed Egyptologist","vehicle":"Private van + flights + Nile cruise","minSeats":6,"maxSeats":16,"baseCost":1980,"publishedRate":1390,"breakPrice":1150,"quality":4.9,"depositPercent":20,"description":"Cairo, a 4-night Nile cruise from Aswan to Luxor, and the iconic temples in one shared program.","included":["3 nights Cairo hotel with breakfast","4 nights Nile cruise (full board)","Domestic flights Cairo → Aswan and Luxor → Cairo","Licensed Egyptologist guide throughout","All sightseeing transfers and entrance support"],"notIncluded":["International flights","Entrance tickets at sites","Drinks on the cruise","Visa and travel insurance","Optional Abu Simbel excursion"],"itinerary":[{"day":1,"city":"Cairo","title":"Arrival","description":"Airport pickup and hotel check-in.","meals":"—"},{"day":2,"city":"Cairo","title":"Pyramids and Sphinx","description":"Full-day Giza Plateau visit.","meals":"Breakfast"},{"day":3,"city":"Cairo","title":"Egyptian Museum and Old Cairo","description":"Museum highlights, Coptic Cairo walk.","meals":"Breakfast"},{"day":4,"city":"Aswan","title":"Fly to Aswan, board cruise","description":"Morning flight, Philae Temple, board the cruise.","meals":"Breakfast, Lunch, Dinner"},{"day":5,"city":"Aswan → Kom Ombo","title":"Sail to Kom Ombo","description":"Sailing day with Kom Ombo Temple in the afternoon.","meals":"Full board"},{"day":6,"city":"Edfu → Esna","title":"Edfu Temple","description":"Edfu Temple morning, sail through Esna Lock.","meals":"Full board"},{"day":7,"city":"Luxor","title":"Luxor East and West Bank","description":"Karnak, Luxor Temple, Valley of the Kings, Hatshepsut.","meals":"Full board"},{"day":8,"city":"Cairo","title":"Fly back and departure","description":"Morning flight to Cairo and onward connections.","meals":"Breakfast"}],"accommodationTiers":[{"id":"standard","name":"Standard (3★ hotel / 4★ cruise)","perPersonSupplement":0,"singleSupplement":280},{"id":"superior","name":"Superior (4★ hotel / 5★ cruise)","perPersonSupplement":320,"singleSupplement":420},{"id":"luxury","name":"Luxury (5★ hotel / 5★ Deluxe cruise)","perPersonSupplement":740,"singleSupplement":820}]}],"departures":[{"id":104,"type":"day_tour","tourProductId":"tour_luxor_west_bank","route":"Luxor West Bank highlights","date":"2026-05-25","time":"08:00","city":"Luxor","guide":"Licensed Egyptologist","vehicle":"Van, 10 seats","minSeats":4,"maxSeats":10,"baseCost":310,"publishedRate":85,"quality":4.8,"cutoff":"May 24, 18:00","status":"open","notes":"Valley of the Kings, Hatshepsut Temple, and Colossi in one shared guided program.","pledges":[{"id":"pl_104_1","agencyId":"ag_3","agency":"LuxWay Tours","seats":2,"customers":"Rita + 1","createdAt":"2026-05-19T13:00:00.000Z"}],"breakPrice":65,"depositPercent":10},{"id":105,"type":"day_tour","tourProductId":"tour_aswan_philae","route":"Aswan Philae and High Dam","date":"2026-05-26","time":"09:00","city":"Aswan","guide":"Licensed Egyptologist","vehicle":"Van, 10 seats","minSeats":4,"maxSeats":10,"baseCost":290,"publishedRate":78,"quality":4.7,"cutoff":"May 25, 18:00","status":"minimum_reached","notes":"A popular shared Aswan date for Philae Temple, the High Dam, and hotel pickup.","pledges":[{"id":"pl_105_1","agencyId":"ag_5","agency":"Lotus Day Trips","seats":4,"customers":"Family booking","createdAt":"2026-05-19T14:00:00.000Z"},{"id":"pl_105_1779980705007","agencyId":"direct_customer","agency":"Direct traveler","seats":1,"customers":"Karim T.","source":"public","bookingCode":"SAWA-SEED01","pricePerPerson":75,"bookingTotal":75,"depositDue":8,"balanceDue":67,"depositPercent":10,"balanceDueDate":"2026-05-25","createdAt":"2026-05-28T15:05:05.008Z"},{"id":"pl_105_1780000153785","agencyId":"direct_customer","agency":"Direct traveler","seats":1,"customers":"Test booking","source":"public","bookingCode":"SAWA-SEED02","pricePerPerson":72,"bookingTotal":72,"depositDue":8,"balanceDue":64,"depositPercent":10,"balanceDueDate":"2026-05-25","createdAt":"2026-05-28T20:29:13.785Z"}],"breakPrice":60,"depositPercent":10},{"id":101,"type":"day_tour","tourProductId":"tour_cairo_pyramids","route":"Giza Pyramids and Sphinx","date":"2026-05-22","time":"08:30","city":"Cairo","guide":"Licensed Egyptologist","vehicle":"Van, 10 seats","minSeats":4,"maxSeats":10,"baseCost":230,"publishedRate":75,"quality":4.8,"cutoff":"Today 20:00","status":"open","notes":"Shared pickup from central Cairo and Giza hotels.","pledges":[{"id":"pl_101_1","agencyId":"ag_1","agency":"Nile Gate Travel","seats":2,"customers":"Maya R. + 1","createdAt":"2026-05-19T09:00:00.000Z"},{"id":"pl_101_2","agencyId":"ag_2","agency":"Cairo Discovery","seats":1,"customers":"Sami K.","createdAt":"2026-05-19T10:15:00.000Z"}],"breakPrice":58,"depositPercent":10},{"id":102,"type":"day_tour","tourProductId":"tour_luxor_east_bank","route":"Luxor East Bank temples","date":"2026-05-23","time":"07:00","city":"Luxor","guide":"Senior guide","vehicle":"Minibus, 14 seats","minSeats":5,"maxSeats":14,"baseCost":520,"publishedRate":115,"quality":4.9,"cutoff":"Tomorrow 18:00","status":"open","notes":"Karnak and Luxor Temple with one shared guide, shared vehicle cost, and agency-branded vouchers.","pledges":[{"id":"pl_102_1","agencyId":"ag_3","agency":"LuxWay Tours","seats":2,"customers":"Chen party","createdAt":"2026-05-19T11:00:00.000Z"},{"id":"pl_102_2","agencyId":"ag_4","agency":"Heritage Desk","seats":2,"customers":"Olivia + Noah","createdAt":"2026-05-19T11:30:00.000Z"}],"breakPrice":88,"depositPercent":10},{"id":103,"type":"day_tour","tourProductId":"tour_cairo_museum","route":"Egyptian Museum and Khan el-Khalili","date":"2026-05-24","time":"10:00","city":"Cairo","guide":"Licensed Egyptologist","vehicle":"Van, 10 seats","minSeats":4,"maxSeats":10,"baseCost":150,"publishedRate":58,"quality":4.7,"cutoff":"May 23, 16:00","status":"open","notes":"Good fit for families, museum highlights, bazaar time, and verified transport.","pledges":[{"id":"pl_103_1","agencyId":"ag_5","agency":"Lotus Day Trips","seats":1,"customers":"Ana M.","createdAt":"2026-05-19T12:05:00.000Z"}],"breakPrice":45,"depositPercent":10},{"id":201,"type":"package","tourProductId":"pkg_cairo_luxor_4d","route":"Cairo and Luxor 4-day discovery","startDate":"2026-06-10","endDate":"2026-06-13","date":"2026-06-10","time":"08:00","city":"Cairo","cities":["Cairo","Luxor"],"nights":3,"guide":"Licensed Egyptologist","vehicle":"Private van + domestic flight","minSeats":4,"maxSeats":12,"baseCost":780,"publishedRate":540,"breakPrice":460,"quality":4.8,"cutoff":"June 5, 18:00","status":"open","notes":"Cairo highlights and Luxor temples in four days with a domestic flight and shared guided program.","pledges":[{"id":"pl_201_1","agencyId":"ag_1","agency":"Nile Gate Travel","seats":2,"customers":"Patel family","roomingType":"double","accommodationTier":"superior","createdAt":"2026-05-20T09:00:00.000Z"}],"depositPercent":20},{"id":202,"type":"package","tourProductId":"pkg_classic_egypt_8d","route":"Classic Egypt 8-day with Nile cruise","startDate":"2026-07-05","endDate":"2026-07-12","date":"2026-07-05","time":"09:00","city":"Cairo","cities":["Cairo","Aswan","Luxor"],"nights":7,"guide":"Licensed Egyptologist","vehicle":"Private van + flights + Nile cruise","minSeats":6,"maxSeats":16,"baseCost":1980,"publishedRate":1390,"breakPrice":1150,"quality":4.9,"cutoff":"June 25, 18:00","status":"open","notes":"Cairo, a 4-night Nile cruise from Aswan to Luxor, and the iconic temples in one shared program.","pledges":[{"id":"pl_202_1","agencyId":"ag_4","agency":"Heritage Desk","seats":3,"customers":"Garcia + 2","roomingType":"double","accommodationTier":"standard","createdAt":"2026-05-21T10:00:00.000Z"}],"depositPercent":20}]}
+{
+  "agencies": [],
+  "cities": [
+    {
+      "id": "aswan",
+      "name": "Aswan",
+      "region": "Upper Egypt",
+      "status": "active"
+    },
+    {
+      "id": "cairo",
+      "name": "Cairo",
+      "region": "Greater Cairo",
+      "status": "active"
+    },
+    {
+      "id": "luxor",
+      "name": "Luxor",
+      "region": "Upper Egypt",
+      "status": "active"
+    }
+  ],
+  "tourProducts": [
+    {
+      "id": "pkg_egypt_end_to_end_cairo_nile_crui_msj33v2z",
+      "type": "package",
+      "title": "Egypt End to End \u2014 Cairo, Nile Cruise & Hurghada | 12 Days",
+      "city": "Cairo",
+      "duration": "12 days \u00b7 11 nights",
+      "defaultTime": "08:00",
+      "guide": "Licensed Egyptologist",
+      "vehicle": "Private van + flights",
+      "minSeats": 4,
+      "maxSeats": 12,
+      "baseCost": 0,
+      "publishedRate": 1900,
+      "breakPrice": 1520,
+      "quality": 4.7,
+      "depositPercent": 20,
+      "description": "Pyramids, Abu Simbel, a 3-night Nile cruise and three days on the Red Sea \u2014 fully guided, flights included.",
+      "operatingDays": [],
+      "included": [
+        "Arrival and departure airport transfers",
+        "Domestic flights Cairo \u2192 Aswan and Hurghada \u2192 Cairo",
+        "4 nights Cairo hotel, 1 night Aswan, 3 nights Nile cruise (full board), 3 nights Hurghada",
+        "11 breakfasts, 5 lunches, 6 dinners \u2014 including 3 dinners at local restaurants",
+        "Licensed Egyptologist guide throughout",
+        "Guided sightseeing and entrance fees to every site in the itinerary",
+        "Memphis, Saqqara, Old Cairo, the Egyptian Museum, Giza Pyramids & Sphinx",
+        "Abu Simbel, Philae Temple, the Aswan High Dam & the Unfinished Obelisk",
+        "Kom Ombo & Edfu temples, Valley of the Kings, Hatshepsut, Colossi of Memnon, Karnak & Luxor Temples",
+        "Felucca sail in Aswan and a Khan El Khalili bazaar visit"
+      ],
+      "notIncluded": [
+        "International flights",
+        "Egypt entry visa",
+        "Drinks and personal expenses",
+        "Travel insurance",
+        "Tipping and gratuities",
+        "Anything not specifically mentioned in the itinerary",
+        "Optional activities (e.g. hot air balloon)"
+      ],
+      "active": true,
+      "status": "approved",
+      "agencyId": null,
+      "submittedAt": "2026-08-07T15:13:11.963Z",
+      "reviewedAt": "2026-08-07T15:13:11.963Z",
+      "rejectionReason": "",
+      "overviewHtml": "<h3>About this departure</h3><p>Egypt end to end in one shared, fully guided trip \u2014 and you only pay once the group is confirmed. Begin in Cairo with Memphis, Saqqara and Old Cairo, the Egyptian Museum and the Pyramids of Giza, then fly south to Aswan for Abu Simbel and a three-night Nile cruise sailing north through Kom Ombo and Edfu to Luxor. Cross the river to the Valley of the Kings and Karnak, then trade the temples for the Red Sea with three nights in Hurghada. Domestic flights and all sightseeing are included, so the logistics are handled end to end.</p><p>You travel with a licensed Egyptologist throughout and stay in hand-picked hotels and cruise boats across three comfort tiers, finishing with the lanes of Khan El Khalili on your final evening in Cairo.</p><h3>Trip highlights</h3><ul><li><p>Arrival and departure airport transfers</p></li><li><p>Domestic flights Cairo \u2192 Aswan and Hurghada \u2192 Cairo</p></li><li><p>4 nights Cairo hotel, 1 night Aswan, 3 nights Nile cruise (full board) and 3 nights Hurghada</p></li><li><p>11 breakfasts, 5 lunches, 6 dinners \u2014 including 3 dinners at local restaurants</p></li><li><p>Abu Simbel, the Giza Pyramids, the Valley of the Kings and Philae Temple in one trip</p></li></ul><p></p>",
+      "policiesHtml": "",
+      "whatToBring": [],
+      "meetingPoint": "",
+      "pickupNote": "",
+      "meetingPoints": [],
+      "bookingCutoffHours": 24,
+      "confirmDeadlineDays": null,
+      "priceTiers": null,
+      "images": [],
+      "itinerary": [
+        {
+          "day": 1,
+          "city": "Cairo",
+          "meals": "dinner",
+          "title": "Arrival in Cairo",
+          "description": "<p>Welcome to Egypt. Our representative meets you at Cairo International Airport, helps with immigration formalities and luggage, and transfers you to your hotel. The rest of the day is yours to settle in, with a welcome dinner together at a local restaurant in the evening.<br /><em>Arrival transfer \u00b7 Welcome dinner at a local restaurant</em></p>"
+        },
+        {
+          "day": 2,
+          "city": "Cairo",
+          "meals": "Breakfast, Lunch, dinner",
+          "title": "Memphis, Saqqara & Old Cairo",
+          "description": "<p>After breakfast, explore the cradle of ancient Egypt. Stand in Memphis, the country's first capital, then walk among the tombs of Saqqara and the Step Pyramid of Djoser \u2014 the world's oldest monumental stone building. After a traditional local lunch, wander Old Cairo, including the Hanging Church and the historic Coptic district.<br /><em>Memphis \u00b7 Saqqara \u2014 Step Pyramid of Djoser \u00b7 Old Cairo &amp; the Hanging Church \u00b7 Traditional local lunch</em></p>"
+        },
+        {
+          "day": 3,
+          "city": "Cairo",
+          "meals": "Breakfast, Lunch, dinner",
+          "title": "Egyptian Museum & the Giza Pyramids",
+          "description": "<p>After breakfast, discover Egypt's most famous landmarks. Begin at the Egyptian Museum among the treasures of the pharaohs, then drive to the Giza plateau for the Great Pyramids, the Sphinx and the Valley Temple. In the evening, gather for dinner at a local restaurant.<br /><em>Egyptian Museum \u00b7 Great Pyramids of Giza \u00b7 The Great Sphinx \u00b7 Dinner at a local restaurant</em></p><p></p>"
+        },
+        {
+          "day": 4,
+          "city": "Cairo \u2192 Aswan",
+          "meals": "Breakfast, Lunch, dinner",
+          "title": "Fly to Aswan & Abu Simbel",
+          "description": "<p>An early-morning flight brings you to Aswan. From there, travel south to Abu Simbel for the colossal temples of Ramses II and Queen Nefertari, carved into the mountainside above Lake Nasser and famously moved stone by stone to save them from the flood. Return to Aswan for a relaxing sail on a traditional felucca as the sun drops behind the west bank.<br /><em>Domestic flight Cairo \u2192 Aswan \u00b7 Abu Simbel Temples \u00b7 Lunch \u00b7 Felucca sail on the Nile</em></p>"
+        },
+        {
+          "day": 5,
+          "city": "Aswan \u2014 Nile Cruise",
+          "meals": "Breakfast, Lunch, dinner",
+          "title": "Aswan Sightseeing & Board the Cruise",
+          "description": "<p>After breakfast, take in the Aswan High Dam that created Lake Nasser, the Unfinished Obelisk still lying in its quarry, and Philae Temple, the island sanctuary of Isis rescued from the rising waters. Board your Nile cruise, settle into your cabin and enjoy lunch and dinner on board as the boat stays overnight in Aswan.<br /><em>Aswan High Dam \u00b7 Unfinished Obelisk \u00b7 Philae Temple \u00b7 Board the Nile cruise \u00b7 Lunch and dinner on board</em></p>"
+        },
+        {
+          "day": 6,
+          "city": "Aswan \u2192 Kom Ombo \u2192 Edfu",
+          "meals": "Breakfast, Lunch, dinner",
+          "title": "Sail to Kom Ombo",
+          "description": "<p>Begin sailing north after breakfast. Step ashore at Kom Ombo, the unusual double temple shared by the gods Sobek and Horus, standing right on a bend of the river. Return on board and continue toward Edfu, with lunch and dinner served as the banks slip by.<br /><em>Sailing to Kom Ombo \u00b7 Kom Ombo Temple \u00b7 Sailing to Edfu \u00b7 Lunch and dinner on board</em></p>"
+        },
+        {
+          "day": 7,
+          "city": "Edfu \u2192 Luxor",
+          "meals": "Breakfast, Lunch, dinner",
+          "title": "Edfu Temple & Sail to Luxor",
+          "description": "<p>After breakfast on board, visit the Temple of Horus at Edfu \u2014 the best-preserved temple in Egypt, its pylon and hypostyle hall almost intact. Return to the cruise and sail on toward Luxor, passing through the Esna lock along the way. Lunch and dinner on board, with the boat moored in Luxor overnight.<br /><em>Temple of Horus at Edfu \u00b7 Esna lock passage \u00b7 Sailing to Luxor \u00b7 Lunch and dinner on board</em></p>"
+        },
+        {
+          "day": 8,
+          "city": "Luxor \u2192 Hurghada",
+          "meals": "Breakfast, Lunch, dinner",
+          "title": "Luxor's West & East Banks",
+          "description": "<p>Disembark after breakfast and cross to Luxor's legendary West Bank. Enter the painted royal tombs of the Valley of the Kings, stand before the terraced Temple of Queen Hatshepsut set against the cliffs, and pause at the towering Colossi of Memnon. Continue to the East Bank for the vast complex of Karnak and the elegant riverside Luxor Temple, then travel through the Eastern Desert to Hurghada and check in to your Red Sea hotel.<br /><em>Valley of the Kings \u00b7 Temple of Queen Hatshepsut \u00b7 Colossi of Memnon \u00b7 Karnak Temple \u00b7 Luxor Temple \u00b7 Transfer Luxor \u2192 Hurghada</em></p>"
+        },
+        {
+          "day": 9,
+          "city": "Hurghada",
+          "meals": "Breakfast, Lunch, dinner",
+          "title": "Leisure in Hurghada",
+          "description": "<p>The temples are behind you and the Red Sea is in front of you. Swim, dive one of the world's great reefs, take a boat out to the islands or simply stay put by the pool \u2014 the day is entirely yours.<br /><em>Free day at leisure in Hurghada</em></p>"
+        },
+        {
+          "day": 10,
+          "city": "Hurghada",
+          "meals": "Breakfast, Lunch, dinner",
+          "title": "Leisure in Hurghada",
+          "description": "<p>Another free day on the coast. Snorkel over the coral, wander the marina in the evening, or make the most of your hotel's facilities at your own pace.<br /><em>Free day at leisure in Hurghada</em></p>"
+        },
+        {
+          "day": 11,
+          "city": "Hurghada \u2192 Cairo",
+          "meals": "Breakfast, Lunch, dinner",
+          "title": "Fly to Cairo & Khan El Khalili",
+          "description": "<p>After breakfast, transfer to Hurghada Airport for the flight back to Cairo. On arrival you're taken to your hotel, and in the evening you head into the lively lanes of Khan El Khalili \u2014 copper, spice and coffee houses \u2014 before a farewell dinner at a local restaurant.<br /><em>Domestic flight Hurghada \u2192 Cairo \u00b7 Khan El Khalili bazaar \u00b7 Dinner at a local restaurant</em></p>"
+        },
+        {
+          "day": 12,
+          "city": "Cairo",
+          "meals": "Breakfast, Lunch, dinner",
+          "title": "Departure",
+          "description": "<p>After breakfast, transfer to Cairo International Airport for your departure flight. We hope you leave Egypt with unforgettable memories \u2014 and look forward to welcoming you back.<br /><em>Departure transfer</em></p>"
+        }
+      ],
+      "cities": [
+        "Cairo",
+        "Aswan",
+        "Kom Ombo",
+        "Edfu",
+        "Luxor",
+        "Hurghada"
+      ],
+      "nights": 11,
+      "accommodationTiers": [
+        {
+          "id": "standard",
+          "name": "Standard (3\u2605)",
+          "singleSupplement": 0,
+          "perPersonSupplement": 0
+        }
+      ]
+    },
+    {
+      "id": "pkg_egypt_nile_cruise_9d",
+      "type": "package",
+      "title": "Egypt in Depth \u2014 9-Day Nile Cruise & Cairo",
+      "city": "Cairo",
+      "duration": "9 days \u00b7 8 nights",
+      "defaultTime": "09:00",
+      "guide": "Licensed Egyptologist",
+      "vehicle": "Private vehicle, domestic flights & Nile cruise",
+      "minSeats": 4,
+      "maxSeats": 12,
+      "baseCost": 2100,
+      "publishedRate": 1690,
+      "breakPrice": 1390,
+      "quality": 4.9,
+      "depositPercent": 20,
+      "description": "Cairo's pyramids, the Egyptian Museum, a 4-night Nile cruise from Luxor to Aswan, and the temples in between \u2014 domestic flights and full sightseeing included.",
+      "operatingDays": [],
+      "included": [
+        "Arrival and departure airport transfers",
+        "Domestic flights Cairo \u2192 Luxor and Aswan \u2192 Cairo",
+        "4 nights Cairo hotel and 4 nights Nile cruise (full board)",
+        "8 breakfasts, 5 lunches, 7 dinners \u2014 including 3 dinners at local restaurants",
+        "Licensed Egyptologist guide throughout",
+        "Guided sightseeing and entrance fees to every site in the itinerary",
+        "Memphis, Saqqara, Old Cairo, the Egyptian Museum, Giza Pyramids & Sphinx",
+        "Karnak & Luxor Temples, Valley of the Kings, Hatshepsut, Colossi of Memnon",
+        "Edfu & Kom Ombo temples, Philae Temple & the Aswan High Dam",
+        "Felucca sail in Aswan and a Khan El Khalili bazaar visit"
+      ],
+      "notIncluded": [
+        "International flights",
+        "Egypt entry visa",
+        "Travel insurance",
+        "Drinks and personal expenses",
+        "Optional activities (e.g. hot air balloon)",
+        "Tipping and gratuities"
+      ],
+      "active": true,
+      "status": "approved",
+      "agencyId": null,
+      "submittedAt": null,
+      "reviewedAt": null,
+      "rejectionReason": "",
+      "overviewHtml": "<p>Egypt's greatest hits in one shared, fully guided trip \u2014 and you only pay once the group is confirmed. Begin in Cairo with Memphis, Saqqara and Old Cairo, the Egyptian Museum and the Pyramids of Giza, then fly south to Luxor to board a four-night Nile cruise calling at Karnak, the Valley of the Kings, Edfu, Kom Ombo and Aswan. Domestic flights and all sightseeing are included, so the logistics are handled end to end.</p><p>You travel with a licensed Egyptologist throughout and stay in hand-picked hotels and cruise boats across three comfort tiers, finishing with Philae Temple, the High Dam and a final evening in the lanes of Khan El Khalili.</p>",
+      "policiesHtml": "",
+      "whatToBring": [],
+      "meetingPoint": "Cairo International Airport \u2014 you'll be met on arrival and transferred to your hotel.",
+      "pickupNote": "",
+      "meetingPoints": [],
+      "bookingCutoffHours": 24,
+      "confirmDeadlineDays": null,
+      "priceTiers": null,
+      "images": [
+        {
+          "alt": "The Great Sphinx before the pyramid of Khafre at Giza",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/packages/egypt-nile-cruise-9d/sphinx-giza.jpg"
+        },
+        {
+          "alt": "Pyramids of Giza at dusk",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/packages/egypt-nile-cruise-9d/giza-dusk.jpg"
+        },
+        {
+          "alt": "Nile cruise ship",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/packages/egypt-nile-cruise-9d/nile-cruise.jpg"
+        },
+        {
+          "alt": "Cruising the Nile between Luxor and Aswan",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/packages/egypt-nile-cruise-9d/nile-cruising.jpg"
+        },
+        {
+          "alt": "The Great Hypostyle Hall at Karnak Temple",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/packages/egypt-nile-cruise-9d/karnak.jpg"
+        },
+        {
+          "alt": "Aerial view of the Valley of the Kings",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/packages/egypt-nile-cruise-9d/valley-of-the-kings.jpg"
+        },
+        {
+          "alt": "Philae Temple on the Nile",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/packages/egypt-nile-cruise-9d/philae.jpg"
+        },
+        {
+          "alt": "A felucca sailing on the Nile at Aswan",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/packages/egypt-nile-cruise-9d/felucca.jpg"
+        },
+        {
+          "alt": "The Great Temple of Ramses II at Abu Simbel",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/packages/egypt-nile-cruise-9d/abu-simbel.jpg"
+        },
+        {
+          "alt": "Al-Muizz Street illuminated in Islamic Cairo",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/packages/egypt-nile-cruise-9d/al-muizz-street.jpg"
+        }
+      ],
+      "itinerary": [
+        {
+          "day": 1,
+          "city": "Cairo",
+          "meals": "Dinner at a local restaurant",
+          "title": "Arrival in Cairo",
+          "special": "Share your flight details at least 14 days before travel so we can confirm your arrival transfer.",
+          "included": [
+            "Arrival transfer",
+            "Welcome dinner at a local restaurant"
+          ],
+          "optional": [],
+          "overnight": "Cairo",
+          "description": "Welcome to Egypt. On arrival at Cairo International Airport you'll be met by our representative, who assists with immigration formalities and luggage before transferring you to your hotel. The rest of the day is yours to settle in, with a welcome dinner together at a local restaurant in the evening.",
+          "accommodation": "Hotel \u00b7 Cairo"
+        },
+        {
+          "day": 2,
+          "city": "Cairo",
+          "meals": "Breakfast, Local lunch",
+          "title": "Memphis, Saqqara & Old Cairo",
+          "special": "",
+          "included": [
+            "Memphis",
+            "Saqqara \u2014 Step Pyramid of Djoser",
+            "Traditional local lunch",
+            "Old Cairo \u2014 Hanging Church & Coptic district"
+          ],
+          "optional": [],
+          "overnight": "Cairo",
+          "description": "After breakfast, explore the cradle of ancient Egypt. Stand in Memphis, the country's first capital, then walk among the tombs of Saqqara and the Step Pyramid of Djoser \u2014 the oldest stone monument in the world. After a traditional local lunch, wander Old Cairo, including the Hanging Church and the historic Coptic district.",
+          "accommodation": "Hotel \u00b7 Cairo"
+        },
+        {
+          "day": 3,
+          "city": "Cairo",
+          "meals": "Breakfast, Dinner at a local restaurant",
+          "title": "Egyptian Museum & the Giza Pyramids",
+          "special": "",
+          "included": [
+            "Egyptian Museum",
+            "Great Pyramids of Giza",
+            "The Great Sphinx",
+            "Valley Temple",
+            "Dinner at a local restaurant"
+          ],
+          "optional": [],
+          "overnight": "Cairo",
+          "description": "After breakfast, discover Egypt's most famous landmarks. Begin at the Egyptian Museum among the treasures of the pharaohs, then drive to the Giza plateau for the Great Pyramids, the Sphinx and the Valley Temple. In the evening, gather for dinner at a local restaurant.",
+          "accommodation": "Hotel \u00b7 Cairo"
+        },
+        {
+          "day": 4,
+          "city": "Cairo \u2192 Luxor",
+          "meals": "Breakfast, Lunch, Dinner",
+          "title": "Fly to Luxor & the East Bank",
+          "special": "Cruise boats are spacious and fully air-conditioned with private facilities; all meals are on board, drinks are extra.",
+          "included": [
+            "Domestic flight Cairo \u2192 Luxor",
+            "Karnak Temple",
+            "Luxor Temple",
+            "Board the Nile cruise"
+          ],
+          "optional": [],
+          "overnight": "Nile Cruise \u00b7 Luxor",
+          "description": "An early-morning flight brings you to Luxor. On arrival, explore the East Bank's great temples \u2014 the vast complex of Karnak with its avenue of sphinxes, and the elegant riverside Luxor Temple. Board your Nile cruise before lunch and settle into your cabin as the river slips by.",
+          "accommodation": "Nile Cruise \u00b7 Luxor"
+        },
+        {
+          "day": 5,
+          "city": "Luxor \u2014 Nile Cruise",
+          "meals": "Breakfast, Lunch, Dinner",
+          "title": "Luxor's West Bank",
+          "special": "The hot air balloon is weather-dependent; pickup is around 4:30\u20135am.",
+          "included": [
+            "Valley of the Kings",
+            "Temple of Queen Hatshepsut",
+            "Colossi of Memnon"
+          ],
+          "optional": [
+            "Hot air balloon over the Valley of the Kings \u2014 USD120"
+          ],
+          "overnight": "Nile Cruise",
+          "description": "After breakfast, cross to Luxor's legendary West Bank. Enter the painted royal tombs of the Valley of the Kings, stand before the terraced Temple of Queen Hatshepsut set against the cliffs, and pause at the towering Colossi of Memnon. Return to the cruise and begin sailing south.",
+          "accommodation": "Nile Cruise"
+        },
+        {
+          "day": 6,
+          "city": "Edfu & Kom Ombo",
+          "meals": "Breakfast, Lunch, Dinner",
+          "title": "Edfu & Kom Ombo Temples",
+          "special": "",
+          "included": [
+            "Temple of Horus at Edfu",
+            "Kom Ombo Temple"
+          ],
+          "optional": [],
+          "overnight": "Nile Cruise \u00b7 Aswan",
+          "description": "After breakfast, visit the Temple of Horus at Edfu \u2014 the best-preserved temple in Egypt \u2014 then return to the cruise and continue sailing. In the afternoon, step ashore at Kom Ombo, the unusual double temple shared by the gods Sobek and Horus on a bend of the Nile, before sailing on toward Aswan.",
+          "accommodation": "Nile Cruise \u00b7 Aswan"
+        },
+        {
+          "day": 7,
+          "city": "Aswan",
+          "meals": "Breakfast, Lunch, Dinner",
+          "title": "Leisure in Aswan",
+          "special": "",
+          "included": [
+            "Felucca sail on the Nile",
+            "Free time at the Aswan market (souq)"
+          ],
+          "optional": [],
+          "overnight": "Nile Cruise \u00b7 Aswan",
+          "description": "A relaxed day in beautiful Aswan. Set sail on a traditional felucca, the lateen-rigged boat that has plied the Nile for centuries, and gliding past Elephantine Island and the Aga Khan Mausoleum. The rest of the day is free to explore the colourful Aswan market and souq at your own pace.",
+          "accommodation": "Nile Cruise \u00b7 Aswan"
+        },
+        {
+          "day": 8,
+          "city": "Aswan \u2192 Cairo",
+          "meals": "Breakfast, Dinner at a local restaurant",
+          "title": "Philae Temple, the High Dam & fly to Cairo",
+          "special": "",
+          "included": [
+            "Philae Temple",
+            "Aswan High Dam",
+            "Domestic flight Aswan \u2192 Cairo",
+            "Khan El Khalili bazaar"
+          ],
+          "optional": [],
+          "overnight": "Cairo",
+          "description": "Disembark after breakfast. Boat across to Philae Temple, the island sanctuary of Isis rescued from the rising waters, then take in the Aswan High Dam that created Lake Nasser. Transfer to Aswan airport for your flight to Cairo, where the evening brings a visit to the lively lanes of the Khan El Khalili bazaar.",
+          "accommodation": "Hotel \u00b7 Cairo"
+        },
+        {
+          "day": 9,
+          "city": "Cairo",
+          "meals": "Breakfast",
+          "title": "Departure",
+          "special": "",
+          "included": [
+            "Departure transfer"
+          ],
+          "optional": [],
+          "overnight": null,
+          "description": "After breakfast, transfer to Cairo International Airport for your departure flight. We hope you leave Egypt with unforgettable memories \u2014 and look forward to welcoming you back.",
+          "accommodation": "\u2014"
+        }
+      ],
+      "cities": [
+        "Cairo",
+        "Luxor",
+        "Aswan"
+      ],
+      "nights": 8,
+      "accommodationTiers": [
+        {
+          "id": "standard",
+          "name": "Standard (3\u2605 / 5\u2605 cruise)",
+          "singleSupplement": 150,
+          "perPersonSupplement": 0
+        },
+        {
+          "id": "superior",
+          "name": "Superior (4\u2605 / deluxe cruise)",
+          "singleSupplement": 240,
+          "perPersonSupplement": 180
+        },
+        {
+          "id": "luxury",
+          "name": "Luxury (5\u2605 / luxury cruise)",
+          "singleSupplement": 420,
+          "perPersonSupplement": 390
+        }
+      ]
+    },
+    {
+      "id": "pkg_nile_majesty_luxor_5d",
+      "type": "package",
+      "title": "Nile Majesty \u2014 5-Day River Cruise from Luxor",
+      "city": "Luxor",
+      "duration": "5 days \u00b7 4 nights",
+      "defaultTime": "09:00",
+      "guide": "Licensed Egyptologist",
+      "vehicle": "Five-star Nile cruiser & private transfers",
+      "minSeats": 4,
+      "maxSeats": 12,
+      "baseCost": 540,
+      "publishedRate": 750,
+      "breakPrice": 675,
+      "quality": 4.9,
+      "depositPercent": 20,
+      "description": "A five-star Nile cruise from Luxor to Aswan \u2014 Karnak and Luxor Temple by night, the Valley of the Kings, Edfu, Kom Ombo, Philae and the High Dam, with full board and a licensed Egyptologist.",
+      "operatingDays": [],
+      "included": [
+        "Meet & assist at Luxor and Aswan airports with all transfers",
+        "4 nights aboard a five-star Nile cruiser (full board)",
+        "4 breakfasts, 4 lunches and 4 dinners on board",
+        "Licensed Egyptologist guide throughout",
+        "All guided sightseeing and entrance fees in the itinerary",
+        "Karnak & Luxor Temples, including the Luxor Temple night tour",
+        "Valley of the Kings, Hatshepsut Temple & the Colossi of Memnon",
+        "Edfu & Kom Ombo temples and a felucca sail in Aswan",
+        "Philae Temple, the Aswan High Dam & the Unfinished Obelisk",
+        "Horse-drawn carriage ride in Luxor"
+      ],
+      "notIncluded": [
+        "International flights",
+        "Egypt entry visa",
+        "Travel insurance",
+        "Drinks and personal expenses",
+        "Optional excursions outside the itinerary",
+        "Tipping and gratuities"
+      ],
+      "active": true,
+      "status": "approved",
+      "agencyId": null,
+      "submittedAt": "2026-08-07T13:00:06.681Z",
+      "reviewedAt": "2026-08-07T13:00:06.681Z",
+      "rejectionReason": "",
+      "overviewHtml": "<p>Sail through the heart of ancient Egypt on a five-star cruiser from Luxor to Aswan \u2014 and you only pay once the group is confirmed. Begin in Luxor with the vast temple complex of Karnak and an after-dark carriage ride to the illuminated Luxor Temple, then cross to the West Bank for the Valley of the Kings, the Temple of Queen Hatshepsut and the Colossi of Memnon.</p><p>As you sail south the temples keep coming \u2014 Horus at Edfu, the double temple of Kom Ombo, and a felucca in Aswan \u2014 finishing with Philae Temple, the Aswan High Dam and the Unfinished Obelisk. Full board and a licensed Egyptologist are included throughout, so every day is handled end to end.</p>",
+      "policiesHtml": "",
+      "whatToBring": [],
+      "meetingPoint": "Luxor International Airport \u2014 you'll be met on arrival and transferred to your Nile cruiser.",
+      "pickupNote": "",
+      "meetingPoints": [
+        {
+          "note": "",
+          "point": "Luxor International Airport \u2014 you'll be met on arrival and transferred to your Nile cruiser."
+        }
+      ],
+      "bookingCutoffHours": 24,
+      "confirmDeadlineDays": null,
+      "priceTiers": null,
+      "images": [
+        {
+          "alt": "A five-star cruiser on the Nile between Luxor and Aswan",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/packages/nile-majesty-luxor-5d/nile-cruise.jpg"
+        },
+        {
+          "alt": "The temple complex of Karnak at Luxor",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/packages/nile-majesty-luxor-5d/karnak.jpg"
+        },
+        {
+          "alt": "Luxor Temple illuminated at night",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/packages/nile-majesty-luxor-5d/luxor-temple-night.jpg"
+        },
+        {
+          "alt": "Aerial view of the Valley of the Kings",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/packages/nile-majesty-luxor-5d/valley-of-the-kings.jpg"
+        },
+        {
+          "alt": "The Temple of Queen Hatshepsut at Deir el-Bahari",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/packages/nile-majesty-luxor-5d/hatshepsut.jpg"
+        },
+        {
+          "alt": "The Temple of Horus at Edfu",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/packages/nile-majesty-luxor-5d/edfu.jpg"
+        },
+        {
+          "alt": "Kom Ombo Temple at sunset on the Nile",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/packages/nile-majesty-luxor-5d/kom-ombo.jpg"
+        },
+        {
+          "alt": "A felucca sailing the Nile at Aswan",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/packages/nile-majesty-luxor-5d/felucca.jpg"
+        },
+        {
+          "alt": "Philae Temple on its island in Aswan",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/packages/nile-majesty-luxor-5d/philae.jpg"
+        },
+        {
+          "alt": "The Nile at Aswan",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/packages/nile-majesty-luxor-5d/aswan-nile.jpg"
+        }
+      ],
+      "itinerary": [
+        {
+          "day": 1,
+          "city": "Luxor",
+          "meals": "Lunch, Dinner",
+          "title": "Arrival in Luxor \u2014 Karnak & Luxor Temple by night",
+          "special": "Share your flight details at least 14 days before travel so we can confirm your arrival transfer.",
+          "included": [
+            "Meet & assist at Luxor International Airport",
+            "Karnak Temple complex",
+            "Horse-drawn carriage ride",
+            "Night tour of the illuminated Luxor Temple"
+          ],
+          "optional": [],
+          "overnight": "Nile Cruise \u00b7 Luxor",
+          "description": "Arrive at Luxor International Airport, where you're met and escorted to your five-star Nile cruiser. Enjoy lunch on board before an afternoon at the vast Karnak Temple complex, dedicated to the pantheon of ancient gods. As the sun sets, a horse-drawn carriage carries you on an enchanting night tour of Luxor Temple, beautifully illuminated against the night sky.",
+          "accommodation": "Nile Cruise \u00b7 Luxor"
+        },
+        {
+          "day": 2,
+          "city": "Luxor \u2014 West Bank",
+          "meals": "Breakfast, Lunch, Dinner",
+          "title": "Valley of the Kings, Hatshepsut & the Colossi of Memnon",
+          "special": "",
+          "included": [
+            "Valley of the Kings",
+            "Temple of Queen Hatshepsut",
+            "Colossi of Memnon"
+          ],
+          "optional": [],
+          "overnight": "Nile Cruise",
+          "description": "Awaken to the flow of the Nile and cross to Luxor's legendary West Bank. Explore the Valley of the Kings, the burial ground of pharaohs including Tutankhamun, stand before the terraced mortuary Temple of Queen Hatshepsut set against the cliffs, and pause at the towering Colossi of Memnon. Return to your cruiser for lunch and a leisurely afternoon sailing the timeless Nile.",
+          "accommodation": "Nile Cruise"
+        },
+        {
+          "day": 3,
+          "city": "Edfu & Kom Ombo",
+          "meals": "Breakfast, Lunch, Dinner",
+          "title": "Edfu & Kom Ombo Temples, felucca in Aswan",
+          "special": "",
+          "included": [
+            "Temple of Horus at Edfu",
+            "Kom Ombo Temple",
+            "Felucca sail around Kitchener's Island"
+          ],
+          "optional": [],
+          "overnight": "Nile Cruise \u00b7 Aswan",
+          "description": "Today brings you to the Temple of Edfu, the exquisitely preserved shrine to the falcon god Horus. After lunch, sail to the Temple of Kom Ombo, uniquely dedicated to both Sobek the crocodile god and Horus the elder. The day closes with a serene felucca sail around Kitchener's Island, followed by another peaceful night aboard your cruiser.",
+          "accommodation": "Nile Cruise \u00b7 Aswan"
+        },
+        {
+          "day": 4,
+          "city": "Aswan",
+          "meals": "Breakfast, Lunch, Dinner",
+          "title": "Philae Temple, the High Dam & the Unfinished Obelisk",
+          "special": "",
+          "included": [
+            "Philae Temple",
+            "Aswan High Dam",
+            "Unfinished Obelisk"
+          ],
+          "optional": [],
+          "overnight": "Nile Cruise \u00b7 Aswan",
+          "description": "After breakfast, set off to explore Aswan's treasures. Visit the captivating Philae Temple, dedicated to the goddess Isis and rescued from the rising waters, marvel at the Aswan High Dam that created Lake Nasser, and see the colossal Unfinished Obelisk still lying in its ancient granite quarry.",
+          "accommodation": "Nile Cruise \u00b7 Aswan"
+        },
+        {
+          "day": 5,
+          "city": "Aswan",
+          "meals": "Breakfast",
+          "title": "Departure from Aswan",
+          "special": "",
+          "included": [
+            "Meet & assist at Aswan International Airport",
+            "Departure transfer"
+          ],
+          "optional": [],
+          "overnight": null,
+          "description": "Enjoy your final breakfast on the Nile before disembarking. Our representative transfers you to Aswan International Airport for your onward flight; if you depart later in the day, special arrangements ensure your comfort until you leave, closing a memorable journey through the land of the pharaohs.",
+          "accommodation": "\u2014"
+        }
+      ],
+      "cities": [
+        "Luxor",
+        "Edfu",
+        "Kom Ombo",
+        "Aswan"
+      ],
+      "nights": 4,
+      "accommodationTiers": [
+        {
+          "id": "standard",
+          "name": "Five-star Nile cruiser",
+          "singleSupplement": 150,
+          "perPersonSupplement": 0
+        }
+      ]
+    },
+    {
+      "id": "tour_aswan_highlights_unfinished_obel_mq40h29k",
+      "type": "day_tour",
+      "title": "Aswan Highlights \u2014 Unfinished Obelisk, High Dam & Philae",
+      "city": "Aswan",
+      "duration": "Full day \u00b7 about 5 hours",
+      "defaultTime": "08:00",
+      "guide": "Licensed Egyptologist",
+      "vehicle": "Air-conditioned car/van",
+      "minSeats": 4,
+      "maxSeats": 12,
+      "baseCost": 0,
+      "publishedRate": 49,
+      "breakPrice": 45,
+      "quality": 4.7,
+      "depositPercent": 10,
+      "description": "Aswan is often treated as a place you pass through \u2014 a stop on the way to a cruise, a handful of sights to tick off in a morning before moving on. We",
+      "operatingDays": [],
+      "included": [
+        "Licensed Egyptologist guide",
+        "Air-conditioned transport",
+        "Hotel pickup & drop-off in Aswan",
+        "Motorboat to Philae Island"
+      ],
+      "notIncluded": [
+        "Entrance tickets",
+        "Gratuities",
+        "Food & drinks",
+        "Personal expenses"
+      ],
+      "active": true,
+      "status": "approved",
+      "agencyId": null,
+      "submittedAt": "2026-07-29T08:30:58.959Z",
+      "reviewedAt": "2026-07-29T08:30:58.959Z",
+      "rejectionReason": "",
+      "overviewHtml": "<p>Aswan is often treated as a place you pass through \u2014 a stop on the way to a cruise, a handful of sights to tick off in a morning before moving on. We see it differently. The three great landmarks of this city are not a checklist; together they tell one continuous story about Egypt and the river that made it, stretching across more than three thousand years.</p>\n<p>That story runs through stone and water. At the <strong>Unfinished Obelisk</strong>, you watch ancient Egyptians learning to cut granite by hand. At the <strong>High Dam</strong>, you stand on modern Egypt's answer to the same river they revered. And at <strong>Philae Temple</strong>, you reach a sanctuary that was very nearly lost to the water that dam created \u2014 and saved, stone by stone, by people who refused to let it drown. Three landmarks, one long conversation between a people and their Nile.</p>\n<p>This is a small-group shared departure, which means the pleasure of travelling alongside like-minded explorers, the ease of fully organised service, and a price that opens Aswan to everyone. <em>Sawa</em> means \"together,\" and that is the spirit of the day \u2014 good company, a knowledgeable guide, and a comfortable seat from one landmark to the next. Your seat is confirmed the moment you book, and the journey runs as a set group departure.</p>\n<h3>Day 1 \u2014 A Day Through Aswan's Granite and Water</h3>\n<h3>The Shape of the Day</h3>\n<p><strong>08:00 AM \u2014 Gather in Aswan</strong> The day begins while the air is still soft, before the southern sun climbs high. Our representative meets you at your hotel, welcomes you, and introduces you to the travellers you'll share the day with. Once everyone is settled, we set off into the city.</p>\n<p><strong>08:00 AM \u2013 08:20 AM \u2014 The Drive to the Quarry</strong> A short ride takes you to the northern granite quarries on the edge of Aswan \u2014 the ancient ground where so many of Egypt's monuments first took shape.</p>\n<p><strong>08:20 AM \u2013 09:05 AM \u2014 The Unfinished Obelisk</strong> You spend the first part of the morning with the largest obelisk the ancient Egyptians ever attempted, still lying in the bedrock where it was carved. Going early means quieter ground and gentler light for taking in the sheer scale of it.</p>\n<p><strong>09:05 AM \u2013 09:30 AM \u2014 On to the High Dam</strong> The road carries you south out of the city, the river never far, until the great wall of the High Dam comes into view.</p>\n<p><strong>09:30 AM \u2013 10:15 AM \u2014 The High Dam</strong> You spend around three quarters of an hour on the dam itself, with Lake Nasser stretching away to the south \u2014 a chance to understand how modern Egypt reshaped its oldest companion, the Nile.</p>\n<p><strong>10:15 AM \u2013 10:30 AM \u2014 To the Boat for Philae</strong> A brief drive brings you to the water's edge, where a boat waits to carry you out to the island.</p>\n<p><strong>10:30 AM \u2013 10:45 AM \u2014 Across to Agilika Island</strong> The short crossing is part of the pleasure \u2014 Philae reveals itself slowly as you approach, columns and gateways rising straight from the river.</p>\n<p><strong>10:45 AM \u2013 12:15 PM \u2014 Philae Temple</strong> You have around an hour and a half on the island to explore the temple of Isis, take in its mythology and architecture, and hear the remarkable story of how it was moved here to escape the rising water.</p>\n<p><strong>12:15 PM \u2013 12:45 PM \u2014 The Return</strong> The boat carries you back to shore, and from there it is a short transfer to your hotel.</p>\n<p><strong>Around 12:45 PM \u2014 Back in Aswan</strong> You arrive back in the early afternoon, with the day still ahead of you \u2014 free to rest by the river, wander the city, or set off on the next chapter of your stay.</p>\n<h3>The Unfinished Obelisk \u2014 A Monument Caught Mid-Breath</h3>\n<p>Your day begins in the granite quarries north of the city, and there is something quietly extraordinary about standing over an obelisk that was never raised.</p>\n<p>This is the largest obelisk ancient Egypt ever attempted \u2014 well over a thousand tons of single, solid granite, which would have stood taller than anything like it had the work ever finished. It didn't. A crack opened in the stone partway through the carving, and the whole project was abandoned where it lay, still attached to the bedrock beneath it.</p>\n<p>That failure is exactly what makes it worth seeing. A finished obelisk tells you nothing about how it was made; this one shows you everything \u2014 the tool marks, the trenches cut around its sides, the sheer human labour of shaping granite with stone and copper and patience. You don't admire a polished result here. You watch the ancient world at work, mid-task, and understand the ambition behind every monument you've ever seen standing.</p>\n<h3>The High Dam \u2014 Modern Egypt and the River</h3>\n<p>From the quarry the road carries you south to the High Dam, and the shift in time is striking \u2014 from a project of the pharaohs to one of the twentieth century, both wrestling with the same river.</p>\n<p>Built through the 1960s under President Gamal Abdel Nasser, the dam was Egypt's great modern undertaking: a structure to hold back the Nile's unpredictable flood, generate electricity for a growing nation, and feed irrigation across the country. Behind it lies Lake Nasser, one of the largest reservoirs ever made by people, reaching far to the south.</p>\n<p>Standing here, you feel the weight of what it means to control a river that an entire civilisation once simply prayed to. But there is a quieter story folded into the view as well \u2014 because the same rising water that the dam created threatened to swallow the temples downstream. The most beautiful of them is your next stop, and the reason it survives is everything you're looking at right now.</p>\n<h3>Philae Temple \u2014 The Sanctuary That Was Saved</h3>\n<p>A short drive and a boat ride bring you to Agilika Island, where Philae rises straight out of the Nile \u2014 and it is hard to imagine that this whole temple once stood somewhere else entirely.</p>\n<p>Dedicated to Isis, goddess of healing, motherhood, and magic, Philae was one of the most beloved sanctuaries in all of Egypt, its worship lingering here long after the rest of the ancient religion had faded. Its courts, columned halls, and great gateways carry carvings of the goddess and her story across every surface, and the setting \u2014 temple, palms, and water all together \u2014 gives it an atmosphere few places can match.</p>\n<p>And then there is the rescue. As the High Dam's reservoir rose, Philae was destined to vanish beneath the water for good. Instead, it was taken apart piece by piece and rebuilt, stone by numbered stone, on higher ground here at Agilika \u2014 a vast effort to save a single sacred place. Standing inside it, knowing the river you saw tamed an hour ago is the very thing that nearly claimed it, you feel the full arc of the day close around you.</p>\n<h3>Returning to Aswan</h3>\n<p>The boat carries you back across the water, and the short drive returns you to the city in the early afternoon, with time still in hand.</p>\n<p>Aswan moves to a gentler rhythm than anywhere else in Egypt \u2014 calmer, warmer, bound more closely to the river. Great rounded granite boulders break the surface of the Nile, palm-fringed islands drift past, Nubian culture colours the streets, and a soft southern light settles over all of it.</p>\n<p>The tour ends here, but what you've really spent the day on is a single thread: a people and their river, carved in granite, held back by a wall, and saved on an island \u2014 seen not alone, but in good company, <em>sawa</em>, together.</p>",
+      "policiesHtml": "",
+      "whatToBring": [
+        "Comfortable walking shoes",
+        "Light, breathable clothing",
+        "Sun protection \u2014 hat, sunglasses, sunscreen",
+        "Camera",
+        "Reusable water bottle"
+      ],
+      "meetingPoint": "Coptic Orthodox Cathedral of the Archangel Michael, Aswan",
+      "pickupNote": "Aswan day tour \u2014 be there by 8:00 AM (hotel pickup also available)",
+      "meetingPoints": [
+        {
+          "note": "Aswan day tour \u2014 be there by 8:00 AM (hotel pickup also available)",
+          "point": "Coptic Orthodox Cathedral of the Archangel Michael, Aswan"
+        }
+      ],
+      "bookingCutoffHours": 24,
+      "confirmDeadlineDays": null,
+      "priceTiers": null,
+      "images": [
+        {
+          "alt": "Unfinished Obelisk Aswan Quarry Walkway",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/tours/aswan-highlights/01.jpg"
+        },
+        {
+          "alt": "Unfinished Obelisk Aswan Quarry",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/tours/aswan-highlights/02.jpg"
+        },
+        {
+          "alt": "Unfinished Obelisk Still Quarry Aswan",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/tours/aswan-highlights/03.jpg"
+        },
+        {
+          "alt": "Egypt Temple Philae Nile",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/tours/aswan-highlights/04.jpg"
+        },
+        {
+          "alt": "Kiosk Of Trajan Philae Temple Aswan Egypt",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/tours/aswan-highlights/05.jpg"
+        },
+        {
+          "alt": "Philae Temple Courtyard Aswan",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/tours/aswan-highlights/06.jpg"
+        },
+        {
+          "alt": "Aswan Egypt View Panorama Mountain West Coast Nile Sunny Day",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/tours/aswan-highlights/07.jpg"
+        },
+        {
+          "alt": "Aswan Nile River Hotel View",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/tours/aswan-highlights/08.jpg"
+        }
+      ],
+      "itinerary": []
+    },
+    {
+      "id": "tour_aswan_to_abu_simbel_temples_of_r_mq40h4p7",
+      "type": "day_tour",
+      "title": "Aswan to Abu Simbel \u2014 Temples of Ramses II & Nefertari",
+      "city": "Aswan",
+      "duration": "Full day \u00b7 about 9 hours",
+      "defaultTime": "04:00",
+      "guide": "Licensed Egyptologist",
+      "vehicle": "Air-conditioned car",
+      "minSeats": 4,
+      "maxSeats": 12,
+      "baseCost": 0,
+      "publishedRate": 110,
+      "breakPrice": 60,
+      "quality": 4.7,
+      "depositPercent": 10,
+      "description": "The drive to Abu Simbel has a reputation as something to be endured \u2014 hours of empty road before the temple at the end. We'd ask you to think of it th",
+      "operatingDays": [],
+      "included": [
+        "Licensed Egyptologist guide",
+        "Air-conditioned car",
+        "Hotel pickup & drop-off in Aswan"
+      ],
+      "notIncluded": [
+        "Abu Simbel entrance tickets",
+        "Gratuities",
+        "Food & drinks"
+      ],
+      "active": true,
+      "status": "approved",
+      "agencyId": null,
+      "submittedAt": "2026-07-29T08:32:30.912Z",
+      "reviewedAt": "2026-07-29T08:32:30.912Z",
+      "rejectionReason": "",
+      "overviewHtml": "<p>The drive to Abu Simbel has a reputation as something to be endured \u2014 hours of empty road before the temple at the end. We'd ask you to think of it the other way around. The route south from Aswan runs deep into Nubia, across one of the emptiest and most beautiful deserts in Egypt, and as the sun climbs you'll watch mirages shimmer and dissolve along the horizon, water that isn't there pooling over the sand. The road is not the price of the day. It's part of it.</p>\n<p>And at the end of it stand two of the greatest things the ancient world ever carved. The <strong>Great Temple of Ramses II</strong>, fronted by four seated colossi cut straight into a sandstone cliff, and beside it the smaller <strong>Temple of Nefertari</strong>, raised by Ramses for his queen \u2014 one of the rare moments in Egypt where a pharaoh honoured his wife at nearly his own scale. Both were lifted from their original ground and rebuilt, block by block, in one of the most ambitious rescues in history.</p>\n<p>This is a small-group shared departure, which means the pleasure of travelling alongside like-minded explorers, the ease of fully organised service, and a price that opens this far-southern corner of Egypt to everyone. <em>Sawa</em> means \"together,\" and on a long road like this one, good company is no small thing \u2014 a knowledgeable guide, a comfortable seat, and travellers to share the wonder with. Your seat is confirmed the moment you book, and the journey runs as a set group departure.</p>\n<h3>Day 1 \u2014 South to Abu Simbel and Back</h3>\n<h3>The Shape of the Day</h3>\n<p><strong>04:00 AM \u2014 Gather in Aswan</strong> The day begins in the dark, early enough to reach Abu Simbel in the cool of the morning and stand before the temples before the heat and the crowds arrive. Our representative meets you at your hotel, welcomes you, and introduces you to the travellers you'll share the long road with. Once everyone is aboard, we turn south.</p>\n<p><strong>04:00 AM \u2013 07:30 AM \u2014 The Drive South</strong> The road to Abu Simbel takes around three and a half hours through the Nubian desert. You set out under the stars and watch the light come up over an enormous, empty landscape \u2014 and as the sun rises and the road heats, you'll see the desert's famous mirages shimmer in the distance, one of the quiet pleasures of travelling this far south.</p>\n<p><strong>07:30 AM \u2013 09:30 AM \u2014 The Temples of Abu Simbel</strong> You arrive in the gentler part of the morning and spend around two hours at the site with your guide \u2014 first the Great Temple of Ramses II, then the Temple of Nefertari beside it \u2014 taking in both their colossal scale and the fine detail carved across their walls.</p>\n<p><strong>09:30 AM \u2013 01:00 PM \u2014 The Return to Aswan</strong> The road carries you back north, around three and a half hours, the desert sliding past once more on the long, easy run home.</p>\n<p><strong>Around 01:00 PM \u2014 Arrival in Aswan</strong> You arrive back in Aswan in the early afternoon. The tour ends at the agreed drop-off point, leaving you free to rest, settle by the river, or carry on with your stay.</p>\n<h3>The Great Temple of Ramses II \u2014 Four Giants in the Cliff</h3>\n<p>Nothing quite prepares you for the first sight of it. Four seated statues of Ramses II, each around twenty metres tall, carved directly into the sandstone cliff, gazing out over the water as they have for more than three thousand years.</p>\n<p>Raised in the thirteenth century BC, the Great Temple was Ramses' statement of his own power, cut not from blocks but straight into the living rock of the hillside. Inside, the scale continues \u2014 pillared halls lined with figures of the king, walls covered in scenes of his battles and his gods, leading deep into the cliff to the sanctuary at its heart. The temple was built so precisely that, on two days each year, the rising sun reaches all the way through to light the statues in that innermost chamber \u2014 an alignment the ancient builders engineered into solid stone.</p>\n<p>What stays with you, though, is what happened to it in modern times. When the High Dam's reservoir, Lake Nasser, began to rise, the entire temple was destined to disappear beneath the water. Instead, Egypt and UNESCO cut it into thousands of enormous blocks and lifted the whole thing more than sixty metres up the cliff, reassembling it exactly as it had stood. You are looking at something ancient that was saved by an act of almost equal ambition.</p>\n<h3>The Temple of Nefertari \u2014 A Queen at Full Scale</h3>\n<p>Beside the Great Temple stands a second, smaller one, and it tells a quieter but no less remarkable story.</p>\n<p>Ramses raised this temple for his beloved queen, Nefertari, and dedicated it to the goddess Hathor. What makes it singular is the facade: among the towering statues of the king stand statues of Nefertari herself, carved at nearly the same height as her husband \u2014 almost unheard of in a world where queens were shown small at a pharaoh's feet. It is, in stone, an unusual public declaration of regard.</p>\n<p>Inside, the carvings are softer and more graceful than the warlike scenes next door \u2014 the queen in the company of the gods, offerings and blessings, the imagery of Hathor throughout. Standing in the two temples one after the other, you feel the difference between them clearly: one built to overwhelm, the other built with something closer to tenderness.</p>\n<h3>Returning to Aswan</h3>\n<p>The long road north carries you back through the same vast desert, and by early afternoon you're returned to Aswan with the day's images still settling.</p>\n<p>Aswan moves to a gentler rhythm than almost anywhere in Egypt \u2014 calmer, warmer, bound closely to the river. Great rounded granite boulders break the surface of the Nile, palm-fringed islands drift past, Nubian culture colours the streets, and a soft southern light settles over all of it.</p>\n<p>The tour ends here. What you've really done is travel to the far edge of Egypt and back to stand before something that should have been lost \u2014 and you did it not alone, but in good company, on a long road made shorter by sharing it, <em>sawa</em>, together.</p>",
+      "policiesHtml": "",
+      "whatToBring": [
+        "Comfortable walking shoes",
+        "Light, breathable clothing",
+        "Sun protection \u2014 hat, sunglasses, sunscreen",
+        "Camera",
+        "Reusable water bottle"
+      ],
+      "meetingPoint": "Coptic Orthodox Cathedral of the Archangel Michael, Aswan",
+      "pickupNote": "Abu Simbel \u2014 very early start, be there by 4:00 AM (hotel pickup available)",
+      "meetingPoints": [
+        {
+          "note": "Abu Simbel \u2014 very early start, be there by 4:00 AM (hotel pickup available)",
+          "point": "Coptic Orthodox Cathedral of the Archangel Michael, Aswan"
+        }
+      ],
+      "bookingCutoffHours": 24,
+      "confirmDeadlineDays": null,
+      "priceTiers": null,
+      "images": [
+        {
+          "alt": "Abu Simbel 2",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/tours/abu-simbel/01.jpg"
+        },
+        {
+          "alt": "Abu Simbel Aswan Egypt February 22 Colossal Statues Small Temple Ramesses Ii Lit Up",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/tours/abu-simbel/02.jpg"
+        },
+        {
+          "alt": "Abu Simbel Colossal Statues Egypt",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/tours/abu-simbel/03.jpg"
+        },
+        {
+          "alt": "Aswan Egypt View Panorama Mountain West Coast Nile Sunny Day",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/tours/abu-simbel/04.jpg"
+        },
+        {
+          "alt": "Aswan Nile River Hotel View",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/tours/abu-simbel/05.jpg"
+        },
+        {
+          "alt": "Dahabiya Nile Cruise Ship Sailing Alongside Sandy Desert Palm Trees River Nile Aswan",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/tours/abu-simbel/06.jpg"
+        },
+        {
+          "alt": "Egypt Temple Philae Nile",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/tours/abu-simbel/07.jpg"
+        },
+        {
+          "alt": "Kiosk Of Trajan Philae Temple Aswan Egypt",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/tours/abu-simbel/08.jpg"
+        }
+      ],
+      "itinerary": []
+    },
+    {
+      "id": "tour_cairo_to_alexandria_the_mediterr_mq41k6qb",
+      "type": "day_tour",
+      "title": "Cairo to Alexandria \u2014 the Mediterranean Day Tour",
+      "city": "Cairo",
+      "duration": "Full day \u00b7 about 10 hours",
+      "defaultTime": "07:00",
+      "guide": "Licensed Egyptologist",
+      "vehicle": "Air-conditioned car/van",
+      "minSeats": 4,
+      "maxSeats": 12,
+      "baseCost": 0,
+      "publishedRate": 93,
+      "breakPrice": 65,
+      "quality": 4.7,
+      "depositPercent": 10,
+      "description": "Almost everyone comes to Egypt for the same things \u2014 pharaohs, pyramids, the desert \u2014 and so Alexandria tends to get reduced to a checklist, a few sig",
+      "operatingDays": [
+        0
+      ],
+      "included": [
+        "Licensed Egyptologist guide",
+        "Air-conditioned transport",
+        "Hotel pickup & drop-off"
+      ],
+      "notIncluded": [
+        "Entrance tickets",
+        "Lunch",
+        "Gratuities"
+      ],
+      "active": true,
+      "status": "approved",
+      "agencyId": null,
+      "submittedAt": "2026-07-29T08:32:54.916Z",
+      "reviewedAt": "2026-07-29T08:32:54.916Z",
+      "rejectionReason": "",
+      "overviewHtml": "<p>Almost everyone comes to Egypt for the same things \u2014 pharaohs, pyramids, the desert \u2014 and so Alexandria tends to get reduced to a checklist, a few sights ticked off on the coast. We see it as the other half of the story. This is where Egypt stops facing the desert and turns to face the sea: a Greek and Roman city, founded by Alexander the Great, that was once the great cosmopolitan capital of the ancient Mediterranean. Spend a day here and you meet an Egypt of scholars, sailors, and mixed bloodlines \u2014 where even the tombs are carved half in Egyptian style and half in Roman.</p>\n<p>The day moves through the layers of that mixed city. The <strong>Catacombs of Kom El Shuqafa</strong>, the largest Greco-Roman necropolis in Egypt, where two civilisations meet underground. <strong>Pompey's Pillar</strong>, a single towering granite column standing for a whole vanished temple. The <strong>National Museum of Alexandria</strong>, where the city's long story is gathered under one roof. And the <strong>Roman Amphitheatre</strong>, the only one of its kind in Egypt.</p>\n<p>This is a small-group shared departure, which means the pleasure of travelling alongside like-minded explorers, the ease of fully organised service, and a price that opens the Mediterranean coast to everyone. <em>Sawa</em> means \"together,\" and that is the spirit of the day \u2014 good company, a knowledgeable guide, and a comfortable seat for the road there and back. Your seat is confirmed the moment you book, and the journey runs as a set group departure.</p>\n<h3>Day 1 \u2014 Cairo to Alexandria and Back</h3>\n<h3>The Shape of the Day</h3>\n<p><strong>07:00 AM \u2014 Gather in Cairo</strong> The day begins early, while the air is still cool and the roads are quiet. Our representative meets you at your hotel, welcomes you, and introduces you to the travellers you'll share the day with. Once everyone is settled, we set off north toward the coast.</p>\n<p><strong>07:00 AM \u2013 10:00 AM \u2014 The Drive to Alexandria</strong> The Cairo\u2013Alexandria highway takes around three hours, the desert and farmland of the delta rolling past until the air changes and the Mediterranean draws near.</p>\n<p><strong>10:00 AM \u2013 11:00 AM \u2014 Catacombs of Kom El Shuqafa</strong> Your first stop, and the perfect introduction to the city \u2014 around an hour exploring the largest Greco-Roman burial site in Egypt, descending underground into its carved chambers and tunnels.</p>\n<p><strong>11:00 AM \u2013 11:45 AM \u2014 Pompey's Pillar</strong> A short drive brings you to the towering granite column nearby, the lone survivor of a great temple complex, with its two sphinxes at the base.</p>\n<p><strong>11:45 AM \u2013 01:15 PM \u2014 National Museum of Alexandria</strong> The drive into the centre brings you to the museum, where you have around an hour to trace the city's whole layered history, from its ancient origins through its later eras, in one elegant setting.</p>\n<p><strong>01:15 PM \u2013 02:15 PM \u2014 The Roman Amphitheatre</strong> The last stop, a short way off, where you spend around an hour at the only Roman theatre in Egypt \u2014 its marble tiers a glimpse of the city's public life in Roman times.</p>\n<p><strong>02:15 PM \u2013 05:15 PM \u2014 The Return to Cairo</strong> The road carries you back south, around three hours, the coast slipping away behind you as the capital draws near.</p>\n<p><strong>Around 05:15 PM \u2014 Back in Cairo</strong> You arrive back in the late afternoon, the tour ending at your hotel, the sea air and the long history of the day still with you.</p>\n<h3>The Catacombs of Kom El Shuqafa \u2014 Two Worlds Underground</h3>\n<p>The day's first stop sets its whole theme. You descend a spiral stair into the cool dark beneath the city, into the largest Greco-Roman necropolis in Egypt \u2014 a sprawling, multi-level burial place cut deep into the rock.</p>\n<p>What makes it singular is written all over the walls. This is where the city's two cultures meet most vividly: ancient Egyptian gods and funerary traditions carved side by side with Greek and Roman style, sometimes blended into single strange figures \u2014 Egyptian deities in Roman dress, classical robes on Egyptian forms. Nowhere captures Alexandria's mixed soul more directly than down here.</p>\n<p>The payoff is that you understand the city before you've even seen it in daylight. Everything you visit afterward is a variation on this one idea \u2014 two worlds layered into one \u2014 and you've already met it underground, carved into the tombs.</p>\n<h3>Pompey's Pillar \u2014 One Column for a Lost World</h3>\n<p>Back above ground, a short drive brings you to Pompey's Pillar, a single column of polished red granite standing some twenty-eight metres tall above the surrounding city, with two sphinxes keeping watch at its base.</p>\n<p>The pillar is something of a beautiful misunderstanding \u2014 it has nothing to do with Pompey at all, and was raised in the late Roman period. What matters is what it's the last of: it once stood within the Serapeum, a grand temple complex that was among the most important religious and intellectual centres of the ancient city. Almost all of that is gone now.</p>\n<p>And that is the quiet power of the place. A whole complex of temple and learning, reduced to one upright column on a low hill \u2014 a single survivor standing in for everything around it that time took away.</p>\n<h3>The National Museum of Alexandria \u2014 The City Under One Roof</h3>\n<p>From the open sites you move indoors, to a museum housed in an elegant old mansion that once belonged to the city's wealthy, its galleries calm and ordered after the morning's heat.</p>\n<p>What the museum gives you is the thread. Its collection runs across the full sweep of Alexandria's history \u2014 Pharaonic, Greco-Roman, Coptic, and Islamic \u2014 gathered floor by floor in one place. After a morning of scattered ruins, here the city's story is laid out whole, each era following the last.</p>\n<p>The payoff is clarity. The catacombs and the pillar suddenly fit into a sequence; you leave understanding not just what you saw, but where each piece sits in the long life of a city that has reinvented itself again and again.</p>\n<h3>The Roman Amphitheatre \u2014 Where the City Gathered</h3>\n<p>The final stop brings you to the Roman Amphitheatre, and it's a fitting place to end \u2014 because where the day began among the dead, it closes among the living.</p>\n<p>This is the only Roman theatre in Egypt, a graceful horseshoe of marble seating laid out in tiers around a central stage, part of a larger Roman quarter unearthed in the heart of the modern city. The thirteen rows of marble seats held a real audience, in a city that prized performance, debate, and public spectacle.</p>\n<p>Sit on the cool stone for a moment and the abstraction falls away. Alexandrians came here to be entertained, to gather, to be a public \u2014 and that simple human fact, after a day of tombs and temples, is what stays with you.</p>\n<h3>Returning to Cairo</h3>\n<p>The highway carries you back south through the delta, and the shift is one you feel as much as see: from a city that lives toward the open sea back to the capital pressed against the edge of the desert.</p>\n<p>Cairo gathers you in again with all its noise and motion \u2014 the medieval city and the modern one tangled together along the Nile, a world away in mood from the breezy Mediterranean coast you spent the day on.</p>\n<p>The tour ends here, in the late afternoon. What you've really done is meet the other Egypt \u2014 Greek, Roman, and seafaring, layered culture upon culture \u2014 and you met it the best way there is, in good company, sharing each discovery as it came, <em>sawa</em>, together.</p>",
+      "policiesHtml": "",
+      "whatToBring": [
+        "Comfortable walking shoes",
+        "Light, breathable clothing",
+        "Sun protection \u2014 hat, sunglasses, sunscreen",
+        "Camera",
+        "Reusable water bottle"
+      ],
+      "meetingPoint": "In front of the Egyptian Museum (Tahrir)",
+      "pickupNote": "Be there by 7:00 AM",
+      "meetingPoints": [
+        {
+          "note": "Be there by 7:00 AM",
+          "point": "In front of the Egyptian Museum (Tahrir)"
+        }
+      ],
+      "bookingCutoffHours": 24,
+      "confirmDeadlineDays": null,
+      "priceTiers": null,
+      "images": [
+        {
+          "alt": "Inside View In The Ancient Catacombs Of Kom El Shoqafa Alexandria Egypt 2",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/tours/alexandria/01.jpg"
+        },
+        {
+          "alt": "Inside View In The Ancient Catacombs Of Kom El Shoqafa Alexandria Egypt 3",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/tours/alexandria/02.jpg"
+        },
+        {
+          "alt": "Inside View In The Ancient Catacombs Of Kom El Shoqafa Alexandria Egypt",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/tours/alexandria/03.jpg"
+        },
+        {
+          "alt": "Pompey Pillar Sphinx Alexandria Egypt 2",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/tours/alexandria/04.jpg"
+        },
+        {
+          "alt": "Pompey Pillar Sphinx Alexandria Egypt",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/tours/alexandria/05.jpg"
+        },
+        {
+          "alt": "Alexandria Egypt 21 February 2018 Library Of Alexandria And People",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/tours/alexandria/06.jpg"
+        },
+        {
+          "alt": "Alexandria Egypt March 29 2019 Library Of Alexandria In Alexandria City",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/tours/alexandria/07.jpg"
+        },
+        {
+          "alt": "Alexandria Egypt November 03 2021 Outdoor Modern View To The Revived Building Of The Ancient Great Library Of Alexandria",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/tours/alexandria/08.jpg"
+        }
+      ],
+      "itinerary": []
+    },
+    {
+      "id": "tour_dendera_abydos_the_far_temples_n_mq41kc7l",
+      "type": "day_tour",
+      "title": "Dendera & Abydos \u2014 the Far Temples North of Luxor",
+      "city": "Luxor",
+      "duration": "Full day \u00b7 about 9.5 hours",
+      "defaultTime": "07:00",
+      "guide": "Licensed Egyptologist",
+      "vehicle": "Comfortable coach",
+      "minSeats": 4,
+      "maxSeats": 12,
+      "baseCost": 0,
+      "publishedRate": 76,
+      "breakPrice": 65,
+      "quality": 4.7,
+      "depositPercent": 10,
+      "description": "Most travellers who come to Luxor never head this way. Dendera and Abydos sit well to the north, off the usual day-trip circuit, and the assumption is",
+      "operatingDays": [],
+      "included": [
+        "Licensed Egyptologist guide",
+        "Coach transport",
+        "Hotel pickup & drop-off"
+      ],
+      "notIncluded": [
+        "Entrance tickets",
+        "Lunch",
+        "Gratuities"
+      ],
+      "active": true,
+      "status": "approved",
+      "agencyId": null,
+      "submittedAt": "2026-07-29T08:33:15.947Z",
+      "reviewedAt": "2026-07-29T08:33:15.947Z",
+      "rejectionReason": "",
+      "overviewHtml": "<p>Most travellers who come to Luxor never head this way. Dendera and Abydos sit well to the north, off the usual day-trip circuit, and the assumption is that the famous sites around the city are all there is. We'd point you up the road instead. The very thing that keeps the crowds away \u2014 the distance \u2014 is what has left these two among the most complete and richly coloured temples in all of Egypt, the kind of places you can stand in almost alone. The drive is simply the price of having Egypt's best-kept temples nearly to yourself.</p>\n<p>And the two of them make a beautiful pair. At <strong>Dendera</strong>, the Temple of Hathor \u2014 goddess of love, joy, music, and motherhood \u2014 crowned by a painted ceiling, recently cleaned to reveal a brilliant map of the night sky and the famous Dendera Zodiac. At <strong>Abydos</strong>, the Temple of Seti I, holiest city of Osiris, lord of the afterlife \u2014 home to some of the finest carved reliefs in Egypt, the great Abydos King List, and the strange, water-ringed structure known as the Osirion. A day that runs from the house of love to the city of the dead.</p>\n<p>This is a small-group shared departure by comfortable coach, which means the pleasure of travelling alongside like-minded explorers, the ease of fully organised service, a knowledgeable guide to bring the myths to life, and a price that opens this far-flung corner to everyone. <em>Sawa</em> means \"together,\" and on a long road to quiet places, good company is the whole point. Your seat is confirmed the moment you book, and the journey runs as a set group departure.</p>\n<h3>Day 1 \u2014 North to Dendera and Abydos</h3>\n<h3>The Shape of the Day</h3>\n<p><strong>07:00 AM \u2014 Gather in Luxor</strong> The day begins early, while the air is still cool. Our representative meets you at your hotel, welcomes you, and introduces you to the travellers you'll share the journey with. Once everyone is settled aboard the coach, we head north along the river.</p>\n<p><strong>07:00 AM \u2013 08:00 AM \u2014 The Drive to Dendera</strong> The road to Dendera takes around an hour, the cultivated green of the valley unrolling beside the Nile as Luxor falls away behind you.</p>\n<p><strong>08:00 AM \u2013 09:30 AM \u2014 Temple of Dendera</strong> You spend around an hour and a half at the Temple of Hathor, taking in its remarkably complete architecture and, above all, the painted ceiling overhead.</p>\n<p><strong>09:30 AM \u2013 11:15 AM \u2014 On to Abydos</strong> The journey continues north, around an hour and three quarters, deeper into the quiet countryside far from the usual routes.</p>\n<p><strong>11:15 AM \u2013 01:00 PM \u2014 Abydos</strong> You have around an hour and three quarters to explore the Temple of Seti I, its King List, and the mysterious Osirion behind it.</p>\n<p><strong>01:00 PM \u2013 01:30 PM \u2014 A Break to Refuel</strong> A pause for refreshment and a rest before the longer drive back.</p>\n<p><strong>01:30 PM \u2013 04:30 PM \u2014 The Return to Luxor</strong> The road carries you back south, around three hours, the long day settling as the river guides you home.</p>\n<p><strong>Around 04:30 PM \u2014 Return to Your Hotel</strong> You arrive back in the late afternoon, the tour ending at your hotel.</p>\n<p><em>Exact order and timing may shift slightly with traffic, site entry flow, and the group's pace.</em></p>\n<h3>The Temple of Dendera \u2014 Hathor's House of Joy</h3>\n<p>Your first stop is one of the most complete temples in Egypt, and the moment to remember here is simple: walk into the great pillared hall, and look up.</p>\n<p>Dedicated to Hathor \u2014 goddess of love, music, joy, and motherhood \u2014 this Greco-Roman temple survives in extraordinary order, its halls, crypts, and Hathor-headed columns all intact. Its glory is the ceiling. For centuries it was black with soot from later fires and cooking; a careful cleaning has lifted that away to reveal what was always underneath \u2014 a brilliant painted sky in deep blues and golds, the heavens stretched overhead, with the famous Dendera Zodiac among the scenes. (The original zodiac relief was taken to the Louvre in the 19th century; a faithful copy now sits in its place.)</p>\n<p>The payoff is colour. So many Egyptian temples have weathered down to bare stone that we forget they were once painted head to toe. Stand under Dendera's restored ceiling and you get that rarest thing \u2014 a true sense of how vivid and alive these sacred spaces once were.</p>\n<h3>Abydos \u2014 The City of Osiris</h3>\n<p>The drive north brings you to Abydos, and the mood shifts entirely. This was one of the holiest places in all of ancient Egypt \u2014 the cult centre of Osiris, god of death and resurrection, and for thousands of years the greatest pilgrimage site in the land.</p>\n<p>At its heart stands the Temple of Seti I, and it is a quiet masterpiece. The raised reliefs carved across its walls are among the most delicate and beautiful anywhere in Egypt, many still holding their original colour. Here too is the Abydos King List, a carved roll-call of the pharaohs Seti chose to honour \u2014 a document historians have relied on ever since to piece together the long line of Egypt's kings. And behind the temple lies the Osirion: a massive, half-submerged structure of huge stone blocks, deeply tied to the myth of Osiris and his resurrection, and still not fully understood.</p>\n<p>The payoff is the sense of standing somewhere sacred. This was a place people travelled to for the promise of eternal life, drawn by the god of the afterlife himself \u2014 and that weight of belief still hangs in the air among the columns.</p>\n<h3>The Day's End in Luxor</h3>\n<p>The long drive south returns you to the city in the late afternoon, with the satisfaction of having gone where few day-trippers ever do.</p>\n<p>Luxor in the evening is a softer place than its crowded daytime sites suggest \u2014 the Nile gold with the lowering sun, feluccas drifting on the water, the great temples beginning to glow under their lights. After a day in the quiet of the far north, the familiar city feels almost busy by comparison.</p>\n<p>The tour ends here. What you've really done is travel beyond the usual map \u2014 from Hathor's painted house of joy to the sacred city of Osiris \u2014 and you did it the best way there is, on a long road made richer by good company, <em>sawa</em>, together.</p>",
+      "policiesHtml": "",
+      "whatToBring": [
+        "Comfortable walking shoes",
+        "Light, breathable clothing",
+        "Sun protection \u2014 hat, sunglasses, sunscreen",
+        "Camera",
+        "Reusable water bottle"
+      ],
+      "meetingPoint": "In front of Steigenberger Resort Achti, Luxor (formerly Etap)",
+      "pickupNote": "Dendera & Abydos \u2014 be there by 7:00 AM",
+      "meetingPoints": [
+        {
+          "note": "Dendera & Abydos \u2014 be there by 7:00 AM",
+          "point": "In front of Steigenberger Resort Achti, Luxor (formerly Etap)"
+        }
+      ],
+      "bookingCutoffHours": 24,
+      "confirmDeadlineDays": null,
+      "priceTiers": null,
+      "images": [
+        {
+          "alt": "Ancient Egyptian Painted Temple Ceiling",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/tours/dendera-abydos/01.jpg"
+        },
+        {
+          "alt": "Dendera Egypt November 17 Carving Details Inside Great Ancient Egyptian Temple Dendera Dendera Egypt",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/tours/dendera-abydos/02.jpg"
+        },
+        {
+          "alt": "Egyptian God Osiris Lying Dead His Lion Couch Flanked Goddess Nekhbet Ancient Egyptian Fertility",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/tours/dendera-abydos/03.jpg"
+        },
+        {
+          "alt": "Ancient Ruins With Water Basin Egypt",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/tours/dendera-abydos/04.jpg"
+        },
+        {
+          "alt": "Scene Abydos Temple Madfuna Town Egypt",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/tours/dendera-abydos/05.jpg"
+        }
+      ],
+      "itinerary": []
+    },
+    {
+      "id": "tour_giza_pyramids_sphinx_the_grand_e_mq41k335",
+      "type": "day_tour",
+      "title": "Giza Pyramids, Sphinx & the Grand Egyptian Museum",
+      "city": "Cairo",
+      "duration": "Full day \u00b7 about 8 hours",
+      "defaultTime": "08:00",
+      "guide": "Licensed Egyptologist",
+      "vehicle": "Air-conditioned car/van",
+      "minSeats": 4,
+      "maxSeats": 12,
+      "baseCost": 0,
+      "publishedRate": 91,
+      "breakPrice": 52,
+      "quality": 4.7,
+      "depositPercent": 10,
+      "description": "The pyramids of Giza are the most photographed monuments on earth, which means most people arrive certain they already know them. We'd gently disagree",
+      "operatingDays": [],
+      "included": [
+        "Licensed Egyptologist guide",
+        "Air-conditioned transport",
+        "Hotel pickup & drop-off"
+      ],
+      "notIncluded": [
+        "Entrance tickets (Pyramids & GEM)",
+        "Optional pyramid interior / camel ride",
+        "Lunch",
+        "Gratuities"
+      ],
+      "active": true,
+      "status": "approved",
+      "agencyId": null,
+      "submittedAt": "2026-07-29T08:33:39.821Z",
+      "reviewedAt": "2026-07-29T08:33:39.821Z",
+      "rejectionReason": "",
+      "overviewHtml": "<p>The pyramids of Giza are the most photographed monuments on earth, which means most people arrive certain they already know them. We'd gently disagree. The postcard is the one thing that prepares you least \u2014 it flattens the true scale, it hides the fact that the whole plateau is a single designed royal landscape rather than three lonely triangles, and it neatly crops out the living city pressing right up to the edge of the sand. This day is about everything the photograph leaves out, with a guide whose job is to get you past the snapshot and into the real story.</p>\n<p>The day pairs the ancient and the brand-new. The <strong>Giza Plateau</strong> \u2014 the three great pyramids, the panorama where they line up across the desert, and the <strong>Great Sphinx</strong> keeping its long watch below them. And then the <strong>Grand Egyptian Museum</strong>, Egypt's vast new museum beside the plateau, purpose-built to give the country's greatest treasures the room they never had \u2014 including the complete collection of Tutankhamun, gathered together for the first time.</p>\n<p>This is a small-group shared departure, which means the pleasure of travelling alongside like-minded explorers, the ease of fully organised service, an expert Egyptologist to bring it all to life, and a price that opens this landmark day to everyone. <em>Sawa</em> means \"together,\" and that is the spirit of it \u2014 discovering the most famous place in Egypt in good company rather than alone. Your seat is confirmed the moment you book, and the journey runs as a set group departure.</p>\n<h3>Day 1 \u2014 Cairo's Treasures</h3>\n<h3>The Shape of the Day</h3>\n<p><strong>08:00 AM \u2014 Gather in Cairo / Giza</strong> The day begins with a pickup from your hotel, where you meet your Egyptologist, your driver, and the travellers you'll share the day with. A short briefing sets the tone before you set off toward the plateau.</p>\n<p><strong>09:00 AM \u2014 The Pyramids of Giza</strong> You arrive at the Giza Plateau for a guided exploration of the three great pyramids \u2014 Khufu, Khafre, and Menkaure \u2014 covering the engineering and belief behind them, what we genuinely know versus what is myth, and the human story of the people who raised them.</p>\n<p><strong>10:30 AM \u2014 The Panorama Viewpoint</strong> A stop at a prime vantage point where the pyramids line up across the desert horizon \u2014 the best place both for photographs and for finally seeing the site as one planned royal landscape rather than separate monuments.</p>\n<p><strong>11:15 AM \u2014 The Great Sphinx &amp; Valley Temple</strong> You come down to stand before the Sphinx itself, where your guide explains its symbolism, the temple complex around it, and why this corner of the plateau matters far beyond the photograph.</p>\n<p><strong>12:30 PM \u2014 Optional Experiences</strong> For those who'd like them, there's the chance to step inside one of the pyramids (subject to ticket availability and site rules) or take a camel ride near the panorama, timed for the best of the view.</p>\n<p><strong>01:15 PM \u2014 Lunch (optional)</strong> A break for lunch at a well-chosen local venue for anyone who'd like it, with dietary preferences accommodated when arranged in advance.</p>\n<p><strong>02:30 PM \u2014 The Grand Egyptian Museum</strong> You continue to the GEM for a guided visit through its key galleries \u2014 kept curated and engaging rather than overwhelming \u2014 following the storytelling that connects objects, craftsmanship, and daily life across thousands of years.</p>\n<p><strong>05:00 PM \u2014 Return to Your Hotel</strong> The tour ends with a transfer back to your hotel, arriving with time to freshen up before the evening.</p>\n<p><em>Exact order and timing may shift slightly with traffic, museum entry flow, and the group's pace on site.</em></p>\n<h3>The Giza Plateau \u2014 The Landscape Behind the Skyline</h3>\n<p>Your morning is given to the three great pyramids \u2014 Khufu, Khafre, and Menkaure \u2014 and the first thing a good guide does is undo what the photographs taught you.</p>\n<p>Up close, the scale is the thing that no image carries: blocks the height of a person stacked into mountains of stone, raised without a single machine. But the deeper revelation is that this was never three separate wonders dropped in the sand. The plateau was laid out as one royal cemetery \u2014 pyramids, temples, causeways, and the tombs of the people who served the kings, all arranged with intent. From the panorama point, where the pyramids align across the horizon, you finally read it as the designed landscape it was always meant to be.</p>\n<p>What stays with you is the gap between the myth and the truth. Stripped of the wilder legends, the real story \u2014 of engineering, organisation, belief, and a whole society bending itself to a single purpose \u2014 turns out to be more impressive than any of the inventions wrapped around it.</p>\n<h3>The Great Sphinx \u2014 The Guardian Below the Kings</h3>\n<p>From the high desert you come down to the Sphinx, and meeting it in person is quieter and stranger than the picture suggests.</p>\n<p>Carved from a single ridge of living rock, the lion-bodied, human-faced figure has kept its watch over the plateau for some four and a half thousand years, set within a temple complex at the foot of the pyramids. Your guide draws out what the snapshot can't \u2014 the symbolism it carried, its place in the royal landscape above it, and the long history of a monument that has been buried, uncovered, and puzzled over for millennia.</p>\n<p>The payoff is in standing close. Worn, weathered, and far smaller in some ways than the pyramids behind it, the Sphinx has a presence the camera flattens entirely \u2014 and a moment in front of it tends to outlast a hundred photographs of it.</p>\n<h3>The Grand Egyptian Museum \u2014 The Treasures Come Home</h3>\n<p>In the afternoon the day turns from the ancient to the brand new, as you continue to the Grand Egyptian Museum rising beside the plateau.</p>\n<p>For a century, Egypt's greatest treasures were crowded into a small, overflowing old museum that could never do them justice. The GEM was built to change that \u2014 a vast, purpose-made home with the space and the modern setting these objects always deserved, and the place where the entire collection of Tutankhamun is finally displayed together, every piece in one journey rather than scattered. Your guide keeps the visit focused on the galleries and stories that matter most, so the sheer scale of the place enriches the day rather than swallowing it.</p>\n<p>The payoff is the reframe. After a morning among raw stone and open desert, the museum gives you the craftsmanship, the colour, and the intimate human detail \u2014 the daily life behind the monuments \u2014 and the ancient world you walked through in the morning suddenly fills in with faces, objects, and lives.</p>\n<h3>Returning to Your Hotel</h3>\n<p>The transfer carries you back into Cairo in the late afternoon, the pyramids receding behind you and the city closing in once more.</p>\n<p>You arrive with the day still settling and the evening ahead of you \u2014 time to rest, to freshen up, and to carry into dinner the strange double image of the day: the oldest wonder on earth in the morning, and the newest museum built to honour it in the afternoon.</p>\n<p>The tour ends here. What you've really done is get past the most famous photograph in the world to the real place behind it \u2014 and you did it in good company, sharing the wonder rather than facing it alone, <em>sawa</em>, together.</p>",
+      "policiesHtml": "",
+      "whatToBring": [
+        "Comfortable walking shoes",
+        "Light, breathable clothing",
+        "Sun protection \u2014 hat, sunglasses, sunscreen",
+        "Camera",
+        "Reusable water bottle"
+      ],
+      "meetingPoint": "In front of the Egyptian Museum (Tahrir)",
+      "pickupNote": "Be there by 8:00 AM at the latest",
+      "meetingPoints": [
+        {
+          "note": "Be there by 8:00 AM at the latest",
+          "point": "In front of the Egyptian Museum (Tahrir)"
+        },
+        {
+          "note": "Be there by 8:45 AM at the latest",
+          "point": "In front of Marriott Mena House, Giza"
+        }
+      ],
+      "bookingCutoffHours": 24,
+      "confirmDeadlineDays": null,
+      "priceTiers": null,
+      "images": [
+        {
+          "alt": "Ancient Egyptian Pyramid Meidum Maidum Ahramat Maydum Egypt North Africa",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/tours/giza/01.jpg"
+        },
+        {
+          "alt": "Ancient Stone Corridor Egyptian Pyramid",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/tours/giza/02.jpg"
+        },
+        {
+          "alt": "Ancient Stone Passage Egyptian Pyramid",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/tours/giza/03.jpg"
+        },
+        {
+          "alt": "Giza Egypt Details Grand Egyptian Giza Egypt S Gift Largest Archaeological About 2 Kilometers 2",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/tours/giza/04.jpg"
+        },
+        {
+          "alt": "Giza Egypt Details Grand Egyptian Giza Egypt S Gift Largest Archaeological About 2 Kilometers",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/tours/giza/05.jpg"
+        },
+        {
+          "alt": "Giza Egypt Ramses Ii Grand Egyptian Grand Egyptian Archaeological Giza Egypt Giza Pyramid Giza",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/tours/giza/06.jpg"
+        },
+        {
+          "alt": "Ancient Egyptian Chariot Wall Painting",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/tours/giza/07.jpg"
+        },
+        {
+          "alt": "Ancient Egyptian Goddess Statues Museum",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/tours/giza/08.jpg"
+        }
+      ],
+      "itinerary": []
+    },
+    {
+      "id": "tour_kom_ombo_edfu_esna_downriver_fro_ms4fly0m",
+      "type": "day_tour",
+      "title": "Kom Ombo, Edfu & Esna \u2014 Downriver from Aswan to Luxor",
+      "city": "Aswan",
+      "duration": "4 hours",
+      "defaultTime": "08:00",
+      "guide": "Licensed Egyptologist",
+      "vehicle": "12",
+      "minSeats": 4,
+      "maxSeats": 12,
+      "baseCost": 0,
+      "publishedRate": 88,
+      "breakPrice": 56,
+      "quality": 4.7,
+      "depositPercent": 10,
+      "description": "Three of Egypt's best-preserved temples, followed downriver from Aswan to Luxor.",
+      "operatingDays": [],
+      "included": [
+        "Licensed Egyptologist guide",
+        "Air-conditioned transport, Aswan to Luxor",
+        "Hotel pickup in Aswan",
+        "Hotel drop-off in Luxor",
+        "Bottled water on board",
+        "All taxes and service charges"
+      ],
+      "notIncluded": [
+        "Entrance tickets to Kom Ombo, Edfu and Esna temples",
+        "Crocodile Museum ticket at Kom Ombo",
+        "Lunch",
+        "Gratuities",
+        "Personal expenses"
+      ],
+      "active": true,
+      "status": "approved",
+      "agencyId": null,
+      "submittedAt": "2026-07-29T08:33:57.566Z",
+      "reviewedAt": "2026-07-29T08:33:57.566Z",
+      "rejectionReason": "",
+      "overviewHtml": "<p><strong>About this departure</strong></p><p>The stretch of Nile between Aswan and Luxor is usually treated as something to pass through. Most travellers see Kom Ombo, Edfu and Esna from the deck of a cruise boat \u2014 half a morning each, a pause between the two great cities. But these three temples are not a gap in the story. They are its final chapter, and, strangely, its clearest one.</p><p>All three were built late, in the Greco-Roman centuries, when Egypt was no longer ruled by Egyptians. Greek and Roman kings raised them in the old style, carved themselves into the walls in pharaonic dress, and made offerings to gods who were already thousands of years ancient. And because they are the youngest temples in Egypt, they are the best preserved: roofs still on, colour still in the ceilings, walls still crowded with text. Everything you strain to imagine at Karnak, you simply stand inside here.</p><p>The day works its way downriver through that late world. The Temple of Kom Ombo, high on its bend of the river, built twice over for two gods at once. The Temple of Horus at Edfu, the most complete temple standing anywhere in Egypt. And the Temple of Khnum at Esna, sunk deep below a working market town, its ceiling still blazing with colour. The road ends in Luxor, where the valley opens green and the great East Bank temples begin to glow.</p><p>We run this route from south to north on purpose. The cruise boats and the Luxor day-groups reach Esna and Edfu mid-morning; starting from Aswan puts you inside Kom Ombo before the boats have docked, and brings you to Edfu and Esna in the quiet of the afternoon, after the crowds have moved on. Same three temples, more room to breathe at each one.</p><p>This is a small-group shared departure, which means the pleasure of travelling alongside like-minded explorers, the ease of fully organised service, the depth a knowledgeable local guide brings, and a price that opens the whole southern Nile to everyone. Sawa means \"together,\" and a journey like this one is far better shared \u2014 the details pointed out, the connections drawn, the road made shorter by good company. Your seat is confirmed the moment you book, and the journey runs as a set group departure.</p><p><em>Please note: this is a one-way journey. It begins in Aswan and ends at your hotel in Luxor \u2014 it does not return to Aswan.</em></p>",
+      "policiesHtml": "",
+      "whatToBring": [
+        "Comfortable walking shoes \u2014 temple ground is uneven",
+        "Sun hat and sunscreen; there is very little shade",
+        "Refillable water bottle",
+        "Camera or smartphone for the reliefs and painted ceilings",
+        "Light snacks for the road between temples",
+        "Small cash notes for tips and incidentals",
+        "Passport or ID"
+      ],
+      "meetingPoint": "Coptic Orthodox Cathedral of the Archangel Michael, Aswan \u2014 Abu Simbel or Luxor",
+      "pickupNote": "departs 6:30 AM.",
+      "meetingPoints": [
+        {
+          "note": "departs 6:30 AM.",
+          "point": "Coptic Orthodox Cathedral of the Archangel Michael, Aswan \u2014 Abu Simbel or Luxor"
+        }
+      ],
+      "bookingCutoffHours": 24,
+      "confirmDeadlineDays": null,
+      "priceTiers": null,
+      "images": [],
+      "itinerary": []
+    },
+    {
+      "id": "tour_luxor_in_depth_east_west_bank_fu_mq41k8ks",
+      "type": "day_tour",
+      "title": "Luxor in Depth \u2014 East & West Bank Full Day",
+      "city": "Luxor",
+      "duration": "Full day \u00b7 about 9 hours",
+      "defaultTime": "07:00",
+      "guide": "Licensed Egyptologist",
+      "vehicle": "Air-conditioned car/van",
+      "minSeats": 4,
+      "maxSeats": 12,
+      "baseCost": 0,
+      "publishedRate": 104,
+      "breakPrice": 68,
+      "quality": 4.7,
+      "depositPercent": 10,
+      "description": "Luxor holds so much that the usual day tour turns into a forced march \u2014 six monuments, a blur of names, and no real sense of how any of it fits togeth",
+      "operatingDays": [
+        0
+      ],
+      "included": [
+        "Licensed Egyptologist guide",
+        "Air-conditioned transport",
+        "Nile crossing",
+        "Hotel pickup & drop-off"
+      ],
+      "notIncluded": [
+        "Entrance tickets",
+        "Special tombs (Tutankhamun, Nefertari)",
+        "Lunch",
+        "Gratuities"
+      ],
+      "active": true,
+      "status": "approved",
+      "agencyId": null,
+      "submittedAt": "2026-07-29T08:34:25.623Z",
+      "reviewedAt": "2026-07-29T08:34:25.623Z",
+      "rejectionReason": "",
+      "overviewHtml": "<p>Luxor holds so much that the usual day tour turns into a forced march \u2014 six monuments, a blur of names, and no real sense of how any of it fits together. We think the city deserves to be read, not raced through. Ancient Luxor was Thebes, the religious heart of Egypt, and it was laid out with a logic you can still follow today: the temples of the living and the rising sun on the <strong>East Bank</strong>, the tombs of the dead and the setting sun on the <strong>West Bank</strong>, the Nile drawn between them like a line between two worlds. Spend the day following the sun across that river, and the whole place finally makes sense.</p>\n<p>The day moves through it in order. On the east, <strong>Luxor Temple</strong> and the vast <strong>Karnak Temple</strong>, among the greatest religious complexes ever built. Then you cross to the west for the <strong>Valley of the Kings</strong>, where the pharaohs were buried; the <strong>Valley of the Queens</strong>, with the painted tomb of Nefertari; the towering <strong>Colossi of Memnon</strong>; and finally the terraced <strong>Temple of Hatshepsut</strong>, raised against the cliffs by one of the few women ever to rule as pharaoh.</p>\n<p>This is a small-group shared departure, which means the pleasure of travelling alongside like-minded explorers, the ease of fully organised service, the depth that a knowledgeable local guide brings, and a price that opens the whole of Luxor to everyone. <em>Sawa</em> means \"together,\" and a day this full is far better shared \u2014 discoveries pointed out, questions answered, the wonder doubled by good company. Your seat is confirmed the moment you book, and the journey runs as a set group departure.</p>\n<h3>Day 1 \u2014 Following the Sun Across the Nile</h3>\n<h3>The Shape of the Day</h3>\n<p><strong>07:00 AM \u2014 Gather in Luxor</strong> The day begins early, while the air is still cool. Our representative meets you at your hotel, welcomes you, and introduces you to the travellers you'll share the day with. Once everyone is settled, we begin on the East Bank, where the city of the living once stood.</p>\n<p><strong>07:20 AM \u2013 08:10 AM \u2014 Luxor Temple</strong> You start in the heart of the city at Luxor Temple, taking in the layered architecture of one of Egypt's most graceful temples in the gentle early light.</p>\n<p><strong>08:25 AM \u2013 10:00 AM \u2014 Karnak Temple</strong> A short drive brings you to Karnak, and you'll want the time \u2014 around an hour and a half to explore the immense complex and its great hall of columns.</p>\n<p><strong>10:00 AM \u2013 10:40 AM \u2014 Crossing to the West Bank</strong> You cross the Nile to the western shore, the green of the cultivation giving way to the desert cliffs where the dead were laid to rest.</p>\n<p><strong>10:40 AM \u2013 12:30 PM \u2014 Valley of the Kings</strong> Around two hours in the great royal necropolis, descending into the painted tombs cut deep into the rock \u2014 among them, for those who choose the extra entry, the tomb of Tutankhamun.</p>\n<p><strong>12:30 PM \u2013 01:10 PM \u2014 A Break to Refuel</strong> A pause in the middle of a long day for refreshment and a rest out of the sun before the afternoon's sites.</p>\n<p><strong>01:10 PM \u2013 01:55 PM \u2014 Valley of the Queens</strong> You continue to the resting place of Egypt's royal women and children, home to the famous painted tomb of Queen Nefertari (entry to which is a limited, separate ticket).</p>\n<p><strong>02:10 PM \u2013 02:30 PM \u2014 The Colossi of Memnon</strong> A stop before the two giant seated statues of Amenhotep III \u2014 a brief but striking pause at all that survives of a once-enormous temple.</p>\n<p><strong>02:45 PM \u2013 03:45 PM \u2014 Temple of Hatshepsut</strong> The day closes at the dramatic terraced temple set against the cliffs at Deir el-Bahari \u2014 a fitting finale on the western shore.</p>\n<p><strong>Around 04:20 PM \u2014 Return to Your Hotel</strong> You arrive back in the late afternoon, the tour ending at your hotel with the long day's images still settling.</p>\n<p><em>Exact order and timing may shift slightly with traffic, site entry flow, and the group's pace.</em></p>\n<h3>Luxor Temple \u2014 The City's Own Sanctuary</h3>\n<p>Your day begins in the centre of the modern city, where Luxor Temple rises straight out of everyday life \u2014 a sanctuary the town simply grew up around.</p>\n<p>Raised mainly under the great kings of the 18th and 19th dynasties, the temple is a model of classical Egyptian design: a grand entrance, a court of columns, statues of the pharaohs, and once an avenue of sphinxes running all the way to Karnak. What makes it singular is how visibly it has lived through history \u2014 Pharaonic at its core, but with a Roman shrine, a Christian chapel, and a working mosque all layered into the same walls over the centuries.</p>\n<p>The payoff is that first lesson of the day: this is not a frozen ruin but a place that every age has used and reused. Standing in it, you feel time stacked rather than stopped.</p>\n<h3>Karnak Temple \u2014 The Forest of Stone</h3>\n<p>A short drive north brings you to Karnak, and the change in scale is immediate. This is among the largest religious complexes ever built \u2014 not a single temple but a city of them, raised, expanded, and reworked across some two thousand years.</p>\n<p>What overwhelms everyone is the Great Hypostyle Hall: a forest of massive stone columns, so tall and so densely packed that walking among them feels like moving through a petrified grove. Beyond it lie courts, chapels, towering gateways, and obelisks, each generation of pharaohs adding its own mark to the sanctuary of Amun, the great god of Thebes.</p>\n<p>The payoff is in the accumulation. No single mind designed Karnak; it grew, ruler upon ruler, ambition upon ambition, for twenty centuries. Few places on earth let you feel the sheer length of a civilisation quite so physically.</p>\n<h3>Valley of the Kings \u2014 The Hidden Tombs of the Pharaohs</h3>\n<p>Crossing the river takes you from the world of the living to the world of the dead, and the first stop is the most famous burial ground in history.</p>\n<p>Here, for around five hundred years, the pharaohs of the New Kingdom abandoned the pyramid \u2014 too obvious, too easily robbed \u2014 and hid their tombs instead, cut deep into the rock of a remote desert valley. What you discover going down into them is colour: walls and ceilings covered in vivid painted scenes and hieroglyphs meant to guide the king safely into the afterlife, many still astonishingly fresh. Among the tombs is that of Tutankhamun, the boy king whose nearly intact burial stunned the world when it was found.</p>\n<p>The payoff is the contrast with the morning. The temples were built to be seen; these tombs were built to be hidden forever. Standing inside one, surrounded by art never meant for living eyes, is a quieter and stranger feeling entirely.</p>\n<h3>Valley of the Queens \u2014 Where the Royal Women Rest</h3>\n<p>A little further into the western hills lies the Valley of the Queens, the resting place of the wives and children of the pharaohs.</p>\n<p>The valley holds dozens of tombs, but one stands above all the rest: the tomb of Nefertari, beloved queen of Ramses II, widely held to be the most beautiful painted tomb in all of Egypt. Its walls glow with images of the queen among the gods, the colour and craftsmanship so fine that entry is carefully limited to protect it (and ticketed separately when available).</p>\n<p>The payoff is in the intimacy. After the monumental scale of the kings, this is the human side of royal Egypt \u2014 the women and children behind the thrones, remembered with a tenderness and artistry that lingers long after you leave.</p>\n<h3>The Colossi of Memnon \u2014 Two Giants Standing Guard</h3>\n<p>Out on the open plain, two enormous seated statues rise from the fields \u2014 the Colossi of Memnon, each carved from a single block of stone, weathered by more than three thousand years of sun and flood.</p>\n<p>They once flanked the entrance to the mortuary temple of Amenhotep III, the largest such temple ever built in Egypt \u2014 almost all of which has long since vanished, leaving only these two sentinels behind. In Roman times, one of them was famous for \"singing\" at dawn, a strange sound that drew travellers from across the ancient world.</p>\n<p>The stop is brief, but the impression isn't: two silent giants holding their post over a temple that no longer exists, a reminder of how much has been lost and how much still endures.</p>\n<h3>Temple of Hatshepsut \u2014 A Queen Carved Into the Cliff</h3>\n<p>The day ends at Deir el-Bahari, where the mortuary temple of Hatshepsut rises in great stone terraces straight out of the foot of the cliffs \u2014 one of the most striking pieces of architecture anywhere in Egypt.</p>\n<p>Hatshepsut was among the very few women ever to rule as pharaoh in her own right, and she ruled with remarkable success. Her temple was built to match her ambition: clean, ordered ranks of terraces and colonnades climbing toward the rock, decorated with scenes of her divine birth and her great trading expeditions. After her death, successors tried to erase her from the record \u2014 and yet here she still stands, larger than any of them.</p>\n<p>It is a fitting close to the day. The cliffs catch the late light, the West Bank quietens around you, and you finish among the monuments of the setting sun, having followed it the whole way across the sky.</p>\n<h3>The Day's End in Luxor</h3>\n<p>The drive back returns you across the city in the late afternoon, the day's long arc complete.</p>\n<p>Luxor in the evening is a softer place than the crowded sites suggest \u2014 the river gold with the lowering sun, feluccas drifting on the water, the great temples you visited that morning beginning to glow under their lights. Few cities anywhere carry their history so openly in the streets of an ordinary, living town.</p>\n<p>The tour ends here. What you've really done is read an entire ancient city the way it was meant to be read \u2014 from the temples of the living in the east to the tombs of the dead in the west, following the sun across the Nile \u2014 and you did it in good company, every wonder shared, <em>sawa</em>, together.</p>",
+      "policiesHtml": "",
+      "whatToBring": [
+        "Comfortable walking shoes",
+        "Light, breathable clothing",
+        "Sun protection \u2014 hat, sunglasses, sunscreen",
+        "Camera",
+        "Reusable water bottle"
+      ],
+      "meetingPoint": "In front of Steigenberger Resort Achti, Luxor (formerly Etap)",
+      "pickupNote": "Be there by 7:00 AM",
+      "meetingPoints": [
+        {
+          "note": "Be there by 7:00 AM",
+          "point": "In front of Steigenberger Resort Achti, Luxor (formerly Etap)"
+        }
+      ],
+      "bookingCutoffHours": 24,
+      "confirmDeadlineDays": null,
+      "priceTiers": null,
+      "images": [
+        {
+          "alt": "Ancient Monuments Of Egypt Karnak Temple",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/tours/luxor-in-depth/01.jpg"
+        },
+        {
+          "alt": "Happy Tourist Girl Dress Interested Egyptology Archaeology Gets Travel Experience Karnak Temple Luxor",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/tours/luxor-in-depth/02.jpg"
+        },
+        {
+          "alt": "Karnak Temple Luxor Egypt",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/tours/luxor-in-depth/03.jpg"
+        },
+        {
+          "alt": "Egypt Luxor Luxor Temple Night Bc Film Scan 2 2",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/tours/luxor-in-depth/04.jpg"
+        },
+        {
+          "alt": "Egypt Luxor Luxor Temple Night Bc Film Scan 2",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/tours/luxor-in-depth/05.jpg"
+        },
+        {
+          "alt": "Egypt Luxor Luxor Temple Night Bc Film Scan",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/tours/luxor-in-depth/06.jpg"
+        },
+        {
+          "alt": "Abandoned Village Of Kurna In Luxor Valley Of Kings Egypt",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/tours/luxor-in-depth/07.jpg"
+        },
+        {
+          "alt": "Aerial View Valley Of Kings Luxor",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/tours/luxor-in-depth/08.jpg"
+        }
+      ],
+      "itinerary": []
+    },
+    {
+      "id": "tour_luxor_to_aswan_edfu_kom_ombo_tem_mq40h77c",
+      "type": "day_tour",
+      "title": "Luxor to Aswan \u2014 Edfu & Kom Ombo Temple Road",
+      "city": "Luxor",
+      "duration": "Full day \u00b7 about 6.5 hours",
+      "defaultTime": "07:00",
+      "guide": "Licensed Egyptologist",
+      "vehicle": "Air-conditioned car/van",
+      "minSeats": 4,
+      "maxSeats": 12,
+      "baseCost": 0,
+      "publishedRate": 90,
+      "breakPrice": 58,
+      "quality": 4.7,
+      "depositPercent": 10,
+      "description": "There is a stretch of the Nile between Luxor and Aswan that most travellers cross with their eyes closed \u2014 a transfer, a few hours of road, a means to",
+      "operatingDays": [],
+      "included": [
+        "Licensed Egyptologist guide",
+        "Air-conditioned transport",
+        "Pickup in Luxor & drop-off in Aswan"
+      ],
+      "notIncluded": [
+        "Edfu & Kom Ombo entrance tickets",
+        "Gratuities",
+        "Food & drinks"
+      ],
+      "active": true,
+      "status": "approved",
+      "agencyId": null,
+      "submittedAt": "2026-07-29T08:34:57.851Z",
+      "reviewedAt": "2026-07-29T08:34:57.851Z",
+      "rejectionReason": "",
+      "overviewHtml": "<p>There is a stretch of the Nile between Luxor and Aswan that most travellers cross with their eyes closed \u2014 a transfer, a few hours of road, a means to an end. We think it deserves better. This is one of the most beautiful corridors in all of Egypt, where the river threads between sugarcane fields and palm groves, desert escarpments and slow-moving villages, and where two of the country's most extraordinary temples wait quietly along the way.</p>\n<p>So instead of simply moving you from one city to another, Sawa Tours turns the road itself into the experience. <em>Sawa</em> means \"together\" \u2014 and that is exactly the spirit of this day. You travel south in good company, with a knowledgeable guide and a comfortable seat, pausing where the Nile keeps its oldest secrets: <strong>Edfu</strong>, one of the most complete temples standing anywhere in the world, and <strong>Kom Ombo</strong>, a strange and beautiful sanctuary built for two gods at once.</p>\n<p>This is a small-group shared departure, which means the pleasure of travelling alongside like-minded explorers, the ease of fully organised service, and a price that opens Upper Egypt to everyone. Your seat is confirmed the moment you book, and the journey runs as a set group departure. For anyone making their way from Luxor to Aswan, it may be the most rewarding road you ever take.</p>\n<h3>Day 1 \u2014 Down the Nile, From Luxor to Aswan</h3>\n<h3>The Shape of the Day</h3>\n<p><strong>07:00 AM \u2014 Gather in Luxor</strong> The day opens early, while the air is still cool and the city is just waking. Our representative meets you at the arranged point in Luxor, welcomes you, and introduces you to the travellers you'll share the journey with. Once everyone is settled, we turn south and set off along the river road.</p>\n<p><strong>07:00 AM \u2013 08:30 AM \u2014 The Drive to Edfu</strong> The road to Edfu takes around an hour and a half, and it is a quiet pleasure in itself. Upper Egypt reveals itself slowly through the window \u2014 cultivated fields glowing green against the desert, date palms, small towns stirring into morning, and the constant company of the Nile, never far from the road.</p>\n<p><strong>08:30 AM \u2013 10:30 AM \u2014 Edfu Temple</strong> You arrive at Edfu in the gentlest part of the morning, before the heat builds and the crowds thicken \u2014 one of the real gifts of an early start. Over roughly two hours you explore one of the best-preserved temples in all of Egypt, raised in honour of Horus, the falcon-headed god. Its great entrance pylon, broad courtyards, forest of columns, and shadowed inner chambers give you the rare feeling of stepping inside a sacred world still intact.</p>\n<p><strong>10:30 AM \u2013 11:45 AM \u2014 On to Kom Ombo</strong> From Edfu the journey continues south, about an hour and fifteen minutes, the landscape shifting between farmland, desert light, and riverside villages as the Nile guides you onward.</p>\n<p><strong>11:45 AM \u2013 12:45 PM \u2014 Kom Ombo Temple</strong> You reach Kom Ombo perched gracefully above the Nile, and spend around an hour inside one of the most unusual temples you will ever see \u2014 a double sanctuary honouring two gods side by side: Sobek, the crocodile god, and Horus the Elder, the falcon. Its mirrored design, vivid reliefs, and famous carvings of ancient medical instruments make it utterly distinct from anywhere else in Upper Egypt.</p>\n<p><strong>12:45 PM \u2013 01:30 PM \u2014 The Last Stretch to Aswan</strong> The final leg is short and easy, around forty-five minutes, following the river to its gentle southern city.</p>\n<p><strong>Around 01:30 PM \u2014 Arrival in Aswan</strong> You arrive in Aswan in the early afternoon, with the day still ahead of you. The tour ends at the agreed drop-off point, leaving you free to begin your stay, rest by the river, or set off on the next chapter of your Egyptian story.</p>\n<h3>Edfu Temple \u2014 A Sacred World Intact</h3>\n<p>Your first great stop is Edfu, and it is hard to overstate how complete it feels.</p>\n<p>Dedicated to Horus, the falcon-headed god, Edfu is one of the finest examples of Ptolemaic temple architecture anywhere \u2014 and one of the most fully preserved temples on earth. Its monumental gateway, its open courts, its towering columns and hidden sanctuaries all survive in such good order that walking through it feels less like visiting a ruin and more like entering a place still humming with purpose.</p>\n<p>The walls do the storytelling. Carved across them are scenes of kingship and divine protection, of offerings and ritual, and of the great mythological struggle between Horus and Seth \u2014 one of the central dramas of the ancient Egyptian imagination. With two hours here, you have time to take in both the sheer scale of the temple and the fine detail that makes it unforgettable.</p>\n<h3>Kom Ombo Temple \u2014 Twin Gods Above the Nile</h3>\n<p>After Edfu, the road carries you to Kom Ombo, one of Egypt's most singular temples.</p>\n<p>Set close above the river, it has an atmosphere all its own. Where almost every other temple honours a single god, Kom Ombo was built for two: Sobek, lord of crocodiles, tied to strength, fertility, and the power of the Nile; and Horus the Elder, the falcon of protection and royal authority. The whole building answers to this double dedication, with paired entrances, twin halls, and mirrored sanctuaries running side by side.</p>\n<p>As you explore, you'll find ritual scenes, sacred symbols, and the remarkable reliefs that have made Kom Ombo famous \u2014 carvings of surgical and medical instruments that reveal how closely the ancient Egyptians wove together faith, healing, nature, and daily life. It is beautiful, strange, and quietly moving, especially with the Nile shining just beyond the columns.</p>\n<h3>Arriving in Aswan</h3>\n<p>The last short drive brings you into Aswan, and the change in mood is immediate.</p>\n<p>Aswan moves to a gentler rhythm than Luxor \u2014 calmer, warmer, and bound more closely to the river than almost anywhere in Egypt. Great rounded granite boulders break the surface of the Nile, palm-fringed islands drift past, Nubian culture colours the streets, and a soft southern light settles over all of it.</p>\n<p>The tour ends here, in the early afternoon, with time still in hand. What began as a journey between two cities becomes something far richer: a day spent in good company, in the presence of two of Egypt's greatest temples, travelling the most beautiful road in Upper Egypt \u2014 <em>sawa</em>, together.</p>",
+      "policiesHtml": "",
+      "whatToBring": [
+        "Comfortable walking shoes",
+        "Light, breathable clothing",
+        "Sun protection \u2014 hat, sunglasses, sunscreen",
+        "Camera",
+        "Reusable water bottle"
+      ],
+      "meetingPoint": "In front of Steigenberger Resort Achti, Luxor (formerly Etap)",
+      "pickupNote": "Be there by 7:00 AM",
+      "meetingPoints": [
+        {
+          "note": "Be there by 7:00 AM",
+          "point": "In front of Steigenberger Resort Achti, Luxor (formerly Etap)"
+        }
+      ],
+      "bookingCutoffHours": 24,
+      "confirmDeadlineDays": null,
+      "priceTiers": null,
+      "images": [
+        {
+          "alt": "Ancient Egyptian Architecture Ruins Hieroglyphs Columns Temple Horus Edfu Egypt",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/tours/edfu-komombo/01.jpg"
+        },
+        {
+          "alt": "Ancient Egyptian Temple Columns",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/tours/edfu-komombo/02.jpg"
+        },
+        {
+          "alt": "Edfu Egypt 3 November Small River Cruise Boat Amunet Sails Down Nile Sahara Desert",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/tours/edfu-komombo/03.jpg"
+        },
+        {
+          "alt": "Egypt Upper Egypt Nile Valley Kom Ombo Temple Dedicated God Sobek Crocodile Headed",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/tours/edfu-komombo/04.jpg"
+        },
+        {
+          "alt": "Kom Ombo Temple At Night",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/tours/edfu-komombo/05.jpg"
+        },
+        {
+          "alt": "Magnificent Temple Sobek Horus Kom Ombo Sun Sets Over River Nile",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/tours/edfu-komombo/06.jpg"
+        },
+        {
+          "alt": "Aswan Egypt View Panorama Mountain West Coast Nile Sunny Day",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/tours/edfu-komombo/07.jpg"
+        },
+        {
+          "alt": "Aswan Nile River Hotel View",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/tours/edfu-komombo/08.jpg"
+        }
+      ],
+      "itinerary": []
+    },
+    {
+      "id": "tour_luxor_to_aswan_esna_edfu_kom_omb_mq41ke7h",
+      "type": "day_tour",
+      "title": "Luxor to Aswan \u2014 Esna, Edfu & Kom Ombo Temple Road",
+      "city": "Luxor",
+      "duration": "Full day \u00b7 about 8 hours",
+      "defaultTime": "07:00",
+      "guide": "Licensed Egyptologist",
+      "vehicle": "Air-conditioned car/van",
+      "minSeats": 4,
+      "maxSeats": 12,
+      "baseCost": 0,
+      "publishedRate": 95,
+      "breakPrice": 58,
+      "quality": 4.7,
+      "depositPercent": 10,
+      "description": "Travellers chase the oldest, most famous things in Egypt \u2014 the pyramids, Karnak \u2014 and so the temples strung along the road south to Aswan tend to get",
+      "operatingDays": [],
+      "included": [
+        "Licensed Egyptologist guide",
+        "Air-conditioned transport",
+        "Pickup in Luxor & drop-off in Aswan"
+      ],
+      "notIncluded": [
+        "Entrance tickets",
+        "Lunch",
+        "Gratuities"
+      ],
+      "active": true,
+      "status": "approved",
+      "agencyId": null,
+      "submittedAt": "2026-07-29T08:35:17.448Z",
+      "reviewedAt": "2026-07-29T08:35:17.448Z",
+      "rejectionReason": "",
+      "overviewHtml": "<p>Travellers chase the oldest, most famous things in Egypt \u2014 the pyramids, Karnak \u2014 and so the temples strung along the road south to Aswan tend to get treated as minor stops on a transfer. We'd ask you to look closer, because these three are something special: among the most complete and vividly coloured temples in the whole country. And that's no accident. They are the youngest great temples in Egypt, raised in its surprising final act, when Greek and Roman rulers governed the Nile and built in the old pharaonic style to claim the legitimacy of the kings before them. Being younger, they have simply survived better \u2014 which means this \"lesser\" road is where you'll see ancient temple-building at its best-preserved.</p>\n<p>The day moves south through that last chapter. <strong>Esna</strong>, the Temple of Khnum, the ram-headed god who shaped humankind on his potter's wheel, its ceiling recently cleaned to reveal astonishing colour. <strong>Edfu</strong>, the most intact temple in all of Egypt, raised to the falcon god Horus. And <strong>Kom Ombo</strong>, the strange double sanctuary built for two gods at once \u2014 Sobek the crocodile and Horus the Elder \u2014 standing above the Nile.</p>\n<p>This is a small-group shared departure, which means the pleasure of travelling alongside like-minded explorers, the ease of fully organised service, a knowledgeable guide, and a price that opens the temple road to everyone. <em>Sawa</em> means \"together,\" and on a journey south like this one, good company makes the miles. Your seat is confirmed the moment you book, and the journey runs as a set group departure, ending in Aswan.</p>\n<h3>Day 1 \u2014 South Along the Temple Road</h3>\n<h3>The Shape of the Day</h3>\n<p><strong>07:00 AM \u2014 Gather in Luxor</strong> The day begins early, while the air is still cool and the city is just waking. Our representative meets you at your hotel, welcomes you, and introduces you to the travellers you'll share the journey with. Once everyone is settled, we turn south along the river.</p>\n<p><strong>07:00 AM \u2013 08:00 AM \u2014 The Drive to Esna</strong> The road to Esna takes around an hour, the cultivated green of the valley running alongside the Nile as Luxor falls behind.</p>\n<p><strong>08:00 AM \u2013 09:00 AM \u2014 Temple of Khnum, Esna</strong> You spend around an hour at the Temple of Khnum, sunk below the level of the modern town, taking in its columned hall and its remarkable restored colour.</p>\n<p><strong>09:00 AM \u2013 10:00 AM \u2014 On to Edfu</strong> The journey continues south, around an hour, the river never far from the road.</p>\n<p><strong>10:00 AM \u2013 11:45 AM \u2014 Temple of Edfu</strong> Around an hour and three quarters at the most complete temple in Egypt \u2014 time enough for both its sheer scale and its fine carved detail.</p>\n<p><strong>11:45 AM \u2013 01:00 PM \u2014 On to Kom Ombo</strong> The road carries you onward, about an hour and a quarter, the landscape shifting between farmland and riverside villages.</p>\n<p><strong>01:00 PM \u2013 02:00 PM \u2014 Temple of Kom Ombo</strong> Around an hour at the double temple set gracefully above the Nile, including its unusual twin design and the crocodile collection.</p>\n<p><strong>02:00 PM \u2013 02:45 PM \u2014 The Last Stretch to Aswan</strong> The final leg is short and easy, around forty-five minutes, following the river to its gentle southern city.</p>\n<p><strong>Around 02:45 PM \u2014 Arrival in Aswan</strong> You arrive in the early afternoon. The tour ends here in Aswan, leaving you free to begin your stay and explore the city's own sights, or to make your way back to Luxor.</p>\n<p><em>Exact order and timing may shift slightly with traffic, site entry flow, and the group's pace.</em></p>\n<h3>The Temple of Khnum, Esna \u2014 Colour Brought Back to Light</h3>\n<p>Your first stop is one of the quiet surprises of the whole road. The Temple of Khnum sits well below the modern town of Esna, in a deep pit that has protected what remains of it \u2014 chiefly a magnificent columned hall.</p>\n<p>Khnum was the ram-headed god of creation, believed to have fashioned humankind on a potter's wheel from the clay of the Nile, and his temple was built in the Roman period on far older foundations. What makes a visit here so worthwhile right now is the colour. For two thousand years the ceiling and columns lay hidden under thick black grime; a painstaking recent cleaning has lifted it away to reveal vivid painted skies, gods, and astronomical scenes in blues and golds that look almost freshly applied.</p>\n<p>The payoff is in the timing. You're seeing this hall at a moment when its colour has only just returned to view \u2014 a glimpse of how dazzling these temples truly were, fresh from beneath centuries of soot.</p>\n<h3>The Temple of Edfu \u2014 The One That Survived Whole</h3>\n<p>From Esna the road brings you to Edfu, and it is hard to overstate how complete it feels.</p>\n<p>Dedicated to Horus, the falcon-headed god, Edfu is the most intact temple in all of Egypt \u2014 finished under the Ptolemies and preserved so fully that walking through it feels less like visiting a ruin than entering a sacred place still standing as it was built. Its towering entrance gateway, broad courts, forest of columns, and shadowed inner sanctuaries all survive, guarded by great statues of Horus as a falcon. The walls carry the story of the god across them, including the long mythical struggle between Horus and Seth.</p>\n<p>The payoff is the rare feeling of wholeness. Most ancient temples ask you to imagine what's missing; Edfu asks nothing of the kind. It simply surrounds you, complete, and lets you stand inside the ancient world intact.</p>\n<h3>The Temple of Kom Ombo \u2014 Two Gods Above the Nile</h3>\n<p>The last temple of the day sits right above the river, and it is one of the most unusual in Egypt.</p>\n<p>Where almost every other temple honours a single god, Kom Ombo was built for two at once: Sobek, the crocodile god of strength, fertility, and the Nile's power; and Horus the Elder, the falcon of protection and kingship. The whole building answers to this double dedication, with paired entrances, twin halls, and mirrored sanctuaries running side by side down its length. On the site you'll also find a collection of mummified crocodiles, sacred to Sobek and once raised here in his honour, along with the temple's famous carved reliefs.</p>\n<p>The payoff is its sheer strangeness. After the single-minded grandeur of Edfu, Kom Ombo's split personality \u2014 two gods, two everything, perfectly balanced \u2014 is unlike anywhere else, and with the Nile shining just beyond the columns it makes a memorable close to the temple road.</p>\n<h3>Arriving in Aswan</h3>\n<p>The last short drive brings you into Aswan in the early afternoon, the temple road complete behind you.</p>\n<p>Aswan moves to a gentler rhythm than anywhere else in Egypt \u2014 calmer, warmer, bound more closely to the river. Great rounded granite boulders break the surface of the Nile, palm-fringed islands drift past, Nubian culture colours the streets, and a soft southern light settles over all of it. From here you can carry on into the city's own wonders \u2014 Philae, the High Dam, the Unfinished Obelisk \u2014 or turn back north toward Luxor.</p>\n<p>The tour ends here. What you've really done is travel the length of Egypt's final chapter, temple by temple, from Khnum's recovered colour to the twin gods above the Nile \u2014 and you did it in good company, every discovery shared along the way, <em>sawa</em>, together.</p>",
+      "policiesHtml": "",
+      "whatToBring": [
+        "Comfortable walking shoes",
+        "Light, breathable clothing",
+        "Sun protection \u2014 hat, sunglasses, sunscreen",
+        "Camera",
+        "Reusable water bottle"
+      ],
+      "meetingPoint": "In front of Steigenberger Resort Achti, Luxor (formerly Etap)",
+      "pickupNote": "Be there by 7:00 AM",
+      "meetingPoints": [
+        {
+          "note": "Be there by 7:00 AM",
+          "point": "In front of Steigenberger Resort Achti, Luxor (formerly Etap)"
+        }
+      ],
+      "bookingCutoffHours": 24,
+      "confirmDeadlineDays": null,
+      "priceTiers": null,
+      "images": [
+        {
+          "alt": "Architectural Detail Named Esna Egypt 2",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/tours/esna-edfu-komombo/01.jpg"
+        },
+        {
+          "alt": "Architectural Detail Named Esna Egypt",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/tours/esna-edfu-komombo/02.jpg"
+        },
+        {
+          "alt": "Cart Donkey Carries Shugarcane Road Along Canal Nile River Esna Suburb Upper Egypt",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/tours/esna-edfu-komombo/03.jpg"
+        },
+        {
+          "alt": "Ancient Egyptian Architecture Ruins Hieroglyphs Columns Temple Horus Edfu Egypt",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/tours/esna-edfu-komombo/04.jpg"
+        },
+        {
+          "alt": "Ancient Egyptian Temple Columns",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/tours/esna-edfu-komombo/05.jpg"
+        },
+        {
+          "alt": "Edfu Egypt 3 November Small River Cruise Boat Amunet Sails Down Nile Sahara Desert",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/tours/esna-edfu-komombo/06.jpg"
+        },
+        {
+          "alt": "Egypt Upper Egypt Nile Valley Kom Ombo Temple Dedicated God Sobek Crocodile Headed",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/tours/esna-edfu-komombo/07.jpg"
+        },
+        {
+          "alt": "Kom Ombo Temple At Night",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/tours/esna-edfu-komombo/08.jpg"
+        }
+      ],
+      "itinerary": []
+    },
+    {
+      "id": "tour_memphis_saqqara_dahshur_birth_of_mq41k505",
+      "type": "day_tour",
+      "title": "Memphis, Saqqara & Dahshur \u2014 Birth of the Pyramid",
+      "city": "Cairo",
+      "duration": "About 6 hours",
+      "defaultTime": "08:00",
+      "guide": "Licensed Egyptologist",
+      "vehicle": "Air-conditioned car/van",
+      "minSeats": 4,
+      "maxSeats": 12,
+      "baseCost": 0,
+      "publishedRate": 52,
+      "breakPrice": 48,
+      "quality": 4.7,
+      "depositPercent": 10,
+      "description": "Most visitors give their day to Giza and treat everything south of it as a lesser warm-up \u2014 Memphis, Saqqara, Dahshur, names on the way to the famous",
+      "operatingDays": [],
+      "included": [
+        "Licensed Egyptologist guide",
+        "Air-conditioned transport",
+        "Hotel pickup & drop-off"
+      ],
+      "notIncluded": [
+        "Entrance tickets",
+        "Lunch",
+        "Gratuities"
+      ],
+      "active": true,
+      "status": "approved",
+      "agencyId": null,
+      "submittedAt": "2026-07-29T08:35:37.503Z",
+      "reviewedAt": "2026-07-29T08:35:37.503Z",
+      "rejectionReason": "",
+      "overviewHtml": "<p>Most visitors give their day to Giza and treat everything south of it as a lesser warm-up \u2014 Memphis, Saqqara, Dahshur, names on the way to the famous ones. We'd turn that around entirely. This is where the pyramid was invented. Spend a day here and you watch the idea being worked out in real time, in the right order: the first daring stack of stone, the experiments that went wrong, and the moment it finally came right \u2014 the rehearsals that made Giza possible at all.</p>\n<p>The day follows that story across three sites. <strong>Memphis</strong>, the ancient capital founded at the dawn of dynastic Egypt, now a scatter of giants and fragments among the palms. <strong>Saqqara</strong>, the great desert necropolis crowned by the <strong>Step Pyramid of Djoser</strong> \u2014 the first large stone building anyone ever raised. And <strong>Dahshur</strong>, where King Snefru built the <strong>Bent Pyramid</strong> and the <strong>Red Pyramid</strong>, two attempts that solved the engineering of the true pyramid once and for all.</p>\n<p>This is a small-group shared departure, which means the pleasure of travelling alongside like-minded explorers, the ease of fully organised service, and a price that opens these foundational sites to everyone. <em>Sawa</em> means \"together,\" and that is the spirit of the day \u2014 good company, a knowledgeable guide, and a comfortable seat from one site to the next. Your seat is confirmed the moment you book, and the journey runs as a set group departure.</p>\n<h3>Day 1 \u2014 Memphis, Saqqara, and Dahshur</h3>\n<h3>The Shape of the Day</h3>\n<p><strong>08:00 AM \u2014 Gather in Cairo</strong> The day begins while the air is still cool and the city is just waking. Our representative meets you at your hotel, welcomes you, and introduces you to the travellers you'll share the day with. Once everyone is settled, we head south, out of the city and toward the old necropolis country along the river.</p>\n<p><strong>08:00 AM \u2013 09:00 AM \u2014 The Drive to Memphis</strong> The road south takes around an hour, the capital giving way to farmland and palm groves as you near Memphis, where Egypt's story as a unified kingdom first began.</p>\n<p><strong>09:00 AM \u2013 09:45 AM \u2014 Memphis</strong> You spend the first part of the morning at the open-air museum of the ancient capital, taking in the great reclining statue of Ramses II and the alabaster sphinx among the palms.</p>\n<p><strong>09:45 AM \u2013 10:00 AM \u2014 On to Saqqara</strong> A short drive carries you up onto the desert plateau to Saqqara, only minutes away.</p>\n<p><strong>10:00 AM \u2013 11:30 AM \u2014 Saqqara</strong> You have around an hour and a half here, in one of the richest archaeological sites in Egypt, exploring the necropolis and standing before the Step Pyramid of Djoser \u2014 the building that started it all.</p>\n<p><strong>11:30 AM \u2013 11:50 AM \u2014 On to Dahshur</strong> A brief drive further south brings you to the quieter desert of Dahshur and its two remarkable pyramids.</p>\n<p><strong>11:50 AM \u2013 01:00 PM \u2014 Dahshur</strong> You spend a little over an hour at Snefru's pyramids \u2014 the Bent Pyramid and the Red Pyramid \u2014 with the time and the open space to really take in how the true pyramid was finally achieved.</p>\n<p><strong>01:00 PM \u2013 02:00 PM \u2014 The Return to Cairo</strong> The road carries you back north, around an hour, the desert giving way once more to the life of the city.</p>\n<p><strong>Around 02:00 PM \u2014 Back in Cairo</strong> You arrive back in the early afternoon, the tour ending at your hotel, with the day's long history still settling and the rest of the day your own.</p>\n<h3>Memphis \u2014 The Capital That Time Scattered</h3>\n<p>Your day begins where Egypt's did. Memphis was founded at the very start of the dynastic age \u2014 tradition credits King Menes, who united the Two Lands more than five thousand years ago \u2014 and for much of ancient history it was among the most important cities on earth.</p>\n<p>Almost nothing of that city still stands. What remains is gathered now in an open-air museum among the palms, and the quiet of the place is part of its power: a capital that ruled for millennia, reduced to a handful of survivors. Chief among them is the enormous reclining figure of Ramses II, carved with such care that you can read the detail of his face and hands lying just above the ground, and nearby the graceful alabaster sphinx.</p>\n<p>Standing here, surrounded by fragments of something once vast, you get the day's first real sense of scale \u2014 not of size, but of time. Everything that follows grew out of the world this city ruled.</p>\n<h3>Saqqara \u2014 Where the Pyramid Began</h3>\n<p>From Memphis you climb onto the desert plateau to Saqqara, and the centrepiece comes into view almost at once: the Step Pyramid of Djoser, rising from the sand in great receding tiers.</p>\n<p>This is the one that started everything. Before it, Egyptian kings were buried under low flat-topped tombs; here, the architect Imhotep stacked those forms one atop another into a single towering structure \u2014 the first time anyone had ever raised a building of this scale entirely in stone. Everything you picture when you think of a pyramid begins at this spot. Around it spreads one of Egypt's richest necropolises, layered with tombs and monuments from across the Old Kingdom.</p>\n<p>The payoff is in understanding what you're looking at. This isn't a finished, perfected pyramid \u2014 it's the first attempt, the bold idea before anyone knew it would work. Stand here and you're standing at the birth of monumental architecture itself.</p>\n<h3>Dahshur \u2014 The Pyramid Finally Solved</h3>\n<p>The last drive brings you to Dahshur, quieter and emptier than the sites before it, where two pyramids built by King Snefru \u2014 father of the man who would raise the Great Pyramid at Giza \u2014 sit against the open desert.</p>\n<p>This is where the engineering was worked out. The Bent Pyramid wears its lesson on the outside: it rises at one steep angle, then visibly changes to a gentler one partway up, as though the builders caught a mistake mid-construction and corrected it before it could collapse. Learning from it, Snefru then built the Red Pyramid nearby \u2014 the first true, smooth-sided pyramid ever completed successfully, and to this day among the largest in Egypt.</p>\n<p>Put the day in order and the whole arc snaps into focus: the stepped experiment at Saqqara, the corrected attempt and the first true success here at Dahshur, and only then the perfected giants at Giza. You've watched, across a single morning, an idea being invented and finally mastered.</p>\n<h3>Returning to Cairo</h3>\n<p>The road north carries you back into the city, and the contrast is immediate after a morning in the quiet of the desert necropolis.</p>\n<p>Cairo closes around you again with all its noise and motion and life \u2014 twenty million people layered over five thousand years of history, the medieval city and the modern one tangled together along the same river that fed the kingdoms you've just spent the day among.</p>\n<p>The tour ends here, in the early afternoon, with time still in hand. What you've really done is trace the invention of the pyramid from its first rough idea to its mastery \u2014 and you did it not alone, but in good company, sharing the discovery as you went, <em>sawa</em>, together.</p>",
+      "policiesHtml": "",
+      "whatToBring": [
+        "Comfortable walking shoes",
+        "Light, breathable clothing",
+        "Sun protection \u2014 hat, sunglasses, sunscreen",
+        "Camera",
+        "Reusable water bottle"
+      ],
+      "meetingPoint": "In front of the Egyptian Museum (Tahrir)",
+      "pickupNote": "Be there by 8:00 AM at the latest",
+      "meetingPoints": [
+        {
+          "note": "Be there by 8:00 AM at the latest",
+          "point": "In front of the Egyptian Museum (Tahrir)"
+        }
+      ],
+      "bookingCutoffHours": 24,
+      "confirmDeadlineDays": null,
+      "priceTiers": null,
+      "images": [
+        {
+          "alt": "Cairo Egypt January 20 Visit Memphis S Ancient Burial Site Saqqara Tomb West Nile",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/tours/memphis-saqqara/01.jpg"
+        },
+        {
+          "alt": "Pyramid Djoser Step Pyramid Djoser Step Pyramid Horus Neterikhet Saqqara Necropolis Egypt Among Sand",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/tours/memphis-saqqara/02.jpg"
+        },
+        {
+          "alt": "Ruins Funerary Djoser Archeological Remain Saqqara Necropolis Egypt Unesco Heritage",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/tours/memphis-saqqara/03.jpg"
+        },
+        {
+          "alt": "Ramses Temple Memphis Egypt Africa",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/tours/memphis-saqqara/04.jpg"
+        },
+        {
+          "alt": "Bent Pyramid Dahshur Egypt",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/tours/memphis-saqqara/05.jpg"
+        },
+        {
+          "alt": "The Red Pyramid Of Dahshur With Blue Sky In Giza Egypt",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/tours/memphis-saqqara/06.jpg"
+        }
+      ],
+      "itinerary": []
+    },
+    {
+      "id": "tour_the_grand_west_bank_tombs_temple_mq41kaab",
+      "type": "day_tour",
+      "title": "The Grand West Bank \u2014 Tombs, Temples & Deir el-Medina",
+      "city": "Luxor",
+      "duration": "Full day \u00b7 about 9 hours",
+      "defaultTime": "07:00",
+      "guide": "Licensed Egyptologist",
+      "vehicle": "Air-conditioned car/van",
+      "minSeats": 4,
+      "maxSeats": 12,
+      "baseCost": 0,
+      "publishedRate": 111,
+      "breakPrice": 64,
+      "quality": 4.7,
+      "depositPercent": 10,
+      "description": "The West Bank of Luxor is usually sold as one thing: the place with the pharaohs' tombs. Visit the Valley of the Kings, tick the box, move on. But tha",
+      "operatingDays": [],
+      "included": [
+        "Licensed Egyptologist guide",
+        "Air-conditioned transport",
+        "Hotel pickup & drop-off"
+      ],
+      "notIncluded": [
+        "Entrance tickets",
+        "Special tombs",
+        "Lunch",
+        "Gratuities"
+      ],
+      "active": true,
+      "status": "approved",
+      "agencyId": null,
+      "submittedAt": "2026-07-29T08:35:53.757Z",
+      "reviewedAt": "2026-07-29T08:35:53.757Z",
+      "rejectionReason": "",
+      "overviewHtml": "<p>The West Bank of Luxor is usually sold as one thing: the place with the pharaohs' tombs. Visit the Valley of the Kings, tick the box, move on. But that misses what the West Bank really is. This was an entire society in death \u2014 not just kings, but their queens and children, their temples to the gods and the dead, and, most remarkably of all, the craftsmen who cut and painted the royal tombs with their own hands, who lived in their own village and were buried in their own small, exquisite tombs just over the hill. A full day here isn't about royalty. It's about a whole civilisation's relationship with death, top to bottom.</p>\n<p>The day works its way through that world. The <strong>Valley of the Kings</strong>, where the New Kingdom pharaohs were hidden away; the <strong>Valley of the Queens</strong>, with the famous painted tomb of Nefertari; the towering <strong>Colossi of Memnon</strong>; the cliff-set <strong>Temple of Hatshepsut</strong>; the vast, vividly preserved <strong>Temple of Medinet Habu</strong>; and finally <strong>Deir El Medina</strong>, the village of the very artisans who made the whole necropolis possible.</p>\n<p>This is a small-group shared departure, which means the pleasure of travelling alongside like-minded explorers, the ease of fully organised service, the depth a knowledgeable local guide brings, and a price that opens the whole West Bank to everyone. <em>Sawa</em> means \"together,\" and a day this rich is far better shared \u2014 the small details pointed out, the connections drawn, the wonder doubled by good company. Your seat is confirmed the moment you book, and the journey runs as a set group departure.</p>\n<h3>Day 1 \u2014 A Full Day on the West Bank</h3>\n<h3>The Shape of the Day</h3>\n<p><strong>07:00 AM \u2014 Gather in Luxor</strong> The day begins early, while the air is still cool \u2014 which matters on the West Bank, where the desert sites offer little shade once the sun climbs. Our representative meets you at your hotel, welcomes you, and introduces you to the travellers you'll share the day with. Then we cross the Nile to the western shore.</p>\n<p><strong>07:40 AM \u2013 09:30 AM \u2014 Valley of the Kings</strong> You begin in the royal necropolis, with access to three tombs cut deep into the rock \u2014 among them the tomb of Tutankhamun, with its painted walls and golden legacy.</p>\n<p><strong>09:50 AM \u2013 10:40 AM \u2014 Valley of the Queens</strong> A short drive brings you to the resting place of the royal women and children, home to the beautifully painted tomb of Queen Nefertari.</p>\n<p><strong>11:00 AM \u2013 11:20 AM \u2014 The Colossi of Memnon</strong> A stop before the two giant seated statues of Amenhotep III, standing where his great temple once rose.</p>\n<p><strong>11:35 AM \u2013 12:35 PM \u2014 Temple of Hatshepsut</strong> You spend around an hour at the dramatic terraced temple set against the cliffs at Deir el-Bahari.</p>\n<p><strong>12:35 PM \u2013 01:15 PM \u2014 A Break to Refuel</strong> A pause in the middle of a long day for refreshment and a rest out of the sun.</p>\n<p><strong>01:35 PM \u2013 02:35 PM \u2014 Temple of Medinet Habu</strong> You explore the vast, remarkably preserved mortuary temple of Ramesses III, its colour and reliefs among the best-kept in all of Egypt.</p>\n<p><strong>02:50 PM \u2013 03:40 PM \u2014 Deir El Medina</strong> The day closes at the village and tombs of the artisans who built the royal necropolis \u2014 a rare, human-scale finish to a day among kings.</p>\n<p><strong>Around 04:15 PM \u2014 Return to Your Hotel</strong> You arrive back in the late afternoon, the tour ending at your hotel with the day's long history still settling.</p>\n<p><em>Exact order and timing may shift slightly with traffic, site entry flow, and the group's pace.</em></p>\n<h3>Valley of the Kings \u2014 The Pharaohs in Hiding</h3>\n<p>Your day begins in the most famous burial ground on earth, and the first thing to understand is that everything here was built to disappear.</p>\n<p>Tired of having their pyramids robbed, the pharaohs of the New Kingdom hid their tombs instead \u2014 cut deep into the rock of a remote desert valley, sealed, and meant to be forgotten. With access to three of them, you descend into a world of colour: walls and ceilings covered in painted scenes and texts meant to carry the king safely through the afterlife, including the tomb of the boy king Tutankhamun, whose nearly intact burial astonished the world.</p>\n<p>What stays with you is the strangeness of standing inside art that was never meant to be seen again. These were not monuments for the living; they were doorways to the next world, sealed shut \u2014 and you're walking through them.</p>\n<h3>Valley of the Queens \u2014 The Royal Family at Rest</h3>\n<p>A short drive south brings you to the Valley of the Queens, where the wives and children of the pharaohs were laid to rest.</p>\n<p>The valley's crowning glory is the tomb of Nefertari, beloved queen of Ramses II \u2014 widely held to be the most beautiful painted tomb in all of Egypt. Its walls glow with images of the queen moving among the gods, the colour so fresh and the craftsmanship so fine that it feels less like a tomb than a painted chapel.</p>\n<p>The payoff is the shift in scale. After the grandeur of the kings, this is royal Egypt at a more human register \u2014 the family behind the throne, remembered with a tenderness and artistry that lingers.</p>\n<h3>The Colossi of Memnon \u2014 Two Giants on the Plain</h3>\n<p>Out where the desert meets the green fields, two enormous seated figures rise from the ground \u2014 the Colossi of Memnon, each carved from a single block of stone and weathered by more than three thousand years.</p>\n<p>They once guarded the entrance to the mortuary temple of Amenhotep III, the largest ever built on the West Bank, almost all of which has long since vanished. In Roman times one of the statues became famous for a strange sound it gave off at dawn, drawing curious travellers from across the ancient world to hear it \"sing.\"</p>\n<p>The stop is brief, but the impression isn't: two silent giants keeping watch over a temple that no longer exists.</p>\n<h3>Temple of Hatshepsut \u2014 A Queen Carved Into the Cliff</h3>\n<p>Next rises one of the most striking buildings in Egypt \u2014 the mortuary temple of Hatshepsut, climbing in great stone terraces straight out of the foot of the cliffs at Deir el-Bahari.</p>\n<p>Hatshepsut was among the very few women ever to rule as pharaoh in her own right, and she did so with rare success. Her temple matched her ambition: clean ranks of colonnaded terraces, chapels, and statues, decorated with scenes of her divine birth and her famous trading expedition to the distant land of Punt. Later rulers tried to erase her name from history \u2014 yet her temple still stands as one of the boldest on the bank.</p>\n<p>It is architecture as statement, and standing before it you feel exactly what she intended: a ruler insisting, in stone, on her own greatness.</p>\n<h3>Temple of Medinet Habu \u2014 The Best-Kept Secret of the Bank</h3>\n<p>The afternoon brings you to Medinet Habu, and for many travellers it quietly steals the day.</p>\n<p>This was the mortuary temple of Ramesses III, and it is enormous \u2014 but what sets it apart is how much survives. Where so many temples have faded to bare stone, here the carvings are deep, crisp, and still carry their original colour in places, covering the walls with vivid scenes of battle, ritual, and royal power. The complex was also fortified, serving as a stronghold and a centre of administration, with a great gateway modelled on a foreign fortress.</p>\n<p>The payoff is in the preservation. Walking through it, you get the rarest thing of all on the West Bank \u2014 a sense of how blazingly colourful and alive these temples once were, before time bleached them down to stone.</p>\n<h3>Deir El Medina \u2014 The Village That Built the Valley</h3>\n<p>The day ends somewhere most tours never reach, and it's the perfect place to finish \u2014 Deir El Medina, the village of the workers who built and decorated the royal tombs.</p>\n<p>This is where the painters, sculptors, and stonecutters of the Valley of the Kings actually lived, generation after generation, in a planned little town tucked into the hills. Their own tombs, though small, are some of the most charming on the whole bank \u2014 decorated by the very hands that worked on the kings', and often more intimate and lively for it. The village has even given up the everyday records of its people: their wages, their disputes, their letters, even the account of one of the first recorded labour strikes in history.</p>\n<p>It is the most human stop of the day, and a deliberate one. After hours among gods and god-kings, you end with the real people \u2014 the craftsmen whose skill made all the splendour possible, and whose ordinary lives are written into the very hill they're buried in.</p>\n<h3>The Day's End in Luxor</h3>\n<p>The drive back across the river returns you to the city in the late afternoon, the full sweep of the day behind you.</p>\n<p>Luxor softens in the evening \u2014 the Nile gold with the lowering sun, feluccas drifting on the water, the great East Bank temples beginning to glow under their lights across the river from the necropolis you've just spent the day in. The living city and the city of the dead, face to face across the water.</p>\n<p>The tour ends here. What you've really done is meet the entire society of the ancient West Bank \u2014 kings, queens, gods, and the working people who built it all \u2014 not as a checklist of tombs, but as a whole world, discovered in good company, <em>sawa</em>, together.</p>",
+      "policiesHtml": "",
+      "whatToBring": [
+        "Comfortable walking shoes",
+        "Light, breathable clothing",
+        "Sun protection \u2014 hat, sunglasses, sunscreen",
+        "Camera",
+        "Reusable water bottle"
+      ],
+      "meetingPoint": "In front of Steigenberger Resort Achti, Luxor (formerly Etap)",
+      "pickupNote": "West Bank tour \u2014 be there by 7:00 AM",
+      "meetingPoints": [
+        {
+          "note": "West Bank tour \u2014 be there by 7:00 AM",
+          "point": "In front of Steigenberger Resort Achti, Luxor (formerly Etap)"
+        }
+      ],
+      "bookingCutoffHours": 24,
+      "confirmDeadlineDays": null,
+      "priceTiers": null,
+      "images": [
+        {
+          "alt": "Abandoned Village Of Kurna In Luxor Valley Of Kings Egypt",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/tours/west-bank/01.jpg"
+        },
+        {
+          "alt": "Aerial View Valley Of Kings Luxor",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/tours/west-bank/02.jpg"
+        },
+        {
+          "alt": "Ancient Egyptian Tomb Entrances Desert",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/tours/west-bank/03.jpg"
+        },
+        {
+          "alt": "Luxor Egypt March 10 2025 Inside The Tomb Of Queen In Valley Of The Queens Luxor Egypt",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/tours/west-bank/04.jpg"
+        },
+        {
+          "alt": "Ancient Ruins At The Village Of The Workers At Deir El Medina A View From A Hot Air Balloon Luxor Egypt October 22 2018",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/tours/west-bank/05.jpg"
+        },
+        {
+          "alt": "Remains Working Class Deir El Medina Thebes West West Side Nile Egypt Africa",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/tours/west-bank/06.jpg"
+        },
+        {
+          "alt": "Scene Pashedu Tomb Deir El Medina Village Luxor Egypt",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/tours/west-bank/07.jpg"
+        },
+        {
+          "alt": "Columns Medinet Habu Temple Luxor Egypt",
+          "url": "https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/tours/west-bank/08.jpg"
+        }
+      ],
+      "itinerary": []
+    }
+  ],
+  "departures": [
+    {
+      "id": 1005,
+      "type": "day_tour",
+      "tourProductId": "tour_aswan_highlights_unfinished_obel_mq40h29k",
+      "route": "Aswan Highlights \u2014 Unfinished Obelisk, High Dam & Philae",
+      "date": "2026-10-05",
+      "time": "08:00",
+      "city": "Aswan",
+      "guide": "Licensed Egyptologist",
+      "vehicle": "Air-conditioned car/van",
+      "minSeats": 4,
+      "maxSeats": 12,
+      "baseCost": 0,
+      "publishedRate": 55,
+      "breakPrice": 45,
+      "quality": 4.7,
+      "cutoff": "Open until 18:00",
+      "status": "open",
+      "notes": "Aswan is often treated as a place you pass through \u2014 a stop on the way to a cruise, a handful of sights to tick off in a morning before moving on. We ",
+      "depositPercent": 10,
+      "pledges": [],
+      "livePrice": 55,
+      "confirmDeadline": "2026-09-28",
+      "confirmDeadlineDays": 7
+    },
+    {
+      "id": 1006,
+      "type": "day_tour",
+      "tourProductId": "tour_aswan_to_abu_simbel_temples_of_r_mq40h4p7",
+      "route": "Aswan to Abu Simbel \u2014 Temples of Ramses II & Nefertari",
+      "date": "2026-10-01",
+      "time": "04:00",
+      "city": "Aswan",
+      "guide": "Licensed Egyptologist",
+      "vehicle": "Air-conditioned car",
+      "minSeats": 4,
+      "maxSeats": 12,
+      "baseCost": 0,
+      "publishedRate": 75,
+      "breakPrice": 60,
+      "quality": 4.7,
+      "cutoff": "Open until 18:00",
+      "status": "open",
+      "notes": "The drive to Abu Simbel has a reputation as something to be endured \u2014 hours of empty road before the temple at the end. We'd ask you to think of it th",
+      "depositPercent": 10,
+      "pledges": [
+        {
+          "id": "pl_demo_1006_0",
+          "agencyId": "direct_customer",
+          "agency": "Demo traveler (fixture only)",
+          "seats": 1,
+          "customers": "Demo traveler",
+          "createdAt": "2026-08-01T12:00:00.000Z"
+        }
+      ],
+      "livePrice": 75,
+      "confirmDeadline": "2026-09-24",
+      "confirmDeadlineDays": 7
+    },
+    {
+      "id": 1007,
+      "type": "day_tour",
+      "tourProductId": "tour_aswan_to_abu_simbel_temples_of_r_mq40h4p7",
+      "route": "Aswan to Abu Simbel \u2014 Temples of Ramses II & Nefertari",
+      "date": "2026-10-07",
+      "time": "04:00",
+      "city": "Aswan",
+      "guide": "Licensed Egyptologist",
+      "vehicle": "Air-conditioned car",
+      "minSeats": 4,
+      "maxSeats": 12,
+      "baseCost": 0,
+      "publishedRate": 75,
+      "breakPrice": 60,
+      "quality": 4.7,
+      "cutoff": "Open until 18:00",
+      "status": "open",
+      "notes": "The drive to Abu Simbel has a reputation as something to be endured \u2014 hours of empty road before the temple at the end. We'd ask you to think of it th",
+      "depositPercent": 10,
+      "pledges": [],
+      "livePrice": 75,
+      "confirmDeadline": "2026-09-30",
+      "confirmDeadlineDays": 7
+    },
+    {
+      "id": 1008,
+      "type": "day_tour",
+      "tourProductId": "tour_luxor_to_aswan_edfu_kom_ombo_tem_mq40h77c",
+      "route": "Luxor to Aswan \u2014 Edfu & Kom Ombo Temple Road",
+      "date": "2026-10-03",
+      "time": "07:00",
+      "city": "Luxor",
+      "guide": "Licensed Egyptologist",
+      "vehicle": "Air-conditioned car/van",
+      "minSeats": 4,
+      "maxSeats": 12,
+      "baseCost": 0,
+      "publishedRate": 70,
+      "breakPrice": 58,
+      "quality": 4.7,
+      "cutoff": "Open until 18:00",
+      "status": "open",
+      "notes": "There is a stretch of the Nile between Luxor and Aswan that most travellers cross with their eyes closed \u2014 a transfer, a few hours of road, a means to",
+      "depositPercent": 10,
+      "pledges": [],
+      "livePrice": 70,
+      "confirmDeadline": "2026-09-26",
+      "confirmDeadlineDays": 7
+    },
+    {
+      "id": 1009,
+      "type": "day_tour",
+      "tourProductId": "tour_luxor_to_aswan_edfu_kom_ombo_tem_mq40h77c",
+      "route": "Luxor to Aswan \u2014 Edfu & Kom Ombo Temple Road",
+      "date": "2026-10-09",
+      "time": "07:00",
+      "city": "Luxor",
+      "guide": "Licensed Egyptologist",
+      "vehicle": "Air-conditioned car/van",
+      "minSeats": 4,
+      "maxSeats": 12,
+      "baseCost": 0,
+      "publishedRate": 70,
+      "breakPrice": 58,
+      "quality": 4.7,
+      "cutoff": "Open until 18:00",
+      "status": "open",
+      "notes": "There is a stretch of the Nile between Luxor and Aswan that most travellers cross with their eyes closed \u2014 a transfer, a few hours of road, a means to",
+      "depositPercent": 10,
+      "pledges": [],
+      "livePrice": 70,
+      "confirmDeadline": "2026-10-02",
+      "confirmDeadlineDays": 7
+    },
+    {
+      "id": 1010,
+      "type": "day_tour",
+      "tourProductId": "tour_giza_pyramids_sphinx_the_grand_e_mq41k335",
+      "route": "Giza Pyramids, Sphinx & the Grand Egyptian Museum",
+      "date": "2026-10-11",
+      "time": "08:00",
+      "city": "Cairo",
+      "guide": "Licensed Egyptologist",
+      "vehicle": "Air-conditioned car/van",
+      "minSeats": 4,
+      "maxSeats": 12,
+      "baseCost": 0,
+      "publishedRate": 65,
+      "breakPrice": 52,
+      "quality": 4.7,
+      "cutoff": "Open until 18:00",
+      "status": "minimum_reached",
+      "notes": "The pyramids of Giza are the most photographed monuments on earth, which means most people arrive certain they already know them. We'd gently disagree",
+      "depositPercent": 10,
+      "pledges": [
+        {
+          "id": "pl_demo_1010_0",
+          "agencyId": "direct_customer",
+          "agency": "Demo traveler (fixture only)",
+          "seats": 1,
+          "customers": "Demo traveler",
+          "createdAt": "2026-08-01T12:00:00.000Z"
+        },
+        {
+          "id": "pl_demo_1010_1",
+          "agencyId": "direct_customer",
+          "agency": "Demo traveler (fixture only)",
+          "seats": 1,
+          "customers": "Demo traveler",
+          "createdAt": "2026-08-01T12:00:00.000Z"
+        },
+        {
+          "id": "pl_demo_1010_2",
+          "agencyId": "direct_customer",
+          "agency": "Demo traveler (fixture only)",
+          "seats": 1,
+          "customers": "Demo traveler",
+          "createdAt": "2026-08-01T12:00:00.000Z"
+        },
+        {
+          "id": "pl_demo_1010_3",
+          "agencyId": "direct_customer",
+          "agency": "Demo traveler (fixture only)",
+          "seats": 1,
+          "customers": "Demo traveler",
+          "createdAt": "2026-08-01T12:00:00.000Z"
+        }
+      ],
+      "livePrice": 65,
+      "confirmDeadline": "2026-10-04",
+      "confirmDeadlineDays": 7
+    },
+    {
+      "id": 1011,
+      "type": "day_tour",
+      "tourProductId": "tour_giza_pyramids_sphinx_the_grand_e_mq41k335",
+      "route": "Giza Pyramids, Sphinx & the Grand Egyptian Museum",
+      "date": "2026-10-25",
+      "time": "08:00",
+      "city": "Cairo",
+      "guide": "Licensed Egyptologist",
+      "vehicle": "Air-conditioned car/van",
+      "minSeats": 4,
+      "maxSeats": 12,
+      "baseCost": 0,
+      "publishedRate": 65,
+      "breakPrice": 52,
+      "quality": 4.7,
+      "cutoff": "Open until 18:00",
+      "status": "open",
+      "notes": "The pyramids of Giza are the most photographed monuments on earth, which means most people arrive certain they already know them. We'd gently disagree",
+      "depositPercent": 10,
+      "pledges": [],
+      "livePrice": 65,
+      "confirmDeadline": "2026-10-18",
+      "confirmDeadlineDays": 7
+    },
+    {
+      "id": 1012,
+      "type": "day_tour",
+      "tourProductId": "tour_memphis_saqqara_dahshur_birth_of_mq41k505",
+      "route": "Memphis, Saqqara & Dahshur \u2014 Birth of the Pyramid",
+      "date": "2026-10-13",
+      "time": "08:00",
+      "city": "Cairo",
+      "guide": "Licensed Egyptologist",
+      "vehicle": "Air-conditioned car/van",
+      "minSeats": 4,
+      "maxSeats": 12,
+      "baseCost": 0,
+      "publishedRate": 60,
+      "breakPrice": 48,
+      "quality": 4.7,
+      "cutoff": "Open until 18:00",
+      "status": "open",
+      "notes": "Most visitors give their day to Giza and treat everything south of it as a lesser warm-up \u2014 Memphis, Saqqara, Dahshur, names on the way to the famous ",
+      "depositPercent": 10,
+      "pledges": [],
+      "livePrice": 60,
+      "confirmDeadline": "2026-10-06",
+      "confirmDeadlineDays": 7
+    },
+    {
+      "id": 1013,
+      "type": "day_tour",
+      "tourProductId": "tour_memphis_saqqara_dahshur_birth_of_mq41k505",
+      "route": "Memphis, Saqqara & Dahshur \u2014 Birth of the Pyramid",
+      "date": "2026-10-27",
+      "time": "08:00",
+      "city": "Cairo",
+      "guide": "Licensed Egyptologist",
+      "vehicle": "Air-conditioned car/van",
+      "minSeats": 4,
+      "maxSeats": 12,
+      "baseCost": 0,
+      "publishedRate": 60,
+      "breakPrice": 48,
+      "quality": 4.7,
+      "cutoff": "Open until 18:00",
+      "status": "open",
+      "notes": "Most visitors give their day to Giza and treat everything south of it as a lesser warm-up \u2014 Memphis, Saqqara, Dahshur, names on the way to the famous ",
+      "depositPercent": 10,
+      "pledges": [],
+      "livePrice": 60,
+      "confirmDeadline": "2026-10-20",
+      "confirmDeadlineDays": 7
+    },
+    {
+      "id": 1014,
+      "type": "day_tour",
+      "tourProductId": "tour_cairo_to_alexandria_the_mediterr_mq41k6qb",
+      "route": "Cairo to Alexandria \u2014 the Mediterranean Day Tour",
+      "date": "2026-10-15",
+      "time": "07:00",
+      "city": "Cairo",
+      "guide": "Licensed Egyptologist",
+      "vehicle": "Air-conditioned car/van",
+      "minSeats": 4,
+      "maxSeats": 12,
+      "baseCost": 0,
+      "publishedRate": 80,
+      "breakPrice": 65,
+      "quality": 4.7,
+      "cutoff": "Open until 18:00",
+      "status": "open",
+      "notes": "Almost everyone comes to Egypt for the same things \u2014 pharaohs, pyramids, the desert \u2014 and so Alexandria tends to get reduced to a checklist, a few sig",
+      "depositPercent": 10,
+      "pledges": [],
+      "livePrice": 80,
+      "confirmDeadline": "2026-10-08",
+      "confirmDeadlineDays": 7
+    },
+    {
+      "id": 1015,
+      "type": "day_tour",
+      "tourProductId": "tour_cairo_to_alexandria_the_mediterr_mq41k6qb",
+      "route": "Cairo to Alexandria \u2014 the Mediterranean Day Tour",
+      "date": "2026-10-29",
+      "time": "07:00",
+      "city": "Cairo",
+      "guide": "Licensed Egyptologist",
+      "vehicle": "Air-conditioned car/van",
+      "minSeats": 4,
+      "maxSeats": 12,
+      "baseCost": 0,
+      "publishedRate": 80,
+      "breakPrice": 65,
+      "quality": 4.7,
+      "cutoff": "Open until 18:00",
+      "status": "open",
+      "notes": "Almost everyone comes to Egypt for the same things \u2014 pharaohs, pyramids, the desert \u2014 and so Alexandria tends to get reduced to a checklist, a few sig",
+      "depositPercent": 10,
+      "pledges": [],
+      "livePrice": 80,
+      "confirmDeadline": "2026-10-22",
+      "confirmDeadlineDays": 7
+    },
+    {
+      "id": 1016,
+      "type": "day_tour",
+      "tourProductId": "tour_luxor_in_depth_east_west_bank_fu_mq41k8ks",
+      "route": "Luxor in Depth \u2014 East & West Bank Full Day",
+      "date": "2026-10-17",
+      "time": "07:00",
+      "city": "Luxor",
+      "guide": "Licensed Egyptologist",
+      "vehicle": "Air-conditioned car/van",
+      "minSeats": 4,
+      "maxSeats": 12,
+      "baseCost": 0,
+      "publishedRate": 85,
+      "breakPrice": 68,
+      "quality": 4.7,
+      "cutoff": "Open until 18:00",
+      "status": "open",
+      "notes": "Luxor holds so much that the usual day tour turns into a forced march \u2014 six monuments, a blur of names, and no real sense of how any of it fits togeth",
+      "depositPercent": 10,
+      "pledges": [
+        {
+          "id": "pl_demo_1016_0",
+          "agencyId": "direct_customer",
+          "agency": "Demo traveler (fixture only)",
+          "seats": 1,
+          "customers": "Demo traveler",
+          "createdAt": "2026-08-01T12:00:00.000Z"
+        },
+        {
+          "id": "pl_demo_1016_1",
+          "agencyId": "direct_customer",
+          "agency": "Demo traveler (fixture only)",
+          "seats": 1,
+          "customers": "Demo traveler",
+          "createdAt": "2026-08-01T12:00:00.000Z"
+        },
+        {
+          "id": "pl_demo_1016_2",
+          "agencyId": "direct_customer",
+          "agency": "Demo traveler (fixture only)",
+          "seats": 1,
+          "customers": "Demo traveler",
+          "createdAt": "2026-08-01T12:00:00.000Z"
+        }
+      ],
+      "livePrice": 85,
+      "confirmDeadline": "2026-10-10",
+      "confirmDeadlineDays": 7
+    },
+    {
+      "id": 1017,
+      "type": "day_tour",
+      "tourProductId": "tour_luxor_in_depth_east_west_bank_fu_mq41k8ks",
+      "route": "Luxor in Depth \u2014 East & West Bank Full Day",
+      "date": "2026-10-31",
+      "time": "07:00",
+      "city": "Luxor",
+      "guide": "Licensed Egyptologist",
+      "vehicle": "Air-conditioned car/van",
+      "minSeats": 4,
+      "maxSeats": 12,
+      "baseCost": 0,
+      "publishedRate": 85,
+      "breakPrice": 68,
+      "quality": 4.7,
+      "cutoff": "Open until 18:00",
+      "status": "open",
+      "notes": "Luxor holds so much that the usual day tour turns into a forced march \u2014 six monuments, a blur of names, and no real sense of how any of it fits togeth",
+      "depositPercent": 10,
+      "pledges": [],
+      "livePrice": 85,
+      "confirmDeadline": "2026-10-24",
+      "confirmDeadlineDays": 7
+    },
+    {
+      "id": 1018,
+      "type": "day_tour",
+      "tourProductId": "tour_the_grand_west_bank_tombs_temple_mq41kaab",
+      "route": "The Grand West Bank \u2014 Tombs, Temples & Deir el-Medina",
+      "date": "2026-10-19",
+      "time": "07:00",
+      "city": "Luxor",
+      "guide": "Licensed Egyptologist",
+      "vehicle": "Air-conditioned car/van",
+      "minSeats": 4,
+      "maxSeats": 12,
+      "baseCost": 0,
+      "publishedRate": 80,
+      "breakPrice": 64,
+      "quality": 4.7,
+      "cutoff": "Open until 18:00",
+      "status": "open",
+      "notes": "The West Bank of Luxor is usually sold as one thing: the place with the pharaohs' tombs. Visit the Valley of the Kings, tick the box, move on. But tha",
+      "depositPercent": 10,
+      "pledges": [],
+      "livePrice": 80,
+      "confirmDeadline": "2026-10-12",
+      "confirmDeadlineDays": 7
+    },
+    {
+      "id": 1019,
+      "type": "day_tour",
+      "tourProductId": "tour_the_grand_west_bank_tombs_temple_mq41kaab",
+      "route": "The Grand West Bank \u2014 Tombs, Temples & Deir el-Medina",
+      "date": "2026-11-02",
+      "time": "07:00",
+      "city": "Luxor",
+      "guide": "Licensed Egyptologist",
+      "vehicle": "Air-conditioned car/van",
+      "minSeats": 4,
+      "maxSeats": 12,
+      "baseCost": 0,
+      "publishedRate": 80,
+      "breakPrice": 64,
+      "quality": 4.7,
+      "cutoff": "Open until 18:00",
+      "status": "open",
+      "notes": "The West Bank of Luxor is usually sold as one thing: the place with the pharaohs' tombs. Visit the Valley of the Kings, tick the box, move on. But tha",
+      "depositPercent": 10,
+      "pledges": [],
+      "livePrice": 80,
+      "confirmDeadline": "2026-10-26",
+      "confirmDeadlineDays": 7
+    },
+    {
+      "id": 1020,
+      "type": "day_tour",
+      "tourProductId": "tour_dendera_abydos_the_far_temples_n_mq41kc7l",
+      "route": "Dendera & Abydos \u2014 the Far Temples North of Luxor",
+      "date": "2026-10-21",
+      "time": "07:00",
+      "city": "Luxor",
+      "guide": "Licensed Egyptologist",
+      "vehicle": "Comfortable coach",
+      "minSeats": 4,
+      "maxSeats": 12,
+      "baseCost": 0,
+      "publishedRate": 80,
+      "breakPrice": 65,
+      "quality": 4.7,
+      "cutoff": "Open until 18:00",
+      "status": "open",
+      "notes": "Most travellers who come to Luxor never head this way. Dendera and Abydos sit well to the north, off the usual day-trip circuit, and the assumption is",
+      "depositPercent": 10,
+      "pledges": [],
+      "livePrice": 80,
+      "confirmDeadline": "2026-10-14",
+      "confirmDeadlineDays": 7
+    },
+    {
+      "id": 1021,
+      "type": "day_tour",
+      "tourProductId": "tour_dendera_abydos_the_far_temples_n_mq41kc7l",
+      "route": "Dendera & Abydos \u2014 the Far Temples North of Luxor",
+      "date": "2026-11-04",
+      "time": "07:00",
+      "city": "Luxor",
+      "guide": "Licensed Egyptologist",
+      "vehicle": "Comfortable coach",
+      "minSeats": 4,
+      "maxSeats": 12,
+      "baseCost": 0,
+      "publishedRate": 80,
+      "breakPrice": 65,
+      "quality": 4.7,
+      "cutoff": "Open until 18:00",
+      "status": "open",
+      "notes": "Most travellers who come to Luxor never head this way. Dendera and Abydos sit well to the north, off the usual day-trip circuit, and the assumption is",
+      "depositPercent": 10,
+      "pledges": [],
+      "livePrice": 80,
+      "confirmDeadline": "2026-10-28",
+      "confirmDeadlineDays": 7
+    },
+    {
+      "id": 1022,
+      "type": "day_tour",
+      "tourProductId": "tour_luxor_to_aswan_esna_edfu_kom_omb_mq41ke7h",
+      "route": "Luxor to Aswan \u2014 Esna, Edfu & Kom Ombo Temple Road",
+      "date": "2026-10-23",
+      "time": "07:00",
+      "city": "Luxor",
+      "guide": "Licensed Egyptologist",
+      "vehicle": "Air-conditioned car/van",
+      "minSeats": 4,
+      "maxSeats": 12,
+      "baseCost": 0,
+      "publishedRate": 72,
+      "breakPrice": 58,
+      "quality": 4.7,
+      "cutoff": "Open until 18:00",
+      "status": "open",
+      "notes": "Travellers chase the oldest, most famous things in Egypt \u2014 the pyramids, Karnak \u2014 and so the temples strung along the road south to Aswan tend to get ",
+      "depositPercent": 10,
+      "pledges": [],
+      "livePrice": 72,
+      "confirmDeadline": "2026-10-16",
+      "confirmDeadlineDays": 7
+    },
+    {
+      "id": 1023,
+      "type": "day_tour",
+      "tourProductId": "tour_luxor_to_aswan_esna_edfu_kom_omb_mq41ke7h",
+      "route": "Luxor to Aswan \u2014 Esna, Edfu & Kom Ombo Temple Road",
+      "date": "2026-11-06",
+      "time": "07:00",
+      "city": "Luxor",
+      "guide": "Licensed Egyptologist",
+      "vehicle": "Air-conditioned car/van",
+      "minSeats": 4,
+      "maxSeats": 12,
+      "baseCost": 0,
+      "publishedRate": 72,
+      "breakPrice": 58,
+      "quality": 4.7,
+      "cutoff": "Open until 18:00",
+      "status": "open",
+      "notes": "Travellers chase the oldest, most famous things in Egypt \u2014 the pyramids, Karnak \u2014 and so the temples strung along the road south to Aswan tend to get ",
+      "depositPercent": 10,
+      "pledges": [],
+      "livePrice": 72,
+      "confirmDeadline": "2026-10-30",
+      "confirmDeadlineDays": 7
+    },
+    {
+      "id": 1024,
+      "type": "package",
+      "tourProductId": "pkg_egypt_nile_cruise_9d",
+      "route": "Egypt in Depth \u2014 9-Day Nile Cruise & Cairo",
+      "date": "2026-11-13",
+      "time": "09:00",
+      "city": "Cairo",
+      "guide": "Licensed Egyptologist",
+      "vehicle": "Private vehicle, domestic flights & Nile cruise",
+      "minSeats": 4,
+      "maxSeats": 12,
+      "baseCost": 2100,
+      "publishedRate": 1690,
+      "breakPrice": 1390,
+      "quality": 4.9,
+      "cutoff": null,
+      "status": "open",
+      "notes": null,
+      "depositPercent": 20,
+      "pledges": [],
+      "startDate": "2026-11-13",
+      "endDate": "2026-11-21",
+      "nights": 8,
+      "cities": [
+        "Cairo",
+        "Luxor",
+        "Aswan"
+      ],
+      "livePrice": 1690,
+      "confirmDeadline": "2026-10-14",
+      "confirmDeadlineDays": 30
+    },
+    {
+      "id": 1025,
+      "type": "package",
+      "tourProductId": "pkg_egypt_nile_cruise_9d",
+      "route": "Egypt in Depth \u2014 9-Day Nile Cruise & Cairo",
+      "date": "2026-12-11",
+      "time": "09:00",
+      "city": "Cairo",
+      "guide": "Licensed Egyptologist",
+      "vehicle": "Private vehicle, domestic flights & Nile cruise",
+      "minSeats": 4,
+      "maxSeats": 12,
+      "baseCost": 2100,
+      "publishedRate": 1690,
+      "breakPrice": 1390,
+      "quality": 4.9,
+      "cutoff": null,
+      "status": "open",
+      "notes": null,
+      "depositPercent": 20,
+      "pledges": [],
+      "startDate": "2026-12-11",
+      "endDate": "2026-12-19",
+      "nights": 8,
+      "cities": [
+        "Cairo",
+        "Luxor",
+        "Aswan"
+      ],
+      "livePrice": 1690,
+      "confirmDeadline": "2026-11-11",
+      "confirmDeadlineDays": 30
+    },
+    {
+      "id": 1026,
+      "type": "package",
+      "tourProductId": "pkg_egypt_nile_cruise_9d",
+      "route": "Egypt in Depth \u2014 9-Day Nile Cruise & Cairo",
+      "date": "2027-01-15",
+      "time": "09:00",
+      "city": "Cairo",
+      "guide": "Licensed Egyptologist",
+      "vehicle": "Private vehicle, domestic flights & Nile cruise",
+      "minSeats": 4,
+      "maxSeats": 12,
+      "baseCost": 2100,
+      "publishedRate": 1690,
+      "breakPrice": 1390,
+      "quality": 4.9,
+      "cutoff": null,
+      "status": "open",
+      "notes": null,
+      "depositPercent": 20,
+      "pledges": [],
+      "startDate": "2027-01-15",
+      "endDate": "2027-01-23",
+      "nights": 8,
+      "cities": [
+        "Cairo",
+        "Luxor",
+        "Aswan"
+      ],
+      "livePrice": 1690,
+      "confirmDeadline": "2026-12-16",
+      "confirmDeadlineDays": 30
+    },
+    {
+      "id": 1027,
+      "type": "package",
+      "tourProductId": "pkg_egypt_nile_cruise_9d",
+      "route": "Egypt in Depth \u2014 9-Day Nile Cruise & Cairo",
+      "date": "2027-02-19",
+      "time": "09:00",
+      "city": "Cairo",
+      "guide": "Licensed Egyptologist",
+      "vehicle": "Private vehicle, domestic flights & Nile cruise",
+      "minSeats": 4,
+      "maxSeats": 12,
+      "baseCost": 2100,
+      "publishedRate": 1690,
+      "breakPrice": 1390,
+      "quality": 4.9,
+      "cutoff": null,
+      "status": "open",
+      "notes": null,
+      "depositPercent": 20,
+      "pledges": [],
+      "startDate": "2027-02-19",
+      "endDate": "2027-02-27",
+      "nights": 8,
+      "cities": [
+        "Cairo",
+        "Luxor",
+        "Aswan"
+      ],
+      "livePrice": 1690,
+      "confirmDeadline": "2027-01-20",
+      "confirmDeadlineDays": 30
+    },
+    {
+      "id": 1028,
+      "type": "package",
+      "tourProductId": "pkg_egypt_nile_cruise_9d",
+      "route": "Egypt in Depth \u2014 9-Day Nile Cruise & Cairo",
+      "date": "2027-03-12",
+      "time": "09:00",
+      "city": "Cairo",
+      "guide": "Licensed Egyptologist",
+      "vehicle": "Private vehicle, domestic flights & Nile cruise",
+      "minSeats": 4,
+      "maxSeats": 12,
+      "baseCost": 2100,
+      "publishedRate": 1690,
+      "breakPrice": 1390,
+      "quality": 4.9,
+      "cutoff": null,
+      "status": "open",
+      "notes": null,
+      "depositPercent": 20,
+      "pledges": [],
+      "startDate": "2027-03-12",
+      "endDate": "2027-03-20",
+      "nights": 8,
+      "cities": [
+        "Cairo",
+        "Luxor",
+        "Aswan"
+      ],
+      "livePrice": 1690,
+      "confirmDeadline": "2027-02-10",
+      "confirmDeadlineDays": 30
+    },
+    {
+      "id": 1029,
+      "type": "package",
+      "tourProductId": "pkg_egypt_nile_cruise_9d",
+      "route": "Egypt in Depth \u2014 9-Day Nile Cruise & Cairo",
+      "date": "2027-04-16",
+      "time": "09:00",
+      "city": "Cairo",
+      "guide": "Licensed Egyptologist",
+      "vehicle": "Private vehicle, domestic flights & Nile cruise",
+      "minSeats": 4,
+      "maxSeats": 12,
+      "baseCost": 2100,
+      "publishedRate": 1690,
+      "breakPrice": 1390,
+      "quality": 4.9,
+      "cutoff": null,
+      "status": "open",
+      "notes": null,
+      "depositPercent": 20,
+      "pledges": [],
+      "startDate": "2027-04-16",
+      "endDate": "2027-04-24",
+      "nights": 8,
+      "cities": [
+        "Cairo",
+        "Luxor",
+        "Aswan"
+      ],
+      "livePrice": 1690,
+      "confirmDeadline": "2027-03-17",
+      "confirmDeadlineDays": 30
+    },
+    {
+      "id": 1030,
+      "type": "package",
+      "tourProductId": "pkg_nile_majesty_luxor_5d",
+      "route": "Nile Majesty \u2014 5-Day River Cruise from Luxor",
+      "date": "2026-10-26",
+      "time": "09:00",
+      "city": "Luxor",
+      "guide": "Licensed Egyptologist",
+      "vehicle": "Five-star Nile cruiser & private transfers",
+      "minSeats": 4,
+      "maxSeats": 12,
+      "baseCost": 540,
+      "publishedRate": 750,
+      "breakPrice": 675,
+      "quality": 4.9,
+      "cutoff": null,
+      "status": "open",
+      "notes": null,
+      "depositPercent": 20,
+      "pledges": [],
+      "startDate": "2026-10-26",
+      "endDate": "2026-10-30",
+      "nights": 4,
+      "cities": [
+        "Luxor",
+        "Edfu",
+        "Kom Ombo",
+        "Aswan"
+      ],
+      "livePrice": 750,
+      "confirmDeadline": "2026-09-26",
+      "confirmDeadlineDays": 30
+    },
+    {
+      "id": 1031,
+      "type": "package",
+      "tourProductId": "pkg_nile_majesty_luxor_5d",
+      "route": "Nile Majesty \u2014 5-Day River Cruise from Luxor",
+      "date": "2026-11-23",
+      "time": "09:00",
+      "city": "Luxor",
+      "guide": "Licensed Egyptologist",
+      "vehicle": "Five-star Nile cruiser & private transfers",
+      "minSeats": 4,
+      "maxSeats": 12,
+      "baseCost": 540,
+      "publishedRate": 750,
+      "breakPrice": 675,
+      "quality": 4.9,
+      "cutoff": null,
+      "status": "open",
+      "notes": null,
+      "depositPercent": 20,
+      "pledges": [],
+      "startDate": "2026-11-23",
+      "endDate": "2026-11-27",
+      "nights": 4,
+      "cities": [
+        "Luxor",
+        "Edfu",
+        "Kom Ombo",
+        "Aswan"
+      ],
+      "livePrice": 750,
+      "confirmDeadline": "2026-10-24",
+      "confirmDeadlineDays": 30
+    },
+    {
+      "id": 1032,
+      "type": "package",
+      "tourProductId": "pkg_nile_majesty_luxor_5d",
+      "route": "Nile Majesty \u2014 5-Day River Cruise from Luxor",
+      "date": "2026-12-14",
+      "time": "09:00",
+      "city": "Luxor",
+      "guide": "Licensed Egyptologist",
+      "vehicle": "Five-star Nile cruiser & private transfers",
+      "minSeats": 4,
+      "maxSeats": 12,
+      "baseCost": 540,
+      "publishedRate": 750,
+      "breakPrice": 675,
+      "quality": 4.9,
+      "cutoff": null,
+      "status": "open",
+      "notes": null,
+      "depositPercent": 20,
+      "pledges": [],
+      "startDate": "2026-12-14",
+      "endDate": "2026-12-18",
+      "nights": 4,
+      "cities": [
+        "Luxor",
+        "Edfu",
+        "Kom Ombo",
+        "Aswan"
+      ],
+      "livePrice": 750,
+      "confirmDeadline": "2026-11-14",
+      "confirmDeadlineDays": 30
+    },
+    {
+      "id": 1033,
+      "type": "package",
+      "tourProductId": "pkg_nile_majesty_luxor_5d",
+      "route": "Nile Majesty \u2014 5-Day River Cruise from Luxor",
+      "date": "2027-01-18",
+      "time": "09:00",
+      "city": "Luxor",
+      "guide": "Licensed Egyptologist",
+      "vehicle": "Five-star Nile cruiser & private transfers",
+      "minSeats": 4,
+      "maxSeats": 12,
+      "baseCost": 540,
+      "publishedRate": 750,
+      "breakPrice": 675,
+      "quality": 4.9,
+      "cutoff": null,
+      "status": "open",
+      "notes": null,
+      "depositPercent": 20,
+      "pledges": [],
+      "startDate": "2027-01-18",
+      "endDate": "2027-01-22",
+      "nights": 4,
+      "cities": [
+        "Luxor",
+        "Edfu",
+        "Kom Ombo",
+        "Aswan"
+      ],
+      "livePrice": 750,
+      "confirmDeadline": "2026-12-19",
+      "confirmDeadlineDays": 30
+    },
+    {
+      "id": 1034,
+      "type": "package",
+      "tourProductId": "pkg_nile_majesty_luxor_5d",
+      "route": "Nile Majesty \u2014 5-Day River Cruise from Luxor",
+      "date": "2027-02-22",
+      "time": "09:00",
+      "city": "Luxor",
+      "guide": "Licensed Egyptologist",
+      "vehicle": "Five-star Nile cruiser & private transfers",
+      "minSeats": 4,
+      "maxSeats": 12,
+      "baseCost": 540,
+      "publishedRate": 750,
+      "breakPrice": 675,
+      "quality": 4.9,
+      "cutoff": null,
+      "status": "open",
+      "notes": null,
+      "depositPercent": 20,
+      "pledges": [],
+      "startDate": "2027-02-22",
+      "endDate": "2027-02-26",
+      "nights": 4,
+      "cities": [
+        "Luxor",
+        "Edfu",
+        "Kom Ombo",
+        "Aswan"
+      ],
+      "livePrice": 750,
+      "confirmDeadline": "2027-01-23",
+      "confirmDeadlineDays": 30
+    },
+    {
+      "id": 1035,
+      "type": "package",
+      "tourProductId": "pkg_nile_majesty_luxor_5d",
+      "route": "Nile Majesty \u2014 5-Day River Cruise from Luxor",
+      "date": "2027-03-22",
+      "time": "09:00",
+      "city": "Luxor",
+      "guide": "Licensed Egyptologist",
+      "vehicle": "Five-star Nile cruiser & private transfers",
+      "minSeats": 4,
+      "maxSeats": 12,
+      "baseCost": 540,
+      "publishedRate": 750,
+      "breakPrice": 675,
+      "quality": 4.9,
+      "cutoff": null,
+      "status": "open",
+      "notes": null,
+      "depositPercent": 20,
+      "pledges": [],
+      "startDate": "2027-03-22",
+      "endDate": "2027-03-26",
+      "nights": 4,
+      "cities": [
+        "Luxor",
+        "Edfu",
+        "Kom Ombo",
+        "Aswan"
+      ],
+      "livePrice": 750,
+      "confirmDeadline": "2027-02-20",
+      "confirmDeadlineDays": 30
+    },
+    {
+      "id": 1036,
+      "type": "package",
+      "tourProductId": "pkg_nile_majesty_luxor_5d",
+      "route": "Nile Majesty \u2014 5-Day River Cruise from Luxor",
+      "date": "2027-04-19",
+      "time": "09:00",
+      "city": "Luxor",
+      "guide": "Licensed Egyptologist",
+      "vehicle": "Five-star Nile cruiser & private transfers",
+      "minSeats": 4,
+      "maxSeats": 12,
+      "baseCost": 540,
+      "publishedRate": 750,
+      "breakPrice": 675,
+      "quality": 4.9,
+      "cutoff": null,
+      "status": "open",
+      "notes": null,
+      "depositPercent": 20,
+      "pledges": [],
+      "startDate": "2027-04-19",
+      "endDate": "2027-04-23",
+      "nights": 4,
+      "cities": [
+        "Luxor",
+        "Edfu",
+        "Kom Ombo",
+        "Aswan"
+      ],
+      "livePrice": 750,
+      "confirmDeadline": "2027-03-20",
+      "confirmDeadlineDays": 30
+    },
+    {
+      "id": 1040,
+      "type": "package",
+      "tourProductId": "pkg_nile_majesty_luxor_5d",
+      "route": "Nile Majesty \u2014 5-Day River Cruise from Luxor",
+      "date": "2026-10-26",
+      "time": "09:00",
+      "city": "Luxor",
+      "guide": "Licensed Egyptologist",
+      "vehicle": "Five-star Nile cruiser & private transfers",
+      "minSeats": 4,
+      "maxSeats": 12,
+      "baseCost": 540,
+      "publishedRate": 750,
+      "breakPrice": 675,
+      "quality": 4.9,
+      "cutoff": "Open until 18:00",
+      "status": "cancelled",
+      "notes": "A five-star Nile cruise from Luxor to Aswan \u2014 Karnak and Luxor Temple by night, the Valley of the Kings, Edfu, Kom Ombo, Philae and the High Dam, with full board and a licensed Egyptologist.",
+      "depositPercent": 20,
+      "pledges": [],
+      "startDate": "2026-10-26",
+      "endDate": "2026-10-30",
+      "nights": 4,
+      "cities": [
+        "Luxor",
+        "Edfu",
+        "Kom Ombo",
+        "Aswan"
+      ],
+      "livePrice": 750,
+      "confirmDeadline": "2026-09-26",
+      "confirmDeadlineDays": 30
+    }
+  ]
+}

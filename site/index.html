@@ -497,11 +497,7 @@ footer .logo .nm i{color:var(--gold)}
       </svg>
       <span class="nm"><b>Sawa</b><i>Tours · Egypt</i></span>
     </a>
-    <div class="nav-links">
-      <a href="/how-it-works">How it works</a>
-      <a href="/departures">Departures</a>
-      <a href="/destinations">Destinations</a><a href="/goahead-promise">The Promise</a>
-    </div>
+    <div class="nav-links"><a href="/itineraries">Itineraries</a><a href="/departures">Departures</a><a href="/goahead">GoAhead</a><a href="/destinations">Destinations</a><a href="/how-it-works">How it works</a><a href="/goahead-promise">The Promise</a></div>
     <div class="nav-right">
       <a href="/departures" class="btn gold sm">Find a departure
         <span class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
@@ -516,9 +512,7 @@ footer .logo .nm i{color:var(--gold)}
 <!-- mobile overlay -->
 <div class="overlay" id="overlay">
   <button class="close" id="close" aria-label="Close menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
-  <a href="/how-it-works">How it works</a>
-  <a href="/departures">Departures</a>
-  <a href="/destinations">Destinations</a><a href="/goahead-promise">The Promise</a>
+  <a href="/itineraries">Itineraries</a><a href="/departures">Departures</a><a href="/goahead">GoAhead</a><a href="/destinations">Destinations</a><a href="/how-it-works">How it works</a><a href="/goahead-promise">The Promise</a>
 </div>
 
 <main id="main">
@@ -532,7 +526,7 @@ footer .logo .nm i{color:var(--gold)}
       <h1>See Egypt the way<br>it's meant to be — <span class="ital gld">together</span>.</h1>
       <p class="lede">Sawa pools travelers from verified Egyptian operators into one shared departure. Four travelers on the same route, and the trip is locked in — we call that moment the <strong>GoAhead</strong>. Join a date that's forming, <span style="text-decoration:underline;text-decoration-color:var(--gold-deep);text-decoration-thickness:2px;text-underline-offset:5px">or pick any tour and start your own</span>.</p>
       <div class="hero-cta">
-        <a href="/tours" class="btn teal">Browse the tours
+        <a href="/itineraries" class="btn teal">Browse the tours
           <span class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
         </a>
         <a href="/departures" class="btn plain">See what's forming
@@ -780,7 +774,9 @@ footer .logo .nm i{color:var(--gold)}
       </div>
       <div class="fcol">
         <h4>Travel</h4>
+        <a href="/itineraries">All itineraries</a>
         <a href="/departures">Open departures</a>
+        <a href="/goahead">GoAhead departures</a>
         <a href="/how-it-works">How it works</a>
         <a href="/goahead-promise">The GoAhead promise</a>
         <a href="/blog">Blog</a>
@@ -879,36 +875,44 @@ footer .logo .nm i{color:var(--gold)}
          production the live API succeeds and this fallback is never used. */
       .catch(function(){return fetch('/_dev_bootstrap.json').then(function(r){return r.json();});});
   }
+  /* One entry per DEPARTURE with at least one traveller aboard — the same
+     rule as the /departures and /goahead boards. A date with zero bookings is
+     inventory and belongs on the itinerary pages, not here.
+     Mirrors isFormingDeparture/isGoAheadDeparture in server/domain.js. */
+  function seatsOf(d){
+    return (d.pledges||[]).reduce(function(s,x){
+      return x&&x.status==='cancelled'?s:s+(Number(x.seats||x.pax)||1);
+    },0);
+  }
   loadData().then(function(data){
-    var products=(data.tourProducts||[]).filter(function(p){return p.active!==false;});
-    var deps=data.departures||[];
+    var byId={};
+    (data.tourProducts||[]).forEach(function(p){if(p.active!==false)byId[p.id]=p;});
     var today=new Date();today.setHours(0,0,0,0);
-    var byProd={};
-    deps.forEach(function(d){(byProd[d.tourProductId]=byProd[d.tourProductId]||[]).push(d);});
-    var model=products.map(function(p){
-      var isPkg=p.type==='package';
-      var list=(byProd[p.id]||[]).slice().sort(function(a,b){return a.date<b.date?-1:1;});
-      /* No `|| list[0]` fallback: when every date on a tour has passed, falling
-         back to the first one printed an expired departure as the next one.
-         With no upcoming date the card reads "Multiple dates" instead. */
-      var next=list.filter(function(d){return new Date(d.date+'T00:00:00')>=today;})[0]||null;
+    var model=[];
+    (data.departures||[]).forEach(function(d){
+      var p=byId[d.tourProductId];
+      if(!p)return;
+      var start=d.startDate||d.date;
+      if(new Date(start+'T00:00:00')<today)return;
+      var joined=seatsOf(d);
+      var min=Number(d.minSeats||p.minSeats)||4;
+      var confirmed=d.status==='minimum_reached'||d.status==='supplier_confirmed'
+        ||(d.status==='open'&&joined>=min);
+      if(!confirmed&&!(d.status==='open'&&joined>=1))return;
+      var isPkg=(d.type||p.type)==='package';
       var img=(p.images&&p.images[0]&&p.images[0].url)||'';
       var alt=(p.images&&p.images[0]&&p.images[0].alt)||p.title;
-      var price=(next&&next.livePrice)||p.publishedRate||p.breakPrice||'';
-      var min=(next&&next.minSeats)||p.minSeats||4;
-      var max=(next&&next.maxSeats)||p.maxSeats||min;
-      var joined=next&&next.pledges?next.pledges.reduce(function(s,x){return s+(x.seats||x.pax||1);},0):0;
-      var confirmed=joined>=min;
+      var price=d.livePrice||p.publishedRate||p.breakPrice||'';
+      var max=Number(d.maxSeats||p.maxSeats)||min;
       var toGo=Math.max(0,min-joined);
       var pct=Math.max(12,Math.min(100,Math.round(joined/min*100)))+'%';
-      return {p:p,isPkg:isPkg,next:next,hasNext:!!next,img:img,alt:alt,price:price,min:min,max:max,
-        joined:joined,confirmed:confirmed,toGo:toGo,pct:pct,
+      model.push({p:p,isPkg:isPkg,next:d,hasNext:true,start:start,img:img,alt:alt,price:price,
+        min:min,max:max,joined:joined,confirmed:confirmed,toGo:toGo,pct:pct,
         link:'/'+(isPkg?'package':'tour')+'/'+tourSlug(p),
-        dateTxt:next?('Departs '+fmt(next.date)):'Multiple dates'};
+        dateTxt:'Departs '+fmt(start)});
     });
-    // Prefer tours that have an upcoming date; if none do, still show the catalogue.
-    var withDates=model.filter(function(m){return m.hasNext;});
-    var pool=withDates.length?withDates:model;
+    model.sort(function(a,b){return a.start<b.start?-1:a.start>b.start?1:0;});
+    var pool=model;
     if(!pool.length)return; // nothing real to show — keep the static demo cards
     var featured=pool.filter(function(m){return m.confirmed;})[0]||pool[0];
     var board=pool.filter(function(m){return m!==featured;}).slice(0,5);
@@ -942,7 +946,7 @@ footer .logo .nm i{color:var(--gold)}
     /* ---- live board (right) ---- */
     if(board.length){
       boardRows.innerHTML=board.map(function(m){
-        var rt=esc(m.p.city)+(m.p.duration?' · '+esc(m.p.duration):'')+(m.hasNext?' · '+esc(fmt(m.next.date)):'');
+        var rt=esc(m.p.city)+(m.p.duration?' · '+esc(m.p.duration):'')+' · '+esc(fmt(m.start));
         var lab=m.confirmed
           ?'<span class="lab ok"><b>'+m.joined+'</b>/'+m.min+' · confirmed</span>'
           :'<span class="lab"><b>'+m.joined+'</b>/'+m.min+' · '+(m.toGo===1?'1 to go':m.toGo+' to go')+'</span>';

@@ -201,10 +201,10 @@ test("sitemap.xml: is structurally well formed", async () => {
 });
 
 test("sitemap.xml: includes the commercially important routes", async () => {
-  // /tours is the catalogue and was absent entirely; /how-it-works and /booking
-  // have real meta and are advertised in llms.txt as core pages.
+  // The three catalogue surfaces (/itineraries, /departures, /goahead) plus
+  // the pages advertised in llms.txt as core.
   const xml = await sitemapXml();
-  for (const path of ["/tours", "/how-it-works", "/booking", "/faq", "/blog", "/contact"]) {
+  for (const path of ["/itineraries", "/departures", "/goahead", "/how-it-works", "/booking", "/faq", "/blog", "/contact"]) {
     assert.ok(xml.includes(`<loc>https://sawa.tours${path}</loc>`), `sitemap missing ${path}`);
   }
 });
@@ -223,7 +223,7 @@ test("sitemap.xml: every loc is absolute and XML-escaped", async () => {
 test("llms.txt: leads with the brand and lists the core pages", () => {
   const txt = llmsTxt();
   assert.match(txt, /^# Sawa Tours/);
-  for (const path of ["/tours", "/how-it-works", "/blog", "/contact", "/faq"]) {
+  for (const path of ["/itineraries", "/departures", "/goahead", "/how-it-works", "/blog", "/contact", "/faq"]) {
     assert.ok(txt.includes(`(${path})`), `llms.txt missing a link to ${path}`);
   }
 });

@@ -68,6 +68,7 @@ const PAGES = {
   "/faq": "faq.html",
   "/how-it-works": "how-it-works.html",
   "/departures": "departures.html",
+  "/goahead": "goahead.html",
   "/goahead-promise": "goahead-promise.html",
   "/operators": "operators.html",
   "/verify": "verify.html",

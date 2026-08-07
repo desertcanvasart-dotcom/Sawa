@@ -1070,13 +1070,15 @@ function StaffPanel({ agencyName, currentUserId }) {
 // page, a mistyped URL heading for the 404) gets a page-neutral loader.
 function showsCatalogue(p) {
   const clean = (p || "/").replace(/\/+$/, "") || "/";
-  return clean === "/" || clean === "/tours" || clean === "/packages"
+  return clean === "/" || clean === "/itineraries" || clean === "/tours" || clean === "/packages"
     || clean.startsWith("/tour/") || clean.startsWith("/package/");
 }
 
 function pageFromPath(p) {
   const clean = (p || "/").replace(/\/+$/, "") || "/";
-  if (clean === "/tours" || clean === "/packages") return "tours";
+  // /itineraries is the canonical catalogue URL; /tours and /packages are
+  // legacy aliases the server 301s, kept here so a client-side hit still lands.
+  if (clean === "/itineraries" || clean === "/tours" || clean === "/packages") return "tours";
   if (clean === "/how-it-works") return "how";
   if (clean === "/about") return "about";
   if (clean === "/contact") return "contact";
@@ -1108,7 +1110,10 @@ const SxLogoMark = () => (
 // Kept in step with the static pages' nav (site/*.html) — the detail page used to
 // drop "The Promise", so a visitor who arrived on a tour page lost the link to
 // the page that explains what they're being asked to trust.
-const SX_NAV_LINKS = [["How it works", "/how-it-works"], ["Departures", "/departures"], ["Destinations", "/destinations"], ["The Promise", "/goahead-promise"]];
+// Plain <a> on purpose: /departures, /goahead and /destinations are static
+// server pages, not SPA routes — SpaLink would client-route them into the 404.
+// Mirrors the nav on the static pages; keep the two in sync.
+const SX_NAV_LINKS = [["Itineraries", "/itineraries"], ["Departures", "/departures"], ["GoAhead", "/goahead"], ["Destinations", "/destinations"], ["How it works", "/how-it-works"], ["The Promise", "/goahead-promise"]];
 
 // The skip link the static pages all carry. It only becomes visible on focus,
 // and it targets the #main that SxChrome/TourDetailV2 put on their <main>.
@@ -1192,7 +1197,7 @@ function SxFooter() {
       <div className="wrap">
         <div className="fgrid">
           <div><a className="logo" href="/"><SxLogoMark /><span className="nm"><b>Sawa</b><i>Tours · Egypt</i></span></a><p className="fblurb">Shared departures, confirmed together. Sawa pools travellers across verified Egyptian operators so the tours you want actually run.</p></div>
-          <div className="fcol"><h4>Travel</h4><a href="/departures">Open departures</a><a href="/how-it-works">How it works</a><a href="/trust">The GoAhead promise</a><a href="/faq">FAQ</a></div>
+          <div className="fcol"><h4>Travel</h4><a href="/itineraries">All itineraries</a><a href="/departures">Open departures</a><a href="/goahead">GoAhead departures</a><a href="/how-it-works">How it works</a><a href="/trust">The GoAhead promise</a><a href="/faq">FAQ</a></div>
           <div className="fcol"><h4>Operators</h4><a href="/operators">List a tour</a><a href="/verify">Become verified</a><a href="/widget">Get the widget</a></div>
           <div className="fcol"><h4>Company</h4><a href="/about">About Sawa</a><a href="/contact">Support</a><a href="/contact">Contact</a></div>
         </div>
@@ -1393,7 +1398,7 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
     }
   }
 
-  const navLinks = [["How it works", "/how-it-works"], ["All departures", "/tours"], ["FAQ", "/faq"], ["Contact", "/contact"]];
+  const navLinks = [["How it works", "/how-it-works"], ["Itineraries", "/itineraries"], ["FAQ", "/faq"], ["Contact", "/contact"]];
 
   return (
     <div className="sx" ref={rootRef}>
@@ -1406,7 +1411,7 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
             {/* Breadcrumbs are the one navigation aid a crawler reads to
                 understand hierarchy, and the JSON-LD in seo.js already claims
                 this trail exists — so they have to be real links. */}
-            <div className="row"><SpaLink navigate={navigate} to="/">Egypt</SpaLink><span className="sep">/</span><SpaLink navigate={navigate} to="/tours">Tours</SpaLink><span className="sep">/</span><b>{tour.title}</b></div>
+            <div className="row"><SpaLink navigate={navigate} to="/">Egypt</SpaLink><span className="sep">/</span><SpaLink navigate={navigate} to="/itineraries">Itineraries</SpaLink><span className="sep">/</span><b>{tour.title}</b></div>
           </nav>
 
           <header className="thead">
@@ -1918,7 +1923,7 @@ function PublicSite({
                 className="hero-search-bar"
                 onSubmit={(event) => {
                   event.preventDefault();
-                  navigate("/tours");
+                  navigate("/itineraries");
                 }}
               >
                 <div className="hsb-field">
@@ -2312,7 +2317,7 @@ function useEmbedAutoResize(dep) {
 function BrandEmbed() {
   useEmbedAutoResize(null);
   return (
-    <a className="embed-banner" href={withEmbedRef(`${SITE_URL}/tours`)} target="_blank" rel="noopener noreferrer">
+    <a className="embed-banner" href={withEmbedRef(`${SITE_URL}/itineraries`)} target="_blank" rel="noopener noreferrer">
       <div className="embed-banner-content">
         <span className="embed-eyebrow"><SawaMark size={20} />Sawa Tours</span>
         <strong className="embed-banner-title">Egypt tours that actually run.</strong>
@@ -2440,9 +2445,9 @@ function ToursPage({ navigate, customerCalendars, cityStats, selectedCity, setSe
   return (
     <div className="page-wrap">
       <PageHead
-        eyebrow="Browse"
-        title="Find a departure that's going — or start your own."
-        lead="Every tour shows live seats and whether the date is confirmed to run. Hold a seat for free — you only pay once it's GoAhead. Don't see your day? Start it on any tour's page."
+        eyebrow="Itineraries"
+        title="Every Sawa itinerary, on one page."
+        lead="The full catalogue of shared day tours and multi-day packages. Open any itinerary to join a forming date or start your own — you only pay once a date reaches GoAhead. Dates already filling live on the departures board."
       />
 
       <div className="tours-toolbar reveal in">
@@ -2807,7 +2812,7 @@ function NotFoundPage({ navigate }) {
             page where a visitor is most likely to want a new tab or to check
             where a control leads before following it. */}
         <div className="page-404-actions">
-          <SpaLink navigate={navigate} to="/tours" className="btn-pill primary">Browse tours <ArrowRight size={16} /></SpaLink>
+          <SpaLink navigate={navigate} to="/itineraries" className="btn-pill primary">Browse itineraries <ArrowRight size={16} /></SpaLink>
           <SpaLink navigate={navigate} to="/" className="btn-pill">Back home</SpaLink>
         </div>
       </div>
@@ -2822,7 +2827,7 @@ function PageCTA({ navigate, note }) {
       {note && <p className="page-cta-note"><span className="live-dot" aria-hidden="true" />{note}</p>}
       <h2>Ready when your group is.</h2>
       <p>Hold a seat for free and watch it turn GoAhead.</p>
-      <button className="btn-pill primary lg" onClick={() => navigate("/tours")}>Browse tours <ArrowRight size={18} /></button>
+      <button className="btn-pill primary lg" onClick={() => navigate("/itineraries")}>Browse itineraries <ArrowRight size={18} /></button>
     </section>
   );
 }

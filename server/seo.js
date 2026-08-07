@@ -41,7 +41,7 @@ const STATIC = {
     title: `${BRAND.name} — ${BRAND.positioning}`,
     description: "Shared day tours and multi-day packages across Cairo, Luxor and Aswan. Hold a seat free; you only pay once your date is confirmed to run.",
   },
-  "/tours": { title: `Egypt Tours & Departures | ${BRAND.name}`, description: "Browse shared Egypt day tours and multi-day packages with live seat counts. Join a forming date or start your own — every date is confirmed before you pay.", crumb: "Tours" },
+  "/itineraries": { title: `Egypt Tour Itineraries — Day Tours & Packages | ${BRAND.name}`, description: "Browse every Sawa itinerary: shared Egypt day tours and multi-day packages. Open one to join a forming date or start your own — every date is confirmed before you pay.", crumb: "Itineraries" },
   "/how-it-works": { title: `How Sawa Works — Guaranteed Shared Tours | ${BRAND.name}`, description: "How Sawa's GoAhead model works: join a forming date or start your own, the group fills, and your departure is guaranteed before you pay a deposit.", crumb: "How it works" },
   "/about": { title: `About Sawa Tours — Shared Departures in Egypt | ${BRAND.name}`, description: BRAND.description, crumb: "About" },
   "/contact": { title: `Contact ${BRAND.name}`, description: "Reach Sawa Tours on WhatsApp or email. We reply within two hours, 9am–9pm Cairo time.", crumb: "Contact" },
@@ -145,7 +145,7 @@ export async function buildHead(pathname) {
     // Tours and packages both live in tour_products, so the same schema builder
     // covers both. (Packages were previously falling through to "Page not found".)
     const res = await tourSchema(decodeURIComponent(path.split("/")[2]), url);
-    if (res) { m = { ...m, ...res.meta }; graph.push(res.schema); crumbs.push({ name: "Tours", url: `${BRAND.url}/tours` }, { name: res.crumbName, url }); }
+    if (res) { m = { ...m, ...res.meta }; graph.push(res.schema); crumbs.push({ name: "Itineraries", url: `${BRAND.url}/itineraries` }, { name: res.crumbName, url }); }
     else m = { ...m, noindex: true, notFound: true, title: `Tour not found | ${BRAND.name}` };
   } else if (/^\/blog\/[^/]+$/.test(path)) {
     const res = await postSchema(decodeURIComponent(path.split("/")[2]), url);
@@ -156,8 +156,10 @@ export async function buildHead(pathname) {
     m = { ...m, noindex: true, title: `Sign in | ${BRAND.name}`, description: "Sign in to your Sawa dashboard." };
   } else if (/^\/embed(\/|$)/.test(path)) {
     m = { ...m, noindex: true, title: `Shared departures | ${BRAND.name}` };
-  } else if (path === "/packages") {
-    m = { ...m, ...STATIC["/tours"] };
+  } else if (path === "/packages" || path === "/tours") {
+    // Legacy catalogue URLs. app.js 301s them to /itineraries; this fallback
+    // only matters if a request slips past the redirect (e.g. in tests).
+    m = { ...m, ...STATIC["/itineraries"] };
   } else {
     m = { ...m, noindex: true, notFound: true, title: `Page not found | ${BRAND.name}` };
   }
@@ -284,11 +286,11 @@ export async function sitemapXml() {
   const urls = [];
   const add = (loc, lastmod, freq) => urls.push({ loc: BRAND.url + loc, lastmod, freq });
   add("/", null, "weekly");
-  // /tours is the main catalogue and was missing entirely, as were
-  // /how-it-works and /booking — all three have real meta in STATIC above and
-  // are listed as core pages in llms.txt, so leaving them out of the sitemap
-  // was an oversight rather than a choice.
-  add("/tours", null, "daily");
+  // The three catalogue surfaces: every itinerary, the forming board, and the
+  // confirmed (GoAhead) board. The boards change with every booking, so they
+  // get the "daily" hint.
+  add("/itineraries", null, "daily");
+  add("/goahead", null, "daily");
   ["/how-it-works", "/departures", "/goahead-promise", "/operators", "/verify", "/widget",
    "/about", "/contact", "/faq", "/blog", "/booking", "/privacy", "/terms",
    // The destination pages are real, linked from the primary nav, and now carry
@@ -430,14 +432,17 @@ export async function buildBody(pathname) {
 <ul>${r.rows.map((p) => `<li><a href="/blog/${encodeURIComponent(p.slug)}">${esc(p.title)}</a>${p.excerpt ? ` — ${esc(p.excerpt)}` : ""} (${esc(dateLabel(p.published_at))})</li>`).join("")}</ul>`);
   }
 
-  if (path === "/tours") {
+  if (path === "/itineraries") {
     const r = await pool.query("SELECT * FROM tour_products WHERE active IS NOT FALSE AND status='approved' ORDER BY id");
-    const deps = await upcomingDepartures(null);
+    // Only dates a traveller is already on count as "forming" — a published
+    // date with zero bookings is inventory, not a departure (isFormingDeparture
+    // in domain.js is the same rule).
+    const deps = (await upcomingDepartures(null)).filter((d) => d.seats >= 1);
     const byProduct = new Map();
     deps.forEach((d) => byProduct.set(d.productId, (byProduct.get(d.productId) || 0) + 1));
     return wrapBody(`
-<h1>Egypt tours &amp; shared departures</h1>
-<p>Shared day tours and multi-day packages run by Ministry-licensed Egyptian operators. Join a forming date — or start your own on any tour's page. Every date is confirmed (GoAhead) at its minimum travellers; you only pay once it confirms.</p>
+<h1>Egypt tour itineraries — shared day tours &amp; packages</h1>
+<p>Every itinerary Sawa runs, operated by Ministry-licensed Egyptian operators. Open one to join a forming date or start your own. Every date is confirmed (GoAhead) at its minimum travellers; you only pay once it confirms. Dates already filling are on <a href="/departures">the departures board</a>; confirmed trips are on <a href="/goahead">the GoAhead board</a>.</p>
 <ul>${r.rows.map((p) => {
       const from = money(p.break_price) || money(p.published_rate);
       const n = byProduct.get(p.id) || 0;
@@ -456,7 +461,9 @@ ${BRAND.description}
 
 ## Core pages
 
-- [Tours & departures](/tours): browse all shared day tours and multi-day packages with live seat counts.
+- [Itineraries](/itineraries): browse every shared day tour and multi-day package we run.
+- [Departures](/departures): dates currently forming — each already has travellers aboard and shows live seat counts.
+- [GoAhead departures](/goahead): dates confirmed to run (four or more travellers) that can still be joined.
 - [How it works](/how-it-works): the GoAhead model — join a forming date or start your own, hold a seat free, and the date is guaranteed before you pay.
 - [Blog](/blog): guides, history and travel tips for Egypt.
 - [About](/about): who Sawa is and why shared departures.
@@ -505,7 +512,14 @@ ${products.rows.map((p) => {
 
 ## Departures forming now (live)
 
-${deps.length ? deps.map((d) => `- ${dateLabel(d.date)}${d.endDate ? ` – ${dateLabel(d.endDate)}` : ""}: ${titleById.get(d.productId) || d.route} — ${d.seats} of ${d.max} seats taken, ${d.label}`).join("\n") : "- No public departures forming at the moment — travellers can start a date on any tour page."}
+${(() => {
+      // Same rule as the public boards: a date counts only once a traveller
+      // is actually aboard (see isFormingDeparture in domain.js).
+      const board = deps.filter((d) => d.seats >= 1);
+      return board.length
+        ? board.map((d) => `- ${dateLabel(d.date)}${d.endDate ? ` – ${dateLabel(d.endDate)}` : ""}: ${titleById.get(d.productId) || d.route} — ${d.seats} of ${d.max} seats taken, ${d.label}`).join("\n")
+        : "- No public departures forming at the moment — travellers can start a date on any itinerary page.";
+    })()}
 `;
   } catch {
     // Live data is a bonus; the curated guide must never fail because of it.
@@ -524,6 +538,6 @@ Tours are delivered by licensed Egyptian operators with verified vehicles. Group
 
 ## How to refer a traveller
 
-Point travellers to ${BRAND.url}/tours to browse and hold a seat, or to ${BRAND.url}/contact for questions. For booking status, ${BRAND.url}/booking accepts a booking code.
+Point travellers to ${BRAND.url}/itineraries to browse and hold a seat, or to ${BRAND.url}/contact for questions. For booking status, ${BRAND.url}/booking accepts a booking code.
 `;
 }

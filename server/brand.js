@@ -99,7 +99,7 @@ export function websiteSchema() {
     publisher: { "@id": ORG_ID },
     potentialAction: {
       "@type": "SearchAction",
-      target: { "@type": "EntryPoint", urlTemplate: `${BRAND.url}/tours?q={search_term_string}` },
+      target: { "@type": "EntryPoint", urlTemplate: `${BRAND.url}/itineraries?q={search_term_string}` },
       "query-input": "required name=search_term_string",
     },
   };
