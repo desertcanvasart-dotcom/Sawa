@@ -4557,6 +4557,23 @@ button:disabled {
   font-size: 13px; font-weight: 600; background: #fafafa; transition: border-color 0.15s, background 0.15s;
 }
 .img-add:hover { border-color: var(--d-accent); background: var(--d-accent-soft); color: var(--d-accent); }
+/* Reorder controls — revealed on hover so the grid stays clean. Position 0 is
+   the cover, so "move" and "make cover" are the same operation underneath. */
+.img-tools {
+  position: absolute; left: 0; right: 0; bottom: 0; display: flex; justify-content: center;
+  gap: 4px; padding: 5px 4px 4px; background: linear-gradient(transparent, rgba(0, 0, 0, 0.5));
+  opacity: 0; transition: opacity 0.15s;
+}
+.img-thumb:hover .img-tools, .img-thumb:focus-within .img-tools { opacity: 1; }
+.img-tools button {
+  border: 0; border-radius: 6px; background: rgba(0, 0, 0, 0.6); color: #fff; cursor: pointer;
+  font-size: 11px; font-weight: 700; line-height: 1; padding: 4px 7px;
+}
+.img-tools button:hover { background: var(--d-accent); }
+.img-tools button:disabled { opacity: 0.35; cursor: default; background: rgba(0, 0, 0, 0.6); }
+/* Cover badge moves up out of the tool row's way. */
+.img-thumb .img-cover { bottom: auto; top: 5px; }
+.field-hint { display: block; font-size: 12px; font-style: normal; color: var(--d-ink-soft); margin: -2px 0 6px; }
 
 /* Row lists (inclusions etc.) */
 .rowlist { display: grid; gap: 8px; }
