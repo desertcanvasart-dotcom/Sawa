@@ -244,8 +244,10 @@
       if(isForming(d,p))formingCount++;
       if(!isGoAhead(d,p))return;
       var isPkg=(d.type||p.type)==='package';
-      var img=(p.images&&p.images[0]&&p.images[0].url)||'';
-      var alt=(p.images&&p.images[0]&&p.images[0].alt)||p.title;
+      /* No-photo listings fall back to the site hero rather than a broken img. */
+      var hasPhoto=!!(p.images&&p.images[0]&&p.images[0].url);
+      var img=hasPhoto?p.images[0].url:'/images/hero-pyramids.jpg';
+      var alt=(hasPhoto&&p.images[0].alt)||p.title;
       var price=d.livePrice||p.publishedRate||p.breakPrice||'';
       var joined=seatsOf(d);
       var max=Number(d.maxSeats||p.maxSeats)||12;
