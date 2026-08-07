@@ -9,8 +9,8 @@
     },
     {
       "name": "site",
-      "runtimeExecutable": "python3",
-      "runtimeArgs": ["-m", "http.server", "4173", "--directory", "site"],
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["scripts/dev-site.js"],
       "port": 4173
     }
   ]
