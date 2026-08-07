@@ -292,7 +292,7 @@ export async function sitemapXml() {
   add("/itineraries", null, "daily");
   add("/goahead", null, "daily");
   ["/how-it-works", "/departures", "/goahead-promise", "/operators", "/verify", "/widget",
-   "/about", "/contact", "/faq", "/blog", "/booking", "/privacy", "/terms",
+   "/about", "/contact", "/faq", "/blog", "/booking", "/privacy", "/cookies", "/terms",
    // The destination pages are real, linked from the primary nav, and now carry
    // canonicals — but were absent from the sitemap entirely.
    "/destinations", "/destinations/cairo", "/destinations/luxor", "/destinations/aswan",

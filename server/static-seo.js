@@ -116,6 +116,7 @@ const CRUMB = {
   "/contact": "Contact",
   "/faq": "FAQ",
   "/privacy": "Privacy",
+  "/cookies": "Cookies",
   "/terms": "Terms",
   "/destinations": "Destinations",
   "/destinations/cairo": "Cairo & Giza",
