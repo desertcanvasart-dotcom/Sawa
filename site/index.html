@@ -899,13 +899,18 @@ footer .logo .nm i{color:var(--gold)}
       var confirmed=d.status==='minimum_reached'||d.status==='supplier_confirmed'
         ||(d.status==='open'&&joined>=min);
       var isPkg=(d.type||p.type)==='package';
-      var img=(p.images&&p.images[0]&&p.images[0].url)||'';
-      var alt=(p.images&&p.images[0]&&p.images[0].alt)||p.title;
+      /* A listing with no photos yet must not render a broken <img> with its
+         alt text bleeding under the badge — fall back to the site's own hero
+         shot until the tour gets a gallery. hasPhoto keeps the featured slot
+         preferring tours with real photography. */
+      var hasPhoto=!!(p.images&&p.images[0]&&p.images[0].url);
+      var img=hasPhoto?p.images[0].url:'/images/hero-pyramids.jpg';
+      var alt=(hasPhoto&&p.images[0].alt)||p.title;
       var price=d.livePrice||p.publishedRate||p.breakPrice||'';
       var max=Number(d.maxSeats||p.maxSeats)||min;
       var toGo=Math.max(0,min-joined);
       var pct=Math.max(12,Math.min(100,Math.round(joined/min*100)))+'%';
-      var m={p:p,isPkg:isPkg,next:d,hasNext:true,start:start,img:img,alt:alt,price:price,
+      var m={p:p,isPkg:isPkg,next:d,hasNext:true,start:start,img:img,alt:alt,price:price,hasPhoto:hasPhoto,
         min:min,max:max,joined:joined,confirmed:confirmed,toGo:toGo,pct:pct,
         link:'/'+(isPkg?'package':'tour')+'/'+tourSlug(p),
         dateTxt:'Departs '+fmt(start)};
@@ -929,7 +934,12 @@ footer .logo .nm i{color:var(--gold)}
       var bt=document.querySelector('.board-top .bt');
       if(bt)bt.innerHTML='<span class="live"></span>Ready to start';
     }
-    var featured=pool.filter(function(m){return m.confirmed;})[0]||pool[0];
+    /* The featured slot is the biggest photo on the page — prefer a confirmed
+       date, then real photography over the fallback shot. */
+    var featured=pool.filter(function(m){return m.confirmed&&m.hasPhoto;})[0]
+      ||pool.filter(function(m){return m.confirmed;})[0]
+      ||pool.filter(function(m){return m.hasPhoto;})[0]
+      ||pool[0];
     var board=pool.filter(function(m){return m!==featured;}).slice(0,5);
 
     /* ---- featured card (left) ---- */
@@ -951,7 +961,7 @@ footer .logo .nm i{color:var(--gold)}
       +fBadge
       +(f.price!==''?'<span class="price"><b class="tnum">$'+f.price+'</b><small>USD &middot; per person</small></span>':'')
       +'</div><div class="body">'
-      +'<span class="rt">Featured · '+esc(f.p.city)+(f.p.duration?' · '+esc(f.p.duration):'')+'</span>'
+      +'<span class="rt">Featured · '+esc(f.p.city)+(f.p.duration?' · '+esc(f.p.duration):'')+' · '+esc(fmt(f.start))+'</span>'
       +'<h3>'+esc(f.p.title)+'</h3>'
       +'<p class="desc">'+esc((f.p.description||'').slice(0,150))+'</p>'
       +'<div class="info"><span>'+CAL+esc(f.dateTxt)+'</span><span>'+USR+esc(f.p.guide||'Verified operator')+'</span></div>'
