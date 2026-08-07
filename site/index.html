@@ -925,7 +925,15 @@ footer .logo .nm i{color:var(--gold)}
        homepage's job at zero bookings is to sell the FIRST seat. */
     var starterMode=!withTravelers.length;
     var pool=starterMode?starters:withTravelers;
-    if(!pool.length)return; // nothing at all — keep the static demo cards
+    if(!pool.length){
+      /* No dates in the system at all — a fresh catalogue under the
+         first-booking rule. Demo cards would be fiction and an empty featured
+         card is a hole, so the section bows out; the itineraries page is the
+         whole story until the first booking lands. */
+      var sec=document.getElementById('departures');
+      if(sec)sec.style.display='none';
+      return;
+    }
     if(starterMode){
       var eb=document.querySelector('#departures .head .eyebrow');
       if(eb)eb.innerHTML='<span class="live"></span>Start a departure';
