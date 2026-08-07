@@ -1,1 +1,631 @@
-{"tourProducts":[{"id":"tour_cairo_pyramids","type":"day_tour","title":"Giza Pyramids and Sphinx","city":"Cairo","duration":"4 hours","defaultTime":"08:30","guide":"Licensed Egyptologist","vehicle":"Van, 10 seats","minSeats":4,"maxSeats":10,"baseCost":230,"publishedRate":75,"quality":4.8,"description":"A high-demand Cairo classic for travelers who want a safe shared visit to the Pyramids and Sphinx.","included":["Shared air-conditioned vehicle","Licensed Egyptologist guide","Hotel pickup from central Cairo or Giza"],"notIncluded":["Entrance tickets","Lunch and drinks","Personal expenses"],"breakPrice":58,"depositPercent":10},{"id":"tour_luxor_east_bank","type":"day_tour","title":"Luxor East Bank temples","city":"Luxor","duration":"5 hours","defaultTime":"07:00","guide":"Senior guide","vehicle":"Minibus, 14 seats","minSeats":5,"maxSeats":14,"baseCost":520,"publishedRate":115,"quality":4.9,"description":"A popular shared Luxor program covering Karnak and Luxor Temple with one guide and shared vehicle.","included":["Shared air-conditioned vehicle","Senior guide","Hotel pickup in Luxor"],"notIncluded":["Entrance tickets","Lunch","Optional tipping"],"breakPrice":88,"depositPercent":10},{"id":"tour_cairo_museum","type":"day_tour","title":"Egyptian Museum and Khan el-Khalili","city":"Cairo","duration":"5 hours","defaultTime":"10:00","guide":"Licensed Egyptologist","vehicle":"Van, 10 seats","minSeats":4,"maxSeats":10,"baseCost":150,"publishedRate":58,"quality":4.7,"description":"A city culture day combining museum highlights, old Cairo atmosphere, and shared transport.","included":["Shared transport","Licensed guide","Museum and bazaar visit plan"],"notIncluded":["Entrance tickets","Meals","Shopping expenses"],"breakPrice":45,"depositPercent":10},{"id":"tour_luxor_west_bank","type":"day_tour","title":"Luxor West Bank highlights","city":"Luxor","duration":"6 hours","defaultTime":"08:00","guide":"Licensed Egyptologist","vehicle":"Van, 10 seats","minSeats":4,"maxSeats":10,"baseCost":310,"publishedRate":85,"quality":4.8,"description":"Valley of the Kings, Hatshepsut Temple, and Colossi in one shared guided program.","included":["Shared van","Licensed Egyptologist guide","Pickup from Luxor hotels"],"notIncluded":["Entrance tickets","Lunch","Optional tomb tickets"],"breakPrice":65,"depositPercent":10},{"id":"tour_aswan_philae","type":"day_tour","title":"Aswan Philae and High Dam","city":"Aswan","duration":"5 hours","defaultTime":"09:00","guide":"Licensed Egyptologist","vehicle":"Van, 10 seats","minSeats":4,"maxSeats":10,"baseCost":290,"publishedRate":78,"quality":4.7,"description":"A popular shared Aswan date for Philae Temple, the High Dam, and hotel pickup.","included":["Shared air-conditioned vehicle","Licensed guide","Hotel pickup in Aswan"],"notIncluded":["Boat ticket to Philae","Entrance tickets","Meals and drinks"],"breakPrice":60,"depositPercent":10},{"id":"pkg_cairo_luxor_4d","type":"package","title":"Cairo and Luxor 4-day discovery","city":"Cairo","cities":["Cairo","Luxor"],"nights":3,"duration":"4 days · 3 nights","defaultTime":"08:00","guide":"Licensed Egyptologist","vehicle":"Private van + domestic flight","minSeats":4,"maxSeats":12,"baseCost":780,"publishedRate":540,"breakPrice":460,"quality":4.8,"depositPercent":20,"description":"Cairo highlights and Luxor temples in four days with a domestic flight and shared guided program.","included":["3 nights hotel with breakfast","Domestic flight Cairo → Luxor","Licensed Egyptologist guide at all sites","All ground transport and airport transfers"],"notIncluded":["International flights","Entrance tickets","Lunches and dinners","Visa and travel insurance"],"itinerary":[{"day":1,"city":"Cairo","title":"Arrival and Old Cairo","description":"Airport pickup, hotel check-in, evening walk in Khan el-Khalili.","meals":"—"},{"day":2,"city":"Cairo","title":"Pyramids and Egyptian Museum","description":"Giza Plateau in the morning, Egyptian Museum after lunch.","meals":"Breakfast"},{"day":3,"city":"Luxor","title":"Fly to Luxor, East Bank","description":"Morning flight to Luxor, Karnak and Luxor Temple in the afternoon.","meals":"Breakfast"},{"day":4,"city":"Luxor","title":"West Bank and departure","description":"Valley of the Kings and Hatshepsut, then evening flight back to Cairo.","meals":"Breakfast"}],"accommodationTiers":[{"id":"standard","name":"Standard (3★)","perPersonSupplement":0,"singleSupplement":90},{"id":"superior","name":"Superior (4★)","perPersonSupplement":120,"singleSupplement":160},{"id":"luxury","name":"Luxury (5★)","perPersonSupplement":280,"singleSupplement":320}]},{"id":"pkg_classic_egypt_8d","type":"package","title":"Classic Egypt 8-day with Nile cruise","city":"Cairo","cities":["Cairo","Aswan","Luxor"],"nights":7,"duration":"8 days · 7 nights","defaultTime":"09:00","guide":"Licensed Egyptologist","vehicle":"Private van + flights + Nile cruise","minSeats":6,"maxSeats":16,"baseCost":1980,"publishedRate":1390,"breakPrice":1150,"quality":4.9,"depositPercent":20,"description":"Cairo, a 4-night Nile cruise from Aswan to Luxor, and the iconic temples in one shared program.","included":["3 nights Cairo hotel with breakfast","4 nights Nile cruise (full board)","Domestic flights Cairo → Aswan and Luxor → Cairo","Licensed Egyptologist guide throughout","All sightseeing transfers and entrance support"],"notIncluded":["International flights","Entrance tickets at sites","Drinks on the cruise","Visa and travel insurance","Optional Abu Simbel excursion"],"itinerary":[{"day":1,"city":"Cairo","title":"Arrival","description":"Airport pickup and hotel check-in.","meals":"—"},{"day":2,"city":"Cairo","title":"Pyramids and Sphinx","description":"Full-day Giza Plateau visit.","meals":"Breakfast"},{"day":3,"city":"Cairo","title":"Egyptian Museum and Old Cairo","description":"Museum highlights, Coptic Cairo walk.","meals":"Breakfast"},{"day":4,"city":"Aswan","title":"Fly to Aswan, board cruise","description":"Morning flight, Philae Temple, board the cruise.","meals":"Breakfast, Lunch, Dinner"},{"day":5,"city":"Aswan → Kom Ombo","title":"Sail to Kom Ombo","description":"Sailing day with Kom Ombo Temple in the afternoon.","meals":"Full board"},{"day":6,"city":"Edfu → Esna","title":"Edfu Temple","description":"Edfu Temple morning, sail through Esna Lock.","meals":"Full board"},{"day":7,"city":"Luxor","title":"Luxor East and West Bank","description":"Karnak, Luxor Temple, Valley of the Kings, Hatshepsut.","meals":"Full board"},{"day":8,"city":"Cairo","title":"Fly back and departure","description":"Morning flight to Cairo and onward connections.","meals":"Breakfast"}],"accommodationTiers":[{"id":"standard","name":"Standard (3★ hotel / 4★ cruise)","perPersonSupplement":0,"singleSupplement":280},{"id":"superior","name":"Superior (4★ hotel / 5★ cruise)","perPersonSupplement":320,"singleSupplement":420},{"id":"luxury","name":"Luxury (5★ hotel / 5★ Deluxe cruise)","perPersonSupplement":740,"singleSupplement":820}]}],"departures":[{"id":104,"type":"day_tour","tourProductId":"tour_luxor_west_bank","route":"Luxor West Bank highlights","date":"2026-05-25","time":"08:00","city":"Luxor","guide":"Licensed Egyptologist","vehicle":"Van, 10 seats","minSeats":4,"maxSeats":10,"baseCost":310,"publishedRate":85,"quality":4.8,"cutoff":"May 24, 18:00","status":"open","notes":"Valley of the Kings, Hatshepsut Temple, and Colossi in one shared guided program.","pledges":[{"id":"pl_104_1","agencyId":"ag_3","agency":"LuxWay Tours","seats":2,"customers":"Rita + 1","createdAt":"2026-05-19T13:00:00.000Z"}],"breakPrice":65,"depositPercent":10},{"id":105,"type":"day_tour","tourProductId":"tour_aswan_philae","route":"Aswan Philae and High Dam","date":"2026-05-26","time":"09:00","city":"Aswan","guide":"Licensed Egyptologist","vehicle":"Van, 10 seats","minSeats":4,"maxSeats":10,"baseCost":290,"publishedRate":78,"quality":4.7,"cutoff":"May 25, 18:00","status":"minimum_reached","notes":"A popular shared Aswan date for Philae Temple, the High Dam, and hotel pickup.","pledges":[{"id":"pl_105_1","agencyId":"ag_5","agency":"Lotus Day Trips","seats":4,"customers":"Family booking","createdAt":"2026-05-19T14:00:00.000Z"},{"id":"pl_105_1779980705007","agencyId":"direct_customer","agency":"Direct traveler","seats":1,"customers":"Karim T.","source":"public","bookingCode":"SAWA-SEED01","pricePerPerson":75,"bookingTotal":75,"depositDue":8,"balanceDue":67,"depositPercent":10,"balanceDueDate":"2026-05-25","createdAt":"2026-05-28T15:05:05.008Z"},{"id":"pl_105_1780000153785","agencyId":"direct_customer","agency":"Direct traveler","seats":1,"customers":"Test booking","source":"public","bookingCode":"SAWA-SEED02","pricePerPerson":72,"bookingTotal":72,"depositDue":8,"balanceDue":64,"depositPercent":10,"balanceDueDate":"2026-05-25","createdAt":"2026-05-28T20:29:13.785Z"}],"breakPrice":60,"depositPercent":10},{"id":101,"type":"day_tour","tourProductId":"tour_cairo_pyramids","route":"Giza Pyramids and Sphinx","date":"2026-05-22","time":"08:30","city":"Cairo","guide":"Licensed Egyptologist","vehicle":"Van, 10 seats","minSeats":4,"maxSeats":10,"baseCost":230,"publishedRate":75,"quality":4.8,"cutoff":"Today 20:00","status":"open","notes":"Shared pickup from central Cairo and Giza hotels.","pledges":[{"id":"pl_101_1","agencyId":"ag_1","agency":"Nile Gate Travel","seats":2,"customers":"Maya R. + 1","createdAt":"2026-05-19T09:00:00.000Z"},{"id":"pl_101_2","agencyId":"ag_2","agency":"Cairo Discovery","seats":1,"customers":"Sami K.","createdAt":"2026-05-19T10:15:00.000Z"}],"breakPrice":58,"depositPercent":10},{"id":102,"type":"day_tour","tourProductId":"tour_luxor_east_bank","route":"Luxor East Bank temples","date":"2026-05-23","time":"07:00","city":"Luxor","guide":"Senior guide","vehicle":"Minibus, 14 seats","minSeats":5,"maxSeats":14,"baseCost":520,"publishedRate":115,"quality":4.9,"cutoff":"Tomorrow 18:00","status":"open","notes":"Karnak and Luxor Temple with one shared guide, shared vehicle cost, and agency-branded vouchers.","pledges":[{"id":"pl_102_1","agencyId":"ag_3","agency":"LuxWay Tours","seats":2,"customers":"Chen party","createdAt":"2026-05-19T11:00:00.000Z"},{"id":"pl_102_2","agencyId":"ag_4","agency":"Heritage Desk","seats":2,"customers":"Olivia + Noah","createdAt":"2026-05-19T11:30:00.000Z"}],"breakPrice":88,"depositPercent":10},{"id":103,"type":"day_tour","tourProductId":"tour_cairo_museum","route":"Egyptian Museum and Khan el-Khalili","date":"2026-05-24","time":"10:00","city":"Cairo","guide":"Licensed Egyptologist","vehicle":"Van, 10 seats","minSeats":4,"maxSeats":10,"baseCost":150,"publishedRate":58,"quality":4.7,"cutoff":"May 23, 16:00","status":"open","notes":"Good fit for families, museum highlights, bazaar time, and verified transport.","pledges":[{"id":"pl_103_1","agencyId":"ag_5","agency":"Lotus Day Trips","seats":1,"customers":"Ana M.","createdAt":"2026-05-19T12:05:00.000Z"}],"breakPrice":45,"depositPercent":10},{"id":201,"type":"package","tourProductId":"pkg_cairo_luxor_4d","route":"Cairo and Luxor 4-day discovery","startDate":"2026-06-10","endDate":"2026-06-13","date":"2026-06-10","time":"08:00","city":"Cairo","cities":["Cairo","Luxor"],"nights":3,"guide":"Licensed Egyptologist","vehicle":"Private van + domestic flight","minSeats":4,"maxSeats":12,"baseCost":780,"publishedRate":540,"breakPrice":460,"quality":4.8,"cutoff":"June 5, 18:00","status":"open","notes":"Cairo highlights and Luxor temples in four days with a domestic flight and shared guided program.","pledges":[{"id":"pl_201_1","agencyId":"ag_1","agency":"Nile Gate Travel","seats":2,"customers":"Patel family","roomingType":"double","accommodationTier":"superior","createdAt":"2026-05-20T09:00:00.000Z"}],"depositPercent":20},{"id":202,"type":"package","tourProductId":"pkg_classic_egypt_8d","route":"Classic Egypt 8-day with Nile cruise","startDate":"2026-07-05","endDate":"2026-07-12","date":"2026-07-05","time":"09:00","city":"Cairo","cities":["Cairo","Aswan","Luxor"],"nights":7,"guide":"Licensed Egyptologist","vehicle":"Private van + flights + Nile cruise","minSeats":6,"maxSeats":16,"baseCost":1980,"publishedRate":1390,"breakPrice":1150,"quality":4.9,"cutoff":"June 25, 18:00","status":"open","notes":"Cairo, a 4-night Nile cruise from Aswan to Luxor, and the iconic temples in one shared program.","pledges":[{"id":"pl_202_1","agencyId":"ag_4","agency":"Heritage Desk","seats":3,"customers":"Garcia + 2","roomingType":"double","accommodationTier":"standard","createdAt":"2026-05-21T10:00:00.000Z"}],"depositPercent":20}]}
+{
+  "tourProducts": [
+    {
+      "id": "tour_cairo_pyramids",
+      "type": "day_tour",
+      "title": "Giza Pyramids and Sphinx",
+      "city": "Cairo",
+      "duration": "4 hours",
+      "defaultTime": "08:30",
+      "guide": "Licensed Egyptologist",
+      "vehicle": "Van, 10 seats",
+      "minSeats": 4,
+      "maxSeats": 10,
+      "baseCost": 230,
+      "publishedRate": 75,
+      "quality": 4.8,
+      "description": "A high-demand Cairo classic for travelers who want a safe shared visit to the Pyramids and Sphinx.",
+      "included": [
+        "Shared air-conditioned vehicle",
+        "Licensed Egyptologist guide",
+        "Hotel pickup from central Cairo or Giza"
+      ],
+      "notIncluded": [
+        "Entrance tickets",
+        "Lunch and drinks",
+        "Personal expenses"
+      ],
+      "breakPrice": 58,
+      "depositPercent": 10
+    },
+    {
+      "id": "tour_luxor_east_bank",
+      "type": "day_tour",
+      "title": "Luxor East Bank temples",
+      "city": "Luxor",
+      "duration": "5 hours",
+      "defaultTime": "07:00",
+      "guide": "Senior guide",
+      "vehicle": "Minibus, 14 seats",
+      "minSeats": 5,
+      "maxSeats": 14,
+      "baseCost": 520,
+      "publishedRate": 115,
+      "quality": 4.9,
+      "description": "A popular shared Luxor program covering Karnak and Luxor Temple with one guide and shared vehicle.",
+      "included": [
+        "Shared air-conditioned vehicle",
+        "Senior guide",
+        "Hotel pickup in Luxor"
+      ],
+      "notIncluded": [
+        "Entrance tickets",
+        "Lunch",
+        "Optional tipping"
+      ],
+      "breakPrice": 88,
+      "depositPercent": 10
+    },
+    {
+      "id": "tour_cairo_museum",
+      "type": "day_tour",
+      "title": "Egyptian Museum and Khan el-Khalili",
+      "city": "Cairo",
+      "duration": "5 hours",
+      "defaultTime": "10:00",
+      "guide": "Licensed Egyptologist",
+      "vehicle": "Van, 10 seats",
+      "minSeats": 4,
+      "maxSeats": 10,
+      "baseCost": 150,
+      "publishedRate": 58,
+      "quality": 4.7,
+      "description": "A city culture day combining museum highlights, old Cairo atmosphere, and shared transport.",
+      "included": [
+        "Shared transport",
+        "Licensed guide",
+        "Museum and bazaar visit plan"
+      ],
+      "notIncluded": [
+        "Entrance tickets",
+        "Meals",
+        "Shopping expenses"
+      ],
+      "breakPrice": 45,
+      "depositPercent": 10
+    },
+    {
+      "id": "tour_luxor_west_bank",
+      "type": "day_tour",
+      "title": "Luxor West Bank highlights",
+      "city": "Luxor",
+      "duration": "6 hours",
+      "defaultTime": "08:00",
+      "guide": "Licensed Egyptologist",
+      "vehicle": "Van, 10 seats",
+      "minSeats": 4,
+      "maxSeats": 10,
+      "baseCost": 310,
+      "publishedRate": 85,
+      "quality": 4.8,
+      "description": "Valley of the Kings, Hatshepsut Temple, and Colossi in one shared guided program.",
+      "included": [
+        "Shared van",
+        "Licensed Egyptologist guide",
+        "Pickup from Luxor hotels"
+      ],
+      "notIncluded": [
+        "Entrance tickets",
+        "Lunch",
+        "Optional tomb tickets"
+      ],
+      "breakPrice": 65,
+      "depositPercent": 10
+    },
+    {
+      "id": "tour_aswan_philae",
+      "type": "day_tour",
+      "title": "Aswan Philae and High Dam",
+      "city": "Aswan",
+      "duration": "5 hours",
+      "defaultTime": "09:00",
+      "guide": "Licensed Egyptologist",
+      "vehicle": "Van, 10 seats",
+      "minSeats": 4,
+      "maxSeats": 10,
+      "baseCost": 290,
+      "publishedRate": 78,
+      "quality": 4.7,
+      "description": "A popular shared Aswan date for Philae Temple, the High Dam, and hotel pickup.",
+      "included": [
+        "Shared air-conditioned vehicle",
+        "Licensed guide",
+        "Hotel pickup in Aswan"
+      ],
+      "notIncluded": [
+        "Boat ticket to Philae",
+        "Entrance tickets",
+        "Meals and drinks"
+      ],
+      "breakPrice": 60,
+      "depositPercent": 10
+    },
+    {
+      "id": "pkg_cairo_luxor_4d",
+      "type": "package",
+      "title": "Cairo and Luxor 4-day discovery",
+      "city": "Cairo",
+      "cities": [
+        "Cairo",
+        "Luxor"
+      ],
+      "nights": 3,
+      "duration": "4 days \u00b7 3 nights",
+      "defaultTime": "08:00",
+      "guide": "Licensed Egyptologist",
+      "vehicle": "Private van + domestic flight",
+      "minSeats": 4,
+      "maxSeats": 12,
+      "baseCost": 780,
+      "publishedRate": 540,
+      "breakPrice": 460,
+      "quality": 4.8,
+      "depositPercent": 20,
+      "description": "Cairo highlights and Luxor temples in four days with a domestic flight and shared guided program.",
+      "included": [
+        "3 nights hotel with breakfast",
+        "Domestic flight Cairo \u2192 Luxor",
+        "Licensed Egyptologist guide at all sites",
+        "All ground transport and airport transfers"
+      ],
+      "notIncluded": [
+        "International flights",
+        "Entrance tickets",
+        "Lunches and dinners",
+        "Visa and travel insurance"
+      ],
+      "itinerary": [
+        {
+          "day": 1,
+          "city": "Cairo",
+          "title": "Arrival and Old Cairo",
+          "description": "Airport pickup, hotel check-in, evening walk in Khan el-Khalili.",
+          "meals": "\u2014"
+        },
+        {
+          "day": 2,
+          "city": "Cairo",
+          "title": "Pyramids and Egyptian Museum",
+          "description": "Giza Plateau in the morning, Egyptian Museum after lunch.",
+          "meals": "Breakfast"
+        },
+        {
+          "day": 3,
+          "city": "Luxor",
+          "title": "Fly to Luxor, East Bank",
+          "description": "Morning flight to Luxor, Karnak and Luxor Temple in the afternoon.",
+          "meals": "Breakfast"
+        },
+        {
+          "day": 4,
+          "city": "Luxor",
+          "title": "West Bank and departure",
+          "description": "Valley of the Kings and Hatshepsut, then evening flight back to Cairo.",
+          "meals": "Breakfast"
+        }
+      ],
+      "accommodationTiers": [
+        {
+          "id": "standard",
+          "name": "Standard (3\u2605)",
+          "perPersonSupplement": 0,
+          "singleSupplement": 90
+        },
+        {
+          "id": "superior",
+          "name": "Superior (4\u2605)",
+          "perPersonSupplement": 120,
+          "singleSupplement": 160
+        },
+        {
+          "id": "luxury",
+          "name": "Luxury (5\u2605)",
+          "perPersonSupplement": 280,
+          "singleSupplement": 320
+        }
+      ]
+    },
+    {
+      "id": "pkg_classic_egypt_8d",
+      "type": "package",
+      "title": "Classic Egypt 8-day with Nile cruise",
+      "city": "Cairo",
+      "cities": [
+        "Cairo",
+        "Aswan",
+        "Luxor"
+      ],
+      "nights": 7,
+      "duration": "8 days \u00b7 7 nights",
+      "defaultTime": "09:00",
+      "guide": "Licensed Egyptologist",
+      "vehicle": "Private van + flights + Nile cruise",
+      "minSeats": 6,
+      "maxSeats": 16,
+      "baseCost": 1980,
+      "publishedRate": 1390,
+      "breakPrice": 1150,
+      "quality": 4.9,
+      "depositPercent": 20,
+      "description": "Cairo, a 4-night Nile cruise from Aswan to Luxor, and the iconic temples in one shared program.",
+      "included": [
+        "3 nights Cairo hotel with breakfast",
+        "4 nights Nile cruise (full board)",
+        "Domestic flights Cairo \u2192 Aswan and Luxor \u2192 Cairo",
+        "Licensed Egyptologist guide throughout",
+        "All sightseeing transfers and entrance support"
+      ],
+      "notIncluded": [
+        "International flights",
+        "Entrance tickets at sites",
+        "Drinks on the cruise",
+        "Visa and travel insurance",
+        "Optional Abu Simbel excursion"
+      ],
+      "itinerary": [
+        {
+          "day": 1,
+          "city": "Cairo",
+          "title": "Arrival",
+          "description": "Airport pickup and hotel check-in.",
+          "meals": "\u2014"
+        },
+        {
+          "day": 2,
+          "city": "Cairo",
+          "title": "Pyramids and Sphinx",
+          "description": "Full-day Giza Plateau visit.",
+          "meals": "Breakfast"
+        },
+        {
+          "day": 3,
+          "city": "Cairo",
+          "title": "Egyptian Museum and Old Cairo",
+          "description": "Museum highlights, Coptic Cairo walk.",
+          "meals": "Breakfast"
+        },
+        {
+          "day": 4,
+          "city": "Aswan",
+          "title": "Fly to Aswan, board cruise",
+          "description": "Morning flight, Philae Temple, board the cruise.",
+          "meals": "Breakfast, Lunch, Dinner"
+        },
+        {
+          "day": 5,
+          "city": "Aswan \u2192 Kom Ombo",
+          "title": "Sail to Kom Ombo",
+          "description": "Sailing day with Kom Ombo Temple in the afternoon.",
+          "meals": "Full board"
+        },
+        {
+          "day": 6,
+          "city": "Edfu \u2192 Esna",
+          "title": "Edfu Temple",
+          "description": "Edfu Temple morning, sail through Esna Lock.",
+          "meals": "Full board"
+        },
+        {
+          "day": 7,
+          "city": "Luxor",
+          "title": "Luxor East and West Bank",
+          "description": "Karnak, Luxor Temple, Valley of the Kings, Hatshepsut.",
+          "meals": "Full board"
+        },
+        {
+          "day": 8,
+          "city": "Cairo",
+          "title": "Fly back and departure",
+          "description": "Morning flight to Cairo and onward connections.",
+          "meals": "Breakfast"
+        }
+      ],
+      "accommodationTiers": [
+        {
+          "id": "standard",
+          "name": "Standard (3\u2605 hotel / 4\u2605 cruise)",
+          "perPersonSupplement": 0,
+          "singleSupplement": 280
+        },
+        {
+          "id": "superior",
+          "name": "Superior (4\u2605 hotel / 5\u2605 cruise)",
+          "perPersonSupplement": 320,
+          "singleSupplement": 420
+        },
+        {
+          "id": "luxury",
+          "name": "Luxury (5\u2605 hotel / 5\u2605 Deluxe cruise)",
+          "perPersonSupplement": 740,
+          "singleSupplement": 820
+        }
+      ]
+    }
+  ],
+  "departures": [
+    {
+      "id": 104,
+      "type": "day_tour",
+      "tourProductId": "tour_luxor_west_bank",
+      "route": "Luxor West Bank highlights",
+      "date": "2026-09-25",
+      "time": "08:00",
+      "city": "Luxor",
+      "guide": "Licensed Egyptologist",
+      "vehicle": "Van, 10 seats",
+      "minSeats": 4,
+      "maxSeats": 10,
+      "baseCost": 310,
+      "publishedRate": 85,
+      "quality": 4.8,
+      "cutoff": "May 24, 18:00",
+      "status": "open",
+      "notes": "Valley of the Kings, Hatshepsut Temple, and Colossi in one shared guided program.",
+      "pledges": [
+        {
+          "id": "pl_104_1",
+          "agencyId": "ag_3",
+          "agency": "LuxWay Tours",
+          "seats": 2,
+          "customers": "Rita + 1",
+          "createdAt": "2026-05-19T13:00:00.000Z"
+        }
+      ],
+      "breakPrice": 65,
+      "depositPercent": 10
+    },
+    {
+      "id": 105,
+      "type": "day_tour",
+      "tourProductId": "tour_aswan_philae",
+      "route": "Aswan Philae and High Dam",
+      "date": "2026-09-26",
+      "time": "09:00",
+      "city": "Aswan",
+      "guide": "Licensed Egyptologist",
+      "vehicle": "Van, 10 seats",
+      "minSeats": 4,
+      "maxSeats": 10,
+      "baseCost": 290,
+      "publishedRate": 78,
+      "quality": 4.7,
+      "cutoff": "May 25, 18:00",
+      "status": "minimum_reached",
+      "notes": "A popular shared Aswan date for Philae Temple, the High Dam, and hotel pickup.",
+      "pledges": [
+        {
+          "id": "pl_105_1",
+          "agencyId": "ag_5",
+          "agency": "Lotus Day Trips",
+          "seats": 4,
+          "customers": "Family booking",
+          "createdAt": "2026-05-19T14:00:00.000Z"
+        },
+        {
+          "id": "pl_105_1779980705007",
+          "agencyId": "direct_customer",
+          "agency": "Direct traveler",
+          "seats": 1,
+          "customers": "Karim T.",
+          "source": "public",
+          "bookingCode": "SAWA-SEED01",
+          "pricePerPerson": 75,
+          "bookingTotal": 75,
+          "depositDue": 8,
+          "balanceDue": 67,
+          "depositPercent": 10,
+          "balanceDueDate": "2026-09-25",
+          "createdAt": "2026-05-28T15:05:05.008Z"
+        },
+        {
+          "id": "pl_105_1780000153785",
+          "agencyId": "direct_customer",
+          "agency": "Direct traveler",
+          "seats": 1,
+          "customers": "Test booking",
+          "source": "public",
+          "bookingCode": "SAWA-SEED02",
+          "pricePerPerson": 72,
+          "bookingTotal": 72,
+          "depositDue": 8,
+          "balanceDue": 64,
+          "depositPercent": 10,
+          "balanceDueDate": "2026-09-25",
+          "createdAt": "2026-05-28T20:29:13.785Z"
+        }
+      ],
+      "breakPrice": 60,
+      "depositPercent": 10
+    },
+    {
+      "id": 101,
+      "type": "day_tour",
+      "tourProductId": "tour_cairo_pyramids",
+      "route": "Giza Pyramids and Sphinx",
+      "date": "2026-09-22",
+      "time": "08:30",
+      "city": "Cairo",
+      "guide": "Licensed Egyptologist",
+      "vehicle": "Van, 10 seats",
+      "minSeats": 4,
+      "maxSeats": 10,
+      "baseCost": 230,
+      "publishedRate": 75,
+      "quality": 4.8,
+      "cutoff": "Today 20:00",
+      "status": "open",
+      "notes": "Shared pickup from central Cairo and Giza hotels.",
+      "pledges": [
+        {
+          "id": "pl_101_1",
+          "agencyId": "ag_1",
+          "agency": "Nile Gate Travel",
+          "seats": 2,
+          "customers": "Maya R. + 1",
+          "createdAt": "2026-05-19T09:00:00.000Z"
+        },
+        {
+          "id": "pl_101_2",
+          "agencyId": "ag_2",
+          "agency": "Cairo Discovery",
+          "seats": 1,
+          "customers": "Sami K.",
+          "createdAt": "2026-05-19T10:15:00.000Z"
+        }
+      ],
+      "breakPrice": 58,
+      "depositPercent": 10
+    },
+    {
+      "id": 102,
+      "type": "day_tour",
+      "tourProductId": "tour_luxor_east_bank",
+      "route": "Luxor East Bank temples",
+      "date": "2026-09-23",
+      "time": "07:00",
+      "city": "Luxor",
+      "guide": "Senior guide",
+      "vehicle": "Minibus, 14 seats",
+      "minSeats": 5,
+      "maxSeats": 14,
+      "baseCost": 520,
+      "publishedRate": 115,
+      "quality": 4.9,
+      "cutoff": "Tomorrow 18:00",
+      "status": "open",
+      "notes": "Karnak and Luxor Temple with one shared guide, shared vehicle cost, and agency-branded vouchers.",
+      "pledges": [
+        {
+          "id": "pl_102_1",
+          "agencyId": "ag_3",
+          "agency": "LuxWay Tours",
+          "seats": 2,
+          "customers": "Chen party",
+          "createdAt": "2026-05-19T11:00:00.000Z"
+        },
+        {
+          "id": "pl_102_2",
+          "agencyId": "ag_4",
+          "agency": "Heritage Desk",
+          "seats": 2,
+          "customers": "Olivia + Noah",
+          "createdAt": "2026-05-19T11:30:00.000Z"
+        }
+      ],
+      "breakPrice": 88,
+      "depositPercent": 10
+    },
+    {
+      "id": 103,
+      "type": "day_tour",
+      "tourProductId": "tour_cairo_museum",
+      "route": "Egyptian Museum and Khan el-Khalili",
+      "date": "2026-09-24",
+      "time": "10:00",
+      "city": "Cairo",
+      "guide": "Licensed Egyptologist",
+      "vehicle": "Van, 10 seats",
+      "minSeats": 4,
+      "maxSeats": 10,
+      "baseCost": 150,
+      "publishedRate": 58,
+      "quality": 4.7,
+      "cutoff": "May 23, 16:00",
+      "status": "open",
+      "notes": "Good fit for families, museum highlights, bazaar time, and verified transport.",
+      "pledges": [
+        {
+          "id": "pl_103_1",
+          "agencyId": "ag_5",
+          "agency": "Lotus Day Trips",
+          "seats": 1,
+          "customers": "Ana M.",
+          "createdAt": "2026-05-19T12:05:00.000Z"
+        }
+      ],
+      "breakPrice": 45,
+      "depositPercent": 10
+    },
+    {
+      "id": 201,
+      "type": "package",
+      "tourProductId": "pkg_cairo_luxor_4d",
+      "route": "Cairo and Luxor 4-day discovery",
+      "startDate": "2026-10-10",
+      "endDate": "2026-10-13",
+      "date": "2026-10-10",
+      "time": "08:00",
+      "city": "Cairo",
+      "cities": [
+        "Cairo",
+        "Luxor"
+      ],
+      "nights": 3,
+      "guide": "Licensed Egyptologist",
+      "vehicle": "Private van + domestic flight",
+      "minSeats": 4,
+      "maxSeats": 12,
+      "baseCost": 780,
+      "publishedRate": 540,
+      "breakPrice": 460,
+      "quality": 4.8,
+      "cutoff": "June 5, 18:00",
+      "status": "open",
+      "notes": "Cairo highlights and Luxor temples in four days with a domestic flight and shared guided program.",
+      "pledges": [
+        {
+          "id": "pl_201_1",
+          "agencyId": "ag_1",
+          "agency": "Nile Gate Travel",
+          "seats": 2,
+          "customers": "Patel family",
+          "roomingType": "double",
+          "accommodationTier": "superior",
+          "createdAt": "2026-05-20T09:00:00.000Z"
+        }
+      ],
+      "depositPercent": 20
+    },
+    {
+      "id": 202,
+      "type": "package",
+      "tourProductId": "pkg_classic_egypt_8d",
+      "route": "Classic Egypt 8-day with Nile cruise",
+      "startDate": "2026-11-05",
+      "endDate": "2026-11-12",
+      "date": "2026-11-05",
+      "time": "09:00",
+      "city": "Cairo",
+      "cities": [
+        "Cairo",
+        "Aswan",
+        "Luxor"
+      ],
+      "nights": 7,
+      "guide": "Licensed Egyptologist",
+      "vehicle": "Private van + flights + Nile cruise",
+      "minSeats": 6,
+      "maxSeats": 16,
+      "baseCost": 1980,
+      "publishedRate": 1390,
+      "breakPrice": 1150,
+      "quality": 4.9,
+      "cutoff": "June 25, 18:00",
+      "status": "open",
+      "notes": "Cairo, a 4-night Nile cruise from Aswan to Luxor, and the iconic temples in one shared program.",
+      "pledges": [
+        {
+          "id": "pl_202_1",
+          "agencyId": "ag_4",
+          "agency": "Heritage Desk",
+          "seats": 3,
+          "customers": "Garcia + 2",
+          "roomingType": "double",
+          "accommodationTier": "standard",
+          "createdAt": "2026-05-21T10:00:00.000Z"
+        }
+      ],
+      "depositPercent": 20
+    }
+  ]
+}

@@ -160,6 +160,30 @@ export function statusFor(departure, pledges) {
   return seatsTotal(pledges) >= goAheadSeatsFor(departure) ? "minimum_reached" : "open";
 }
 
+// Which public board a departure belongs on. One definition, used by the
+// server-rendered lists (seo.js) and mirrored by the inline scripts on
+// /departures and /goahead (site/*.html — keep in sync, like slug.js).
+//
+// A departure is "forming" only once a real traveller holds a seat: an
+// admin-published date with zero pledges is inventory, not a departure, and
+// stays off the board (it is still bookable from its itinerary page). It
+// leaves the board in either direction — down when its last booking cancels
+// (seats drop to 0), up when it reaches its minimum and moves to /goahead.
+export function isFormingDeparture(departure, pledges = departure?.pledges) {
+  if (departure?.status !== "open") return false;
+  const seats = seatsTotal(pledges);
+  return seats >= 1 && seats < goAheadSeatsFor(departure);
+}
+
+// Confirmed to run: at or past its minimum. `closed` and `cancelled` are
+// deliberately excluded — the GoAhead board advertises trips a traveller can
+// still join or at least celebrate, not history.
+export function isGoAheadDeparture(departure, pledges = departure?.pledges) {
+  return ["minimum_reached", "supplier_confirmed"].includes(
+    statusFor(departure, pledges || [])
+  );
+}
+
 export function findTier(product, tierId) {
   const tiers = product?.accommodationTiers || [];
   return tiers.find((t) => t.id === tierId) || tiers[0] || null;

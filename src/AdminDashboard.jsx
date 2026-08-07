@@ -1743,7 +1743,7 @@ function ReferralsSection({ flash }) {
 
   const embedSnippet = (code) =>
     `<iframe src="https://sawa.tours/embed?ref=${code}" style="width:100%;border:0;border-radius:18px;min-height:240px" loading="lazy" title="Sawa Tours"></iframe>`;
-  const linkFor = (code) => `https://sawa.tours/tours?ref=${code}`;
+  const linkFor = (code) => `https://sawa.tours/itineraries?ref=${code}`;
 
   async function copy(text, label) {
     try { await navigator.clipboard.writeText(text); flash(`${label} copied to clipboard.`); }

@@ -107,6 +107,7 @@ export function faqFromHtml(html) {
 const CRUMB = {
   "/how-it-works": "How it works",
   "/departures": "Departures",
+  "/goahead": "GoAhead departures",
   "/goahead-promise": "The GoAhead Promise",
   "/operators": "For operators",
   "/verify": "Become a verified operator",
@@ -132,6 +133,7 @@ const PAGE_TYPE = {
   "/faq": "FAQPage",
   "/destinations": "CollectionPage",
   "/departures": "CollectionPage",
+  "/goahead": "CollectionPage",
 };
 
 export const cleanPath = (p) => {
