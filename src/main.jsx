@@ -475,13 +475,27 @@ function App() {
   const dayTourProducts = useMemo(() => tourProducts.filter((p) => !isPackage(p)), [tourProducts]);
   const packageProducts = useMemo(() => tourProducts.filter((p) => isPackage(p)), [tourProducts]);
 
+  // The server already strips archived and unapproved listings from the
+  // ANONYMOUS payload — but a signed-in admin gets the unfiltered one (their
+  // dashboards need it), and these customer-facing pages rendered it as-is. So
+  // an archived tour was invisible to every real customer yet showed up for
+  // the one person checking the site: the admin who had just archived it.
+  // The public rule is therefore applied here too, whoever is signed in.
+  const publiclyVisible = (product) =>
+    product.active !== false && (!product.status || product.status === "approved");
+  const hiddenProductIds = useMemo(
+    () => new Set(tourProducts.filter((p) => !publiclyVisible(p)).map((p) => p.id)),
+    [tourProducts]
+  );
   const visibleProducts = useMemo(() => {
-    return tourProducts.filter((product) => selectedCity === "All cities" || product.city === selectedCity);
+    return tourProducts.filter((product) => publiclyVisible(product)
+      && (selectedCity === "All cities" || product.city === selectedCity));
   }, [selectedCity, tourProducts]);
 
   const visibleDepartures = useMemo(() => {
-    return departures.filter((departure) => selectedCity === "All cities" || departure.city === selectedCity);
-  }, [departures, selectedCity]);
+    return departures.filter((departure) => !hiddenProductIds.has(departure.tourProductId)
+      && (selectedCity === "All cities" || departure.city === selectedCity));
+  }, [departures, hiddenProductIds, selectedCity]);
 
   const filtered = useMemo(() => {
     return visibleDepartures.filter((departure) => {
