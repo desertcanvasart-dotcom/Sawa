@@ -74,6 +74,7 @@ const PAGES = {
   "/verify": "verify.html",
   "/widget": "widget.html",
   "/privacy": "privacy.html",
+  "/cookies": "cookies.html",
   "/terms": "terms.html",
   "/destinations": join("destinations", "index.html"),
   "/destinations/cairo": join("destinations", "cairo.html"),

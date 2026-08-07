@@ -34,7 +34,8 @@ export const BRAND = {
   },
   sameAs: [], // TODO social profile URLs: Instagram, Facebook, TripAdvisor, etc.
   awards: [], // TODO e.g. ["…"]
-  accreditations: [], // TODO e.g. ["Egyptian Tourism Authority licensed operator"]
+  // Shown to search engines as hasCredential, and printed in every footer.
+  accreditations: ["Operated by Capital Travel Service — ETAA licence no. 2179"],
   knowsAbout: [
     "Egypt day tours", "Shared group tours", "Cairo tours", "Giza Pyramids",
     "Grand Egyptian Museum", "Luxor tours", "Valley of the Kings", "Aswan tours",
