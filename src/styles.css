@@ -4574,6 +4574,12 @@ button:disabled {
 /* Cover badge moves up out of the tool row's way. */
 .img-thumb .img-cover { bottom: auto; top: 5px; }
 .field-hint { display: block; font-size: 12px; font-style: normal; color: var(--d-ink-soft); margin: -2px 0 6px; }
+/* One departure per row: the day plus the traveller it belongs to. */
+.date-row {
+  display: grid; grid-template-columns: 150px 1fr 1fr 150px 70px 34px;
+  gap: 8px; align-items: center; margin-bottom: 8px;
+}
+@media (max-width: 900px) { .date-row { grid-template-columns: 1fr 1fr; } }
 
 /* Row lists (inclusions etc.) */
 .rowlist { display: grid; gap: 8px; }

@@ -470,7 +470,27 @@ app.post("/api/departures", requireAuth, requireRole("agency_owner", "agency_age
 // Admin publishes a departure from a product (platform staff only).
 app.post("/api/admin/departures", requireAuth, requireRole("super_admin", "ops_staff"), h(async (req, res) => {
   const body = req.body || {};
-  const departure = await withTransaction(async (c) => {
+  // A departure is instantiated by its first committed traveller — that is the
+  // core of the model, and it applies to ops too. Admin date creation exists
+  // for bookings that arrive by phone or WhatsApp, so it records that booking;
+  // it must not mint empty inventory that sits on the itinerary pages as
+  // fiction. (Decided 2026-08-08; the traveler-initiated addendum says the
+  // same for the public flow.)
+  const t = body.firstTraveler || {};
+  const travelerName = String(t.name || "").trim();
+  const travelerEmail = String(t.email || "").trim();
+  const travelerPhone = String(t.phone || "").trim();
+  const travelerSeats = Number(t.seats || 1);
+  if (!travelerName) {
+    throw new AppError(422, "A date is created by its first booking — record the traveller's name.");
+  }
+  if (!travelerEmail && !travelerPhone) {
+    throw new AppError(422, "Record how to reach the first traveller — an email or a phone number.");
+  }
+  if (!Number.isInteger(travelerSeats) || travelerSeats < 1) {
+    throw new AppError(422, "Seats must be a whole number of at least 1.");
+  }
+  const result = await withTransaction(async (c) => {
     const product = await loadProduct(c, body.tourProductId);
     if (!product) throw new AppError(404, "Tour product not found.");
 
@@ -480,6 +500,9 @@ app.post("/api/admin/departures", requireAuth, requireRole("super_admin", "ops_s
     const depMaxSeats = Number(body.maxSeats || product.maxSeats);
     const capacityProblem = capacityError(depMinSeats, depMaxSeats);
     if (capacityProblem) throw new AppError(422, capacityProblem);
+    if (travelerSeats > depMaxSeats) {
+      throw new AppError(422, `This date holds at most ${depMaxSeats} travellers.`);
+    }
 
     const isPkg = product.type === "package";
     const startDate = body.startDate || body.date || "2026-05-25";
@@ -510,10 +533,44 @@ app.post("/api/admin/departures", requireAuth, requireRole("super_admin", "ops_s
         Number(product.depositPercent || defaultDepositFor(product)),
       ]
     );
-    return loadDeparture(c, id);
+
+    // The first booking, in the same transaction: the date and its traveller
+    // exist together or not at all.
+    const fresh = await loadDeparture(c, id);
+    const pricing = computePledgePricing(fresh, product, {
+      seats: travelerSeats, roomingType: t.roomingType, accommodationTier: t.accommodationTier,
+    });
+    const bookingCode = await uniqueBookingCode(c);
+    await insertPledge(c, id, {
+      id: newPledgeId(id),
+      agencyId: "direct_customer",
+      agency: "Direct traveler",
+      seats: travelerSeats,
+      customers: travelerName,
+      customerEmail: travelerEmail || null,
+      customerPhone: travelerPhone || null,
+      source: "admin",
+      bookingCode,
+      createdByUserId: req.user.id,
+      ...pricing,
+    });
+    return { departure: await loadDeparture(c, id), bookingCode, pricing };
   });
+  const departure = result.departure;
   emitDepartureSync(departure.id);
-  res.status(201).json({ departure: presentDeparture(departure, req.user) });
+  await logAudit(req, {
+    action: "departure.create_with_booking", entity: "departure", entityId: String(departure.id),
+    detail: { tourProductId: body.tourProductId, date: departure.startDate || departure.date, seats: travelerSeats, source: "admin" },
+  });
+  if (travelerEmail) {
+    sendEmail(bookingConfirmationEmail({
+      to: travelerEmail, customerName: travelerName, route: departure.route,
+      dateLabel: departure.startDate ? `${departure.startDate} – ${departure.endDate}` : departure.date,
+      seats: travelerSeats, depositDue: result.pricing.depositDue, balanceDue: result.pricing.balanceDue,
+      balanceDueDate: result.pricing.balanceDueDate, bookingCode: result.bookingCode,
+    })).catch(() => {});
+  }
+  res.status(201).json({ departure: presentDeparture(departure, req.user), bookingCode: result.bookingCode });
 }));
 
 // Shared upsert used by both the admin editor and the agency listing editor.

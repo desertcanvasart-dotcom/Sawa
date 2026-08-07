@@ -659,7 +659,12 @@ export function ProductEditor({ type: typeProp, existing, destinations = [], dep
     existing?.accommodationTiers?.length ? existing.accommodationTiers
       : pkg ? [{ id: "standard", name: "Standard (3★)", perPersonSupplement: 0, singleSupplement: 0 }] : []
   );
-  const [dates, setDates] = useState([""]); // new departures to publish on save (not for edit pre-fill)
+  // New departures to publish on save (not for edit pre-fill). A date is
+  // created together with its first booking — the traveller it belongs to —
+  // so each row carries the person, not just the day.
+  const newDateRow = () => ({ date: "", name: "", email: "", phone: "", seats: 1 });
+  const [dates, setDates] = useState([newDateRow()]);
+  const setDateRow = (i, k) => (e) => setDates((a) => a.map((x, j) => (j === i ? { ...x, [k]: e.target.value } : x)));
   const [uploading, setUploading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
@@ -694,6 +699,15 @@ export function ProductEditor({ type: typeProp, existing, destinations = [], dep
     if (!f.title.trim()) { setStep(0); return setErr("Title is required."); }
     if (!(Number(f.publishedRate) > 0)) { setStep(0); return setErr("GoAhead price must be a positive number."); }
     if (f.breakPrice && Number(f.breakPrice) > Number(f.publishedRate)) { setStep(0); return setErr("Break price can't exceed the GoAhead price."); }
+    // Date rows are validated BEFORE the product saves, so a half-filled row
+    // can't leave the product written and the dates silently dropped.
+    const wantDates = agencyMode ? [] : dates.filter((r) => r.date || r.name.trim() || r.email.trim() || r.phone.trim());
+    for (const r of wantDates) {
+      if (!r.date || !r.name.trim() || !(r.email.trim() || r.phone.trim())) {
+        setStep(steps.length - 1);
+        return setErr("Each new date needs a date, the first traveller's name, and an email or phone — a date is created by its first booking.");
+      }
+    }
     setBusy(true);
     try {
       const body = {
@@ -739,15 +753,20 @@ export function ProductEditor({ type: typeProp, existing, destinations = [], dep
       if (!r.ok) throw new Error(j.error || "Could not save.");
       const productId = j.product.id;
 
-      // Publish any first dates entered (merged create flow). Agencies submit for
-      // review and don't publish departures directly, so skip this for them.
+      // Publish any dates entered (merged create flow, validated above).
+      // Every date carries its first booking — the server refuses one without.
       if (!agencyMode) {
-        const wantDates = clean(dates);
-        for (const d of wantDates) {
-          await apiFetch("/admin/departures", {
+        for (const r of wantDates) {
+          const dr = await apiFetch("/admin/departures", {
             method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(pkg ? { tourProductId: productId, startDate: d } : { tourProductId: productId, date: d }),
+            body: JSON.stringify({
+              tourProductId: productId,
+              ...(pkg ? { startDate: r.date } : { date: r.date }),
+              firstTraveler: { name: r.name.trim(), email: r.email.trim(), phone: r.phone.trim(), seats: Number(r.seats) || 1 },
+            }),
           });
+          const dj = await dr.json();
+          if (!dr.ok) throw new Error(dj.error || `Could not create the ${r.date} date.`);
         }
       }
       onSaved();
@@ -952,13 +971,17 @@ export function ProductEditor({ type: typeProp, existing, destinations = [], dep
                 </>
               )}
               <div className="modal-subhead">
-                <h3>{editing ? "Create a date" : "First dates"}</h3>
-                <button type="button" className="btn-ghost sm" onClick={() => setDates((d) => [...d, ""])}><Plus size={14} />Add date</button>
+                <h3>Create a date</h3>
+                <button type="button" className="btn-ghost sm" onClick={() => setDates((d) => [...d, newDateRow()])}><Plus size={14} />Add date</button>
               </div>
-              <p className="field-hint">Publish one or more {pkg ? "start dates" : "dates"} for this tour. You can always add more later from the Departures tab. Each date holds up to {f.maxSeats} travellers.</p>
-              {dates.map((d, i) => (
-                <div className="itin-row" key={i}>
-                  <input type="date" value={d} onChange={(e) => setDates((a) => a.map((x, j) => j === i ? e.target.value : x))} />
+              <p className="field-hint">A date is created together with its <strong>first booking</strong> — record the traveller it belongs to (bookings that arrive by phone or WhatsApp; email or phone, at least one). Travellers on the website create dates themselves from the itinerary page, so leave this empty unless someone has actually booked. Each date holds up to {f.maxSeats} travellers.</p>
+              {dates.map((r, i) => (
+                <div className="date-row" key={i}>
+                  <input type="date" value={r.date} onChange={setDateRow(i, "date")} />
+                  <input type="text" placeholder="Traveller name" value={r.name} onChange={setDateRow(i, "name")} />
+                  <input type="email" placeholder="Email" value={r.email} onChange={setDateRow(i, "email")} />
+                  <input type="tel" placeholder="Phone / WhatsApp" value={r.phone} onChange={setDateRow(i, "phone")} />
+                  <input type="number" min={1} max={f.maxSeats} title="Seats" value={r.seats} onChange={setDateRow(i, "seats")} />
                   <button type="button" className="icon-btn" onClick={() => setDates((a) => a.filter((_, j) => j !== i))}><Trash2 size={14} /></button>
                 </div>
               ))}
@@ -1503,8 +1526,8 @@ function DeparturesSection({ data, reload, flash }) {
       <PageHead title="Departures" sub="Publish dates, confirm GoAhead, and manage what's running."
         action={
           <div className="head-actions">
-            <button className="btn-ghost" onClick={() => setPub({ type: "day_tour" })}><Plus size={16} />Publish tour date</button>
-            <button className="btn-primary" onClick={() => setPub({ type: "package" })}><Plus size={16} />Publish package date</button>
+            <button className="btn-ghost" onClick={() => setPub({ type: "day_tour" })}><Plus size={16} />Create tour date</button>
+            <button className="btn-primary" onClick={() => setPub({ type: "package" })}><Plus size={16} />Create package date</button>
           </div>
         } />
 
@@ -1543,7 +1566,7 @@ function DeparturesSection({ data, reload, flash }) {
         </table>
       </div>
 
-      {pub && <PublishModal type={pub.type} data={data} onClose={() => setPub(null)} onDone={() => { setPub(null); flash("Date published."); reload(); }} />}
+      {pub && <PublishModal type={pub.type} data={data} onClose={() => setPub(null)} onDone={(code) => { setPub(null); flash(code ? `Date created with its first booking — code ${code}.` : "Date created."); reload(); }} />}
     </>
   );
 }
@@ -1561,6 +1584,10 @@ function PublishModal({ type, data, onClose, onDone }) {
   const products = (data.tourProducts || []).filter((p) => (pkg ? isPkg(p) : !isPkg(p)) && p.active !== false);
   const [productId, setProductId] = useState(products[0]?.id || "");
   const [date, setDate] = useState("");
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [seats, setSeats] = useState(1);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
 
@@ -1568,34 +1595,45 @@ function PublishModal({ type, data, onClose, onDone }) {
     e.preventDefault();
     if (!productId) return setErr("Pick a product.");
     if (!date) return setErr("Pick a date.");
+    if (!name.trim()) return setErr("A date is created by its first booking — record the traveller's name.");
+    if (!email.trim() && !phone.trim()) return setErr("Record how to reach the traveller — an email or phone number.");
     setBusy(true); setErr("");
     try {
-      const body = pkg ? { tourProductId: productId, startDate: date } : { tourProductId: productId, date };
+      const body = {
+        tourProductId: productId,
+        ...(pkg ? { startDate: date } : { date }),
+        firstTraveler: { name: name.trim(), email: email.trim(), phone: phone.trim(), seats: Number(seats) || 1 },
+      };
       const r = await apiFetch("/admin/departures", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       const j = await r.json();
-      if (!r.ok) throw new Error(j.error || "Could not publish.");
-      onDone();
+      if (!r.ok) throw new Error(j.error || "Could not create the date.");
+      onDone(j.bookingCode);
     } catch (e2) { setErr(e2.message); } finally { setBusy(false); }
   }
 
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal modal-sm" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-head"><h2>{pkg ? "Publish package date" : "Publish tour date"}</h2><button className="icon-btn" onClick={onClose}><X size={18} /></button></div>
+        <div className="modal-head"><h2>{pkg ? "Create a package date" : "Create a tour date"}</h2><button className="icon-btn" onClick={onClose}><X size={18} /></button></div>
         <form onSubmit={go}>
           <div className="modal-body">
+            <p className="field-hint">A date is created together with its first booking — use this for bookings that arrive by phone or WhatsApp. Travellers on the website start dates themselves from the itinerary page.</p>
             <Field label={pkg ? "Package" : "Tour"} full>
               <select value={productId} onChange={(e) => setProductId(e.target.value)}>
                 {products.map((p) => <option key={p.id} value={p.id}>{p.title}</option>)}
               </select>
             </Field>
             <Field label={pkg ? "Start date" : "Date"} full><input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></Field>
+            <Field label="First traveller" full><input type="text" placeholder="Full name" value={name} onChange={(e) => setName(e.target.value)} /></Field>
+            <Field label="Email"><input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} /></Field>
+            <Field label="Phone / WhatsApp"><input type="tel" placeholder="+20 …" value={phone} onChange={(e) => setPhone(e.target.value)} /></Field>
+            <Field label="Seats"><input type="number" min={1} value={seats} onChange={(e) => setSeats(e.target.value)} /></Field>
             {products.length === 0 && <p className="dash-empty">No active {pkg ? "packages" : "tours"}. Create one first.</p>}
             {err && <div className="auth-error">{err}</div>}
           </div>
           <div className="modal-foot">
             <button type="button" className="btn-ghost" onClick={onClose}>Cancel</button>
-            <button type="submit" className="btn-primary" disabled={busy || !products.length}>{busy ? "Publishing…" : "Publish"}</button>
+            <button type="submit" className="btn-primary" disabled={busy || !products.length}>{busy ? "Creating…" : "Create date & booking"}</button>
           </div>
         </form>
       </div>
