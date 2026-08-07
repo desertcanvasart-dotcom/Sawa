@@ -32,6 +32,7 @@ const NAV_GROUPS = [
     items: [
       { id: "overview", label: "Overview", icon: LayoutDashboard },
       { id: "tours", label: "Tours & Packages", icon: Package },
+      { id: "archive", label: "Archive", icon: Archive },
       { id: "listings", label: "Listing requests", icon: Inbox, alert: (s) => s?.pendingListings || 0 },
       { id: "daterequests", label: "Date requests", icon: Clock3 },
       { id: "destinations", label: "Destinations", icon: MapPin },
@@ -100,6 +101,7 @@ export function AdminDashboard({ user, agency, signOut, navigate }) {
           <>
             {section === "overview" && <Overview stats={stats} data={data} onGo={setSection} />}
             {section === "tours" && <ToursSection data={data} destinations={destinations} reload={loadAll} flash={flash} />}
+            {section === "archive" && <ArchiveSection data={data} reload={loadAll} flash={flash} />}
             {section === "listings" && <ListingRequestsSection data={data} reload={loadAll} flash={flash} />}
             {section === "daterequests" && <DateRequestsSection data={data} reload={loadAll} flash={flash} />}
             {section === "destinations" && <DestinationsSection destinations={destinations} reload={loadAll} flash={flash} />}
@@ -200,21 +202,17 @@ function Empty({ label }) { return <div className="dash-empty">{label}</div>; }
 /* ---------------- Tours & Packages ---------------- */
 function ToursSection({ data, destinations = [], reload, flash }) {
   const [editor, setEditor] = useState(null); // null | {type}
-  // Archived listings live behind their own tab rather than greyed out in the
-  // working list — mixing them in read as clutter, and made it look as if a
-  // cancelled tour was still on sale.
-  const [view, setView] = useState("active"); // "active" | "archived"
-  const all = data.tourProducts || [];
-  const activeProducts = all.filter((p) => p.active !== false);
-  const archivedProducts = all.filter((p) => p.active === false);
-  const products = view === "archived" ? archivedProducts : activeProducts;
+  // Only what's on sale. Archived listings live in their own sidebar section —
+  // mixed into this list they read as clutter, and made it look as if a
+  // cancelled tour was still being sold.
+  const products = (data.tourProducts || []).filter((p) => p.active !== false);
 
-  async function toggleActive(p) {
+  async function archive(p) {
     const r = await apiFetch(`/admin/tour-products/${p.id}`, {
       method: "PATCH", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ active: !(p.active !== false) }),
+      body: JSON.stringify({ active: false }),
     });
-    if (r.ok) { flash(p.active !== false ? "Tour archived." : "Tour restored."); reload(); }
+    if (r.ok) { flash("Tour archived — find it under Archive in the sidebar."); reload(); }
   }
 
   // Full-page editor takes over the section when adding/editing.
@@ -240,45 +238,70 @@ function ToursSection({ data, destinations = [], reload, flash }) {
           </div>
         } />
 
-      <div className="seg">
-        <button className={view === "active" ? "active" : ""} onClick={() => setView("active")}>
-          Active ({activeProducts.length})
-        </button>
-        <button className={view === "archived" ? "active" : ""} onClick={() => setView("archived")}>
-          Archive ({archivedProducts.length})
-        </button>
-      </div>
-
       <div className="table-wrap">
         <table className="dash-table">
           <thead><tr><th>Name</th><th>Type</th><th>City</th><th>GoAhead</th><th>Break</th><th>Min</th><th>Status</th><th></th></tr></thead>
           <tbody>
             {products.map((p) => (
-              <tr key={p.id} className={p.active === false ? "row-archived" : ""}>
+              <tr key={p.id}>
                 <td><strong>{p.title}</strong></td>
                 <td>{isPkg(p) ? <span className="tag tag-pkg">Package</span> : <span className="tag">Day tour</span>}</td>
                 <td>{isPkg(p) ? (p.cities || [p.city]).join(" → ") : p.city}</td>
                 <td>{money(p.publishedRate)}</td>
                 <td>{money(p.breakPrice)}</td>
                 <td>{p.minSeats}</td>
-                <td>{p.active === false ? <span className="tag tag-off">Archived</span> : <span className="tag tag-on">Active</span>}</td>
+                <td><span className="tag tag-on">Active</span></td>
                 <td className="row-actions">
                   <button className="icon-btn" title="Edit" onClick={() => setEditor({ existing: p })}><Pencil size={15} /></button>
-                  <button className="icon-btn" title={p.active === false ? "Restore" : "Archive"} onClick={() => toggleActive(p)}>
-                    {p.active === false ? <ArchiveRestore size={15} /> : <Archive size={15} />}
-                  </button>
+                  <button className="icon-btn" title="Archive" onClick={() => archive(p)}><Archive size={15} /></button>
                 </td>
               </tr>
             ))}
-            {products.length === 0 && (
-              <tr><td colSpan={8}><Empty label={view === "archived"
-                ? "Nothing in the archive. Archiving a tour moves it here — customers never see it."
-                : "No products yet. Add your first tour or package."} /></td></tr>
-            )}
+            {products.length === 0 && <tr><td colSpan={8}><Empty label="No products yet. Add your first tour or package." /></td></tr>}
           </tbody>
         </table>
       </div>
 
+    </>
+  );
+}
+
+/* ---------------- Archive (retired listings) ---------------- */
+function ArchiveSection({ data, reload, flash }) {
+  const products = (data.tourProducts || []).filter((p) => p.active === false);
+
+  async function restore(p) {
+    const r = await apiFetch(`/admin/tour-products/${p.id}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ active: true }),
+    });
+    if (r.ok) { flash("Tour restored — it's back under Tours & Packages."); reload(); }
+  }
+
+  return (
+    <>
+      <PageHead title="Archive" sub="Retired and cancelled listings. Nothing here is visible to customers or agencies — restore one to put it back on sale." />
+      <div className="table-wrap">
+        <table className="dash-table">
+          <thead><tr><th>Name</th><th>Type</th><th>City</th><th>GoAhead</th><th>Break</th><th>Min</th><th></th></tr></thead>
+          <tbody>
+            {products.map((p) => (
+              <tr key={p.id} className="row-archived">
+                <td><strong>{p.title}</strong></td>
+                <td>{isPkg(p) ? <span className="tag tag-pkg">Package</span> : <span className="tag">Day tour</span>}</td>
+                <td>{isPkg(p) ? (p.cities || [p.city]).join(" → ") : p.city}</td>
+                <td>{money(p.publishedRate)}</td>
+                <td>{money(p.breakPrice)}</td>
+                <td>{p.minSeats}</td>
+                <td className="row-actions">
+                  <button className="icon-btn" title="Restore" onClick={() => restore(p)}><ArchiveRestore size={15} /></button>
+                </td>
+              </tr>
+            ))}
+            {products.length === 0 && <tr><td colSpan={7}><Empty label="The archive is empty. Archiving a tour from Tours & Packages moves it here." /></td></tr>}
+          </tbody>
+        </table>
+      </div>
     </>
   );
 }
@@ -610,6 +633,14 @@ export function ProductEditor({ type: typeProp, existing, destinations = [], onC
   const [notIncluded, setNotIncluded] = useState(existing?.notIncluded?.length ? existing.notIncluded : [""]);
   const [whatToBring, setWhatToBring] = useState(existing?.whatToBring?.length ? existing.whatToBring : [""]);
   const [images, setImages] = useState(existing?.images || []);
+  // Reorder in place; position 0 is the cover everywhere the images are read.
+  const moveImage = (from, to) => setImages((a) => {
+    if (to < 0 || to >= a.length) return a;
+    const next = a.slice();
+    const [im] = next.splice(from, 1);
+    next.splice(to, 0, im);
+    return next;
+  });
   // Off unless the listing already has a table. The two anchors handle most
   // tours; this is for the ones whose costs step rather than slide.
   const [useTiers, setUseTiers] = useState(Boolean(existing?.priceTiers?.length));
@@ -779,13 +810,18 @@ export function ProductEditor({ type: typeProp, existing, destinations = [], onC
 
           {step === 1 && (
             <div className="wiz-content">
-              <Field label="Cover & gallery images" full>
+              <Field label="Cover & gallery images" full hint="The first image is the cover. Hover a photo to reorder it or make it the cover.">
                 <div className="img-grid">
                   {images.map((im, i) => (
                     <div className="img-thumb" key={i}>
                       <img src={im.url} alt={im.alt || ""} />
                       {i === 0 && <span className="img-cover">Cover</span>}
-                      <button type="button" className="img-del" onClick={() => setImages((a) => a.filter((_, j) => j !== i))}><X size={13} /></button>
+                      <button type="button" className="img-del" title="Remove" onClick={() => setImages((a) => a.filter((_, j) => j !== i))}><X size={13} /></button>
+                      <div className="img-tools">
+                        <button type="button" title="Move left" disabled={i === 0} onClick={() => moveImage(i, i - 1)}>‹</button>
+                        {i > 0 && <button type="button" title="Make cover" onClick={() => moveImage(i, 0)}>Cover</button>}
+                        <button type="button" title="Move right" disabled={i === images.length - 1} onClick={() => moveImage(i, i + 1)}>›</button>
+                      </div>
                     </div>
                   ))}
                   <label className="img-add">
@@ -1006,9 +1042,15 @@ function RowList({ label, rows, setRows, placeholder }) {
 // `asDiv` renders a <div> instead of a <label>. Required for rich-text editors:
 // a <label> forwards clicks to its first labelable descendant (the Bold toolbar
 // button), which steals focus from the contenteditable and blocks typing.
-function Field({ label, children, full, asDiv }) {
+function Field({ label, children, full, asDiv, hint }) {
   const Tag = asDiv ? "div" : "label";
-  return <Tag className={`field ${full ? "field-full" : ""}`}><span>{label}</span>{children}</Tag>;
+  return (
+    <Tag className={`field ${full ? "field-full" : ""}`}>
+      <span>{label}</span>
+      {hint && <em className="field-hint">{hint}</em>}
+      {children}
+    </Tag>
+  );
 }
 
 /* ---------------- Listing requests (approval) ---------------- */
