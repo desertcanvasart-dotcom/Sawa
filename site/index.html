@@ -539,7 +539,7 @@ footer .logo .nm i{color:var(--gold)}
            averages are not substantiable, and an advertising regulator expects a
            business to be able to substantiate a performance claim. -->
       <div class="hero-meta">
-        <div class="m"><b class="tnum" data-live-departures aria-live="polite">&mdash;</b><span>dates open<br>across Egypt</span></div>
+        <div class="m"><b class="tnum" data-live-departures aria-live="polite">&mdash;</b><span data-live-departures-label>dates open<br>across Egypt</span></div>
         <div class="sep"></div>
         <div class="m"><b class="tnum">4</b><span>travelers confirm<br>a departure</span></div>
       </div>
@@ -932,6 +932,16 @@ footer .logo .nm i{color:var(--gold)}
          whole story until the first booking lands. */
       var sec=document.getElementById('departures');
       if(sec)sec.style.display='none';
+      /* The hero stat counts dates, and there are none — but leaving the em
+         dash reads as "failed to load" rather than "nothing yet". Count what
+         actually exists instead: the itineraries someone can start today. */
+      var nProducts=Object.keys(byId).length;
+      var heroN=document.querySelector('[data-live-departures]');
+      var heroLbl=document.querySelector('[data-live-departures-label]');
+      if(heroN&&nProducts){
+        heroN.textContent=nProducts;
+        if(heroLbl)heroLbl.innerHTML='itineraries<br>ready to start';
+      }
       return;
     }
     if(starterMode){
