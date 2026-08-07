@@ -222,6 +222,7 @@ function ToursSection({ data, destinations = [], reload, flash }) {
         type={editor.type}
         existing={editor.existing}
         destinations={destinations}
+        departures={data.departures || []}
         onClose={() => setEditor(null)}
         onSaved={() => { setEditor(null); flash(editor.existing ? "Tour updated." : "Tour created."); reload(); }}
       />
@@ -591,7 +592,7 @@ function BlogEditor({ existing, onClose, onSaved }) {
 
 const STEPS = ["Details", "Content", "Itinerary", "Dates"];
 
-export function ProductEditor({ type: typeProp, existing, destinations = [], onClose, onSaved, saveEndpoint = "/admin/tour-products", agencyMode = false }) {
+export function ProductEditor({ type: typeProp, existing, destinations = [], departures = [], onClose, onSaved, saveEndpoint = "/admin/tour-products", agencyMode = false }) {
   const editing = !!existing;
   const type = existing?.type || typeProp;
   const pkg = type === "package";
@@ -633,6 +634,11 @@ export function ProductEditor({ type: typeProp, existing, destinations = [], onC
   const [notIncluded, setNotIncluded] = useState(existing?.notIncluded?.length ? existing.notIncluded : [""]);
   const [whatToBring, setWhatToBring] = useState(existing?.whatToBring?.length ? existing.whatToBring : [""]);
   const [images, setImages] = useState(existing?.images || []);
+  // The dates step shows what is already on the calendar next to the create
+  // form — the tour's published departures, soonest first.
+  const scheduled = (editing ? departures.filter((d) => d.tourProductId === existing.id) : [])
+    .slice()
+    .sort((a, b) => String(a.startDate || a.date).localeCompare(String(b.startDate || b.date)));
   // Reorder in place; position 0 is the cover everywhere the images are read.
   const moveImage = (from, to) => setImages((a) => {
     if (to < 0 || to >= a.length) return a;
@@ -908,8 +914,45 @@ export function ProductEditor({ type: typeProp, existing, destinations = [], onC
 
           {step === 3 && (
             <div className="wiz-content">
+              {editing && (
+                <>
+                  <div className="modal-subhead">
+                    <h3>Scheduled dates ({scheduled.length})</h3>
+                  </div>
+                  <p className="field-hint">Every date already published for this tour, with live bookings. Confirm or cancel them from the Departures section.</p>
+                  {scheduled.length > 0 ? (
+                    <div className="table-wrap" style={{ marginBottom: 26 }}>
+                      <table className="dash-table">
+                        <thead><tr><th>Date</th><th>Status</th><th>Booked</th></tr></thead>
+                        <tbody>
+                          {scheduled.map((d) => {
+                            const seats = seatsOf(d);
+                            const min = Number(d.minSeats || f.minSeats) || 4;
+                            const past = new Date(`${d.startDate || d.date}T23:59:59`) < new Date();
+                            const tag = d.status === "cancelled" ? <span className="tag tag-off">Cancelled</span>
+                              : past ? <span className="tag tag-off">Departed</span>
+                              : d.status === "supplier_confirmed" ? <span className="tag tag-on">Confirmed</span>
+                              : d.status === "pending_review" ? <span className="tag tag-off">Pending review</span>
+                              : seats >= min ? <span className="tag tag-on">GoAhead</span>
+                              : <span className="tag">Forming</span>;
+                            return (
+                              <tr key={d.id} className={d.status === "cancelled" || past ? "row-archived" : ""}>
+                                <td><strong>{fmtDate(d.startDate || d.date)}</strong>{d.endDate ? ` – ${fmtDate(d.endDate)}` : ""}</td>
+                                <td>{tag}</td>
+                                <td>{seats} of {min} to GoAhead · max {d.maxSeats || f.maxSeats}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <p className="dash-empty" style={{ marginBottom: 26 }}>No dates scheduled yet — create the first one below.</p>
+                  )}
+                </>
+              )}
               <div className="modal-subhead">
-                <h3>{editing ? "Add more dates" : "First dates"}</h3>
+                <h3>{editing ? "Create a date" : "First dates"}</h3>
                 <button type="button" className="btn-ghost sm" onClick={() => setDates((d) => [...d, ""])}><Plus size={14} />Add date</button>
               </div>
               <p className="field-hint">Publish one or more {pkg ? "start dates" : "dates"} for this tour. You can always add more later from the Departures tab. Each date holds up to {f.maxSeats} travellers.</p>
