@@ -10,6 +10,19 @@
     <link rel="icon" href="/favicon.ico" sizes="any" />
     <link rel="icon" type="image/png" href="/images/favicon.png" />
     <link rel="apple-touch-icon" href="/images/favicon.png" />
+    <!-- The server injects a plain-HTML copy of the route's content inside
+         #root (server/seo.js buildBody) so crawlers that never run JavaScript
+         still read /itineraries, every tour page and every blog post in full.
+         React clears it the moment it mounts — but the bundle is a deferred
+         module, so the browser had already PAINTED that bare markup: an
+         unstyled wall of links flashing past before the real page arrived.
+         Hiding it behind a class that only script can set keeps the markup
+         byte-for-byte identical for a non-JS crawler while guaranteeing a
+         browser never renders it. The script below is parser-blocking and runs
+         before the body is parsed, so the rule is in force at the first paint.
+         server/spa-shell.test.js holds both halves of that in place. -->
+    <style>.js [data-server-rendered] { display: none }</style>
+    <script>document.documentElement.classList.add("js");</script>
     <title>Sawa Shared Tours</title>
   </head>
   <body>
