@@ -35,7 +35,7 @@ import { dirname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   buildHead, buildBody, robotsTxt, sitemapXml, llmsTxt, llmsFullTxt,
-  inlineScriptJson, sliceBootstrapForRoute,
+  inlineScriptJson, sliceBootstrapForRoute, clearSeoCaches,
 } from "./seo.js";
 import { emitDepartureSync, unavailableDates } from "./autoura-sync.js";
 import { tourSlug } from "./slug.js";
@@ -347,6 +347,9 @@ let publicBlogCache = { at: 0, payload: null };
 // the SPA one only exists when /dist is present. So they register a clearer here
 // instead, and every cache drops together.
 const cacheClearers = [];
+// The tour lookup and slug index in seo.js embed product rows, so a catalogue
+// write has to drop them with everything else.
+cacheClearers.push(() => clearSeoCaches());
 function invalidatePublicBootstrap() {
   publicBootstrapCache = { at: 0, payload: null };
   publicBlogCache = { at: 0, payload: null };
@@ -1003,6 +1006,28 @@ app.get("/api/public/bookings/:code", h(async (req, res) => {
 // Public: count a click-through from a partner widget. Fire-and-forget.
 // Dates travelers must not start a departure on (operator blackouts, via the
 // Autoura capacity feed). Public and cache-friendly: dates only, no reasons.
+// Public: one product in full, for a page that arrived holding the sliced copy.
+//
+// sliceBootstrapForRoute strips itinerary, inclusions and the rest from every
+// product except the route's own, so a client-side click from the catalogue to
+// a tour renders DetailPending skeletons and swaps in the real content when the
+// background refresh lands — a visible second version of the page. This lets
+// that page fetch just the part it is missing instead of waiting on the whole
+// 135KB catalogue.
+//
+// Served from the same memoised anonymous payload the page was built from, so
+// it costs no query, cannot disagree with the inlined copy, and carries the
+// same redaction. Never buildBootstrap(req.user) here — see renderPage.
+app.get("/api/public/tour-products/:id", h(async (req, res) => {
+  const payload = await publicBootstrapPayload();
+  const product = (payload.tourProducts || []).find((p) => String(p.id) === String(req.params.id));
+  if (!product) throw new AppError(404, "Tour not found.");
+  // Matches the inlined payload's own freshness: detail fields are edited by
+  // operators, not by bookings, so this does not carry live seat counts.
+  res.set("Cache-Control", "public, max-age=0, s-maxage=60, stale-while-revalidate=300");
+  res.json({ product });
+}));
+
 app.get("/api/public/unavailable-dates", h(async (_req, res) => {
   const blocked = await unavailableDates();
   res.set("Cache-Control", "public, max-age=300");
