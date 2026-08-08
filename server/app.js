@@ -44,10 +44,13 @@ import { startJobScheduler } from "./jobs/scheduler.js";
 import { cleanHtml, cleanItinerary } from "./sanitize.js";
 import { canonicalRedirect } from "./canonical.js";
 import { injectStaticSchema } from "./static-seo.js";
-import { cacheState, PAGE_TTL_MS, PAGE_STALE_TTL_MS } from "./page-cache.js";
+import { cacheState, staleWhileRevalidate, PAGE_TTL_MS, PAGE_STALE_TTL_MS } from "./page-cache.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const distDir = join(__dirname, "..", "dist");
+// Assigned only when /dist exists — there is nothing to keep warm without the
+// built SPA. Started after the listener, alongside the job scheduler.
+let startPageWarmer = null;
 
 const app = express();
 app.disable("x-powered-by");
@@ -337,7 +340,25 @@ app.get("/api/me", requireAuth, h(async (req, res) => {
 // loading screen. Authenticated users (agency/admin) always build fresh — their
 // view is viewer-specific — and any catalogue write clears the cache immediately.
 const PUBLIC_BOOTSTRAP_TTL = 30_000;
-let publicBootstrapCache = { at: 0, payload: null };
+// Past PUBLIC_BOOTSTRAP_TTL the payload stops being served as fresh, but it is
+// still a perfectly good payload — and it is the single most expensive thing a
+// cold render does (measured on the live site at 1774ms of a 3769ms render of a
+// tour page). A hard TTL meant a site this quiet rebuilt it on the request path
+// almost every time: 30 seconds without a visitor was enough to throw it away.
+// So it now follows the same rule the rendered pages do — stale is served
+// immediately and refreshed behind the request.
+//
+// Serving stale is safe on exactly the terms it is for the page cache: any
+// write calls invalidatePublicBootstrap(), which empties the entry outright and
+// reads as a miss. The stale window only ever covers a period where nothing
+// changed.
+const PUBLIC_BOOTSTRAP_STALE_TTL = 10 * 60_000;
+const publicBootstrap = staleWhileRevalidate({
+  ttl: PUBLIC_BOOTSTRAP_TTL,
+  staleTtl: PUBLIC_BOOTSTRAP_STALE_TTL,
+  build: () => buildBootstrap(undefined),
+  onError: (e) => console.error("[bootstrap] background refresh failed —", e.message),
+});
 // The published-post list is read on every /blog view and never varies per
 // visitor, so cache it the same way. Both are dropped on any successful write.
 const PUBLIC_BLOG_TTL = 60_000;
@@ -351,7 +372,7 @@ const cacheClearers = [];
 // write has to drop them with everything else.
 cacheClearers.push(() => clearSeoCaches());
 function invalidatePublicBootstrap() {
-  publicBootstrapCache = { at: 0, payload: null };
+  publicBootstrap.invalidate();
   publicBlogCache = { at: 0, payload: null };
   for (const clear of cacheClearers) clear();
 }
@@ -360,13 +381,8 @@ function invalidatePublicBootstrap() {
 // embed exactly the same object the SPA would otherwise fetch (see renderPage):
 // one builder means the inlined data and the API can never disagree, which is
 // the whole point — a visitor must not watch the numbers change after load.
-async function publicBootstrapPayload() {
-  if (publicBootstrapCache.payload && Date.now() - publicBootstrapCache.at < PUBLIC_BOOTSTRAP_TTL) {
-    return publicBootstrapCache.payload;
-  }
-  const payload = await buildBootstrap(undefined);
-  publicBootstrapCache = { at: Date.now(), payload };
-  return payload;
+function publicBootstrapPayload() {
+  return publicBootstrap.get();
 }
 
 // `user` undefined means the anonymous view. Kept as one function so the
@@ -2037,6 +2053,10 @@ if (existsSync(distDir)) {
   // payload — it would be dead weight on every dashboard load.
   const needsCatalogue = (p) => !/^\/(admin|agency|portal|embed)(\/|$)/.test(p);
 
+  // The routes worth never letting go cold. Everything else is rebuilt on
+  // demand; these are the two the public site actually lands on.
+  const HOT_PATHS = ["/itineraries", "/blog"];
+
   // Builds one path and stores it. Concurrent callers for the same path share
   // the one build: without this, a cold entry under any traffic at all lets
   // every request start its own four-second render.
@@ -2050,12 +2070,27 @@ if (existsSync(distDir)) {
 
   const renderToCache = async (path) => {
       const t0 = Date.now();
-      const { title, head, notFound } = await buildHead(path);
+      // The three phases are independent — buildHead and buildBody each resolve
+      // the route themselves, and the payload is the same anonymous object on
+      // every page — but they used to run strictly one after another, so a cold
+      // render paid the sum of all three. Measured on the live site, a cold tour
+      // page was head 1809ms + body 186ms + payload 1774ms = 3769ms; started
+      // together it costs the slowest one instead.
+      //
+      // They start before notFound is known, and that costs nothing: buildBody
+      // returns "" for a route it doesn't recognise without touching the
+      // database, and the payload is memoised and shared with every other page,
+      // so the worst a 404 can do is warm a cache the next real request wanted.
+      // Both results are discarded below if the route turns out not to exist.
+      let tHead = t0, tBody = t0, tPayload = t0;
+      const headJob = buildHead(path).then((r) => { tHead = Date.now(); return r; });
       // GEO: crawlers don't execute JS, so inject the route's real content
       // inside #root. React's createRoot().render() replaces it on mount.
-      const tHead = Date.now();
-      const body = notFound ? "" : await buildBody(path);
-      const tBody = Date.now();
+      // A body that fails is not worth losing the page over — the head, the
+      // schema and the inlined payload are all still good.
+      const bodyJob = buildBody(path)
+        .then((r) => { tBody = Date.now(); return r; })
+        .catch((e) => { console.error("[seo] body render failed for", path, "-", e.message); return ""; });
       // The SPA used to mount, discard the server-rendered body, and only THEN
       // fetch /api/bootstrap — so every visitor sat on a loading screen waiting
       // for data this process already had in hand. Inlining it means the first
@@ -2070,10 +2105,14 @@ if (existsSync(distDir)) {
       // Sliced to the route: the cached full payload is built once and shared,
       // then narrowed per path. Slicing here rather than in the builder keeps
       // one cache entry for every route instead of one per URL.
-      const full = !notFound && needsCatalogue(path)
-        ? await publicBootstrapPayload().catch(() => null)
-        : null;
-      const tPayload = Date.now();
+      const payloadJob = needsCatalogue(path)
+        ? publicBootstrapPayload().then((r) => { tPayload = Date.now(); return r; }).catch(() => null)
+        : Promise.resolve(null);
+
+      const [{ title, head, notFound }, renderedBody, builtPayload] =
+        await Promise.all([headJob, bodyJob, payloadJob]);
+      const body = notFound ? "" : renderedBody;
+      const full = notFound ? null : builtPayload;
       const bootstrap = full ? sliceBootstrapForRoute(full, path) : null;
       const bootstrapTag = bootstrap
         ? `<script>window.__SAWA_BOOTSTRAP__=${inlineScriptJson(bootstrap)}</script>`
@@ -2099,7 +2138,12 @@ if (existsSync(distDir)) {
       if (pageCache.size > 500) pageCache.clear();
       // Which of the three phases is slow is not guessable from the outside —
       // all a visitor sees is one long wait — so an uncached render says so.
-      const timing = { head: tHead - t0, body: tBody - tHead, payload: tPayload - tBody, total: Date.now() - t0 };
+      // Each is now measured from the start of the render rather than from the
+      // end of the phase before it: they overlap, so these are "finished at",
+      // and the total is the slowest rather than the sum. A phase that never
+      // ran (the payload, on a portal route) reads as 0.
+      const since = (t) => (t === t0 ? 0 : t - t0);
+      const timing = { head: since(tHead), body: since(tBody), payload: since(tPayload), total: Date.now() - t0 };
       if (timing.total > 750) {
         console.warn(`[seo] slow render ${path} — ${timing.total}ms (head ${timing.head}, body ${timing.body}, payload ${timing.payload})`);
       }
@@ -2140,6 +2184,41 @@ if (existsSync(distDir)) {
       res.sendFile(join(distDir, "index.html"));
     }
   };
+  // Every cache in this process is short-lived by design, and this site is
+  // quiet. Those two facts together were the whole problem: PAGE_STALE_TTL is
+  // five minutes, the payload's stale window is ten, and a marketing site can
+  // easily go longer than that between visitors. So the caches were nearly
+  // always empty when someone finally arrived, and the person who arrived paid
+  // for filling them — a measured 3.8 seconds on the live site, over and over,
+  // for what is a fourteen-product catalogue that barely changes.
+  //
+  // Keeping the hot paths warm moves that cost off the request path entirely.
+  // It is a handful of queries a minute against a catalogue this size, and it
+  // is the difference between "the first visitor after a quiet spell waits four
+  // seconds" and "nobody waits".
+  //
+  // A tick that overlaps a rebuild is harmless: buildPage dedupes by path.
+  startPageWarmer = () => {
+    // PAGE_WARM_INTERVAL_MS=0 turns it off — the pages still render on demand,
+    // they just go cold between visitors again.
+    const everyMs = Number(process.env.PAGE_WARM_INTERVAL_MS ?? 45_000);
+    if (!(everyMs > 0)) {
+      console.log("[warm] page warmer off (PAGE_WARM_INTERVAL_MS=0)");
+      return () => {};
+    }
+    const tick = () => {
+      for (const path of HOT_PATHS) {
+        buildPage(path).catch((e) => console.warn("[warm] failed for", path, "-", e.message));
+      }
+    };
+    tick();
+    const timer = setInterval(tick, everyMs);
+    // unref so the timer never holds the process open during a shutdown.
+    timer.unref();
+    console.log(`[warm] keeping ${HOT_PATHS.join(", ")} warm every ${Math.round(everyMs / 1000)}s`);
+    return () => clearInterval(timer);
+  };
+
   // Root must be handled before static (static would otherwise serve raw index.html).
   app.get("/", renderPage);
   app.use(express.static(distDir, { index: false }));
@@ -2171,6 +2250,11 @@ app.listen(port, "0.0.0.0", () => {
   // because it starts empty. Warming it costs one query at boot; failing to
   // warm it is not an error, only a slower first page.
   publicBootstrapPayload()
-    .then((p) => console.log(`[boot] catalogue warm — ${(p?.tourProducts || []).length} products`))
+    .then((p) => {
+      console.log(`[boot] catalogue warm — ${(p?.tourProducts || []).length} products`);
+      // Only once the payload is in hand: the hot-path renders each need it,
+      // and starting them first would have every one of them build its own.
+      startPageWarmer?.();
+    })
     .catch((e) => console.warn("[boot] catalogue warm-up skipped —", e.message));
 });

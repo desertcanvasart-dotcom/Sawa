@@ -508,11 +508,13 @@ export async function buildBody(pathname) {
     // overview_html and images came back — tens of kilobytes of JSONB per row —
     // to print a title, a city, a duration and a price. These eight columns are
     // everything the list and tourSlug() actually read.
-    const rows = await catalogueRows();
+    // Neither query needs the other's result, and each is a round trip to
+    // Postgres — awaited one after the other, this page paid for two.
+    const [rows, upcoming] = await Promise.all([catalogueRows(), upcomingDepartures(null)]);
     // Only dates a traveller is already on count as "forming" — a published
     // date with zero bookings is inventory, not a departure (isFormingDeparture
     // in domain.js is the same rule).
-    const deps = (await upcomingDepartures(null)).filter((d) => d.seats >= 1);
+    const deps = upcoming.filter((d) => d.seats >= 1);
     const byProduct = new Map();
     deps.forEach((d) => byProduct.set(d.productId, (byProduct.get(d.productId) || 0) + 1));
     return wrapBody(`
