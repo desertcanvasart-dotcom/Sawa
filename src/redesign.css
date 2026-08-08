@@ -402,7 +402,11 @@
 .sx .view-all{position:absolute;right:14px;bottom:14px;z-index:2;display:inline-flex;align-items:center;gap:9px;background:rgba(251,248,241,.92);backdrop-filter:blur(8px);color:var(--teal);font-weight:600;font-size:.84rem;padding:9px 15px;border-radius:999px;border:1px solid rgba(255,255,255,.7);cursor:pointer;transition:transform .4s var(--ease)}
 .sx .view-all:hover{transform:translateY(-2px)}
 .sx .view-all svg{width:15px;height:15px}
-.sx .layout{display:grid;grid-template-columns:1fr 392px;gap:54px;padding:64px 0 0;align-items:start}
+/* minmax(0,…) not 1fr: a 1fr track keeps min-width:auto, so it refuses to
+   shrink below its content's min-content width. On a 375px phone the single
+   column resolved to 373px inside a 319px wrap and .sx overflow-x:hidden
+   clipped the itinerary text instead of scrolling it. */
+.sx .layout{display:grid;grid-template-columns:minmax(0,1fr) 392px;gap:54px;padding:64px 0 0;align-items:start}
 .sx .sec{padding:0 0 48px;border-bottom:1px solid var(--line);margin-bottom:48px}
 .sx .sec:last-child{border-bottom:0}
 .sx .sec h2{font-family:'Fraunces',serif;font-weight:500;color:var(--teal);font-size:1.85rem;letter-spacing:-.01em}
@@ -438,7 +442,7 @@
 .sx .inc.no li .ck{background:rgba(23,50,58,.07);color:var(--muted)}
 .sx .inc li .ck svg{width:13px;height:13px}
 .sx .op-card{margin-top:24px;background:var(--paper);padding:8px;border-radius:var(--r-lg);border:1px solid rgba(255,255,255,.7);box-shadow:var(--shadow-card)}
-.sx .op-inner{display:grid;grid-template-columns:auto 1fr auto;gap:22px;align-items:center;background:var(--paper);border-radius:calc(var(--r-lg) - 8px);padding:22px 24px}
+.sx .op-inner{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:22px;align-items:center;background:var(--paper);border-radius:calc(var(--r-lg) - 8px);padding:22px 24px}
 .sx .op-logo{width:66px;height:66px;border-radius:18px;background:var(--teal);color:var(--gold);display:grid;place-items:center;font-family:'Fraunces',serif;font-weight:600;font-size:1.5rem;flex:0 0 auto}
 .sx .op-meta .vr{display:inline-flex;align-items:center;gap:6px;font-size:.7rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#2c7a57;background:rgba(44,122,87,.1);padding:4px 10px;border-radius:999px}
 .sx .op-meta .vr svg{width:12px;height:12px}
@@ -559,15 +563,19 @@
 .sx .mbar{position:fixed;left:0;right:0;bottom:0;z-index:55;display:none;align-items:center;justify-content:space-between;gap:14px;padding:14px 18px;background:rgba(251,248,241,.95);backdrop-filter:blur(18px);border-top:1px solid var(--line)}
 .sx .mbar .p b{font-family:'Fraunces',serif;font-weight:600;font-size:1.3rem;color:var(--teal)}
 .sx .mbar .p span{font-size:.78rem;color:var(--muted);display:block}
-@media(max-width:1080px){.sx .layout{grid-template-columns:1fr 340px;gap:38px}}
-@media(max-width:920px){.sx .layout{grid-template-columns:1fr;gap:0}.sx .rail{position:static;margin-top:48px}.sx .rel-grid{grid-template-columns:1fr 1fr}}
+@media(max-width:1080px){.sx .layout{grid-template-columns:minmax(0,1fr) 340px;gap:38px}}
+@media(max-width:920px){.sx .layout{grid-template-columns:minmax(0,1fr);gap:0}.sx .rail{position:static;margin-top:48px}.sx .rel-grid{grid-template-columns:1fr 1fr}}
 @media(max-width:760px){
   .sx .gallery{grid-template-columns:1fr 1fr;grid-template-rows:auto;height:auto}
   .sx .gallery .gcell{aspect-ratio:4/3}
   .sx .gallery .gcell.big{grid-column:span 2;grid-row:span 1;aspect-ratio:16/10}
   .sx .gallery .gcell.hide-sm{display:none}
   .sx .hl,.sx .inc-grid,.sx .rev-grid,.sx .faq{grid-template-columns:1fr}
-  .sx .op-inner{grid-template-columns:auto 1fr;gap:16px}
+  .sx .op-inner{grid-template-columns:auto minmax(0,1fr);gap:16px}
+  /* The button wraps to row 2 but still sizes the auto column it lands in,
+     which squeezed the operator name to 70px against its 124px of text. Give
+     it a row of its own so column 1 is only ever as wide as the logo. */
+  .sx .op-inner>.btn{grid-column:1/-1;justify-self:start}
   .sx .rel-grid{grid-template-columns:1fr}
   .sx .mbar{display:flex}
 }
