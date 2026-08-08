@@ -6,6 +6,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { catalogueListHtml } from "./seo.js";
+import { tourPath } from "./slug.js";
 
 const tour = {
   id: "tour_giza", type: "day_tour", title: "Giza Pyramids & Sphinx",
@@ -64,4 +65,24 @@ test("operator-supplied titles are escaped", () => {
 
 test("an empty catalogue renders an empty list, not a crash", () => {
   assert.equal(catalogueListHtml([]), "");
+});
+
+// The page warmer renders a list of product URLs on a timer so a visitor never
+// lands on a cold tour page. That is only worth anything if the URLs it warms
+// are the URLs the catalogue actually links to — warming /tour/x while the
+// catalogue links to /tour/y is invisible in review and leaves every real page
+// cold. Both now come from tourPath(); this is what stops them drifting apart.
+test("the links the catalogue renders are exactly the paths tourPath produces", () => {
+  const rows = [tour, pkg];
+  const rendered = [...catalogueListHtml(rows).matchAll(/<a href="([^"]+)"/g)].map((m) => m[1]);
+  assert.deepEqual(rendered, rows.map(tourPath));
+});
+
+test("a title that slugifies to nothing still yields one usable path, not a broken link", () => {
+  // An Arabic title, or one made entirely of stop-words. tourSlug has a
+  // fallback for exactly this; the catalogue markup must use the same one.
+  const odd = { id: "tour_x", type: "day_tour", title: "The And Of", city: "Cairo" };
+  const [href] = [...catalogueListHtml([odd]).matchAll(/<a href="([^"]+)"/g)].map((m) => m[1]);
+  assert.equal(href, tourPath(odd));
+  assert.match(href, /^\/tour\/[a-z0-9-]+$/, "must be a clean, linkable path");
 });

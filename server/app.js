@@ -36,7 +36,7 @@ import { dirname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   buildHead, buildBody, robotsTxt, sitemapXml, llmsTxt, llmsFullTxt,
-  inlineScriptJson, sliceBootstrapForRoute, clearSeoCaches,
+  inlineScriptJson, sliceBootstrapForRoute, clearSeoCaches, catalogueRoutes,
 } from "./seo.js";
 import { emitDepartureSync, unavailableDates } from "./autoura-sync.js";
 import { tourSlug } from "./slug.js";
@@ -2229,16 +2229,57 @@ if (existsSync(distDir)) {
       console.log("[warm] page warmer off (PAGE_WARM_INTERVAL_MS=0)");
       return () => {};
     }
-    const tick = () => {
-      for (const path of HOT_PATHS) {
-        buildPage(path).catch((e) => console.warn("[warm] failed for", path, "-", e.message));
+    // The catalogue is small and curated, so every product page is warmed too —
+    // a cold tour page was measured at 1.15s on the live site, and it is the
+    // page a visitor lands on from search. The cap is a backstop against a
+    // catalogue that grows past what a background sweep should be doing; it
+    // says so out loud rather than quietly warming a prefix, because a silent
+    // truncation here reads as "every page is fast" when it is not.
+    const limit = Number(process.env.PAGE_WARM_LIMIT || 60);
+    let announcedCap = false;
+
+    const routes = async () => {
+      const detail = await catalogueRoutes().catch((e) => {
+        console.warn("[warm] could not list catalogue routes —", e.message);
+        return [];
+      });
+      const all = [...HOT_PATHS, ...detail];
+      if (all.length > limit && !announcedCap) {
+        announcedCap = true;
+        console.warn(`[warm] ${all.length} routes exceeds PAGE_WARM_LIMIT=${limit}; warming the first ${limit}, the rest render on demand`);
+      }
+      return all.slice(0, limit);
+    };
+
+    // A sweep runs the pages ONE AT A TIME. Sixteen concurrent renders every
+    // 45 seconds would each take a connection from a pool of ten and compete
+    // with real visitors for it; done in sequence the sweep is invisible and
+    // still finishes in a fraction of the interval.
+    //
+    // Already-fresh pages are skipped, so a sweep only pays for what has aged
+    // out. Stale ones are rebuilt here rather than being left for a visitor to
+    // trigger — a stale page is served instantly either way, but refreshing it
+    // on our own time keeps the background work off the request path entirely.
+    let sweeping = false;
+    const sweep = async () => {
+      if (sweeping) return;  // a slow sweep must not stack up behind the timer
+      sweeping = true;
+      try {
+        for (const path of await routes()) {
+          if (cacheState(pageCache.get(path), Date.now(), PAGE_TTL, PAGE_STALE_TTL) === "fresh") continue;
+          await buildPage(path).catch((e) => console.warn("[warm] failed for", path, "-", e.message));
+        }
+      } finally {
+        sweeping = false;
       }
     };
-    tick();
-    const timer = setInterval(tick, everyMs);
+
+    const run = () => { sweep().catch((e) => console.warn("[warm] sweep failed —", e.message)); };
+    run();
+    const timer = setInterval(run, everyMs);
     // unref so the timer never holds the process open during a shutdown.
     timer.unref();
-    console.log(`[warm] keeping ${HOT_PATHS.join(", ")} warm every ${Math.round(everyMs / 1000)}s`);
+    console.log(`[warm] keeping the catalogue and ${HOT_PATHS.join(", ")} warm every ${Math.round(everyMs / 1000)}s`);
     return () => clearInterval(timer);
   };
 
