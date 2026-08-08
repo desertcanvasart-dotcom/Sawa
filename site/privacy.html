@@ -28,6 +28,10 @@
 .legal a{color:var(--gold-ink);text-decoration:underline;text-underline-offset:2px}
 .legal strong{color:var(--teal)}
 .legal .lead{font-size:1.1rem;color:var(--ink)}
+.legal .tscroll{overflow-x:auto;margin:0 0 18px;-webkit-overflow-scrolling:touch}
+.legal table{width:100%;border-collapse:collapse;margin:0;font-size:.95rem}
+.legal th{text-align:left;color:var(--teal);font-weight:700;padding:10px 12px;border-bottom:2px solid var(--line)}
+.legal td{color:var(--muted);padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top;line-height:1.6}
 </style>
 <script src="/assets/analytics.js"></script>
 </head>
@@ -72,87 +76,189 @@
 <section class="block" style="padding-top:20px">
   <div class="wrap">
     <div class="legal rv">
-      <!-- Was "October 1, 2026" while the documents were already live and being
-     relied on — a policy cannot govern bookings taken before it takes
-     effect. Set to the date this correction ships. -->
-      <p class="updated">Effective date: August 5, 2026</p>
+      <p class="updated">Effective date: August 8, 2026 &middot; Last updated: August 8, 2026</p>
 
-      <p class="lead">Capital Travel Service, trading as Sawa Tours (&ldquo;Sawa Tours&rdquo;, &ldquo;us&rdquo;, &ldquo;we&rdquo;, or &ldquo;our&rdquo;) operates the <a href="https://sawa.tours">sawa.tours</a> website (the &ldquo;Service&rdquo;).</p>
-      <p>This page informs you of our policies regarding the collection, use, and disclosure of personal data when you use our Service and the choices you have associated with that data. We use your data to provide and improve the Service. By using the Service, you agree to the collection and use of information in accordance with this policy. Unless otherwise defined in this Privacy Policy, terms used here have the same meanings as in our <a href="/terms">Terms and Conditions</a>.</p>
-
-      <h2>Information collection and use</h2>
-      <p>We collect several different types of information for various purposes to provide and improve our Service to you.</p>
-
-      <h3>Types of data collected</h3>
-      <p><strong>Personal Data.</strong> While using our Service, we may ask you to provide certain personally identifiable information that can be used to contact or identify you (&ldquo;Personal Data&rdquo;). This may include, but is not limited to:</p>
+      <h2>1. Purpose and scope</h2>
+      <p class="lead">This Privacy Policy explains how Capital Travel Service, trading as Sawa Tours (&ldquo;Sawa&rdquo;, &ldquo;we&rdquo;, &ldquo;us&rdquo; or &ldquo;our&rdquo;), collects, uses, shares, retains and protects personal data when you:</p>
       <ul>
-        <li>Email address</li>
-        <li>First name and last name</li>
-        <li>Phone number</li>
-        <li>Nationality and passport details where required to confirm a booking</li>
-        <li>Address, state, province, ZIP/postal code and city</li>
-      </ul>
-      <p><strong>Usage Data.</strong> We may also collect information on how the Service is accessed and used (&ldquo;Usage Data&rdquo;). This may include your device&rsquo;s Internet Protocol (IP) address, browser type and version, the pages of our Service you visit, the time and date of your visit, the time spent on those pages, unique device identifiers and other diagnostic data.</p>
-      <p><strong>Tracking &amp; cookies data.</strong> We use cookies and similar tracking technologies to track activity on our Service and hold certain information. Cookies are files with a small amount of data which may include an anonymous unique identifier, sent to your browser from a website and stored on your device. We also use beacons, tags and scripts to collect and analyse information and improve our Service.</p>
-      <p>You can instruct your browser to refuse all cookies or to indicate when a cookie is being sent. However, if you do not accept cookies, you may not be able to use some portions of our Service. Examples of cookies we use:</p>
-      <ul>
-        <li><strong>Session cookies</strong> — to operate our Service.</li>
-        <li><strong>Preference cookies</strong> — to remember your preferences and settings.</li>
-        <li><strong>Security cookies</strong> — for security purposes.</li>
+        <li>browse <a href="https://sawa.tours">sawa.tours</a>;</li>
+        <li>reserve or book a tour;</li>
+        <li>start or join a shared departure;</li>
+        <li>communicate with us by email, telephone, WhatsApp, form or social media;</li>
+        <li>create or use a traveler or operator account;</li>
+        <li>use a Sawa departures widget embedded on another website;</li>
+        <li>submit a review, enquiry, operator application or support request; or</li>
+        <li>otherwise interact with our services.</li>
       </ul>
 
-      <h2>Use of data</h2>
-      <p>Sawa Tours uses the collected data for various purposes:</p>
+      <h2>2. Who controls your data</h2>
+      <p>The principal controller is:</p>
+      <!-- Legal form and commercial registration number are omitted rather than
+           invented; add them here and in section 1 of terms.html together. -->
+      <p><strong>Capital Travel Service, trading as Sawa Tours</strong><br>
+      ETAA licence: 2179<br>
+      Address: Flat 6, Floor 1, Block 1, Panorama Pyramids Building, El-Ahramat Street, Giza, Egypt<br>
+      Privacy email: <a href="mailto:hello@sawa.tours">hello@sawa.tours</a><br>
+      Telephone and WhatsApp: <a href="https://wa.me/201092847613" rel="noopener" target="_blank">+20 109 284 7613</a></p>
+      <p>For the delivery of a booked tour, the named Operating Partner may act as a separate controller for the data it needs to operate the tour, meet its legal duties, keep its records and handle claims. Its identity is shown before payment or in your confirmation, and it must provide its own privacy information where required.</p>
+      <p>Where a traveler reaches Sawa through a partner operator or an embedded Sawa widget, Sawa and that referring partner may each control the data they collect for their own purposes.</p>
+
+      <h2>3. Personal data we collect</h2>
+      <p>Depending on how you interact with Sawa, we may collect:</p>
+      <h3>Identity and contact information</h3>
+      <p>Name, title, email address, phone number, postal address, country of residence, nationality, preferred language and account identifiers.</p>
+      <h3>Reservation and travel information</h3>
+      <p>Selected itinerary and date, group size, traveler names, booking number, seat status, accommodation preferences, rooming arrangements, meeting and pickup details, flight or arrival information, special requests, referral code, communications, changes, cancellations and tour history.</p>
+      <h3>Passport and compliance information</h3>
+      <p>Where genuinely required for a confirmed service: passport number, issuing country, issue and expiry dates, date of birth, visa information and copies of relevant documents. We do not request passport information merely to browse the site or hold a free seat.</p>
+      <h3>Health, accessibility and dietary information</h3>
+      <p>Information you choose or need to provide about disability, mobility, allergies, dietary requirements, medical conditions, pregnancy or emergency needs. This can be sensitive personal data and is used only where there is an appropriate legal basis and it is necessary for safety or service delivery.</p>
+      <h3>Payment and transaction information</h3>
+      <!-- Accurate to the current build: the Platform has no payment
+           integration, so no card data of any kind reaches it. Revisit this
+           paragraph and section 12 of the Terms when payments go live. -->
+      <p>Payment status, amount, currency, billing country, refund records and transaction references. The Platform does not collect or store payment-card numbers or security codes.</p>
+      <h3>Technical and usage information</h3>
+      <p>IP address, device and browser type, approximate location derived from IP address, pages viewed, referring page, campaign or operator referral code, timestamps, session information, error logs, and interaction with our website or embedded widget.</p>
+      <h3>Communications and content</h3>
+      <p>Emails, form submissions, WhatsApp and support messages, call notes, reviews, survey responses, photographs and complaints.</p>
+      <h3>Operator and business information</h3>
+      <p>For partner representatives: employer, job title, business contact details, licence and insurance documents, payout details, tax information, tour listings, ratings, performance records and dashboard activity.</p>
+
+      <h2>4. How we collect data</h2>
+      <p>We collect data:</p>
       <ul>
-        <li>To provide and maintain the Service</li>
-        <li>To notify you about changes to our Service</li>
-        <li>To allow you to participate in interactive features of our Service when you choose to do so</li>
-        <li>To provide customer care and support</li>
-        <li>To confirm bookings, coordinate shared departures and communicate with the operators who run your tour</li>
-        <li>To provide analysis or valuable information so that we can improve the Service</li>
-        <li>To monitor the usage of the Service</li>
-        <li>To detect, prevent and address technical issues</li>
+        <li>directly from you or the Lead Traveler;</li>
+        <li>from another traveler authorised to book for you;</li>
+        <li>from a referring or Operating Partner;</li>
+        <li>from our hosting, database, email, analytics and support providers;</li>
+        <li>automatically through cookies, local storage, logs and similar technologies;</li>
+        <li>through a Sawa widget on a partner website; and</li>
+        <li>from public registers or sources when verifying an operator&rsquo;s licence, insurance or business status.</li>
       </ul>
+      <p>If you provide another person&rsquo;s data, you must have the authority to do so and should direct them to this Policy.</p>
 
-      <h2>Transfer of data</h2>
-      <p>Your information, including Personal Data, may be transferred to &mdash; and maintained on &mdash; computers located outside of your state, province, country or other governmental jurisdiction where the data protection laws may differ from those of your jurisdiction.</p>
-      <p>If you are located outside Egypt and choose to provide information to us, please note that we transfer the data, including Personal Data, to Egypt and process it there. Your consent to this Privacy Policy followed by your submission of such information represents your agreement to that transfer.</p>
-      <p>Sawa Tours will take all steps reasonably necessary to ensure that your data is treated securely and in accordance with this Privacy Policy, and no transfer of your Personal Data will take place to an organisation or a country unless there are adequate controls in place, including the security of your data and other personal information.</p>
+      <h2>5. Why we use data and our legal bases</h2>
+      <p>The legal bases below use GDPR terminology because Sawa may offer services to travelers in the European Economic Area or the United Kingdom. Equivalent or additional bases may apply under Egyptian law and other applicable laws.</p>
+      <div class="tscroll">
+        <table>
+          <tr><th>Purpose</th><th>Data typically used</th><th>Legal basis</th></tr>
+          <tr><td>Show itineraries, availability and forming departures</td><td>Technical, usage and general enquiry data</td><td>Legitimate interests in operating the Platform; steps requested before a contract</td></tr>
+          <tr><td>Hold a free seat and coordinate GoAhead</td><td>Identity, contact, reservation and referral data</td><td>Steps requested before entering a contract; legitimate interests in managing shared departures</td></tr>
+          <tr><td>Confirm and deliver a booking</td><td>Identity, contact, travel, passport where necessary, payment, communications</td><td>Performance of a contract; legal obligations</td></tr>
+          <tr><td>Share a traveler manifest with the Operating Partner and necessary suppliers</td><td>Identity, contact, travel, passport or special-request data where required</td><td>Performance of a contract; legal obligations; vital interests in an emergency</td></tr>
+          <tr><td>Process payments and refunds</td><td>Transaction and contact data</td><td>Performance of a contract; legal obligations</td></tr>
+          <tr><td>Handle health, accessibility, allergy or dietary needs</td><td>Health and special-request data</td><td>Explicit consent where appropriate; vital interests; or another condition permitted by applicable law</td></tr>
+          <tr><td>Provide customer service, safety notices and emergency support</td><td>Identity, contact, booking and communications data</td><td>Performance of a contract; legitimate interests; vital interests in emergencies</td></tr>
+          <tr><td>Verify and manage Operating Partners</td><td>Business, licence, insurance, payout and performance data</td><td>Contract; legal obligations; legitimate interests in platform safety and quality</td></tr>
+          <tr><td>Attribute referrals and calculate partner payments</td><td>Referral code, booking, transaction and technical data</td><td>Contract; legitimate interests in accurate attribution and preventing fraud</td></tr>
+          <tr><td>Maintain security, logs and backups, and prevent abuse</td><td>Technical, account, transaction and communications data</td><td>Legitimate interests in security and legal claims; legal obligations</td></tr>
+          <tr><td>Measure and improve the Platform</td><td>Cookie, technical and usage data</td><td>Legitimate interests in understanding how the site is used; consent where required by your local law</td></tr>
+          <tr><td>Send marketing and travel inspiration</td><td>Name, email, preferences and engagement</td><td>Consent where required; otherwise a lawful existing-customer basis, always with an opt-out</td></tr>
+          <tr><td>Publish reviews or promotional photographs</td><td>Review, name, image and trip information</td><td>Consent, or the licence you grant when voluntarily submitting content</td></tr>
+          <tr><td>Meet tax, accounting, tourism, consumer and regulatory duties</td><td>Booking, identity, payment, complaint and operator records</td><td>Legal obligation</td></tr>
+          <tr><td>Establish, exercise or defend legal claims</td><td>Relevant records</td><td>Legitimate interests; the legal-claims condition for sensitive data where applicable</td></tr>
+        </table>
+      </div>
+      <p>Where we rely on consent you may withdraw it at any time, without affecting processing that was lawful before the withdrawal. Where we rely on legitimate interests you may object, and we will consider your rights alongside our reasons for continuing.</p>
+      <p>We do not use sensitive health data for marketing or unrelated profiling.</p>
 
-      <h2>Disclosure of data</h2>
-      <p><strong>Legal requirements.</strong> Sawa Tours may disclose your Personal Data in the good-faith belief that such action is necessary to:</p>
+      <h2>6. If you do not provide requested data</h2>
+      <p>Fields marked as required are needed to provide the stated service, meet a legal duty or safely operate the tour. If you do not provide them we may be unable to hold a seat, confirm a booking, process payment, arrange an adjustment or allow participation. Optional information is identified as such.</p>
+
+      <h2>7. Who receives personal data</h2>
+      <p>We share data only where reasonably necessary, with:</p>
       <ul>
-        <li>Comply with a legal obligation</li>
-        <li>Protect and defend the rights or property of Sawa Tours</li>
-        <li>Prevent or investigate possible wrongdoing in connection with the Service</li>
-        <li>Protect the personal safety of users of the Service or the public</li>
-        <li>Protect against legal liability</li>
+        <li>the Operating Partner named for your departure;</li>
+        <li>hotels, cruise companies, guides, transport providers, attractions, airlines and other suppliers included in your booking;</li>
+        <li>the operator or publisher whose referral link or Sawa widget you used, for attribution, service and agreed commission reporting;</li>
+        <li>professional advisers, insurers, auditors and claims handlers;</li>
+        <li>regulators, courts, law enforcement, tourism authorities, tax authorities or other bodies where disclosure is legally required or necessary to protect rights and safety; and</li>
+        <li>a genuine buyer or successor if Sawa undergoes a merger, reorganisation, financing or sale, subject to appropriate confidentiality safeguards.</li>
       </ul>
+      <!-- The vendor list below is the real one, read off the codebase rather
+           than assumed: Supabase (server/supabase.js, src/supabaseClient.js),
+           Resend (server/email.js), Railway (railway.json) and GA4
+           (site/assets/analytics.js). Keep it in step with what we deploy. -->
+      <p>We also use service providers who process data on our behalf under contract:</p>
+      <div class="tscroll">
+        <table>
+          <tr><th>Provider</th><th>What it does for us</th></tr>
+          <tr><td>Supabase</td><td>Database, file and image storage, and account authentication</td></tr>
+          <tr><td>Railway</td><td>Hosting for the website and booking service</td></tr>
+          <tr><td>Resend</td><td>Sending transactional email, such as reservation and GoAhead notices</td></tr>
+          <tr><td>Google LLC</td><td>Google Analytics website measurement, and Google Fonts</td></tr>
+        </table>
+      </div>
+      <p>We do not sell personal data. We do not disclose traveler contact details to other travelers before a departure without permission, except where it is necessary for group coordination and has been clearly explained.</p>
 
-      <h2>Security of data</h2>
-      <p>The security of your data is important to us, but remember that no method of transmission over the Internet, or method of electronic storage, is 100% secure. While we strive to use commercially acceptable means to protect your Personal Data, we cannot guarantee its absolute security.</p>
+      <h2>8. International transfers</h2>
+      <p>Sawa is based in Egypt and tour services are delivered in Egypt, so if you are outside Egypt your personal data will be transferred to and processed in Egypt. Our service providers may also process data outside Egypt, including in the United States and the European Union.</p>
+      <p>Where data-protection law requires transfer safeguards, we use an available lawful mechanism, which may include an adequacy decision, standard contractual clauses, the UK International Data Transfer Addendum, or another legally approved safeguard, and we assess our providers&rsquo; technical and contractual protections. Contact us to request further information about the safeguard relevant to your data.</p>
 
-      <h2>Service providers</h2>
-      <p>We may employ third-party companies and individuals to facilitate our Service (&ldquo;Service Providers&rdquo;), to provide the Service on our behalf, to perform Service-related tasks, or to assist us in analysing how our Service is used. This includes the licensed Egyptian operators who run confirmed departures and the payment providers who process your payment. These third parties have access to your Personal Data only to perform these tasks on our behalf and are obligated not to disclose or use it for any other purpose.</p>
-
-      <h2>Analytics</h2>
-      <p>We may use third-party Service Providers to monitor and analyse the use of our Service, such as <strong>Google Analytics</strong> — a web analytics service that tracks and reports website traffic. You can opt out of having your activity on the Service made available to Google Analytics by installing the Google Analytics opt-out browser add-on. For more information on the privacy practices of Google, please visit the <a href="https://policies.google.com/privacy">Google Privacy &amp; Terms</a> page.</p>
-
-      <h2>Links to other sites</h2>
-      <p>Our Service may contain links to other sites that are not operated by us. If you click a third-party link, you will be directed to that third party&rsquo;s site. We strongly advise you to review the Privacy Policy of every site you visit. We have no control over, and assume no responsibility for, the content, privacy policies or practices of any third-party sites or services.</p>
-
-      <h2>Children&rsquo;s privacy</h2>
-      <p>Our Service does not address anyone under the age of 18 (&ldquo;Children&rdquo;). We do not knowingly collect personally identifiable information from anyone under the age of 18. If you are a parent or guardian and you are aware that your child has provided us with Personal Data, please contact us. If we become aware that we have collected Personal Data from children without verification of parental consent, we take steps to remove that information from our servers.</p>
-
-      <h2>Changes to this Privacy Policy</h2>
-      <p>We may update our Privacy Policy from time to time. We will notify you of any changes by posting the new Privacy Policy on this page and updating the &ldquo;effective date&rdquo; above. Where changes are material we will let you know via email and/or a prominent notice on our Service prior to the change becoming effective. You are advised to review this Privacy Policy periodically for any changes. Changes are effective when they are posted on this page.</p>
-
-      <h2>Contact us</h2>
-      <p>If you have any questions about this Privacy Policy, please contact us:</p>
+      <h2>9. Data retention</h2>
+      <p>We keep personal data only for as long as it is reasonably needed for the purpose it was collected for, and to satisfy legal, accounting, tourism, tax, fraud-prevention and claims requirements. In practice:</p>
       <ul>
-        <li>By email: <a href="mailto:hello@sawa.tours">hello@sawa.tours</a></li>
-        <li>By visiting the <a href="/contact">contact page</a> on our website</li>
+        <li>a reservation on a departure that never reaches GoAhead is kept for a short period after the date closes, and then deleted or anonymised, unless it is needed for a dispute;</li>
+        <li>confirmed booking and payment records are kept for the period required by Egyptian tax and commercial law;</li>
+        <li>passport details and copies are deleted once the service they were collected for has been delivered, unless a law requires us to keep them for longer;</li>
+        <li>health and accessibility information is deleted shortly after the tour ends, unless an incident or claim requires us to keep it;</li>
+        <li>customer-service messages and complaints are kept for the period during which a related claim could be brought;</li>
+        <li>a marketing subscription is kept until you opt out, after which we keep a minimal record so that your opt-out is respected; and</li>
+        <li>analytics and security logs are kept for the limited periods set in the relevant tool.</li>
       </ul>
+      <p>When data is no longer required we delete, anonymise or securely isolate it, subject to backup cycles and legal holds. Anonymised statistical data may be kept because it no longer identifies anyone.</p>
+
+      <h2>10. Security</h2>
+      <p>We use proportionate administrative, organisational and technical safeguards, including access controls, role-based permissions, encrypted connections, provider security reviews, backups, logging and staff confidentiality measures. No online system is completely secure, but we review our safeguards regularly.</p>
+      <p>If a personal-data breach creates a legal notification duty, we will notify the relevant authority and the affected individuals within the required period.</p>
+
+      <h2>11. Your privacy rights</h2>
+      <p>Depending on the law that applies to you, you may have the right to:</p>
+      <ul>
+        <li>ask whether we process your data and obtain a copy;</li>
+        <li>correct inaccurate or incomplete data;</li>
+        <li>request deletion;</li>
+        <li>restrict processing;</li>
+        <li>object to processing based on legitimate interests, or to direct marketing;</li>
+        <li>withdraw consent;</li>
+        <li>receive certain data in a portable format;</li>
+        <li>object to, or request review of, certain solely automated decisions; and</li>
+        <li>complain to a competent data-protection authority.</li>
+      </ul>
+      <p>To exercise a right, email <a href="mailto:hello@sawa.tours">hello@sawa.tours</a> and describe your request. We may ask for information necessary to verify your identity, and we will respond within the period required by the applicable law. Rights can have exceptions &mdash; for example, we may need to retain records for tax, legal claims or fraud prevention.</p>
+      <p>You may also complain to the data-protection regulator in your country of residence or work.</p>
+
+      <h2>12. Marketing choices</h2>
+      <p>We distinguish booking and safety messages from marketing. You cannot opt out of messages necessary to administer an active reservation or booking, but you can unsubscribe from marketing at any time using the link in an email or by contacting us.</p>
+      <p>We will not add a partner-supplied traveler to Sawa marketing merely because that partner shared data in order to operate a departure. Separate valid permission, or another lawful basis, is required.</p>
+
+      <h2>13. Cookies and similar technologies</h2>
+      <p>We use cookies, local storage and similar technologies as described in our <a href="/cookies">Cookie Policy</a>, which lists each one, what it does and how long it lasts, and explains how to block or delete them.</p>
+
+      <h2>14. Embedded Sawa widget</h2>
+      <p>A partner website may display Sawa departures through an embedded widget. When the widget loads, Sawa may receive ordinary network information such as your IP address, device and browser data, the referring domain, the widget configuration and a partner identifier. If you interact with the widget or reserve a seat, Sawa receives the information you enter and processes it as described in this Policy.</p>
+      <p>The partner remains responsible for its own website, cookies and privacy notice.</p>
+
+      <h2>15. Children&rsquo;s privacy</h2>
+      <p>The Platform is intended for adults making travel arrangements. We do not knowingly allow anyone under 18 to create an account or make a booking independently. A parent or authorised adult may provide a child&rsquo;s data where it is needed for a family booking; we use it only for the travel service, safety and legal requirements, and never for direct marketing to the child.</p>
+      <p>If you believe a child has provided data without proper authority, contact us so that we can investigate and delete it where appropriate.</p>
+
+      <h2>16. Automated decisions</h2>
+      <p>We do not make decisions producing legal or similarly significant effects about you solely by automated means. Seat counts and the automatic GoAhead status are operational rules based on valid reservations, not profiling decisions about a traveler.</p>
+
+      <h2>17. Third-party sites and services</h2>
+      <p>The Platform may link to third-party websites or services whose privacy practices they control. Review their notices before supplying data. A link does not mean that Sawa controls or endorses their privacy practices.</p>
+
+      <h2>18. Changes to this Policy</h2>
+      <p>We may update this Policy to reflect changes in law, in our providers or in our services. We publish the new version and update the date above. If a change materially affects how we use data already collected, we will give additional notice or seek consent where required.</p>
+
+      <h2>19. Contact and complaints</h2>
+      <p>Questions, requests and complaints may be sent to:</p>
+      <p><strong>Privacy Contact, Sawa Tours</strong><br>
+      Email: <a href="mailto:hello@sawa.tours">hello@sawa.tours</a><br>
+      Address: Flat 6, Floor 1, Block 1, Panorama Pyramids Building, El-Ahramat Street, Giza, Egypt<br>
+      Telephone and WhatsApp: <a href="https://wa.me/201092847613" rel="noopener" target="_blank">+20 109 284 7613</a></p>
     </div>
   </div>
 </section>
@@ -191,12 +297,14 @@
         <h4>Company</h4>
         <a href="/about">About Sawa</a>
         <a href="/contact">Support</a>
+        <a href="/privacy">Privacy Policy</a>
+        <a href="/cookies">Cookies</a>
+        <a href="/terms">Terms and Conditions</a>
         
       </div>
     </div>
     <div class="fbot">
       <span>© 2026 Sawa Tours · Operated by Capital Travel Service · ETAA 2179</span>
-      <div class="lks"><a href="/privacy">Privacy Policy</a><a href="/cookies">Cookies</a><a href="/terms">Terms and Conditions</a></div>
       <!-- Instagram and Facebook are not live yet, so they are simply absent.
            A muted placeholder icon still lands in the accessibility tree as
            something a screen reader reads out and a keyboard user passes over,
