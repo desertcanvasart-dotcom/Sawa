@@ -212,8 +212,8 @@ footer .logo .nm i{color:var(--gold)}
 .fcol h4{font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;color:var(--gold);margin-bottom:18px}
 .fcol a{display:block;color:rgba(247,243,234,.72);font-size:.94rem;padding:7px 0;transition:color .3s var(--ease)}
 .fcol a:hover{color:var(--cream)}
-.fbot{border-top:1px solid rgba(247,243,234,.13);margin-top:54px;padding-top:26px;display:flex;justify-content:space-between;align-items:center;gap:18px;flex-wrap:wrap;font-size:.85rem;color:rgba(247,243,234,.56)}
-.fbot .lks{display:flex;gap:22px}
+.fbot{border-top:1px solid rgba(247,243,234,.13);margin-top:54px;padding-top:26px;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:18px;font-size:.85rem;color:rgba(247,243,234,.56)}.fbot>span{grid-column:2;text-align:center}.fbot .socials{grid-column:3;justify-self:end}
+
 .fbot a:hover{color:var(--cream)}
 
 .rv{opacity:0;transform:translateY(34px);filter:blur(7px);transition:opacity .9s var(--ease-2),transform .9s var(--ease-2),filter .9s var(--ease-2)}
@@ -252,7 +252,7 @@ footer .logo .nm i{color:var(--gold)}
   .know{grid-template-columns:1fr}
   .rel-grid{grid-template-columns:1fr}
   .fgrid{grid-template-columns:1fr;gap:30px}
-  .fbot{flex-direction:column;align-items:flex-start}
+  .fbot{grid-template-columns:1fr;justify-items:center}.fbot>span,.fbot .socials{grid-column:1;justify-self:center}
 }
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition-duration:.01ms!important}.rv{opacity:1;transform:none;filter:none}}
 </style>
@@ -380,11 +380,10 @@ footer .logo .nm i{color:var(--gold)}
         <a href="/blog">Blog</a>
         <a href="/faq">FAQ</a></div>
       <div class="fcol"><h4>Operators</h4><a href="/operators">For Operators</a><a href="/operators">List a tour</a><a href="/verify">Become verified</a><a href="/widget">Get the widget</a></div>
-      <div class="fcol"><h4>Company</h4><a href="/about">About Sawa</a><a href="/contact">Support</a></div>
+      <div class="fcol"><h4>Company</h4><a href="/about">About Sawa</a><a href="/contact">Support</a><a href="/privacy">Privacy Policy</a><a href="/cookies">Cookies</a><a href="/terms">Terms and Conditions</a></div>
     </div>
     <div class="fbot">
       <span>© 2026 Sawa Tours · Operated by Capital Travel Service · ETAA 2179</span>
-      <div class="lks"><a href="/privacy">Privacy Policy</a><a href="/cookies">Cookies</a><a href="/terms">Terms and Conditions</a></div>
     </div>
   </div>
 </footer>

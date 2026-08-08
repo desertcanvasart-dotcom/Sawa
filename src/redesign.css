@@ -305,8 +305,11 @@
 .sx .fcol h4{font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;color:var(--gold);margin-bottom:18px}
 .sx .fcol a{display:block;color:rgba(247,243,234,.72);font-size:.94rem;padding:7px 0;transition:color .3s var(--ease)}
 .sx .fcol a:hover{color:var(--cream)}
-.sx .fbot{border-top:1px solid rgba(247,243,234,.13);margin-top:54px;padding-top:26px;display:flex;justify-content:space-between;align-items:center;gap:18px;flex-wrap:wrap;font-size:.85rem;color:rgba(247,243,234,.56)}
-.sx .fbot .lks{display:flex;gap:22px}
+/* Matches site/assets/sawa.css: the copyright line is centred and the legal
+   links now live in the Company column above. */
+.sx .fbot{border-top:1px solid rgba(247,243,234,.13);margin-top:54px;padding-top:26px;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:18px;font-size:.85rem;color:rgba(247,243,234,.56)}
+.sx .fbot>span{grid-column:2;text-align:center}
+.sx .fbot .socials{grid-column:3;justify-self:end}
 .sx .fbot a{color:rgba(247,243,234,.56);transition:color .3s}
 .sx .fbot a:hover{color:var(--cream)}
 .sx .socials{display:flex;gap:11px}
@@ -356,7 +359,8 @@
   .sx .board-top,.sx .board-foot{padding-left:16px;padding-right:16px}
   .sx .cta-inner{padding:56px 24px}
   .sx .fgrid{grid-template-columns:1fr;gap:30px}
-  .sx .fbot{flex-direction:column;align-items:flex-start}
+  .sx .fbot{grid-template-columns:1fr;justify-items:center}
+  .sx .fbot>span,.sx .fbot .socials{grid-column:1;justify-self:center}
   .sx .ph-1,.sx .ph-2{transform:none}
 }
 @media(prefers-reduced-motion:reduce){
