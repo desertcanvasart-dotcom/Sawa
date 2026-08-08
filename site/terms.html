@@ -28,6 +28,10 @@
 .legal a{color:var(--gold-ink);text-decoration:underline;text-underline-offset:2px}
 .legal strong{color:var(--teal)}
 .legal .lead{font-size:1.1rem;color:var(--ink)}
+.legal .tscroll{overflow-x:auto;margin:0 0 18px;-webkit-overflow-scrolling:touch}
+.legal table{width:100%;border-collapse:collapse;margin:0;font-size:.95rem}
+.legal th{text-align:left;color:var(--teal);font-weight:700;padding:10px 12px;border-bottom:2px solid var(--line)}
+.legal td{color:var(--muted);padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top;line-height:1.6}
 </style>
 <script src="/assets/analytics.js"></script>
 </head>
@@ -72,97 +76,241 @@
 <section class="block" style="padding-top:20px">
   <div class="wrap">
     <div class="legal rv">
-      <!-- Was "October 1, 2026" while the documents were already live and being
-     relied on — a policy cannot govern bookings taken before it takes
-     effect. Set to the date this correction ships. -->
-      <p class="updated">Effective date: August 5, 2026</p>
+      <p class="updated">Effective date: August 8, 2026 &middot; Last updated: August 8, 2026</p>
 
-      <h2>Our contract</h2>
-      <p class="lead">Capital Travel Service, trading as Sawa Tours (&ldquo;Sawa Tours&rdquo;, &ldquo;we&rdquo;, &ldquo;us&rdquo;, &ldquo;our&rdquo;) owns and runs the brand <a href="https://sawa.tours">sawa.tours</a>, a platform that pools travelers into shared departures operated by licensed, verified Egyptian tour operators.</p>
-      <p>Sawa coordinates the group, the payment and the &ldquo;GoAhead&rdquo; confirmation; the operator named on each departure delivers the tour. By making a booking with Sawa Tours you confirm that you have read and agreed to the entire Booking Agreement (these Booking Conditions) between you and Sawa Tours. The services provided will be those referred to in your booking confirmation.</p>
-
-      <h2>Validity</h2>
-      <!-- Also read "October 1, 2026" — the same future date as the effective
-           date, so the site took bookings under prices it said were not yet
-           valid. Kept in step with the effective date above; change both together. -->
-      <p>Dates, itineraries and prices are valid from August 5, 2026 and may be updated from time to time. The terms applicable to your booking are those in force on the date your booking is confirmed.</p>
-
-      <h2>Reserving a seat and the GoAhead</h2>
-      <p>Reserving a seat on a forming departure is free. We may place a temporary authorisation hold to verify your payment card, but no money is captured while the departure is still forming. A departure is confirmed only when it reaches its minimum group size — a minimum of four travelers, the moment we call the <a href="/goahead-promise">GoAhead</a>. Every Sawa departure runs with a minimum of 4 and a maximum of 12 travelers.</p>
-
-      <h2>Deposits and final payment</h2>
-      <p>Once a departure reaches the GoAhead and your booking is confirmed, payment becomes due. Depending on the tour, you will be required to pay a deposit — typically 20% per person for multi-day packages and 10% per person for day tours — with the balance due before departure. If your booking is confirmed within 30 days of the departure date, the full amount is payable at the time of confirmation. The specific deposit and balance-due date for your trip are shown before you book and on your booking confirmation. If the balance is not paid on or before the due date we reserve the right to cancel your booking.</p>
-
-      <h2>Your details</h2>
-      <p>In order for Sawa Tours and the operating partner to confirm your travel arrangements, you must provide all requested documentation and details when you pay the balance of the trip. This includes your full name exactly as it appears on your passport, your nationality, passport number, date of birth, passport issue and expiry dates, and any pre-existing medical conditions that may affect your ability to complete your travel arrangements.</p>
-
-      <h2>Cancellation by the traveller</h2>
-      <p><strong>Before the GoAhead:</strong> you may cancel your reservation at any time at no cost, and any authorisation hold is released in full.</p>
-      <p><strong>After the GoAhead:</strong> the cancellation policy of the operating partner — shown on every departure before you reserve — applies. We must receive written notice of cancellation for it to be effective. Where no specific operator policy applies, the following default schedule applies from the date the departure is confirmed:</p>
+      <h2>1. About these Terms</h2>
+      <p class="lead">These Terms and Conditions (the &ldquo;Terms&rdquo;) govern your use of sawa.tours and any related Sawa Tours booking pages, traveler portals, messages and services (together, the &ldquo;Platform&rdquo;), and any reservation or booking you make through them.</p>
+      <!-- Legal form, commercial registration and tax numbers are deliberately
+           absent rather than guessed: nothing in this repository or on the site
+           records them. Add them here once confirmed — this paragraph and the
+           controller block in privacy.html are the two places they belong. -->
+      <p>The Platform is operated by <strong>Capital Travel Service</strong>, trading as <strong>Sawa Tours</strong> (&ldquo;Sawa&rdquo;, &ldquo;we&rdquo;, &ldquo;us&rdquo; or &ldquo;our&rdquo;), an Egyptian travel company licensed by the Egyptian Travel Agents Association under licence number <strong>ETAA 2179</strong>, with its registered office at Flat 6, Floor 1, Block 1, Panorama Pyramids Building, El-Ahramat Street, Giza, Egypt.</p>
+      <p>You can contact us at:</p>
       <ul>
-        <li>46 days or more prior to departure — we retain the deposit.</li>
-        <li>Between 30 and 45 days prior to departure — we retain the deposit or 50% of the total booking cost, whichever is greater.</li>
-        <li>Less than 30 days prior to departure — we retain 100% of amounts paid in connection with the booking.</li>
+        <li>Email: <a href="mailto:hello@sawa.tours">hello@sawa.tours</a></li>
+        <li>Telephone and WhatsApp: <a href="https://wa.me/201092847613" rel="noopener" target="_blank">+20 109 284 7613</a></li>
+        <li>Postal address: Flat 6, Floor 1, Block 1, Panorama Pyramids Building, El-Ahramat Street, Giza, Egypt</li>
+        <li>Assistance for travelers on an active tour: the same WhatsApp number, monitored 24 hours a day while your tour is running</li>
       </ul>
-      <p>In certain cases (for example where flights or non-refundable services have already been issued) a 100% cancellation fee may apply as soon as the booking is confirmed. Please ask for full details of cancellation charges at the time of booking. If you leave a trip for any reason after it has commenced, we are not obliged to make any refund for unused services.</p>
+      <p>By using the Platform or submitting a reservation, you confirm that you have read and accept these Terms. If you book for other travelers, you confirm that you have their authority to do so, that you will provide these Terms to them, and that the information you submit about them is accurate and lawfully shared.</p>
 
-      <h2>Cancellation by Sawa</h2>
-      <!-- The deadline was referred to but never stated, and until now nothing
-           enforced it. Both are fixed: the days are named here, and a daily job
-           cancels dates that miss them (server/jobs/cancel-unconfirmed.js). -->
-      <p><strong>The GoAhead deadline.</strong> Every departure must reach its minimum of four travelers by a deadline before it departs: <strong>30 days</strong> for multi-day packages and <strong>7 days</strong> for day tours. The exact date is shown on the departure before you reserve. An operator may set a longer or shorter deadline on a particular tour, in which case the deadline shown on that departure applies.</p>
-      <p>If a departure does not reach its minimum of four travelers by its deadline, it is cancelled automatically and you pay nothing; any hold is released in full. We notify you by email as soon as this happens. We may also cancel a trip at any time up to 28 days before departure if, due to terrorism, natural disasters, political instability or other external events, it is not viable to operate the planned itinerary.</p>
-      <p>If we cancel your confirmed trip, you may transfer amounts paid to an alternative departure date or receive a full refund. Where the cancellation is due to external events beyond our control, refunds will be made less any unrecoverable costs. We are not responsible for incidental costs you may have incurred as a result of your booking, including visas, vaccinations, travel insurance or non-refundable flights.</p>
+      <h2>2. Sawa&rsquo;s role and the operating partner</h2>
+      <p>Sawa provides a platform that brings travelers together on shared departures and coordinates reservations, confirmation, communication and payment. Tours are delivered on the ground by licensed Egyptian tour operators approved by Sawa (each an &ldquo;Operating Partner&rdquo;).</p>
+      <p>The Operating Partner responsible for a departure is identified on the departure page or in the booking confirmation. The Operating Partner is responsible for delivering the itinerary and included travel services. Sawa remains responsible for the services it expressly undertakes to provide, including administering the Sawa booking process and the <a href="/goahead-promise">GoAhead</a> system.</p>
+      <p>Where a booking contains services supplied by hotels, cruise companies, transport providers, guides, attractions, airlines or other third parties, their reasonable conditions may also apply to those services. We will make material supplier conditions available before booking, or on request, where they affect cancellation, changes, liability or participation.</p>
+      <p>Nothing in these Terms removes a responsibility that Sawa or an Operating Partner cannot lawfully exclude. Any ambiguity about who is responsible for a service should be raised with us before payment.</p>
 
-      <h2>Booking amendments</h2>
-      <p>If you want to transfer from one trip to another, or transfer your booking to a third party, you must notify us at least 31 days prior to the proposed departure date. A fee of US$50 per person per change applies, in addition to any charges levied by hotels, ground operators or airlines. If we are notified less than 30 days prior to departure, the cancellation policy applies. Transfers to a third party are only permitted where the transferee meets all the requirements of the trip, and transfers to another departure can only be made within the current validity period. Amendments to any other arrangements will incur a US$25 administration fee per booking per change, in addition to any supplier charges. No amendments are permitted within 7 days of departure.</p>
+      <h2>3. Key definitions</h2>
+      <ul>
+        <li><strong>Departure:</strong> a particular itinerary scheduled for a specific date and time.</li>
+        <li><strong>Forming Departure:</strong> a Departure that has at least one reservation but has not reached its Confirmation Minimum.</li>
+        <li><strong>Confirmation Minimum:</strong> the minimum number of confirmed travelers required for a Departure to run. The standard minimum is four travelers unless the booking page expressly shows another number.</li>
+        <li><strong>GoAhead:</strong> the moment a Departure reaches its Confirmation Minimum and becomes confirmed.</li>
+        <li><strong>Confirmation Deadline:</strong> the date by which a Forming Departure must reach its Confirmation Minimum.</li>
+        <li><strong>Booking:</strong> a traveler&rsquo;s confirmed place after GoAhead and any required payment has been made.</li>
+        <li><strong>Lead Traveler:</strong> the person submitting a reservation for themselves and, where applicable, for other travelers.</li>
+        <li><strong>Tour Price:</strong> the price of the included services shown at checkout, excluding items expressly listed as excluded.</li>
+      </ul>
 
-      <h2>Inclusions / exclusions</h2>
-      <p>As described on each tour. Every departure lists exactly what is included and excluded before you book.</p>
+      <h2>4. Eligibility and authority to book</h2>
+      <p>You must be at least 18 years old and legally able to enter into a contract to make a reservation. A traveler under 18 may travel only where the itinerary permits and must be included in a booking made by their parent, legal guardian or another adult with proper authority, who remains responsible for their day-to-day care throughout the tour.</p>
+      <p>The Lead Traveler is responsible for:</p>
+      <ul>
+        <li>providing accurate and complete details for every traveler;</li>
+        <li>ensuring every traveler reads and accepts these Terms and the applicable itinerary conditions;</li>
+        <li>making payments due for the booking;</li>
+        <li>passing our messages and documents to all travelers promptly; and</li>
+        <li>obtaining lawful authority to give us another person&rsquo;s personal or health information.</li>
+      </ul>
+      <!-- The old wording set a minimum age of 14 and then set rules for
+           travelers under 14, which cannot both be true. Resolved as: 18 to
+           book, 14 to travel unless the itinerary says otherwise, accompanied
+           under 18. Change the number here if the operator position differs. -->
+      <p>Unless the tour page states otherwise, the minimum age to travel is 14. Age limits, child pricing, accessibility and minimum fitness requirements vary by itinerary; the requirements that apply to your trip appear on the tour page or booking confirmation.</p>
 
-      <h2>Prices</h2>
-      <!-- "$" alone is ambiguous to an international customer — it reads as CAD,
-           AUD or SGD as readily as USD. Every price on the site and in these
-           conditions is US dollars, so the conditions say so once, plainly. -->
-      <p><strong>All prices, deposits, fees and refunds referred to on the Sawa Tours website and in these Booking Conditions are quoted and payable in United States dollars (USD), shown as &ldquo;$&rdquo; or &ldquo;US$&rdquo;.</strong> Your bank or card issuer may apply its own conversion rate and foreign-transaction fee if your account is held in another currency; those charges are outside our control and are not refundable by us.</p>
-      <p>Our trip prices are based on currency exchange rates applicable at the time of listing. We reserve the right to impose surcharges up to 31 days before departure due to changes in exchange rates, increases in airfares or other transport costs, increases in local operator costs, taxes, or if government action requires us to do so. In such instances, we will be responsible for the first 50% of the additional costs and you will be responsible for the balance.</p>
+      <h2>5. Information shown on the Platform</h2>
+      <p>We take reasonable care to ensure that itinerary descriptions, availability, seat counts, prices, images, inclusions and other information are accurate. Images may be illustrative, and travel conditions can change. The final booking summary and confirmation identify the services included in your Booking.</p>
+      <p>Live seat counts may take a short time to update, and a displayed place is not guaranteed until your reservation is accepted. If we identify an obvious pricing, availability or description error before GoAhead or payment, we will tell you and allow you to accept the corrected details or cancel without charge. We will not knowingly rely on an obvious error.</p>
 
-      <h2>Age &amp; health requirements</h2>
-      <p>For the vast majority of our trips the minimum age for children is 14. All travelers under 14 must be accompanied by an adult responsible for the child&rsquo;s day-to-day care. For most trips there is no upper age limit; however, some trips can be physically demanding. We can provide details on mandatory health requirements, but we are not medical experts.</p>
+      <h2>6. Forming Departures and free reservations</h2>
+      <!-- Accurate to the current build: reserving takes contact details only.
+           No card is requested, no processor is integrated and no authorisation
+           hold is placed. Rewrite this section and section 12 together on the
+           day payments go live. -->
+      <p>You may reserve a place on a Forming Departure without paying the Tour Price. A reservation at this stage is an expression of commitment to join if the Departure reaches GoAhead; it is not yet confirmation that the tour will run.</p>
+      <p>Before GoAhead:</p>
+      <ul>
+        <li>no Tour Price is captured, and no payment card details are requested or held;</li>
+        <li>you may cancel your reservation at any time without a Sawa cancellation charge;</li>
+        <li>the Departure remains open for other travelers to join; and</li>
+        <li>you should not make non-refundable connected arrangements in reliance on the Departure running.</li>
+      </ul>
 
-      <h2>Passport and visas</h2>
-      <p>For your protection and for easy access when necessary, you must carry your valid passport and any other travel-related documents with you at all times. Your passport must not expire within six months of the end of your trip.</p>
+      <h2>7. Starting a new date</h2>
+      <p>Where the Platform permits, you may request a new date for an existing itinerary. The date does not become an open Departure until Sawa and an Operating Partner have reviewed availability, pricing, operating conditions and the Confirmation Deadline. Submitting a request does not oblige us or an Operating Partner to offer that date.</p>
+      <p>Once approved and published, the new date is open for other travelers to join under the same rules as any other Forming Departure.</p>
 
-      <h2>Travel insurance</h2>
-      <p>Travel insurance is mandatory for all Sawa travelers and should be obtained when you book. Your travel insurance must cover personal accident, death, medical expenses and emergency repatriation, with a recommended minimum coverage of US$100,000 for each category. We also strongly recommend cover for cancellation, curtailment, personal liability and loss of luggage and personal effects. You must provide proof of your travel insurance.</p>
+      <h2>8. GoAhead and formation of the Booking</h2>
+      <p>A Departure reaches GoAhead when the number of valid traveler commitments reaches the Confirmation Minimum shown for that Departure. We then send the Lead Traveler a GoAhead confirmation stating:</p>
+      <ul>
+        <li>the Departure and Operating Partner;</li>
+        <li>the travelers included;</li>
+        <li>the Tour Price and currency;</li>
+        <li>the deposit or full amount due;</li>
+        <li>the payment deadline and balance-due date;</li>
+        <li>the applicable cancellation conditions; and</li>
+        <li>important itinerary-specific requirements.</li>
+      </ul>
+      <p>Your Booking becomes binding when we have sent the GoAhead confirmation and you have paid the amount it requires by the deadline it states. The contract for the tour forms when that payment is received. We do not charge a card automatically at GoAhead.</p>
+      <p>If payment fails or is not received by the stated deadline, we may release the seats after giving the Lead Traveler a reasonable opportunity to correct the payment, unless departure is imminent.</p>
+      <!-- The promise below is a commercial choice, not something the code
+           enforces: nothing re-opens or cancels a date once it has passed its
+           minimum. Stated plainly here so travelers can rely on it. -->
+      <p>Once a Departure reaches GoAhead it will not be cancelled merely because another traveler later cancels and the group falls below the Confirmation Minimum.</p>
 
-      <h2>Flexibility</h2>
-      <p>You recognise and acknowledge that this type of tour requires considerable flexibility, and you should allow for last-minute changes and alternatives. The itinerary provided for each trip is representative of the types of activities planned; the route, schedules, itineraries, amenities and transport may be subject to change without prior notice due to unexpected changes in local circumstances or events.</p>
+      <h2>9. Confirmation Deadlines</h2>
+      <p>Unless a different deadline is clearly shown before you reserve:</p>
+      <ul>
+        <li>a multi-day Departure must reach GoAhead at least <strong>30 days</strong> before departure; and</li>
+        <li>a day tour must reach GoAhead at least <strong>7 days</strong> before departure.</li>
+      </ul>
+      <p>If a Forming Departure does not reach the Confirmation Minimum by its Confirmation Deadline, it closes automatically. You owe nothing and no Tour Price is captured. We notify you by email as soon as this happens, and we may suggest another Departure, but you are not required to accept it.</p>
 
-      <h2>Change of itinerary</h2>
-      <p>Sawa Tours endeavours to operate all trips as planned; however, we reserve the right to change a trip itinerary if necessary. Before departure, if there is a change we will inform you as soon as reasonably possible. A major change is one affecting at least one day of the itinerary. When a major change occurs you may choose between accepting the change, obtaining a refund of money paid on the land portion of the trip only, or accepting an offered alternative tour. After departure, we reserve the right to change an itinerary due to local circumstances or events outside our control; in such emergency circumstances, the additional cost of any necessary alterations will be your responsibility. We are not responsible for incidental expenses incurred as a result of a change of itinerary, such as non-refundable flights.</p>
+      <h2>10. Prices, currency and taxes</h2>
+      <p><strong>Prices are stated in United States dollars (USD), shown as &ldquo;$&rdquo; or &ldquo;US$&rdquo;, unless another currency is expressly shown.</strong> The Tour Price includes only the services listed under &ldquo;Included&rdquo;. Items listed under &ldquo;Not included&rdquo; &mdash; which may include visas, international flights, insurance, gratuities, meals, drinks, optional activities or entrance tickets &mdash; are your responsibility.</p>
+      <p>Any mandatory charge payable to Sawa is disclosed before you complete payment. Your bank or payment provider may apply currency conversion, foreign-transaction or other charges; these are separate from the Tour Price and are neither controlled nor refunded by Sawa.</p>
+      <!-- Replaces the previous open-ended surcharge clause, which let us pass
+           on exchange-rate and supplier increases after a booking was confirmed
+           and is not safely enforceable against consumers. -->
+      <p>We will not increase the confirmed Tour Price after your Booking becomes binding except where:</p>
+      <ul>
+        <li>you request a change;</li>
+        <li>the change is required by law, tax, a government fee, or a service you select; or</li>
+        <li>a price-adjustment rule that was clearly disclosed to you before booking, and is permitted by applicable law, applies.</li>
+      </ul>
+      <p>If a permitted increase is material, we will explain the reason and any cancellation rights required by law.</p>
 
-      <h2>Limitation of liability</h2>
-      <p>Sawa Tours contracts with a network of companies, individuals and government agencies to assist in planning and running our trips and itineraries. As an agent for these third parties, we cannot be responsible for the acts and omissions of these third parties. To the fullest extent permitted by law, liability for any loss, death, injury or damage you may suffer, directly or indirectly, in connection with or arising out of your participation in a trip, or any breach of these Booking Conditions, is excluded.</p>
-      <p>You release us and our officers, employees, agents and representatives from any liability and expressly waive any claims you may have against us arising out of or in connection with your participation in a trip. Any condition or warranty which would otherwise be implied by law is excluded. To the extent an implied warranty cannot be excluded, our liability is limited, at our absolute discretion, to (i) the provision of a similar trip of equivalent value; or (ii) a refund of the total amount received by us from you in connection with your booking. Any claim by you is excluded to the extent that it is for indirect or consequential loss, loss of profits or economic loss, however it arises, or for indirect, special, punitive or exemplary damages.</p>
+      <h2>11. Deposits and final payment</h2>
+      <p>The required payment schedule is shown before Booking. Unless the booking page states otherwise:</p>
+      <ul>
+        <li>day tours require a <strong>10%</strong> deposit at GoAhead;</li>
+        <li>multi-day tours require a <strong>20%</strong> deposit at GoAhead; and</li>
+        <li>the remaining balance is due <strong>the day before departure</strong>.</li>
+      </ul>
+      <p>If GoAhead occurs on or after the balance-due date, the full Tour Price is due at confirmation. A deposit forms part of the Tour Price; it is not an additional fee.</p>
+      <p>If a balance is not received on time we may treat the Booking as cancelled by you and apply the cancellation terms below, but we will normally contact the Lead Traveler first.</p>
 
-      <h2>Optional activities</h2>
-      <p>Any optional activities not included in the price of the trip do not form part of the trip or this contract.</p>
+      <h2>12. Payment processing and security</h2>
+      <!-- True of the current build: there is no payment integration, so no
+           processor is named and no card data reaches the Platform. Naming a
+           provider here before one is live would be a false statement about
+           where traveler card data goes. -->
+      <p>Payment instructions are issued with your GoAhead confirmation. The Platform does not collect or store payment-card numbers or security codes, and no card is charged automatically. Where a payment is taken through a payment provider, that provider processes your information under its own terms and privacy notice, and your confirmation identifies the entity receiving the payment and issuing any invoice or receipt.</p>
+      <p>We will only process a payment that you have expressly approved, and we will not use a payment authority for unrelated charges.</p>
 
-      <h2>Claims &amp; complaints</h2>
-      <p>If you have a complaint or concern about your trip, please inform your tour guide or our local representative so that they can attempt to rectify the matter. If satisfaction cannot be reached through these means, further complaints should be put in writing to us within 30 days of the end of your tour.</p>
+      <h2>13. Cancellation by you</h2>
+      <h3>13.1 Before GoAhead</h3>
+      <p>You may cancel at any time without a Sawa cancellation charge. No Tour Price is captured.</p>
+      <h3>13.2 After GoAhead</h3>
+      <p>The cancellation schedule displayed before you reserve, and repeated in the booking confirmation, applies. An Operating Partner&rsquo;s special cancellation schedule applies only if it was clearly disclosed before reservation. If no special schedule is disclosed, the following default schedule applies:</p>
+      <div class="tscroll">
+        <table>
+          <tr><th>Written cancellation received</th><th>Cancellation charge</th></tr>
+          <tr><td>46 days or more before departure</td><td>Deposit paid</td></tr>
+          <tr><td>30&ndash;45 days before departure</td><td>Greater of the deposit or 50% of the Tour Price</td></tr>
+          <tr><td>Fewer than 30 days before departure, or no-show</td><td>100% of the Tour Price</td></tr>
+        </table>
+      </div>
+      <p>Some components &mdash; such as domestic flights, named hotels, cruise cabins, permits or special tickets &mdash; may become non-refundable earlier. We will disclose any such condition before payment wherever it is known. If a supplier charge arises only after a traveler-requested change, we will provide details before making the change where reasonably possible.</p>
+      <p>Cancellation must be sent by email to <a href="mailto:hello@sawa.tours">hello@sawa.tours</a> and takes effect when we receive it. We will acknowledge it in writing. Refunds, where due, are returned to the original payment method within 14 business days of our confirming the refundable amount, subject to your bank&rsquo;s processing time.</p>
+      <p>No refund is due for unused services if you arrive late, do not attend, voluntarily leave after a tour starts, or cannot participate because you have not met passport, visa, health, insurance or conduct requirements, except where applicable law requires otherwise.</p>
 
-      <h2>Photos &amp; marketing</h2>
-      <p>You consent that Sawa Tours may use images of you taken during your trip for advertising and promotional purposes in any medium of our choice. You grant us a perpetual, royalty-free, worldwide, irrevocable licence to use such images for publicity and promotional purposes.</p>
+      <h2>14. Changes requested by you</h2>
+      <p>Ask us in writing if you wish to change a traveler name, transfer a Booking, change the Departure or modify another service. Changes are subject to availability, supplier approval and legal or security requirements.</p>
+      <p>The following administration charges apply in addition to actual supplier costs: <strong>US$50 per person</strong> to transfer a Booking to another traveler or another Departure, and <strong>US$25 per booking</strong> for any other change. We will tell you the expected cost before confirming a change. If the requested change cannot be made, the original Booking remains in place unless you cancel it under section 13.</p>
+      <p>A substitute traveler must accept these Terms and satisfy all itinerary requirements. Name changes may not be possible for issued tickets or permits. No change is guaranteed within 7 days of departure.</p>
 
-      <h2>Privacy</h2>
-      <p>Any personal information Sawa Tours collects about you may be used for any purpose associated with the operation of a trip or to send you marketing material relating to our events and special offers. The information may be disclosed to our agents, service providers or operating partners to enable us to operate the trip. We will otherwise treat your details in accordance with our <a href="/privacy">Privacy Policy</a>.</p>
+      <h2>15. Cancellation or material change by us or the Operating Partner</h2>
+      <p>We or the Operating Partner may cancel or materially change a Departure where necessary because of safety concerns, insufficient participation before GoAhead, supplier failure, government action, force majeure or another legitimate operational reason.</p>
+      <p>If we cancel a confirmed Departure for a reason that is not attributable to you, we will offer, as appropriate: an equivalent or comparable alternative, with any price difference clearly explained; credit, but only if you freely choose it; or a refund of amounts paid for services that will not be provided.</p>
+      <p>Where a material change is made before departure, we will explain it and give you a reasonable period to accept an alternative or exercise any right to cancel. A <strong>material change</strong> is one that significantly alters the main characteristics of the confirmed tour, such as its principal destination, duration, standard of accommodation or a substantial part of its itinerary. Minor timing, route, guide, vehicle or ordering changes that do not materially reduce the experience are not normally material changes.</p>
+      <p>Refunds may be reduced only by amounts that are lawfully non-refundable and that we cannot recover despite reasonable efforts, and we will explain any such reduction. We are not responsible for separate costs &mdash; such as international flights, visas or independent accommodation &mdash; that you booked outside the Sawa Booking, except where the law makes us responsible. Travel insurance should cover these risks.</p>
 
-      <h2>Applicable law</h2>
-      <p>These Booking Conditions are governed by the laws of the Arab Republic of Egypt to the fullest extent allowable. Any disputes in connection with a trip or these Booking Conditions must be initiated in the courts of Cairo.</p>
+      <h2>16. Force majeure and unavoidable events</h2>
+      <p><strong>Force majeure</strong> means an event beyond the reasonable control of Sawa, the Operating Partner or relevant suppliers whose consequences could not reasonably have been avoided. It may include severe weather, natural disaster, epidemic, pandemic, war, terrorism, civil unrest, government restriction, border closure, significant transport disruption, industrial action by third parties, utility failure, or closure of a site essential to the itinerary.</p>
+      <p>We will act reasonably to protect travelers and find practical alternatives. Refunds and additional costs depend on recoverable supplier payments, applicable law and the services actually provided. Nothing in this section limits rights that cannot lawfully be limited.</p>
 
-      <h2>Registered address</h2>
-      <p><strong>Capital Travel Service</strong> — ETAA 2179<br>Flat 6, Floor 1, Block 1, Panorama Pyramids Building, El-Ahramat St., Giza, Egypt.</p>
+      <h2>17. Itinerary flexibility and on-tour changes</h2>
+      <p>Travel in Egypt may require changes because of weather, navigation conditions, site access, security directions, traffic, local events or supplier operations. The Operating Partner may change the order or timing of visits, transport, accommodation or another component where reasonably necessary, while seeking to preserve the overall character and value of the itinerary.</p>
+      <p>During a tour, the guide or Operating Partner may take reasonable decisions for the group&rsquo;s safety and smooth operation. If a significant part of the confirmed services cannot be provided after departure, reasonable alternative arrangements will be offered where possible. Any refund for a reduction in value will be assessed under applicable law and the circumstances.</p>
+
+      <h2>18. Passports, visas and travel documents</h2>
+      <p>You are responsible for checking and meeting the passport, visa, entry, exit, vaccination and other travel requirements that apply to your nationality, residence, itinerary and transit points. Information provided by Sawa is general guidance and may change.</p>
+      <p>Your passport must remain valid for at least six months after the end of your tour, and for any longer period required by Egyptian or transit authorities. You must carry the required original documents during travel. Sawa is not responsible for refusal of entry or participation caused by incomplete, invalid or missing documents, unless we expressly agreed in writing to obtain a document and failed to do so.</p>
+
+      <h2>19. Health, mobility, accessibility and special requests</h2>
+      <p>Tell us before Booking about mobility needs, disabilities, allergies, dietary requirements, pregnancy or medical conditions that may affect safe participation or require adjustments. Health information is handled as described in our <a href="/privacy">Privacy Policy</a> and shared only where reasonably needed to arrange or safely deliver the tour.</p>
+      <p>We will consider reasonable requests and tell you whether the itinerary and available services can meet them. A request is not guaranteed unless confirmed in writing. You remain responsible for obtaining medical advice and bringing required medicine or equipment. Neither Sawa nor an Operating Partner provides medical advice.</p>
+      <p>We may decline or end participation only where, after reasonable assessment, a traveler cannot safely complete the itinerary, a necessary adjustment cannot reasonably be provided, or participation creates a serious risk to that traveler or others. Such decisions will not be made unlawfully or on a discriminatory basis.</p>
+
+      <h2>20. Travel insurance</h2>
+      <p>Travel insurance is <strong>mandatory</strong> for all Sawa travelers and should be arranged when you book. Your cover must include medical treatment, emergency evacuation and repatriation, and we strongly recommend cover for cancellation, curtailment, personal liability, baggage and any activities you plan to join. We may request evidence of insurance before departure.</p>
+      <p>Insurance is a separate contract between you and the insurer. Check the exclusions for existing medical conditions, activities, destinations, government travel advice and cancellation for force majeure.</p>
+
+      <h2>21. Conduct, safety and removal from a tour</h2>
+      <p>You must follow lawful instructions from the guide or Operating Partner, respect local laws and customs, arrive at stated meeting points on time, and behave in a way that does not threaten, harass, abuse or unreasonably disrupt other travelers, staff, local communities or property.</p>
+      <p>The Operating Partner may refuse or end a person&rsquo;s participation where reasonably necessary for safety, serious misconduct, intoxication, illegal behaviour, harassment or material disruption. Where appropriate, the traveler will first be warned and given a reasonable opportunity to correct the behaviour. A removed traveler is responsible for any resulting accommodation, transport or repatriation costs, and a refund is not normally due for unused services. This does not affect rights arising where a removal was unlawful or unreasonable.</p>
+
+      <h2>22. Luggage and personal belongings</h2>
+      <p>You are responsible for your passport, money, valuables and luggage, unless loss or damage is caused by a person for whom Sawa or the Operating Partner is legally responsible. Vehicle, domestic-flight, cruise or porterage limits may apply and will be communicated where material. Report loss or damage immediately to the guide, supplier, police or carrier as appropriate, and keep the supporting documents for an insurance claim.</p>
+
+      <h2>23. Optional activities and independent arrangements</h2>
+      <p>An activity or service expressly included in your booking confirmation forms part of the Booking. An optional activity purchased separately from an independent provider does not form part of the Sawa Booking, unless Sawa or the Operating Partner sells it to you as its own service or applicable law provides otherwise.</p>
+      <p>Before purchasing an optional activity, check the provider, price, insurance, safety requirements and cancellation terms. Your guide may provide information, but a recommendation alone does not make Sawa the supplier.</p>
+
+      <h2>24. Our responsibility and limitation of liability</h2>
+      <p>Sawa is responsible for performing the booking and coordination services it promises with reasonable care. The Operating Partner is responsible for delivering the travel services identified in your confirmation. Responsibility for the acts or omissions of a hotel, carrier, guide or other supplier is determined by the capacity in which Sawa and the Operating Partner act, and by applicable law.</p>
+      <p>Nothing in these Terms excludes or limits liability for fraud, fraudulent misrepresentation, wilful misconduct, death or personal injury caused by negligence where such liability cannot be excluded, or any other liability or consumer right that cannot lawfully be excluded or limited.</p>
+      <p>Subject to the paragraph above, neither party is liable for losses that were not reasonably foreseeable when the Booking was made, or for business losses suffered by a traveler acting as a consumer.</p>
+      <p>International transport conventions and a carrier&rsquo;s conditions may limit liability for delay, injury, baggage or other loss. We may rely on those limits where permitted by law.</p>
+
+      <h2>25. Complaints and resolving problems</h2>
+      <p>If a problem occurs during the tour, tell the guide, the Operating Partner or Sawa immediately so that there is a fair opportunity to resolve it. For urgent assistance while you are travelling, reach us on WhatsApp at <a href="https://wa.me/201092847613" rel="noopener" target="_blank">+20 109 284 7613</a>.</p>
+      <p>If the issue is not resolved, send a written complaint to <a href="mailto:hello@sawa.tours">hello@sawa.tours</a> within 30 days after the tour, including your booking number, a clear description and any relevant evidence. Missing this period does not remove a legal right, but delay may make investigation more difficult. We aim to acknowledge complaints within 3 business days and to provide a substantive response within 15 business days.</p>
+
+      <h2>26. Reviews, photographs and traveler content</h2>
+      <p>You retain ownership of reviews, photographs and other content you submit. If you voluntarily post or send content for publication, you give Sawa a non-exclusive, worldwide, royalty-free licence to store, reproduce, adapt for formatting and display it for operating and promoting Sawa, subject to any privacy choice you have stated. You may withdraw permission for future promotional use by contacting us, although we may retain copies required for legal records or already incorporated into printed material.</p>
+      <!-- Replaces the previous clause, under which simply joining a tour gave
+           us a perpetual and irrevocable licence to a traveler's image. Consent
+           is now asked for and can be withdrawn. -->
+      <p>We do not treat a traveler&rsquo;s presence on a tour as blanket consent to promotional photography. Where a person is identifiable we ask permission, and we provide a reasonable way to opt out.</p>
+
+      <h2>27. Platform accounts and acceptable use</h2>
+      <p>If you create an account, keep your login details confidential and tell us promptly about any suspected unauthorised use. You must not:</p>
+      <ul>
+        <li>misuse, disrupt, scrape, reverse engineer or attempt unauthorised access to the Platform;</li>
+        <li>submit false reservations, payment information, reviews, licences or traveler details;</li>
+        <li>use the Platform for unlawful, fraudulent, abusive or infringing purposes; or</li>
+        <li>reproduce Sawa content or data commercially without permission.</li>
+      </ul>
+      <p>We may suspend access or remove content where reasonably necessary to protect travelers, operators, Sawa or the Platform, to investigate misconduct, or to comply with law.</p>
+
+      <h2>28. Intellectual property</h2>
+      <p>The Platform, the Sawa name and marks, software, layout, text and original content are owned by or licensed to Sawa and protected by applicable intellectual-property laws. You may view and download booking documents for personal use. No other right is transferred.</p>
+      <p>Operating Partner names, marks and itinerary content may belong to their respective owners.</p>
+
+      <h2>29. Privacy, cookies and communications</h2>
+      <p>Our <a href="/privacy">Privacy Policy</a> explains how we collect, use, disclose and protect personal data. Our <a href="/cookies">Cookie Policy</a> explains the cookies and similar technologies used by the Platform.</p>
+      <p>We may send service messages necessary to administer a reservation or Booking, including seat-count, GoAhead, payment, itinerary, safety and support updates. Marketing messages are sent only where permitted by law, and you can unsubscribe at any time without affecting service messages.</p>
+
+      <h2>30. Governing law and disputes</h2>
+      <p>These Terms and all Bookings are governed by the laws of the Arab Republic of Egypt. The courts of Cairo have jurisdiction, except that a consumer retains any mandatory right to bring a claim in another court or to rely on the mandatory consumer protections of their country of residence.</p>
+      <p>Before starting formal proceedings, both parties should first try in good faith to resolve the issue through the complaint process in section 25.</p>
+
+      <h2>31. General provisions</h2>
+      <p>If a provision is held invalid or unenforceable, it will be adjusted or removed only to the extent required, and the remaining provisions continue in force. A delay in enforcing a right is not a waiver. You may not transfer your rights except under section 14; Sawa may transfer this agreement as part of a genuine business reorganisation or sale, provided your rights are not reduced.</p>
+      <p>These Terms, together with the booking summary, confirmation, itinerary and any special conditions disclosed before Booking, form the agreement between us. If they conflict, the order of priority is: (1) the booking confirmation and any expressly agreed special conditions; (2) itinerary-specific conditions; and (3) these Terms &mdash; except that no document may remove mandatory legal rights.</p>
+      <p>We may update these Terms for future use. The Terms governing a confirmed Booking are those accepted when that Booking became binding, unless a change is required by law or you agree to it.</p>
 
       <h2>Contact</h2>
       <p>For any questions about these Terms and Conditions, email <a href="mailto:hello@sawa.tours">hello@sawa.tours</a> or visit our <a href="/contact">contact page</a>.</p>
