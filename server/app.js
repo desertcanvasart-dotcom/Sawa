@@ -11,6 +11,7 @@ import {
   defaultDepositFor,
   bookingClosed,
   departureStarted,
+  departureScopeSql,
   validatePriceTiers,
   capacityError,
   MAX_GROUP_SIZE,
@@ -396,12 +397,34 @@ async function buildBootstrap(user) {
   const productsSql = canSeeAll
     ? "SELECT * FROM tour_products ORDER BY id"
     : "SELECT * FROM tour_products WHERE active IS NOT FALSE AND status = 'approved' ORDER BY id";
+
+  // The two filters below used to run only in JS, after every departure and
+  // every pledge the business had ever recorded had already been read out of
+  // Postgres and mapped. The rows were then thrown away. Today both tables are
+  // empty so it costs nothing; a year in, the public catalogue would have been
+  // paying to load and discard a year of history on every rebuild.
+  //
+  // These mirror the JS filters below exactly — same two rules, same two
+  // audiences — so nothing that reaches the payload changes. The JS filters
+  // stay where they are: they remain the authority on what is included, and
+  // this only stops the database sending rows that could never have survived
+  // them. The rule itself lives in domain.js, beside departureStarted().
+  const departureScope = departureScopeSql({ canSeeAll: !!canSeeAll, signedIn: !!user });
+
+  // Pledges are only ever read here to attach to a departure in the same
+  // payload, so any pledge outside that set is loaded and dropped. Scoped with
+  // a subquery rather than by feeding the ids back in, so this still runs
+  // alongside the departures query instead of waiting a round trip for it.
   const [agencies, cities, products, departures, pledges] = await Promise.all([
     pool.query("SELECT * FROM agencies ORDER BY id"),
     pool.query("SELECT * FROM cities ORDER BY id"),
     pool.query(productsSql),
-    pool.query("SELECT * FROM departures ORDER BY id"),
-    pool.query("SELECT * FROM pledges ORDER BY created_at ASC, id ASC"),
+    pool.query(`SELECT * FROM departures WHERE ${departureScope} ORDER BY id`),
+    pool.query(
+      `SELECT * FROM pledges
+        WHERE departure_id IN (SELECT id FROM departures WHERE ${departureScope})
+        ORDER BY created_at ASC, id ASC`
+    ),
   ]);
 
   const byDep = new Map();
