@@ -58,7 +58,24 @@
         io.unobserve(e.target);
       });
     },{threshold:[0,.16],rootMargin:'0px 0px -7% 0px'});
-    document.querySelectorAll('.rv').forEach(function(el){io.observe(el);});
+    /* Anything already on screen when the page opens is shown as it is. The
+     entrance animation is for content you scroll to; replaying it on every
+     navigation left the whole mobile viewport blank for a beat and then slid
+     and unblurred it, which reads as a flash on every link you tap. */
+  var rvAbove=[],rvBelow=[];
+  document.querySelectorAll('.rv').forEach(function(el){
+    (el.getBoundingClientRect().top<window.innerHeight?rvAbove:rvBelow).push(el);
+  });
+  rvAbove.forEach(function(el){
+    el.style.transition='none';
+    el.classList.add('in');
+    el.querySelectorAll('[data-fill]').forEach(function(b){b.style.width=b.dataset.fill;});
+  });
+  // One forced reflow commits the revealed state while the transition is still
+  // off; without it the browser can coalesce both changes and animate anyway.
+  if(rvAbove.length)void document.body.offsetHeight;
+  requestAnimationFrame(function(){rvAbove.forEach(function(el){el.style.transition='';});});
+  rvBelow.forEach(function(el){io.observe(el);});
   } else {
     document.querySelectorAll('.rv').forEach(function(el){el.classList.add('in');});
     document.querySelectorAll('[data-fill]').forEach(function(b){b.style.width=b.dataset.fill;});

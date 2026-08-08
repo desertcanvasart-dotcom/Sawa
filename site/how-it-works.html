@@ -252,8 +252,8 @@ footer .logo .nm i{color:var(--gold)}
 }
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition-duration:.01ms!important}.rv{opacity:1;transform:none;filter:none}}
 </style>
-<script src="/assets/consent.js"></script>
-<script src="/assets/analytics.js"></script>
+<script defer src="/assets/consent.js"></script>
+<script defer src="/assets/analytics.js"></script>
 </head>
 <body>
 <div class="grain"></div>
@@ -561,7 +561,24 @@ footer .logo .nm i{color:var(--gold)}
       io.unobserve(e.target);
     });
   },{threshold:.14,rootMargin:'0px 0px -6% 0px'});
-  document.querySelectorAll('.rv').forEach(el=>io.observe(el));
+  /* Anything already on screen when the page opens is shown as it is. The
+     entrance animation is for content you scroll to; replaying it on every
+     navigation left the whole mobile viewport blank for a beat and then slid
+     and unblurred it, which reads as a flash on every link you tap. */
+  var rvAbove=[],rvBelow=[];
+  document.querySelectorAll('.rv').forEach(function(el){
+    (el.getBoundingClientRect().top<window.innerHeight?rvAbove:rvBelow).push(el);
+  });
+  rvAbove.forEach(function(el){
+    el.style.transition='none';
+    el.classList.add('in');
+    el.querySelectorAll('[data-fill]').forEach(function(b){b.style.width=b.dataset.fill;});
+  });
+  // One forced reflow commits the revealed state while the transition is still
+  // off; without it the browser can coalesce both changes and animate anyway.
+  if(rvAbove.length)void document.body.offsetHeight;
+  requestAnimationFrame(function(){rvAbove.forEach(function(el){el.style.transition='';});});
+  rvBelow.forEach(function(el){io.observe(el);});
 </script>
 <script src="/assets/sawa.js"></script>
 </body>
