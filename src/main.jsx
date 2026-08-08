@@ -1298,13 +1298,12 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
   useEffect(() => { setDepId(lead?.id || ""); }, [lead?.id]);
   useEffect(() => {
     const root = rootRef.current; if (!root) return;
-    const io = new IntersectionObserver((entries) => {
-      entries.forEach((e) => { if (!e.isIntersecting) return; e.target.classList.add("in"); e.target.querySelectorAll("[data-fill]").forEach((b) => { b.style.width = b.dataset.fill; }); io.unobserve(e.target); });
-    }, { threshold: 0.12, rootMargin: "0px 0px -6% 0px" });
-    root.querySelectorAll(".rv").forEach((el) => io.observe(el));
-    const t = setTimeout(() => root.querySelectorAll(".book [data-fill]").forEach((b) => { b.style.width = b.dataset.fill; }), 400);
+    // Scroll first: which elements count as "already on screen" depends on
+    // being at the top of the new page, not wherever the previous one was left.
     window.scrollTo(0, 0);
-    return () => { io.disconnect(); clearTimeout(t); };
+    const stop = observeReveal(root, ".rv", { threshold: 0.12, rootMargin: "0px 0px -6% 0px" });
+    const t = setTimeout(() => root.querySelectorAll(".book [data-fill]").forEach((b) => { b.style.width = b.dataset.fill; }), 400);
+    return () => { stop(); clearTimeout(t); };
   }, [tour.id]);
 
   function reserve(e) {
@@ -1846,25 +1845,7 @@ function PublicSite({
   });
 
   useEffect(() => {
-    const els = Array.from(document.querySelectorAll(".reveal"));
-    if (!els.length) return;
-    if (!("IntersectionObserver" in window)) {
-      els.forEach((el) => el.classList.add("in"));
-      return;
-    }
-    const io = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            entry.target.classList.add("in");
-            io.unobserve(entry.target);
-          }
-        });
-      },
-      { threshold: 0.1, rootMargin: "0px 0px -50px 0px" }
-    );
-    els.forEach((el) => io.observe(el));
-    return () => io.disconnect();
+    return observeReveal(document, ".reveal", { threshold: 0.1, rootMargin: "0px 0px -50px 0px" });
   }, [publicView, tourId, packageId]);
 
   if ((tourId && !routeTour) || (packageId && !routePackage)) {
@@ -2230,6 +2211,46 @@ function LoadErrorScreen({ onRetry }) {
 // Canonical public site — embed links always point here, wherever the widget
 // is hosted.
 const SITE_URL = "https://sawa.tours";
+
+// ---- Scroll reveal ------------------------------------------------------
+// One implementation for both observers in this file (.rv on a tour or package
+// page, .reveal on the listing) and the same rule the static pages follow in
+// /assets/sawa.js: an entrance animation is for content you scroll to. Anything
+// already on screen when the view renders is shown as it is, or every route
+// change blanks the viewport and then slides it — which on a phone is the whole
+// screen, on every tap.
+function observeReveal(root, selector, options) {
+  const els = Array.from((root || document).querySelectorAll(selector));
+  if (!els.length) return () => {};
+  if (!("IntersectionObserver" in window)) {
+    els.forEach((el) => el.classList.add("in"));
+    return () => {};
+  }
+
+  const above = [], below = [];
+  els.forEach((el) => (el.getBoundingClientRect().top < window.innerHeight ? above : below).push(el));
+
+  above.forEach((el) => {
+    el.style.transition = "none";
+    el.classList.add("in");
+    el.querySelectorAll("[data-fill]").forEach((b) => { b.style.width = b.dataset.fill; });
+  });
+  // Commits the revealed state while the transition is still off; without it
+  // the browser coalesces both changes and animates anyway.
+  if (above.length) void document.body.offsetHeight;
+  requestAnimationFrame(() => above.forEach((el) => { el.style.transition = ""; }));
+
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach((e) => {
+      if (!e.isIntersecting) return;
+      e.target.classList.add("in");
+      e.target.querySelectorAll("[data-fill]").forEach((b) => { b.style.width = b.dataset.fill; });
+      io.unobserve(e.target);
+    });
+  }, options);
+  below.forEach((el) => io.observe(el));
+  return () => io.disconnect();
+}
 
 // ---- Referral attribution (?ref=CODE) ----
 const REF_KEY = "sawa_ref";
