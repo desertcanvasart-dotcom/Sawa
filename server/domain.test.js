@@ -5,7 +5,7 @@ import {
   isPackage, goAheadSeatsFor, defaultDepositFor, seatsTotal, livePriceFor,
   statusFor, packagePriceFor, balanceDueDate, computePledgePricing, enrichDeparture,
   isFormingDeparture, isGoAheadDeparture,
-  bookingClosed, departureStarted,
+  bookingClosed, departureStarted, departureScopeSql,
   confirmDeadlineDaysFor, confirmDeadlineAt, missedConfirmDeadline,
   priceFromTiers, validatePriceTiers, withPriceTiers,
   capacityError, MAX_GROUP_SIZE, MIN_GROUP_SIZE,
@@ -433,4 +433,54 @@ test("capacityError: the floor and the cap are checked together", () => {
   assert.match(capacityError(2, 20), /Minimum group size is 4/);   // floor reported first
   assert.match(capacityError(4, 20), /Maximum group size is 12/);
   assert.match(capacityError(10, 6), /cannot be below the minimum/);
+});
+
+// --- departureScopeSql: the SQL half of the same boundary --------------------
+// This narrows the bootstrap query so a year of finished departures is not read
+// out of Postgres and then dropped in JS. The property that makes that safe is
+// one-directional: it may pass through rows departureStarted() then rejects; it
+// must never cut one departureStarted() would have kept.
+
+test("departureScopeSql: platform staff are scoped to nothing at all", () => {
+  // They see pending_review and they see history — there is no rule to apply.
+  assert.equal(departureScopeSql({ canSeeAll: true, signedIn: true }), "TRUE");
+});
+
+test("departureScopeSql: agencies lose pending_review but keep their history", () => {
+  const sql = departureScopeSql({ canSeeAll: false, signedIn: true });
+  assert.match(sql, /status <> 'pending_review'/);
+  assert.doesNotMatch(sql, /CURRENT_DATE/, "a signed-in agency's dashboard counts past departures as history");
+});
+
+test("departureScopeSql: anonymous visitors lose pending_review and the past", () => {
+  const sql = departureScopeSql({ canSeeAll: false, signedIn: false });
+  assert.match(sql, /status <> 'pending_review'/);
+  assert.match(sql, /CURRENT_DATE - INTERVAL '2 days'/);
+});
+
+test("departureScopeSql: the default is the most restrictive audience", () => {
+  // Called with nothing, it must not accidentally hand out the staff view.
+  assert.equal(departureScopeSql(), departureScopeSql({ canSeeAll: false, signedIn: false }));
+});
+
+test("departureScopeSql: a dateless row is never cut, matching departureStarted", () => {
+  // departureStarted() keeps these deliberately — "a bad row is an ops problem,
+  // not a reason to hide inventory" — so the query must not remove them first.
+  assert.equal(departureStarted({ date: null, startDate: null }), false);
+  assert.match(departureScopeSql(), /COALESCE\(start_date, date\) IS NULL OR/);
+});
+
+test("departureScopeSql: the date slack is wider than any Cairo offset", () => {
+  // The two rules disagree by design: Postgres compares dates in UTC, and
+  // departureStarted() resolves Cairo wall-clock time, which is UTC+2 or +3.
+  // The slack has to exceed that gap in whole days or the query would cut a
+  // departure that is still running.
+  const slackDays = Number(/INTERVAL '(\d+) days'/.exec(departureScopeSql())[1]);
+  assert.ok(slackDays >= 1, `slack of ${slackDays} day(s) is not wider than Cairo's UTC offset`);
+
+  // Concretely: a departure starting today, at the most extreme hour, is still
+  // inside the window on both sides of the comparison.
+  const today = new Date().toISOString().slice(0, 10);
+  assert.equal(departureStarted({ date: today, time: "23:59" }, Date.parse(`${today}T00:00:00Z`)), false,
+    "still upcoming — so the SQL bound, which keeps everything from today onwards, must keep it");
 });

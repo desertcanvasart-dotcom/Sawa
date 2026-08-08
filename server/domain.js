@@ -245,6 +245,36 @@ export function departureStarted(departure, nowMs = Date.now()) {
   return nowMs >= start;
 }
 
+// The SQL half of the two rules the bootstrap payload applies to departures:
+// pending_review is hidden from everyone but platform staff, and an anonymous
+// visitor is not shown a departure that has already started.
+//
+// It lives next to departureStarted() on purpose. Both describe the same
+// boundary and they have to be read together — one narrows the query, the other
+// decides the result — and a copy of this parked in app.js next to the SQL
+// would drift from the rule it exists to approximate without anyone noticing.
+//
+// It is deliberately the looser of the two. departureStarted() resolves the
+// stored date and wall-clock time in Africa/Cairo (tz.js); Postgres has no
+// reason to agree about that instant, least of all across a DST boundary. Two
+// days of slack is far wider than any offset, so this can only ever pass
+// through rows departureStarted() then judges — it can never cut one that
+// would have been kept. Rows with no date survive for the same reason
+// departureStarted() keeps them: a bad row is an ops problem, not a reason to
+// hide inventory.
+//
+// Returns a WHERE fragment built only from these two booleans — no caller data
+// reaches it, so there is nothing here to parameterise.
+export function departureScopeSql({ canSeeAll = false, signedIn = false } = {}) {
+  const conditions = [
+    canSeeAll ? null : "status <> 'pending_review'",
+    signedIn ? null : "(COALESCE(start_date, date) IS NULL OR COALESCE(start_date, date) >= CURRENT_DATE - INTERVAL '2 days')",
+  ].filter(Boolean);
+  // No conditions means platform staff, who see everything. "TRUE" keeps the
+  // callers' `WHERE ${scope}` from having to special-case an empty string.
+  return conditions.join(" AND ") || "TRUE";
+}
+
 // How many days before departure this date must reach its minimum. A per-listing
 // value wins; otherwise the type default.
 export function confirmDeadlineDaysFor(product, departure) {
