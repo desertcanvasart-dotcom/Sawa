@@ -43,14 +43,21 @@
 
   /* reveal + fill bars */
   if('IntersectionObserver' in window){
+    /* A ratio alone cannot judge a block taller than the window. The legal
+       pages are one .rv element about 19,000px high, so 16% of it is roughly
+       3,000px — more than the viewport can ever show — and the callback never
+       fired: the whole policy sat at opacity 0. Watch ratio 0 as well, and
+       reveal on whichever comes first, 16% of the element or 16% of the
+       window's worth of it. */
     var io=new IntersectionObserver(function(es){
       es.forEach(function(e){
         if(!e.isIntersecting)return;
+        if(e.intersectionRatio<.16&&e.intersectionRect.height<window.innerHeight*.16)return;
         e.target.classList.add('in');
         e.target.querySelectorAll('[data-fill]').forEach(function(b){b.style.width=b.dataset.fill;});
         io.unobserve(e.target);
       });
-    },{threshold:.16,rootMargin:'0px 0px -7% 0px'});
+    },{threshold:[0,.16],rootMargin:'0px 0px -7% 0px'});
     document.querySelectorAll('.rv').forEach(function(el){io.observe(el);});
   } else {
     document.querySelectorAll('.rv').forEach(function(el){el.classList.add('in');});
