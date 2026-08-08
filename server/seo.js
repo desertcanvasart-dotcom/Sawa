@@ -60,15 +60,55 @@ const STATIC = {
 // listing still rendered a fully-formed page (title, description, overview,
 // price) to any crawler or anyone with the URL. Users couldn't see it; Google
 // could. Same filter as app.js and the /tours listing below.
+const VISIBLE = "active IS NOT FALSE AND status = 'approved'";
+
+// Rendering one tour page called this twice — once for the <head> through
+// tourSchema, once for the body — and every slug-shaped URL (which is all of
+// them) missed the id lookup and fell through to SELECT * over the whole table,
+// pulling every product's itinerary, overview_html and images to match a slug
+// in JS. Server-Timing on the live site put that at head 928ms + body 570ms for
+// a single page.
+//
+// Two caches fix both halves. The slug index is the only thing that has to scan,
+// and it reads four small columns instead of every row in full; the resolved
+// product is then held just long enough for head and body to share one lookup.
+// Both are flushed by clearSeoCaches() on any catalogue write, so neither can
+// serve something an admin has already changed.
+const LOOKUP_TTL_MS = 30_000;
+let slugIndex = { at: 0, byslug: null };
+const productCache = new Map(); // id or slug -> { at, row }
+
+export function clearSeoCaches() {
+  slugIndex = { at: 0, byslug: null };
+  productCache.clear();
+}
+
+async function slugToId(slug) {
+  if (!slugIndex.byslug || Date.now() - slugIndex.at > LOOKUP_TTL_MS) {
+    // tourSlug() reads title, type and city, and nothing else.
+    const r = await pool.query(`SELECT id, title, type, city FROM tour_products WHERE ${VISIBLE}`);
+    const byslug = new Map();
+    for (const row of r.rows) byslug.set(tourSlug(row), row.id);
+    slugIndex = { at: Date.now(), byslug };
+  }
+  return slugIndex.byslug.get(slug) || null;
+}
+
 async function findTourProduct(idOrSlug) {
-  const VISIBLE = "active IS NOT FALSE AND status = 'approved'";
+  const hit = productCache.get(idOrSlug);
+  if (hit && Date.now() - hit.at < LOOKUP_TTL_MS) return hit.row;
+
   let r = await pool.query(`SELECT * FROM tour_products WHERE id=$1 AND ${VISIBLE} LIMIT 1`, [idOrSlug]);
   if (!r.rows.length) {
-    const all = await pool.query(`SELECT * FROM tour_products WHERE ${VISIBLE}`);
-    const match = all.rows.find((row) => tourSlug(row) === idOrSlug);
-    if (match) r = { rows: [match] };
+    const id = await slugToId(idOrSlug);
+    if (id) r = await pool.query(`SELECT * FROM tour_products WHERE id=$1 AND ${VISIBLE} LIMIT 1`, [id]);
   }
-  return r.rows[0] || null;
+  const row = r.rows[0] || null;
+  // A miss is cached too: an unknown slug is exactly what a crawler hammers,
+  // and it used to cost the full-table scan every time.
+  if (productCache.size > 300) productCache.clear();
+  productCache.set(idOrSlug, { at: Date.now(), row });
+  return row;
 }
 
 async function tourSchema(idOrSlug, url) {

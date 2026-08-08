@@ -1250,8 +1250,36 @@ const SxStar = () => <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2
 const SxCheck = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>;
 const SxX = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M6 6l12 12M18 6 6 18" /></svg>;
 
-function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPublicBooking, publicBooking, tour, allProducts = [] }) {
+function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPublicBooking, publicBooking, tour: tourProp, allProducts = [] }) {
   const rootRef = useRef(null);
+
+  // A page reached by clicking through from the catalogue holds the sliced copy
+  // of this product — card-complete, detail-empty, flagged detailPending — so
+  // it renders skeletons for "Day by day" and "What's included" until the whole
+  // catalogue refresh lands, then swaps in several thousand characters of
+  // itinerary. That swap is the second version of the page people notice.
+  // Fetching this one product instead closes it in a single small request.
+  // Overlaid, not substituted. `dates` is assembled by the parent out of the
+  // departures list and does not exist on a product from the API at all, so
+  // swapping the object wholesale would blank the page on tour.dates[0].
+  // Everything the parent computed stays; only the stripped detail arrives.
+  const [detail, setDetail] = useState(null);
+  const tour = detail && detail.id === tourProp.id
+    ? { ...tourProp, ...detail, dates: tourProp.dates, detailPending: false }
+    : tourProp;
+
+  useEffect(() => {
+    if (!tourProp.detailPending) { setDetail(null); return; }
+    let live = true;
+    apiFetch(`/public/tour-products/${encodeURIComponent(tourProp.id)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      // A failure is not worth surfacing: the background catalogue refresh is
+      // already in flight and fills the same gap a moment later.
+      .then((j) => { if (live && j?.product) setDetail(j.product); })
+      .catch(() => {});
+    return () => { live = false; };
+  }, [tourProp.id, tourProp.detailPending]);
+
   const lead = tour.dates[0];
   const [depId, setDepId] = useState(lead?.id || "");
   const [name, setName] = useState("");
