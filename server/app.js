@@ -44,6 +44,7 @@ import { startJobScheduler } from "./jobs/scheduler.js";
 import { cleanHtml, cleanItinerary } from "./sanitize.js";
 import { canonicalRedirect } from "./canonical.js";
 import { injectStaticSchema } from "./static-seo.js";
+import { cacheState, PAGE_TTL_MS, PAGE_STALE_TTL_MS } from "./page-cache.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const distDir = join(__dirname, "..", "dist");
@@ -1995,25 +1996,41 @@ if (existsSync(distDir)) {
   // Rendered pages are cached briefly: crawlers (which never share browser
   // cache) hit tour/blog routes in bursts, and each render costs DB queries.
   const pageCache = new Map(); // path -> { at, status, html }
-  const PAGE_TTL = 60 * 1000;
+  const PAGE_TTL = PAGE_TTL_MS;
+  // Past PAGE_TTL an entry stops being served as fresh, but it is still a
+  // perfectly good page. Measured from the live site, a render that misses both
+  // this cache and the CDN costs about four seconds against Postgres, and a
+  // phone shows the PREVIOUS page for every one of them — the "another version,
+  // then the permanent version" this exists to fix. So a stale entry is served
+  // immediately and refreshed behind the request. Nothing is served stale that
+  // a write has invalidated: cacheClearers empties the map outright.
+  const PAGE_STALE_TTL = PAGE_STALE_TTL_MS;
+  const inFlight = new Map(); // path -> Promise, so a burst rebuilds once
   cacheClearers.push(() => pageCache.clear());
   // Routes whose UI is driven by the public catalogue. The portal and the embed
   // widget either need viewer-scoped data or none at all, so they don't get the
   // payload — it would be dead weight on every dashboard load.
   const needsCatalogue = (p) => !/^\/(admin|agency|portal|embed)(\/|$)/.test(p);
 
-  const renderPage = async (req, res) => {
-    try {
-      const key = req.path;
-      const hit = pageCache.get(key);
-      if (hit && Date.now() - hit.at < PAGE_TTL) {
-        res.set("Cache-Control", hit.cacheControl);
-        return res.status(hit.status).type("html").send(hit.html);
-      }
-      const { title, head, notFound } = await buildHead(req.path);
+  // Builds one path and stores it. Concurrent callers for the same path share
+  // the one build: without this, a cold entry under any traffic at all lets
+  // every request start its own four-second render.
+  const buildPage = (path) => {
+    const running = inFlight.get(path);
+    if (running) return running;
+    const job = renderToCache(path).finally(() => inFlight.delete(path));
+    inFlight.set(path, job);
+    return job;
+  };
+
+  const renderToCache = async (path) => {
+      const t0 = Date.now();
+      const { title, head, notFound } = await buildHead(path);
       // GEO: crawlers don't execute JS, so inject the route's real content
       // inside #root. React's createRoot().render() replaces it on mount.
-      const body = notFound ? "" : await buildBody(req.path);
+      const tHead = Date.now();
+      const body = notFound ? "" : await buildBody(path);
+      const tBody = Date.now();
       // The SPA used to mount, discard the server-rendered body, and only THEN
       // fetch /api/bootstrap — so every visitor sat on a loading screen waiting
       // for data this process already had in hand. Inlining it means the first
@@ -2028,10 +2045,11 @@ if (existsSync(distDir)) {
       // Sliced to the route: the cached full payload is built once and shared,
       // then narrowed per path. Slicing here rather than in the builder keeps
       // one cache entry for every route instead of one per URL.
-      const full = !notFound && needsCatalogue(req.path)
+      const full = !notFound && needsCatalogue(path)
         ? await publicBootstrapPayload().catch(() => null)
         : null;
-      const bootstrap = full ? sliceBootstrapForRoute(full, req.path) : null;
+      const tPayload = Date.now();
+      const bootstrap = full ? sliceBootstrapForRoute(full, path) : null;
       const bootstrapTag = bootstrap
         ? `<script>window.__SAWA_BOOTSTRAP__=${inlineScriptJson(bootstrap)}</script>`
         : "";
@@ -2054,9 +2072,44 @@ if (existsSync(distDir)) {
       // Unknown routes still render the SPA's 404 screen, but with a real 404
       // status so crawlers and monitoring don't treat them as live pages.
       if (pageCache.size > 500) pageCache.clear();
-      pageCache.set(key, { at: Date.now(), status: notFound ? 404 : 200, html, cacheControl });
-      res.set("Cache-Control", cacheControl);
-      res.status(notFound ? 404 : 200).type("html").send(html);
+      // Which of the three phases is slow is not guessable from the outside —
+      // all a visitor sees is one long wait — so an uncached render says so.
+      const timing = { head: tHead - t0, body: tBody - tHead, payload: tPayload - tBody, total: Date.now() - t0 };
+      if (timing.total > 750) {
+        console.warn(`[seo] slow render ${path} — ${timing.total}ms (head ${timing.head}, body ${timing.body}, payload ${timing.payload})`);
+      }
+      const entry = { at: Date.now(), status: notFound ? 404 : 200, html, cacheControl, timing };
+      pageCache.set(path, entry);
+      return entry;
+  };
+
+  const send = (res, entry, state) => {
+    res.set("Cache-Control", entry.cacheControl);
+    // Readable in devtools and by any monitor, so the four seconds is
+    // attributable rather than folded into one opaque TTFB.
+    res.set("Server-Timing", [
+      `cache;desc=${state}`,
+      `head;dur=${entry.timing.head}`,
+      `body;dur=${entry.timing.body}`,
+      `payload;dur=${entry.timing.payload}`,
+    ].join(", "));
+    return res.status(entry.status).type("html").send(entry.html);
+  };
+
+  const renderPage = async (req, res) => {
+    try {
+      const path = req.path;
+      const hit = pageCache.get(path);
+      const state = cacheState(hit, Date.now(), PAGE_TTL, PAGE_STALE_TTL);
+
+      if (state === "fresh") return send(res, hit, "fresh");
+      if (state === "stale") {
+        // Serve now, rebuild behind. A rejected refresh must not become an
+        // unhandled rejection — the stale copy has already gone out.
+        buildPage(path).catch((e) => console.error("[seo] background refresh failed for", path, "-", e.message));
+        return send(res, hit, "stale");
+      }
+      return send(res, await buildPage(path), "miss");
     } catch (e) {
       console.error("[seo] head injection failed for", req.path, "-", e.message);
       res.sendFile(join(distDir, "index.html"));
@@ -2088,4 +2141,11 @@ app.listen(port, "0.0.0.0", () => {
   // Started after the listener so a failure here can never stop the site from
   // coming up, and so the healthcheck passes before any job touches the DB.
   startJobScheduler();
+  // The first visitor after a deploy would otherwise pay for the catalogue
+  // query on the request path — the one case the page cache cannot cover,
+  // because it starts empty. Warming it costs one query at boot; failing to
+  // warm it is not an error, only a slower first page.
+  publicBootstrapPayload()
+    .then((p) => console.log(`[boot] catalogue warm — ${(p?.tourProducts || []).length} products`))
+    .catch((e) => console.warn("[boot] catalogue warm-up skipped —", e.message));
 });

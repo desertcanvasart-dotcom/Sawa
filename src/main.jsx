@@ -387,6 +387,16 @@ function App() {
     return () => window.removeEventListener("popstate", handlePop);
   }, []);
 
+  // Cheap structural comparison. The payloads are plain JSON from one builder,
+  // so key order is stable and stringify is a fair test; it runs once per
+  // refresh over data the page already parsed, against a React re-render of
+  // the whole catalogue, so it is the cheaper of the two by a wide margin.
+  function same(prev, next) {
+    if (!Array.isArray(prev) || !Array.isArray(next)) return false;
+    if (prev.length !== next.length) return false;
+    return JSON.stringify(prev) === JSON.stringify(next);
+  }
+
   // Runs on mount and on every auth change. When the page arrived with an
   // inlined payload this is a background refresh — it must never put the app
   // back into a loading state, because content is already on screen.
@@ -411,10 +421,14 @@ function App() {
         if (!snap.ok) throw new Error("Could not load portal data.");
         data = await snap.json();
       }
-      setAgencies(data.agencies || []);
-      setCities(data.cities || []);
-      setTourProducts(data.tourProducts || []);
-      setDepartures(data.departures || []);
+      // Keep the state object we already have when the refresh carries the same
+      // thing. The page arrives with an inlined payload and then fetches the
+      // same catalogue again; replacing state unconditionally re-rendered every
+      // card on the catalogue for data whose visible fields had not changed.
+      setAgencies((prev) => same(prev, data.agencies) ? prev : (data.agencies || []));
+      setCities((prev) => same(prev, data.cities) ? prev : (data.cities || []));
+      setTourProducts((prev) => same(prev, data.tourProducts) ? prev : (data.tourProducts || []));
+      setDepartures((prev) => same(prev, data.departures) ? prev : (data.departures || []));
       setSelectedId((prev) => prev || data.departures?.[0]?.id || null);
       const firstDayTour = (data.tourProducts || []).find((p) => !isPackage(p));
       const firstPackage = (data.tourProducts || []).find((p) => isPackage(p));
