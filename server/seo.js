@@ -78,9 +78,38 @@ const LOOKUP_TTL_MS = 30_000;
 let slugIndex = { at: 0, byslug: null };
 const productCache = new Map(); // id or slug -> { at, row }
 
+let catalogueCache = { at: 0, rows: null };
+
 export function clearSeoCaches() {
   slugIndex = { at: 0, byslug: null };
   productCache.clear();
+  catalogueCache = { at: 0, rows: null };
+}
+
+// Takes the ROWS, not a query result. Separated so the markup can be tested
+// against fixture products without a database — the version of this that read
+// `r.rows` off an array it had just been handed would have thrown on every
+// /itineraries render, and nothing here could have caught it.
+export function catalogueListHtml(rows, formingByProduct = new Map()) {
+  if (!Array.isArray(rows)) throw new TypeError("catalogueListHtml expects an array of product rows");
+  return rows.map((p) => {
+    const from = money(p.break_price) || money(p.published_rate);
+    const n = formingByProduct.get(p.id) || 0;
+    return `<li><a href="/${p.type === "package" ? "package" : "tour"}/${encodeURIComponent(tourSlug(p))}">${esc(p.title)}</a> — ${esc(p.city || "Egypt")}${p.duration ? `, ${esc(p.duration)}` : ""}${from ? `, from ${from}/person` : ""}${n ? `, ${n} date${n === 1 ? "" : "s"} forming` : ""}</li>`;
+  }).join("");
+}
+
+// The catalogue listing: every visible product, narrow columns only. Memoised
+// on the same terms as the lookups above, so the /itineraries body and the
+// slug index are not each paying for their own scan within the same window.
+async function catalogueRows() {
+  if (catalogueCache.rows && Date.now() - catalogueCache.at < LOOKUP_TTL_MS) return catalogueCache.rows;
+  const r = await pool.query(
+    `SELECT id, type, title, city, duration, break_price, published_rate
+       FROM tour_products WHERE ${VISIBLE} ORDER BY id`
+  );
+  catalogueCache = { at: Date.now(), rows: r.rows };
+  return r.rows;
 }
 
 async function slugToId(slug) {
@@ -474,7 +503,12 @@ export async function buildBody(pathname) {
   }
 
   if (path === "/itineraries") {
-    const r = await pool.query("SELECT * FROM tour_products WHERE active IS NOT FALSE AND status='approved' ORDER BY id");
+    // Server-Timing put this one branch at 981ms, the whole remaining cost of a
+    // cold /itineraries render. It was SELECT *, so every product's itinerary,
+    // overview_html and images came back — tens of kilobytes of JSONB per row —
+    // to print a title, a city, a duration and a price. These eight columns are
+    // everything the list and tourSlug() actually read.
+    const rows = await catalogueRows();
     // Only dates a traveller is already on count as "forming" — a published
     // date with zero bookings is inventory, not a departure (isFormingDeparture
     // in domain.js is the same rule).
@@ -484,11 +518,7 @@ export async function buildBody(pathname) {
     return wrapBody(`
 <h1>Egypt tour itineraries — shared day tours &amp; packages</h1>
 <p>Every itinerary Sawa runs, operated by Ministry-licensed Egyptian operators. Open one to join a forming date or start your own. Every date is confirmed (GoAhead) at its minimum travellers; you only pay once it confirms. Dates already filling are on <a href="/departures">the departures board</a>; confirmed trips are on <a href="/goahead">the GoAhead board</a>.</p>
-<ul>${r.rows.map((p) => {
-      const from = money(p.break_price) || money(p.published_rate);
-      const n = byProduct.get(p.id) || 0;
-      return `<li><a href="/${p.type === "package" ? "package" : "tour"}/${encodeURIComponent(tourSlug(p))}">${esc(p.title)}</a> — ${esc(p.city || "Egypt")}${p.duration ? `, ${esc(p.duration)}` : ""}${from ? `, from ${from}/person` : ""}${n ? `, ${n} date${n === 1 ? "" : "s"} forming` : ""}</li>`;
-    }).join("")}</ul>`);
+<ul>${catalogueListHtml(rows, byProduct)}</ul>`);
   }
 
   return "";
@@ -537,16 +567,18 @@ Based in ${BRAND.address.addressLocality}, Egypt.
 export async function llmsFullTxt() {
   let live = "";
   try {
+    // Same seven columns this file's catalogue listing needs, and the same memo
+    // — this used to be a second SELECT * over every product.
     const [products, deps] = await Promise.all([
-      pool.query("SELECT * FROM tour_products WHERE active IS NOT FALSE AND status='approved' ORDER BY id"),
+      catalogueRows(),
       upcomingDepartures(null),
     ]);
-    const titleById = new Map(products.rows.map((p) => [p.id, p.title]));
+    const titleById = new Map(products.map((p) => [p.id, p.title]));
     live = `
 
 ## Live tours (current)
 
-${products.rows.map((p) => {
+${products.map((p) => {
       const from = money(p.break_price) || money(p.published_rate);
       return `- [${p.title}](${BRAND.url}/${p.type === "package" ? "package" : "tour"}/${encodeURIComponent(tourSlug(p))}) — ${p.city || "Egypt"}${p.duration ? `, ${p.duration}` : ""}${from ? `, from ${from}/person` : ""}`;
     }).join("\n")}
