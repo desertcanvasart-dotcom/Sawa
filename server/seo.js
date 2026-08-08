@@ -187,6 +187,7 @@ export async function buildHead(pathname) {
     // Analytics. The same file the 18 static pages load, so the measurement ID
     // lives in exactly one place (site/assets/analytics.js) rather than being
     // pasted into every head on the site.
+    `<script src="/assets/consent.js"></script>`,
     `<script src="/assets/analytics.js"></script>`,
   ].join("\n");
 

@@ -2242,20 +2242,32 @@ function refFromUrl() {
 }
 // On a real landing (not the embed itself): remember the partner + count one
 // click-through. Stored client-side; sent with the booking later.
+//
+// The store is a functional cookie under site/cookies.html, so it waits for
+// consent. The code is read from the URL and held in memory meanwhile: a
+// visitor who lands on ?ref=… and then accepts on the banner is still
+// attributed to the partner who sent them, which would not be true if the code
+// were only read on the initial call.
 function captureReferral() {
   const code = refFromUrl();
   if (!code) return;
-  try {
-    localStorage.setItem(REF_KEY, JSON.stringify({ code, ts: Date.now() }));
-    const flag = `sawa_ref_hit_${code}`;
-    if (!sessionStorage.getItem(flag)) {
-      sessionStorage.setItem(flag, "1");
-      fetch(`${API_BASE}/track/referral`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code }), keepalive: true,
-      }).catch(() => {});
-    }
-  } catch (e) { /* storage blocked — ignore */ }
+  const store = () => {
+    try {
+      localStorage.setItem(REF_KEY, JSON.stringify({ code, ts: Date.now() }));
+      const flag = `sawa_ref_hit_${code}`;
+      if (!sessionStorage.getItem(flag)) {
+        sessionStorage.setItem(flag, "1");
+        fetch(`${API_BASE}/track/referral`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ code }), keepalive: true,
+        }).catch(() => {});
+      }
+    } catch (e) { /* storage blocked — ignore */ }
+  };
+
+  const consent = window.sawaConsent;
+  if (!consent) return; // no consent module loaded — treat as no consent
+  consent.onChange((choice) => { if (choice.functional) store(); });
 }
 function getStoredRef() {
   try {

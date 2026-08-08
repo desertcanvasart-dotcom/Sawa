@@ -36,6 +36,7 @@
 .legal th{text-align:left;color:var(--teal);font-weight:700;padding:10px 12px;border-bottom:2px solid var(--line)}
 .legal td{color:var(--muted);padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top;line-height:1.6}
 </style>
+<script src="/assets/consent.js"></script>
 <script src="/assets/analytics.js"></script>
 </head>
 <body>
@@ -90,9 +91,9 @@
       <h2>2. Cookie categories</h2>
       <h3>Strictly necessary</h3>
       <p>Required for security, booking, login, fraud prevention or remembering your choices. The requested service cannot work reliably without them.</p>
-      <h3>Functional</h3>
+      <h3>Functional &mdash; off until you turn it on</h3>
       <p>Remember optional choices, such as the partner link you arrived through, and provide enhanced features.</p>
-      <h3>Analytics</h3>
+      <h3>Analytics &mdash; off until you turn it on</h3>
       <p>Help us understand visits, traffic sources, errors and feature use, so that we can improve the Platform.</p>
       <h3>Advertising</h3>
       <p><strong>Sawa does not use advertising or cross-site tracking cookies</strong>, and we do not sell data derived from cookies to anyone. If that ever changes, this Policy and the table below will be updated before the change takes effect.</p>
@@ -106,6 +107,7 @@
       <div class="tscroll wide">
         <table>
           <tr><th>Name</th><th>Set by</th><th>Kind</th><th>Category</th><th>Purpose</th><th>Lasts</th></tr>
+          <tr><td><code>sawa_consent</code></td><td>Sawa</td><td>Local storage</td><td>Strictly necessary</td><td>Remembers the choices you make on the cookie banner, and when you made them, so you are not asked again on every page.</td><td>12 months</td></tr>
           <tr><td><code>sb-&hellip;-auth-token</code></td><td>Sawa (Supabase)</td><td>Local storage</td><td>Strictly necessary</td><td>Keeps operators and staff signed in to their dashboard. Set only when you sign in; the public site never sets it.</td><td>Until you sign out</td></tr>
           <tr><td><code>sawa_ref</code></td><td>Sawa</td><td>Local storage</td><td>Functional</td><td>Remembers the partner code you arrived through, so the partner is credited if you go on to book. Holds a short code, nothing personal.</td><td>30 days</td></tr>
           <tr><td><code>sawa_ref_hit_&hellip;</code></td><td>Sawa</td><td>Session storage</td><td>Functional</td><td>Counts one click-through per partner per visit, so a single visit is not counted repeatedly.</td><td>Until the tab is closed</td></tr>
@@ -115,24 +117,19 @@
       </div>
       <p>Sawa does not currently take payments on the Platform, so no payment-provider cookies are set. If a payment provider is added, its cookies will be listed here first.</p>
 
-      <h2>4. Analytics and your choices</h2>
-      <!-- Stated as it actually is: analytics.js is loaded by every page and by
-           buildHead() for SPA routes, with no consent gate in front of it. If a
-           consent banner is added, this section and section 5 must be rewritten
-           in the same change — a policy that describes a banner we do not have
-           would be worse than no policy. -->
-      <p>We use Google Analytics 4, provided by Google LLC, to understand how people find and use the site. We have not enabled Google&rsquo;s advertising features, Google Signals or User-ID, and we do not use analytics data to identify you personally.</p>
-      <p>Sawa does not currently show a cookie banner, and Google Analytics loads on every page of the site. We are being straightforward about that rather than describing a choice we do not yet offer. Until a consent banner is in place, you can stop analytics entirely by:</p>
-      <ul>
-        <li>installing Google&rsquo;s <a href="https://tools.google.com/dlpage/gaoptout" rel="noopener" target="_blank">Analytics opt-out browser add-on</a>, which applies on every site you visit;</li>
-        <li>blocking third-party cookies, or blocking <code>googletagmanager.com</code>, in your browser settings; or</li>
-        <li>using your browser&rsquo;s tracking-protection or private-browsing mode.</li>
-      </ul>
-      <p>Google&rsquo;s own handling of this data is governed by <a href="https://policies.google.com/privacy" rel="noopener" target="_blank">Google&rsquo;s privacy policy</a>.</p>
-      <p>Blocking analytics does not affect browsing or booking. Blocking the strictly necessary sign-in storage only affects the operator and staff dashboards; the public site works without any sign-in.</p>
+      <h2>4. Your choices</h2>
+      <p>On your first visit we show a cookie banner offering three equally available options: <strong>Accept all</strong>, <strong>Reject optional</strong>, or <strong>Manage choices</strong> to decide category by category. Nothing in the functional or analytics categories is set before you choose. Closing or ignoring the banner is not consent, no optional category is pre-ticked, and refusing does not prevent you browsing or booking.</p>
+      <p>You can change your mind at any time through <strong>Cookie settings</strong> in the Company column of the footer. Withdrawing a consent does not undo what was lawful beforehand, but it stops any further use and deletes the cookies and stored values in that category. We ask again after 12 months, and sooner if the purposes materially change.</p>
+      <p>We use Google Analytics 4, provided by Google LLC, to understand how people find and use the site. We have not enabled Google&rsquo;s advertising features, Google Signals or User-ID, and we do not use analytics data to identify you personally. Google Analytics is not loaded at all until you accept the analytics category; if you later withdraw, we delete its cookies and set Google&rsquo;s own opt-out flag for the rest of the session.</p>
+      <p>Google&rsquo;s handling of any data it does receive is governed by <a href="https://policies.google.com/privacy" rel="noopener" target="_blank">Google&rsquo;s privacy policy</a>. If you would rather opt out of Google Analytics everywhere, not only here, Google offers an <a href="https://tools.google.com/dlpage/gaoptout" rel="noopener" target="_blank">opt-out browser add-on</a>.</p>
+      <p>Blocking the strictly necessary sign-in storage only affects the operator and staff dashboards; the public site works without any sign-in.</p>
 
       <h2>5. Referral attribution</h2>
-      <p>When you follow a link from a partner, Sawa stores a short referral code in your browser for 30 days so that the correct partner is credited if you reserve or book. The code does not contain your name or contact details, though it can become linked to a booking once you submit one. You can clear it at any time by clearing your browser&rsquo;s site data for sawa.tours.</p>
+      <p>When you follow a link from a partner, Sawa can store a short referral code in your browser for 30 days so that the correct partner is credited if you reserve or book. The code does not contain your name or contact details, though it can become linked to a booking once you submit one.</p>
+      <!-- Functional, not necessary. The pack was explicit that commercial
+           usefulness is not the test, so the code waits for consent like any
+           other optional store — see captureReferral in src/main.jsx. -->
+      <p>This is a functional purpose rather than a necessary one, so the code is only stored if you accept the functional category &mdash; it is commercially useful to us, which is not the same as being needed to give you what you asked for. You can clear it by withdrawing that consent in Cookie settings, or by clearing your browser&rsquo;s site data for sawa.tours.</p>
 
       <h2>6. The embedded Sawa widget</h2>
       <p>Sawa departures may appear inside a partner operator&rsquo;s website. Loading the widget sends Sawa ordinary network information, such as your IP address, browser details, the referring domain and the widget configuration. The referral store described above is not set by the widget itself &mdash; only by a real visit to sawa.tours.</p>
