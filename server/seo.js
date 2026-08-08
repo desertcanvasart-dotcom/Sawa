@@ -6,7 +6,12 @@
 // ============================================================
 import { pool } from "./db/index.js";
 import { BRAND, ORG_ID, SITE_ID, travelAgencySchema, websiteSchema } from "./brand.js";
-import { tourSlug } from "./slug.js";
+// tourPath is the one definition of a product's public URL. It already existed
+// and was already tested, but nothing used it: the catalogue markup, the
+// sitemap and (nearly) the page warmer each rebuilt the same expression by
+// hand. Three hand-written copies of a URL is three chances for the warmer to
+// warm a URL the catalogue does not link to.
+import { tourSlug, tourPath } from "./slug.js";
 import { cleanHtml } from "./sanitize.js";
 
 const esc = (s) => String(s == null ? "" : s)
@@ -95,7 +100,7 @@ export function catalogueListHtml(rows, formingByProduct = new Map()) {
   return rows.map((p) => {
     const from = money(p.break_price) || money(p.published_rate);
     const n = formingByProduct.get(p.id) || 0;
-    return `<li><a href="/${p.type === "package" ? "package" : "tour"}/${encodeURIComponent(tourSlug(p))}">${esc(p.title)}</a> — ${esc(p.city || "Egypt")}${p.duration ? `, ${esc(p.duration)}` : ""}${from ? `, from ${from}/person` : ""}${n ? `, ${n} date${n === 1 ? "" : "s"} forming` : ""}</li>`;
+    return `<li><a href="${esc(tourPath(p))}">${esc(p.title)}</a> — ${esc(p.city || "Egypt")}${p.duration ? `, ${esc(p.duration)}` : ""}${from ? `, from ${from}/person` : ""}${n ? `, ${n} date${n === 1 ? "" : "s"} forming` : ""}</li>`;
   }).join("");
 }
 
@@ -110,6 +115,14 @@ async function catalogueRows() {
   );
   catalogueCache = { at: Date.now(), rows: r.rows };
   return r.rows;
+}
+
+// Every product's detail URL, in the same form the catalogue links to and the
+// sitemap advertises. Reads the memoised catalogue rows, so asking for this
+// repeatedly (the page warmer does, on a timer) costs nothing beyond the scan
+// the /itineraries body was already paying for.
+export async function catalogueRoutes() {
+  return (await catalogueRows()).map(tourPath);
 }
 
 async function slugToId(slug) {
@@ -385,9 +398,7 @@ export async function sitemapXml() {
               AND d.status NOT IN ('cancelled', 'pending_review')
        WHERE p.active IS NOT FALSE AND p.status = 'approved'
        GROUP BY p.id`);
-    tours.rows.forEach((t) =>
-      add(`/${t.type === "package" ? "package" : "tour"}/${encodeURIComponent(tourSlug(t))}`, iso(t.lastmod), "weekly")
-    );
+    tours.rows.forEach((t) => add(tourPath(t), iso(t.lastmod), "weekly"));
     const posts = await pool.query("SELECT slug, updated_at FROM blog_posts WHERE status='published'");
     posts.rows.forEach((p) => add(`/blog/${encodeURIComponent(p.slug)}`, iso(p.updated_at), "monthly"));
   } catch { /* DB optional */ }
