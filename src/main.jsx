@@ -35,6 +35,10 @@ import { toDate } from "./dates.js";
 // to carry its own `const DEFAULT_GO_AHEAD = 4`, free to drift from the server
 // that enforces it and from the twenty static pages that state it.
 import { DEFAULT_GO_AHEAD, MAX_GROUP_SIZE, GROUP_MAX_WORD, numberWord } from "../shared/group-size.js";
+// NN2.1 — the board rules, from the one module that declares them. This file
+// used to carry hand-written copies of seatsTotal and goAheadFor with a comment
+// asking the next person to keep them in sync with domain.js.
+import { seatsTotal, goAheadSeatsFor } from "../shared/departure-state.js";
 // Lazy-loaded so the heavy authenticated portal (admin desk + TipTap editor)
 // is split out of the public bundle and never downloaded by visitors.
 const LoginGate = lazy(() => import("./LoginGate").then((m) => ({ default: m.LoginGate })));
@@ -93,9 +97,10 @@ function isPackage(item) {
   return item && item.type === "package";
 }
 
-function goAheadFor(item) {
-  return Math.max(1, Number(item?.minSeats || DEFAULT_GO_AHEAD));
-}
+// NN2.1 — `goAheadFor` is the authority's `goAheadSeatsFor` under the name this
+// file already used everywhere. The local copy differed: it read `minSeats`
+// only, where the server also accepts a raw `min_seats` row.
+const goAheadFor = goAheadSeatsFor;
 
 function confidenceFor(seats, goAhead = DEFAULT_GO_AHEAD) {
   if (seats >= goAhead) return { label: "GoAhead confirmed", tone: "go" };
@@ -149,19 +154,6 @@ function formatRange(start, end) {
   const endYear = needsYear(endDate) ? ` ${endDate.getFullYear()}` : "";
   if (sameMonth) return `${monthFmt.format(startDate)} ${dayFmt.format(startDate)}–${dayFmt.format(endDate)}${endYear}`;
   return `${monthFmt.format(startDate)} ${dayFmt.format(startDate)}${startYear} – ${monthFmt.format(endDate)} ${dayFmt.format(endDate)}${endYear}`;
-}
-
-// Canceled bookings have released their seats, so they must not count toward
-// capacity, live pricing, or GoAhead. Mirrors the server's rule in domain.js —
-// if this drifts, the price we show is not the price the server charges.
-function seatsTotal(pledges = []) {
-  // 'cancelled', two Ls, because that is what the database CHECK constraint
-  // permits — see server/db/schema_007_booking_lifecycle.sql. It is deliberately
-  // NOT the US spelling this site uses in copy: this is a database contract
-  // value, not prose. It read "canceled" here for a long time, so the comparison
-  // never matched and every cancelled booking was counted as a traveller
-  // holding a seat. Nothing threw. See scripts/check-status-literals.js.
-  return pledges.reduce((sum, pledge) => (pledge?.status === "cancelled" ? sum : sum + Number(pledge.seats || 0)), 0);
 }
 
 function safePrice(value, fallback) {

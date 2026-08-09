@@ -214,15 +214,33 @@ only; nothing compares the copies against it.
 
 | Rule | Authority | Re-implemented in | Checked? |
 |---|---|---|---|
-| `isForming` / `isGoAhead` | `domain.js` | `site/index.html`, `site/departures.html`, `site/goahead.html` | ❌ — **this is the pair Bug A broke** |
-| `seatsTotal` | `domain.js` | `src/main.jsx` + the three static pages | ❌ (the status literal is now checked; the rule is not) |
+| `isForming` / `isGoAhead` | `shared/departure-state.js` | nothing — `site/assets/rules.js` is generated | ✅ **NN2.1** — `check:rules` + a parity test comparing the generated browser copy against the server on 16 cases |
+| `seatsTotal` / `goAheadSeatsFor` | `shared/departure-state.js` | nothing — `main.jsx` imports it | ✅ **NN2.1**, same check |
 | `slugify` / `tourSlug` | `server/slug.js` | `site/index.html`, `site/departures.html` | ❌ — drift gives a 404 or a 301 loop |
 | `livePriceFor` / `priceFromTiers` | `domain.js` | `src/AgencyDashboard.jsx` | ❌ — drift means an agency quotes a price the server will not honour |
 | `capacityError` | `domain.js` | `src/AdminDashboard.jsx` | ❌ — fails safe: the save 409s |
 
 The group-size constants are the counter-example and the model: they were the
 same shape until `shared/group-size.js` made one module the authority and
-`check:constants` enforced it.
+`check:constants` enforced it. **NN2.1 applied that model to the board rules**,
+and the three copies had already diverged three ways before anyone looked.
+
+Order the remaining three by **silence, not by cost**. `livePriceFor` drifting
+costs money, but it is one copy, agency-facing, and a wrong price is noticed by
+the person quoting it — there is a human who complains. A board rule drifting is
+noticed by nobody, because the number looks plausible.
+
+### NN4 — start where the code is oldest
+
+`cancelOne()` in `jobs/cancel-unconfirmed.js` was already correct on every sweep
+it has been part of: it filtered cancelled pledges out of its recipient list
+when the two older route handlers did not, and it was the one implementation of
+the board rule that never existed to diverge. It is the newest code in the
+repository.
+
+Every defect in this class has been in the oldest code. **Order an audit by
+file age, not by directory listing, and expect the return to fall off sharply in
+anything written recently.**
 
 ## Migrations do not run on deploy
 

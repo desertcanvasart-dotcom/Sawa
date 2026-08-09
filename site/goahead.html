@@ -167,6 +167,7 @@
     </div>
   </div>
 </footer>
+<script src="/assets/rules.js"></script>
 <script src="/assets/sawa.js"></script>
 <script>
 /* Render confirmed (GoAhead) departures from the live API. Same card system as
@@ -240,25 +241,17 @@
   }
   /* Mirrors isGoAheadDeparture/isFormingDeparture in server/domain.js — keep
      in sync. */
-  function seatsOf(d){
-    return (d.pledges||[]).reduce(function(s,x){
-      /* 'cancelled', two Ls — the database's spelling, not the US spelling this
-         site uses in copy. A status is a contract value. When this read
-         'canceled' the comparison never matched and cancelled bookings were
-         counted as travellers on the board. */
-      return x&&x.status==='cancelled'?s:s+(Number(x.seats||x.pax)||1);
-    },0);
-  }
-  function minOf(d,p){return Number(d.minSeats||(p&&p.minSeats))||4;}
-  function isGoAhead(d,p){
-    if(d.status==='minimum_reached'||d.status==='supplier_confirmed')return true;
-    return d.status==='open'&&seatsOf(d)>=minOf(d,p);
-  }
-  function isForming(d,p){
-    if(d.status!=='open')return false;
-    var s=seatsOf(d);
-    return s>=1&&s<minOf(d,p);
-  }
+  /* NN2.1 — the board rules come from /assets/rules.js, generated from
+     shared/departure-state.js. The copy that used to live here treated a STORED
+     `minimum_reached` as confirmed, so this board advertised as running a date
+     whose bookings had since been cancelled and which the server considered
+     merely open. */
+  var R=window.SawaRules;
+  function withMin(d,p){var o={};for(var k in d)o[k]=d[k];if(o.minSeats==null&&p)o.minSeats=p.minSeats;return o;}
+  function seatsOf(d){return R.seatsTotal(d.pledges);}
+  function minOf(d,p){return R.goAheadSeatsFor(withMin(d,p));}
+  function isGoAhead(d,p){return R.isGoAheadDeparture(withMin(d,p));}
+  function isForming(d,p){return R.isFormingDeparture(withMin(d,p));}
   loadData().then(function(data){
     var byId={};
     (data.tourProducts||[]).forEach(function(p){if(p.active!==false&&(!p.status||p.status==='approved'))byId[p.id]=p;});
