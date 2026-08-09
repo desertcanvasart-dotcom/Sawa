@@ -37,7 +37,11 @@ export function schemaStatusVocabulary(dir = join(ROOT, "server", "db")) {
   const sources = new Map();
   for (const file of readdirSync(dir).filter((f) => f.endsWith(".sql"))) {
     const sql = readFileSync(join(dir, file), "utf8");
-    const re = /CHECK\s*\(\s*(\w+)\s+IN\s*\(([^)]*)\)/gi;
+    // Two shapes. `CHECK (col IN (...))` for a required value, and
+    // `CHECK (col IS NULL OR col IN (...))` for a nullable one — 023 uses the
+    // second, and the first draft of this parser did not see it, so five
+    // permitted values were invisible to the vocabulary.
+    const re = /CHECK\s*\(\s*(?:\w+\s+IS\s+NULL\s+OR\s+)?(\w+)\s+IN\s*\(([^)]*)\)/gi;
     let m;
     while ((m = re.exec(sql))) {
       const column = m[1].toLowerCase();
@@ -64,12 +68,11 @@ const APPLICATION_ONLY = new Map([
   ["failed", "email_log.status — written by email.js when a send is rejected"],
   ["system", "audit_log.actor_role for machine-written entries; the column has no CHECK"],
   ["public", "pledges.source, not a status — free text marking a traveller booking"],
-  // blog_posts.status is genuinely unconstrained in the schema. Recording it
-  // here rather than adding a CHECK because the correction belongs in a
-  // migration, and migrations do not run on deploy (B5) — so the constraint and
-  // the code would disagree on production until someone ran it by hand.
-  ["published", "blog_posts.status — the column has no CHECK; see the note above"],
-  ["draft", "blog_posts.status — the column has no CHECK; see the note above"],
+  // 'published' and 'draft' USED to live here, because blog_posts.status had no
+  // CHECK. Migration 023 added one, so the schema is now the authority for them
+  // and the exception is gone. That is what the exception list is for: every
+  // entry is a place the schema is not the authority, and the list should
+  // shrink.
 ]);
 
 // ---------------------------------------------------------------- the scan
