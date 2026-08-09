@@ -93,16 +93,58 @@ test("the rules never change spelling", () => {
   assert.equal(applyConstants(us, 6, 14), us, "and still not when the constants move");
 });
 
-// A page-level "never carries both spellings" assertion lived here and passed
-// until T1.1, when supplied [EXACT COPY] using "travellers" landed on
-// operators.html, which is written in "travelers" throughout. Final copy wins
-// over house style, so the page legitimately mixes them now.
+// ---- US English is the site standard (U4.3) ---------------------------------
 //
-// The assertion is not reinstated in a weakened form, because it was testing
-// editorial consistency rather than anything this script does — and a test that
-// is quietly relaxed to keep passing stops meaning anything. Mixed spelling is
-// reported to the client as a copy decision instead; see
-// docs/audit/rendered-claims-audit.md.
+// This assertion was DELETED once, to make a build pass, when supplied
+// [EXACT COPY] using "travellers" landed on a page written in "travelers". That
+// was the wrong repair: the standard was never decided, so the test was removed
+// instead of the ambiguity. The standard is now decided — US English site-wide,
+// and supplied copy bends to the site — so the assertion is restored rather than
+// reinstated in a weakened form.
+//
+// It runs over every copy surface, including the attribute text (placeholder,
+// alt, aria-label, title) that a earlier audit could not see at all.
+
+const UK_SPELLINGS = [
+  "travellers", "traveller", "travelled", "travelling",
+  "cancelled", "cancelling", "organisation", "organisations", "organisational",
+  "reorganisation", "organiser", "authorisation", "authorised", "unauthorised",
+  "licence", "licences", "recognised", "apologise", "realise", "minimise",
+];
+
+const stripComments = (html) => html
+  .replace(/<!--[\s\S]*?-->/g, " ")
+  .replace(/\/\*[\s\S]*?\*\//g, " ")
+  .replace(/^\s*\/\/.*$/gm, " ");
+
+test("every static page is written in US English", () => {
+  const problems = [];
+  for (const file of pages()) {
+    // Comments are not copy — the audit notes in these files quote the old
+    // British spellings deliberately, to record what was removed.
+    const body = stripComments(read(file));
+    for (const uk of UK_SPELLINGS) {
+      const re = new RegExp(`\\b${uk}\\b`, "gi");
+      const hits = body.match(re);
+      if (hits) problems.push(`${name(file)}: ${hits.length}× "${uk}"`);
+    }
+  }
+  assert.deepEqual(problems, [], `US English is the site standard:\n  ${problems.join("\n  ")}`);
+});
+
+test("attribute text is held to the same standard", () => {
+  // placeholder, alt, aria-label and title are read by users and were invisible
+  // to every check until an operator name was found sitting in a placeholder.
+  const problems = [];
+  for (const file of pages()) {
+    for (const m of stripComments(read(file)).matchAll(/\b(placeholder|alt|aria-label|title)="([^"]*)"/gi)) {
+      for (const uk of UK_SPELLINGS) {
+        if (new RegExp(`\\b${uk}\\b`, "i").test(m[2])) problems.push(`${name(file)} @${m[1]}: "${m[2].slice(0, 60)}"`);
+      }
+    }
+  }
+  assert.deepEqual(problems, [], `US English in attribute text:\n  ${problems.join("\n  ")}`);
+});
 
 test("a group-size range is corrected in every phrasing the site uses", () => {
   // /how-it-works read "Travel in a group of 4–8 with one guide" — a ceiling of

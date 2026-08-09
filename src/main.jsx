@@ -42,15 +42,15 @@ const AdminDashboard = lazy(() => import("./AdminDashboard").then((m) => ({ defa
 const AgencyDashboard = lazy(() => import("./AgencyDashboard").then((m) => ({ default: m.AgencyDashboard })));
 
 
-// Three named traveller quotes lived here — Valencia, Munich, Abu Dhabi, each
-// against a named trip in May 2026. No traveller has ever been on a Sawa
+// Three named traveler quotes lived here — Valencia, Munich, Abu Dhabi, each
+// against a named trip in May 2026. No traveler has ever been on a Sawa
 // departure: the pledges table has never held a row. They were invented to
 // dress a design and there is nothing to reinstate them from, so they are gone
 // rather than commented out.
 //
 const articles = [
   {
-    title: "Why shared tours usually get cancelled, and how we fix it",
+    title: "Why shared tours usually get canceled, and how we fix it",
     meta: "Planning guide",
     text: "A date becomes GoAhead when its minimum seats are booked, making the shared car and guide price work for everyone.",
   },
@@ -122,7 +122,7 @@ function needsYear(date) {
   return date.getFullYear() !== new Date().getFullYear();
 }
 
-// `alwaysYear` is not just for payment deadlines: every date a traveller picks
+// `alwaysYear` is not just for payment deadlines: every date a traveler picks
 // from carries its year too. The catalogue already runs into the following
 // calendar year, and "Tue, Oct 7" beside a 2027 package is genuinely ambiguous.
 function formatDate(date, { alwaysYear = false } = {}) {
@@ -151,11 +151,11 @@ function formatRange(start, end) {
   return `${monthFmt.format(startDate)} ${dayFmt.format(startDate)}${startYear} – ${monthFmt.format(endDate)} ${dayFmt.format(endDate)}${endYear}`;
 }
 
-// Cancelled bookings have released their seats, so they must not count toward
+// Canceled bookings have released their seats, so they must not count toward
 // capacity, live pricing, or GoAhead. Mirrors the server's rule in domain.js —
 // if this drifts, the price we show is not the price the server charges.
 function seatsTotal(pledges = []) {
-  return pledges.reduce((sum, pledge) => (pledge?.status === "cancelled" ? sum : sum + Number(pledge.seats || 0)), 0);
+  return pledges.reduce((sum, pledge) => (pledge?.status === "canceled" ? sum : sum + Number(pledge.seats || 0)), 0);
 }
 
 function safePrice(value, fallback) {
@@ -164,7 +164,7 @@ function safePrice(value, fallback) {
 }
 
 // Mirror of priceFromTiers in server/domain.js. These two must agree exactly:
-// this one decides the price a traveller is shown, that one decides the price
+// this one decides the price a traveler is shown, that one decides the price
 // they are charged, and a disagreement is a quote the server won't honour.
 function priceFromTiers(tiers, seats) {
   if (!Array.isArray(tiers) || !tiers.length) return null;
@@ -209,9 +209,9 @@ function departureFull(d) {
   return seatsTotal(d.pledges) >= Number(d.maxSeats || 0);
 }
 
-// A product is fully booked when it HAS dates and every one is full or cancelled.
+// A product is fully booked when it HAS dates and every one is full or canceled.
 function productFullyBooked(product) {
-  const live = (product.dates || []).filter((d) => d.status !== "cancelled");
+  const live = (product.dates || []).filter((d) => d.status !== "canceled");
   return live.length > 0 && live.every(departureFull);
 }
 
@@ -233,9 +233,9 @@ function departurePast(departure, today = todayIso()) {
   return typeof end === "string" && end < today;
 }
 
-// Bookable dates only (not past, not full, not cancelled).
+// Bookable dates only (not past, not full, not canceled).
 function openDates(product) {
-  return (product.dates || []).filter((d) => d.status !== "cancelled" && !departureFull(d) && !departurePast(d));
+  return (product.dates || []).filter((d) => d.status !== "canceled" && !departureFull(d) && !departurePast(d));
 }
 
 function packagePriceFor(product, departure, seats, { roomingType = "double", tierId } = {}) {
@@ -643,7 +643,7 @@ function App() {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Could not cancel client.");
       setDepartures((current) => current.map((departure) => (departure.id === data.departure.id ? data.departure : departure)));
-      setNotice("Client cancelled from this shared group.");
+      setNotice("Client canceled from this shared group.");
     } catch (error) {
       setNotice(error.message);
     } finally {
@@ -761,10 +761,10 @@ function App() {
   }
 
   // customerPhone was collected by the booking form but neither destructured
-  // here nor put in the body, so every phone number travellers typed was thrown
+  // here nor put in the body, so every phone number travelers typed was thrown
   // away — even though the API accepts it, the column stores it, and the admin
   // bookings table has a column for it. WhatsApp is the primary contact channel
-  // for these tours, so this was the operator's main way to reach a traveller.
+  // for these tours, so this was the operator's main way to reach a traveler.
   async function bookPublicDeparture({ departureId, customerName, customerEmail, customerPhone, seats, roomingType, accommodationTier }) {
     if (isSaving) return;
     setIsSaving(true);
@@ -812,7 +812,7 @@ function App() {
       if (!response.ok) throw new Error(data.error || "Could not cancel this booking.");
       setDepartures((current) => current.map((departure) => (departure.id === data.departure.id ? data.departure : departure)));
       setPublicBooking(null);
-      setNotice("Booking cancelled. Availability updated live.");
+      setNotice("Booking canceled. Availability updated live.");
     } catch (error) {
       setNotice(error.message);
     } finally {
@@ -1212,7 +1212,7 @@ function SxFooter() {
     <div className="sfooter">
       <div className="wrap">
         <div className="fgrid">
-          <div><a className="logo" href="/"><SxLogoMark /><span className="nm"><b>Sawa</b><i>Tours · Egypt</i></span></a><p className="fblurb">Shared departures, confirmed together. Sawa pools travellers across verified Egyptian operators so the tours you want actually run.</p></div>
+          <div><a className="logo" href="/"><SxLogoMark /><span className="nm"><b>Sawa</b><i>Tours · Egypt</i></span></a><p className="fblurb">Shared departures, confirmed together. Sawa pools travelers across Ministry-licensed Egyptian operators so the tours you want actually run.</p></div>
           <div className="fcol"><h4>Travel</h4><a href="/itineraries">All itineraries</a><a href="/departures">Open departures</a><a href="/goahead">GoAhead departures</a><a href="/destinations">Destinations</a><a href="/how-it-works">How it works</a><a href="/trust">The GoAhead promise</a><a href="/faq">FAQ</a></div>
           <div className="fcol"><h4>Operators</h4><a href="/operators">List a tour</a><a href="/verify">Become verified</a><a href="/widget">Get the widget</a></div>
           <div className="fcol"><h4>Company</h4><a href="/about">About Sawa</a><a href="/contact">Support</a><a href="/privacy">Privacy Policy</a><a href="/cookies">Cookies</a><a href="/terms">Terms and Conditions</a></div>
@@ -1279,7 +1279,7 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
   // applies them (defaulting to the first tier + a double room). This page
   // renders packages too, but offered neither control and sent neither field —
   // so every package sold at the cheapest tier in a shared room, the Superior
-  // and Luxury upgrades were unreachable, and a solo traveller was silently
+  // and Luxury upgrades were unreachable, and a solo traveler was silently
   // booked into a double with no single supplement charged.
   const pkgTiers = isPackage(tour) ? (tour.accommodationTiers || []) : [];
   const [tierId, setTierId] = useState(pkgTiers[0]?.id || "");
@@ -1340,7 +1340,7 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
     e.preventDefault();
     setErr("");
     if (!dep) return setErr("Pick a departure date.");
-    if (name.trim().length < 2) return setErr("Enter the lead traveller's name.");
+    if (name.trim().length < 2) return setErr("Enter the lead traveler's name.");
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return setErr("Enter a valid email.");
     if (Number(seats) > remaining) return setErr(`Only ${remaining} seat${remaining === 1 ? "" : "s"} left on this date.`);
     onBookPublicDeparture({
@@ -1409,7 +1409,7 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
     // when the date is missing, bring the field to the visitor instead of
     // leaving an error they can't see the cause of.
     if (!reqDate) { setReqErr("Pick the date you want — we've highlighted the field."); showDateField(); return; }
-    if (name.trim().length < 2) return setReqErr("Enter the lead traveller's name.");
+    if (name.trim().length < 2) return setReqErr("Enter the lead traveler's name.");
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return setReqErr("Enter a valid email — we'll confirm your date there.");
     setReqBusy(true);
     try {
@@ -1419,7 +1419,7 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
         body: JSON.stringify({
           tourProductId: tour.id, date: reqDate, customerName: name.trim(),
           customerEmail: email.trim(), customerPhone: phone.trim(), seats: nSeats, ignoreMatches,
-          // The seed pledge is priced on submission, so a traveller starting
+          // The seed pledge is priced on submission, so a traveler starting
           // their own package date needs the same tier/room choice as one
           // joining an existing date — otherwise it silently seeds at the
           // cheapest tier in a shared room.
@@ -1464,10 +1464,10 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
               <div className="facts">
                 {tour.duration && <span className="f"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg><b>{tour.duration}</b></span>}
                 <span className="dot" />
-                <span className="f"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /></svg><b>{goAhead}–{tour.maxSeats}</b> travellers</span>
+                <span className="f"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /></svg><b>{goAhead}–{tour.maxSeats}</b> travelers</span>
                 <span className="dot" />
                 <span className="f"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M3 11l19-9-9 19-2-8-8-2z" /></svg>{cityLabel}</span>
-                {/* A star rating labelled "verified travellers" used to render here from
+                {/* A star rating labelled "verified travelers" used to render here from
                     tour_products.quality — seeded values of 4.7 and 4.9 on a platform
                     that has taken zero bookings. There is no reviews table, so nothing
                     could evidence where the number came from or who gave it.
@@ -1578,7 +1578,7 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
               <section className="sec rv" style={{ borderBottom: 0, marginBottom: 0 }}>
                 <h2>Good to know</h2>
                 <div className="faq">
-                  {[["When is the trip confirmed?", "The moment this date reaches its own GoAhead number — the count is shown on the date itself."], ["Can I pick my own date?", "Yes — use 'start your own' in the dates list. Our team gives it a quick review, it opens for other travellers to join, and nothing is charged unless it reaches GoAhead."], ["What if a date doesn't fill?", "You're never charged for a trip that doesn't run. If it doesn't reach GoAhead, you're refunded in full or moved to another date."], ["Who will I travel with?", "A small mix of travellers pooled from operators registered with the Egyptian Ministry of Tourism & Antiquities — a shared group with one licensed guide, never a freelancer."], ["How do payments work?", "You hold a seat now and pay a deposit only once the date is confirmed. Funds release to the operator at GoAhead."]].map(([q, a]) => (
+                  {[["When is the trip confirmed?", "The moment this date reaches its own GoAhead number — the count is shown on the date itself."], ["Can I pick my own date?", "Yes — use 'start your own' in the dates list. Our team gives it a quick review, it opens for other travelers to join, and nothing is charged unless it reaches GoAhead."], ["What if a date doesn't fill?", "You're never charged for a trip that doesn't run. If it doesn't reach GoAhead, you're refunded in full or moved to another date."], ["Who will I travel with?", "A small mix of travelers pooled from operators registered with the Egyptian Ministry of Tourism & Antiquities — a shared group with one licensed guide, never a freelancer."], ["How do payments work?", "You hold a seat now and pay a deposit only once the date is confirmed. Funds release to the operator at GoAhead."]].map(([q, a]) => (
                     <div className="q" key={q}><h4>{q}</h4><p>{a}</p></div>
                   ))}
                 </div>
@@ -1597,10 +1597,10 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
                     <div className="book-price">
                       <b className="tnum">${pp}</b><span>USD / person</span>
                       <span className="book-promise">Never more than {GROUP_MAX_WORD}. Ever.</span>
-                      <span className="book-threshold">This date confirms at {numberWord(goAhead)} traveller{goAhead === 1 ? "" : "s"}.</span>
+                      <span className="book-threshold">This date confirms at {numberWord(goAhead)} traveler{goAhead === 1 ? "" : "s"}.</span>
                     </div>
                     <div className="go-status">{reqMode
-                      ? (<><span className="pill form"><span className="d" />New date</span> Your day — travellers join you</>)
+                      ? (<><span className="pill form"><span className="d" />New date</span> Your day — travelers join you</>)
                       : (<><span className={`pill${confirmed ? "" : " form"}`}><span className="d" />{confirmed ? "GoAhead" : "Forming"}</span> {confirmed ? "Confirmed — this date is running" : `${Math.max(0, goAhead - booked)} more to confirm`}</>)}</div>
                   </div>
                   {!reqMode && <div className="seats-block">
@@ -1726,7 +1726,7 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
                       {/* Wrapping <label> rather than aria-label: the name stays on screen
                           once the field has content, which a placeholder does not. */}
                       <label className="bk-field">
-                        <span>Lead traveller name</span>
+                        <span>Lead traveler name</span>
                         <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Amina Hassan" required aria-required="true" autoComplete="name" />
                       </label>
                       <div className="frow">
@@ -1753,13 +1753,13 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
                       <div className="r"><span>Balance</span><b>${balance} USD</b></div>
                       <div className="nt">All amounts in US dollars (USD). Nothing is charged today. Balance due {dep ? balanceDueDate(dep.date) : "before departure"}.</div>
                       {/* The deadline is the other half of the GoAhead promise:
-                          the date by which this either confirms or is cancelled
+                          the date by which this either confirms or is canceled
                           and everyone refunded. Showing it before someone
                           reserves is the point — a commitment nobody can see is
                           not one they can rely on. */}
                       {dep?.confirmDeadline && (
                         <div className="nt">
-                          This date confirms or cancels by <b>{formatDate(dep.confirmDeadline, { alwaysYear: true })}</b> — {dep.confirmDeadlineDays} days before departure. If it hasn't reached {goAheadFor(dep)} travellers by then it's cancelled and you're charged nothing.
+                          This date confirms or cancels by <b>{formatDate(dep.confirmDeadline, { alwaysYear: true })}</b> — {dep.confirmDeadlineDays} days before departure. If it hasn't reached {goAheadFor(dep)} travelers by then it's canceled and you're charged nothing.
                         </div>
                       )}
                       <PaymentTimeline />
@@ -1779,7 +1779,7 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
                           <button className="btn gold full" type="submit" disabled={isSaving || !dep || remaining <= 0}>{isSaving ? "Holding…" : remaining <= 0 ? "Date full" : "Reserve a seat"}<span className="chip"><SxArrow /></span></button>
                           {err && <div className="bk-err" role="alert">{err}</div>}
                           {publicBooking && Number(publicBooking.departureId) === Number(dep?.id) && (
-                            // Cancelling a held seat is an action, not navigation, and it was an
+                            // Canceling a held seat is an action, not navigation, and it was an
                             // <a> with no href: unreachable by keyboard and announced to screen
                             // readers as plain text. A real <button> restores focus and Enter/Space.
                             <div className="bk-ok" role="status">Seat held — {publicBooking.code}. {publicBooking.depositDue ? `$${publicBooking.depositDue} USD deposit due at GoAhead.` : ""} <button type="button" className="bk-cancel" onClick={onCancelPublicBooking}>Cancel</button></div>
@@ -2040,7 +2040,7 @@ function PublicSite({
             <section className="how reveal" id="how-it-works">
               <div className="how-head">
                 <SectionHeading kicker="How Sawa works" title="Your date is confirmed before you pay a cent." />
-                <p className="how-lead">Sawa pools small bookings into one shared group. You hold a seat for free; once enough travellers join the same date, it is confirmed to run.</p>
+                <p className="how-lead">Sawa pools small bookings into one shared group. You hold a seat for free; once enough travelers join the same date, it is confirmed to run.</p>
               </div>
               <div className="how-grid">
                 <article className="how-step">
@@ -2051,7 +2051,7 @@ function PublicSite({
                 <article className="how-step">
                   <span className="how-num">02</span>
                   <h3>The group fills</h3>
-                  <p>As more travellers book the same date, the shared price drops and the trip moves toward GoAhead.</p>
+                  <p>As more travelers book the same date, the shared price drops and the trip moves toward GoAhead.</p>
                 </article>
                 <article className="how-step is-go">
                   <span className="how-num">03</span>
@@ -2108,9 +2108,9 @@ function PublicSite({
               </div>
             </section>
 
-            {/* A review wall stood here: "4.9 ★★★★★ from 312 confirmed travellers",
-                headed "Travellers who actually went", above named five-star quotes.
-                The pledges table has never held a row, so no traveller has been on a
+            {/* A review wall stood here: "4.9 ★★★★★ from 312 confirmed travelers",
+                headed "Travelers who actually went", above named five-star quotes.
+                The pledges table has never held a row, so no traveler has been on a
                 Sawa departure and none of it could be evidenced.
                 It was already unreachable — this branch does not render — but it
                 shipped in the bundle and was one conditional away from being live
@@ -2520,7 +2520,7 @@ function ToursPage({ navigate, customerCalendars, cityStats, selectedCity, setSe
         // constant; the threshold is per product and is never stated here,
         // because it is not the same number on every itinerary. Each card and
         // each date carries its own.
-        lead={`Every itinerary Sawa runs is operated by an Egyptian travel company licensed by the Ministry of Tourism and registered with ETAA. Open one to join a forming date or start your own. Each date shows exactly how many travellers it needs to confirm — that moment is the GoAhead — and no Sawa group ever goes above ${GROUP_MAX_WORD}. You pay nothing until your date confirms.`}
+        lead={`Every itinerary Sawa runs is operated by an Egyptian travel company licensed by the Ministry of Tourism and registered with ETAA. Open one to join a forming date or start your own. Each date shows exactly how many travelers it needs to confirm — that moment is the GoAhead — and no Sawa group ever goes above ${GROUP_MAX_WORD}. You pay nothing until your date confirms.`}
       />
 
       <div className="tours-toolbar reveal in">
@@ -2578,15 +2578,15 @@ function ToursPage({ navigate, customerCalendars, cityStats, selectedCity, setSe
 function HowItWorksPage({ navigate, customerSummary }) {
   const steps = [
     { n: "01", t: "Hold a seat, free", d: "Pick a date and reserve your spot with no card and no deposit. You're simply joining the group that's forming for that day." },
-    { n: "02", t: "The group fills", d: "As more travellers book the same date, it moves toward GoAhead. The shared cost of the guide and vehicle is split across everyone, so the price stays fair." },
-    { n: "03", t: "It runs — confirmed.", d: "Once the minimum number of travellers is reached, we confirm the guide and transport and take your deposit. If a date never fills, you pay nothing." },
+    { n: "02", t: "The group fills", d: "As more travelers book the same date, it moves toward GoAhead. The shared cost of the guide and vehicle is split across everyone, so the price stays fair." },
+    { n: "03", t: "It runs — confirmed.", d: "Once the minimum number of travelers is reached, we confirm the guide and transport and take your deposit. If a date never fills, you pay nothing." },
   ];
   return (
     <div className="page-wrap">
       <PageHead
         eyebrow="How Sawa works"
         title="Your seat is free until the trip is real."
-        lead="“Sawa” means together. We pool small bookings from different travellers into one shared group, so day tours and packages actually run — and you never pay for a date that isn't confirmed."
+        lead="“Sawa” means together. We pool small bookings from different travelers into one shared group, so day tours and packages actually run — and you never pay for a date that isn't confirmed."
       />
 
       <div className="how2-steps reveal in">
@@ -2604,13 +2604,13 @@ function HowItWorksPage({ navigate, customerSummary }) {
         <div>
           <p className="page-eyebrow">The gold dot</p>
           <h2>GoAhead means your tour is confirmed.</h2>
-          <p>When a date reaches its minimum travellers, it turns GoAhead — the guide and vehicle are booked and the departure is locked in. Until then, your seat is just a free hold. No surprises, no last-minute cancellations after you've paid.</p>
+          <p>When a date reaches its minimum travelers, it turns GoAhead — the guide and vehicle are booked and the departure is locked in. Until then, your seat is just a free hold. No surprises, no last-minute cancellations after you've paid.</p>
         </div>
       </section>
 
       <section className="how2-trust reveal in">
         <div className="how2-trust-item"><Users size={20} /><div><strong>Small groups</strong><span>Shared, never crowded — a real guide, not a mega-bus.</span></div></div>
-        <div className="how2-trust-item"><ShieldCheck size={20} /><div><strong>Verified operators</strong><span>Licensed Egyptian guides and checked vehicles on every trip.</span></div></div>
+        <div className="how2-trust-item"><ShieldCheck size={20} /><div><strong>Ministry-licensed operators</strong><span>Licensed Egyptian guides and checked vehicles on every trip.</span></div></div>
         <div className="how2-trust-item"><BadgeCheck size={20} /><div><strong>No payment until confirmed</strong><span>You're only charged once the date is confirmed to run.</span></div></div>
       </section>
 
@@ -2626,13 +2626,13 @@ function AboutPage({ navigate, customerSummary }) {
       <PageHead
         eyebrow="About Sawa"
         title="Shared departures, confirmed together."
-        lead="Sawa is a Cairo-based shared-tour platform. We connect independent travellers heading the same way on the same day, so small bookings become real, confirmed group departures across Egypt."
+        lead="Sawa is a Cairo-based shared-tour platform. We connect independent travelers heading the same way on the same day, so small bookings become real, confirmed group departures across Egypt."
       />
 
       <section className="about-lead reveal in">
         <div className="about-lead-text">
           <h2>Why we built it</h2>
-          <p>Booking a day tour in Egypt usually means two bad options: pay a premium for a private car, or book a cheap group tour that quietly gets cancelled when not enough people sign up. Sawa fixes the second problem. By pooling bookings from multiple agencies and travellers into one shared group, a date only needs a handful of people to be confirmed — and everyone shares a fair price.</p>
+          <p>Booking a day tour in Egypt usually means two bad options: pay a premium for a private car, or book a cheap group tour that quietly gets canceled when not enough people sign up. Sawa fixes the second problem. By pooling bookings from multiple agencies and travelers into one shared group, a date only needs a handful of people to be confirmed — and everyone shares a fair price.</p>
           <p>You hold your seat for free and watch the group fill in real time. The moment it reaches GoAhead, the guide and vehicle are locked in. You only pay when the trip is real.</p>
         </div>
         <aside className="about-stats">
@@ -2644,7 +2644,7 @@ function AboutPage({ navigate, customerSummary }) {
 
       <section className="about-pillars reveal in">
         <article><Users size={22} /><h3>Small groups</h3><p>Shared, never crowded. A proper guide and a comfortable vehicle, not a packed coach.</p></article>
-        <article><ShieldCheck size={22} /><h3>Verified operators</h3><p>Every departure runs with licensed Egyptian guides and inspected transport.</p></article>
+        <article><ShieldCheck size={22} /><h3>Ministry-licensed operators</h3><p>Every departure runs with licensed Egyptian guides and inspected transport.</p></article>
         <article><CalendarDays size={22} /><h3>Real departures</h3><p>Dates are confirmed before you pay — what you book is what actually runs.</p></article>
       </section>
 
@@ -2718,7 +2718,7 @@ const FAQ_GROUPS = [
     title: "Booking & payment",
     items: [
       { q: "Do I pay when I book?", a: "No. Holding a seat is completely free. You only pay a deposit once your date reaches GoAhead and is confirmed to run." },
-      { q: "What happens if the tour doesn't fill?", a: "If a date never reaches the minimum number of travellers, it simply doesn't run and you're charged nothing. We'll let you know and help you move to another date." },
+      { q: "What happens if the tour doesn't fill?", a: "If a date never reaches the minimum number of travelers, it simply doesn't run and you're charged nothing. We'll let you know and help you move to another date." },
       { q: "How much is the deposit?", a: "It varies by tour, but it's a small percentage of the total shown clearly before you confirm. The balance is settled per the tour's terms." },
     ],
   },
@@ -2726,7 +2726,7 @@ const FAQ_GROUPS = [
     title: "GoAhead & how it works",
     items: [
       { q: "What does GoAhead mean?", a: "GoAhead means a date has reached its own confirmation number, so the guide and vehicle are booked and the departure is confirmed to run." },
-      { q: "Can a confirmed tour still be cancelled?", a: "Once a date is GoAhead we don't cancel it for low numbers. In rare cases of safety or weather, we'll rebook or refund you." },
+      { q: "Can a confirmed tour still be canceled?", a: "Once a date is GoAhead we don't cancel it for low numbers. In rare cases of safety or weather, we'll rebook or refund you." },
     ],
   },
   {
@@ -2788,7 +2788,7 @@ function LegalPage({ kind, navigate }) {
 }
 
 const PRIVACY_SECTIONS = [
-  { h: "What we collect", p: ["When you hold a seat or book a tour, we collect the details you give us — your name, email, phone number, the travellers in your party, and the tour and date you choose.", "We also collect basic technical information such as your browser type and pages visited, to keep the service running and secure."] },
+  { h: "What we collect", p: ["When you hold a seat or book a tour, we collect the details you give us — your name, email, phone number, the travelers in your party, and the tour and date you choose.", "We also collect basic technical information such as your browser type and pages visited, to keep the service running and secure."] },
   { h: "How we use it", p: ["We use your information to confirm departures, contact you about your booking, take payment when a date is confirmed, and provide support. Agencies you book through can see the booking details needed to run your tour.", "We do not sell your personal information."] },
   { h: "Who sees it", p: ["Your booking details are shared only with the operating agency and our operations team, strictly to deliver your tour. Payment is handled by our payment provider; we don't store full card details."] },
   { h: "Your choices", p: ["You can ask us to access, correct, or delete your information at any time by emailing us. You can opt out of non-essential messages while still receiving booking updates."] },
@@ -2796,7 +2796,7 @@ const PRIVACY_SECTIONS = [
 ];
 
 const TERMS_SECTIONS = [
-  { h: "The Sawa model", p: ["Sawa pools bookings from multiple travellers and agencies into shared group departures. Holding a seat is free and does not guarantee the tour will run. A departure becomes confirmed (GoAhead) only when it reaches the minimum number of travellers."] },
+  { h: "The Sawa model", p: ["Sawa pools bookings from multiple travelers and agencies into shared group departures. Holding a seat is free and does not guarantee the tour will run. A departure becomes confirmed (GoAhead) only when it reaches the minimum number of travelers."] },
   { h: "Bookings & payment", p: ["You pay nothing to hold a seat. Once a date reaches GoAhead, the deposit shown at booking becomes due to confirm your place. The remaining balance is payable per the individual tour's terms.", "Prices are shown per person and may vary with group size, accommodation tier, and room type for packages."] },
   { h: "Cancellations", p: ["You may release a free hold at any time before confirmation at no cost. After a date is confirmed, the cancellation policy shown on that tour applies. Sawa and its operators may cancel for reasons of safety, weather, or force majeure, in which case we will rebook or refund you."] },
   { h: "On the day", p: ["You are responsible for arriving at the listed meeting point at the stated time. Tours depart on schedule; missed departures due to late arrival are not refundable."] },

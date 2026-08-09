@@ -517,7 +517,7 @@ export async function buildBody(pathname) {
   ${included.length ? `<h2>Included</h2><ul>${included.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}
   ${notIncluded.length ? `<h2>Not included</h2><ul>${notIncluded.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}
   ${p.meeting_point ? `<h2>Meeting point</h2><p>${esc(p.meeting_point)}</p>` : ""}
-  <p>Operated by an operator registered with the Egyptian Ministry of Tourism &amp; Antiquities and verified by ${esc(BRAND.name)}.</p>
+  <p>Operated by an Egyptian travel company licensed by the Ministry of Tourism and registered with ETAA.</p>
 </article>`);
   }
 
