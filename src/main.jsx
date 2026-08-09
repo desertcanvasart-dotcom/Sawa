@@ -2865,13 +2865,25 @@ function BookingLookupPage({ navigate, path }) {
               <div><Users size={16} /> {b.seats} {b.seats === 1 ? "seat" : "seats"}</div>
               {b.city && <div><MapPin size={16} /> {b.city}</div>}
             </div>
-            <div className="booking-progress">
-              <div className="booking-progress-row"><span>{b.seatsBooked}/{b.goAhead} seats to confirm</span><b>{b.confirmed ? "GoAhead — confirmed" : "Still forming"}</b></div>
-              <i><em style={{ width: `${Math.min(100, (b.seatsBooked / Math.max(1, b.goAhead)) * 100)}%` }} /></i>
-            </div>
-            <p className="booking-note">{b.confirmed
-              ? "Your date is confirmed — the guide and transport are booked. See your confirmation email for the meeting point and time."
-              : "Your seat is held. We'll let you know the moment this date reaches GoAhead."}</p>
+            {/* LL3 — the seat count is a live figure. On a date that is not
+                running it is not information, it is an invitation to keep
+                waiting, so the server decides whether it is shown at all. */}
+            {b.showProgress && (
+              <div className="booking-progress">
+                <div className="booking-progress-row"><span>{b.seatsBooked}/{b.goAhead} seats to confirm</span><b>{b.confirmed ? "GoAhead — confirmed" : "Still forming"}</b></div>
+                <i><em style={{ width: `${Math.min(100, (b.seatsBooked / Math.max(1, b.goAhead)) * 100)}%` }} /></i>
+              </div>
+            )}
+            {/* The note comes from the server, which is the only thing that
+                knows the state. It used to be chosen here from `confirmed`
+                alone, which is how a cancelled date came to read "the guide and
+                transport are booked". */}
+            <p className="booking-note">{b.note}</p>
+            {b.state === "date_cancelled" && b.routePath && (
+              <SpaLink navigate={navigate} to={b.routePath} className="btn-pill primary">
+                See other dates on this route <ArrowRight size={16} />
+              </SpaLink>
+            )}
           </article>
         )}
       </div>

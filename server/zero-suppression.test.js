@@ -49,13 +49,28 @@ test("the board count and footer are present, empty, and addressable", () => {
   assert.match(html, /class="sk sk-cnt"/, "the count must ship as a skeleton, not as text");
 });
 
+test("no board renders a bare zero as a headline statistic", () => {
+  // MM2 — P3.4's approved scope was "no bare zero anywhere". JJ3 shipped the
+  // homepage and /departures and stopped, and /goahead kept serving "0" beside
+  // "departures at GoAhead". The task LOOKED done, which is why nothing caught
+  // it. Every page with a live counter is named here so the next one cannot be
+  // half-finished the same way.
+  for (const file of ["index.html", "departures.html", "goahead.html"]) {
+    const html = read(file);
+    assert.ok(
+      /if\s*\(\s*n\s*>\s*0\s*\)|moreN\s*>\s*0/.test(html),
+      `${file}: a live counter is written without checking the value is above zero`
+    );
+  }
+});
+
 test("both boards offer State A's two actions, and neither invents a destination", () => {
   // State A is only honest if its actions work. "Tell me when a group forms"
   // points at /contact because no alerts capture exists yet; if that href ever
   // points somewhere unbuilt, this fails.
-  for (const file of ["index.html", "departures.html"]) {
+  for (const file of ["index.html", "departures.html", "goahead.html"]) {
     const html = read(file);
-    assert.match(html, /Start a date/, `${file}: State A is missing its primary action`);
+    assert.match(html, /Start a date|See what's forming/, `${file}: State A is missing its primary action`);
     // The anchor itself, not "the words appear somewhere near an href" — the
     // first draft of this matched a code comment that happened to quote both.
     assert.match(

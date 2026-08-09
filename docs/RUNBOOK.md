@@ -187,6 +187,43 @@ and `DRY_RUN=1` still makes it dry. This governs the unattended tick only.
 
 ---
 
+## A guard is only as strong as the check on the contract it depends on
+
+`app.js:158` deliberately preserves a pledge's `status` through redaction, with
+a comment explaining exactly why: *"a cancelled pledge has released its seats,
+and without this the viewer counts it as still occupying them."*
+
+The reasoning was right, written in the right place, by someone who understood
+the failure. It was then defeated by the consumer, which compared that value
+against `'canceled'` — a spelling the database cannot produce. The guard held.
+The contract it depended on was never checked.
+
+This is not stale documentation. It is **defensive code whose intent was
+silently discarded downstream**, which is worse, because the guard's presence is
+what makes everyone stop looking.
+
+**Rule:** where a guard depends on a downstream consumer honouring a contract,
+there must be a check on that contract. `check:status-literals` is now that
+check for status values.
+
+### Where no such check exists — MM3
+
+Five rules are implemented on the server, tested on the server, and
+**re-implemented by hand** in the front end. Every test covers the server's copy
+only; nothing compares the copies against it.
+
+| Rule | Authority | Re-implemented in | Checked? |
+|---|---|---|---|
+| `isForming` / `isGoAhead` | `domain.js` | `site/index.html`, `site/departures.html`, `site/goahead.html` | ❌ — **this is the pair Bug A broke** |
+| `seatsTotal` | `domain.js` | `src/main.jsx` + the three static pages | ❌ (the status literal is now checked; the rule is not) |
+| `slugify` / `tourSlug` | `server/slug.js` | `site/index.html`, `site/departures.html` | ❌ — drift gives a 404 or a 301 loop |
+| `livePriceFor` / `priceFromTiers` | `domain.js` | `src/AgencyDashboard.jsx` | ❌ — drift means an agency quotes a price the server will not honour |
+| `capacityError` | `domain.js` | `src/AdminDashboard.jsx` | ❌ — fails safe: the save 409s |
+
+The group-size constants are the counter-example and the model: they were the
+same shape until `shared/group-size.js` made one module the authority and
+`check:constants` enforced it.
+
 ## Migrations do not run on deploy
 
 `npm start` is `node server/app.js`. There is **no migrate step**. Every

@@ -16,7 +16,7 @@ export const DEFAULT_PACKAGE_DEPOSIT = 20;
 // tz.js, tz.js reads process.env, and the browser has no process — so the SPA
 // carried its own copy of the number and the two were free to drift apart.
 export { DEFAULT_GO_AHEAD, MAX_GROUP_SIZE } from "../shared/group-size.js";
-import { DEFAULT_GO_AHEAD, MAX_GROUP_SIZE } from "../shared/group-size.js";
+import { DEFAULT_GO_AHEAD, MAX_GROUP_SIZE, numberWord } from "../shared/group-size.js";
 
 // MIN_GROUP_SIZE is the floor a listing may not go below, which is the same
 // number as the default threshold. Named separately because they mean different
@@ -365,5 +365,67 @@ export function computePledgePricing(departure, product, { seats, roomingType, a
     balanceDue: bookingTotal - depositDue,
     balanceDueDate: balanceDueDate(departure.startDate || departure.date),
     ...extra,
+  };
+}
+
+// ---- LL3 — what /booking tells a traveller -----------------------------------
+//
+// Extracted from the route so it can be tested without a database, because the
+// answer it produces is read by one named person who then acts on it.
+//
+// The defect: this asked only whether the PLEDGE was cancelled, then whether
+// enough seats were counted. On a departure the auto-cancel job had cancelled,
+// the pledge was still `confirmed` and the seats were still counted, so it
+// answered "Confirmed — GoAhead… the guide and transport are booked. See your
+// confirmation email for the meeting point and time." — to someone who had
+// just been emailed that their trip was cancelled.
+//
+// The date's own status is now the first thing asked. It is asked here, at the
+// read, and not only at the write (KK1): if the write path regresses, or a row
+// is corrected by hand, or some future path cancels a date another way, the
+// person reading this page is the one who pays for it.
+export function bookingLookupState({ departureStatus, pledgeStatus, seatsBooked = 0, goAhead = DEFAULT_GO_AHEAD }) {
+  if (departureStatus === "cancelled") return "date_cancelled";
+  if (pledgeStatus === "cancelled") return "booking_cancelled";
+  if (departureStatus === "supplier_confirmed" || Number(seatsBooked) >= Number(goAhead)) return "confirmed";
+  return "forming";
+}
+
+const BOOKING_STATE_LABEL = {
+  date_cancelled: "Date cancelled",
+  booking_cancelled: "Booking cancelled",
+  confirmed: "Confirmed — GoAhead",
+  forming: "Forming",
+};
+
+// KK2.1's wording, adapted. The old copy read as a service failure at the exact
+// moment the promise was being KEPT — a date that does not fill is cancelled and
+// nobody is charged, which is the whole proposition.
+function bookingStateNote(state, goAhead) {
+  switch (state) {
+    case "date_cancelled":
+      return `This date didn't reach the ${numberWord(goAhead)} travelers it needed, so it isn't running. `
+        + "That's the GoAhead promise doing its job — you were never charged, so there's nothing to refund.";
+    case "booking_cancelled":
+      return "This booking was cancelled. Nothing was charged for it.";
+    case "confirmed":
+      return "Your date is confirmed — the guide and transport are booked. See your confirmation email for the meeting point and time.";
+    default:
+      return "Your seat is held. We'll let you know the moment this date reaches GoAhead.";
+  }
+}
+
+export function bookingLookupView(input) {
+  const state = bookingLookupState(input);
+  const goAhead = Number(input.goAhead) || DEFAULT_GO_AHEAD;
+  return {
+    state,
+    confirmed: state === "confirmed",
+    // The seat count is a LIVE figure. On a date that is not running it is not
+    // information, it is an invitation to keep waiting.
+    showProgress: state === "confirmed" || state === "forming",
+    statusLabel: BOOKING_STATE_LABEL[state],
+    statusTone: state === "confirmed" ? "go" : state === "forming" ? "pending" : "cancelled",
+    note: bookingStateNote(state, goAhead),
   };
 }

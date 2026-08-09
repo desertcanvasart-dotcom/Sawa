@@ -17,6 +17,7 @@ import {
   MAX_GROUP_SIZE,
   MIN_GROUP_SIZE,
   DEFAULT_GO_AHEAD,
+  bookingLookupView,
 } from "./domain.js";
 import { attachUser, requireAuth, requireRole, isPlatform, isAgency, AuthError } from "./auth.js";
 import { supabaseAdmin } from "./supabase.js";
@@ -39,7 +40,8 @@ import {
   inlineScriptJson, sliceBootstrapForRoute, clearSeoCaches, catalogueRoutes,
 } from "./seo.js";
 import { emitDepartureSync, unavailableDates } from "./autoura-sync.js";
-import { tourSlug } from "./slug.js";
+import { tourSlug, tourPath } from "./slug.js";
+
 import { BRAND } from "./brand.js";
 import { startJobScheduler, jobSchedulerEnabled, cancelJobDryRun } from "./jobs/scheduler.js";
 import { TOUR_TIMEZONE } from "./tz.js";
@@ -882,7 +884,21 @@ app.post("/api/admin/departures/:id/confirm", requireAuth, requireRole("super_ad
   });
   await logAudit(req, { action: "departure.confirm", entity: "departure", entityId: departure.id, detail: { route: departure.route } });
   const dateLabel = departure.startDate ? `${departure.startDate} – ${departure.endDate}` : departure.date;
-  const recips = await pool.query(`SELECT DISTINCT customer_email FROM pledges WHERE departure_id=$1 AND customer_email IS NOT NULL`, [departure.id]);
+  // MM1 — `status <> 'cancelled'` is the whole point of this line.
+  //
+  // Without it, a traveller who had cancelled their own booking was still on
+  // the list, and was emailed about a date they were no longer on. Same defect
+  // class as the booking page telling a cancelled traveller to meet the guide:
+  // a message addressed to a named individual, stating something untrue about
+  // their booking, which they may act on.
+  //
+  // The job's own recipient list (jobs/cancel-unconfirmed.js) already filtered
+  // correctly. These two — the older code — did not.
+  const recips = await pool.query(
+    `SELECT DISTINCT customer_email FROM pledges
+      WHERE departure_id=$1 AND customer_email IS NOT NULL AND status <> 'cancelled'`,
+    [departure.id]
+  );
   for (const row of recips.rows) {
     sendEmail(goAheadEmail({ to: row.customer_email, route: departure.route, dateLabel })).catch(() => {});
   }
@@ -1056,7 +1072,7 @@ app.get("/api/public/bookings/:code", h(async (req, res) => {
             d.id AS dep_id, d.route, d.date, d.start_date, d.end_date, d.city,
             d.status AS dep_status, d.min_seats,
             (SELECT COALESCE(SUM(seats), 0) FROM pledges WHERE departure_id = d.id AND status <> 'cancelled') AS seats_booked,
-            tp.title AS product_title
+            tp.title AS product_title, tp.id AS product_id, tp.type AS product_type, tp.city AS product_city
        FROM pledges p
        JOIN departures d ON d.id = p.departure_id
        LEFT JOIN tour_products tp ON tp.id = d.tour_product_id
@@ -1068,14 +1084,36 @@ app.get("/api/public/bookings/:code", h(async (req, res) => {
   const b = r.rows[0];
   const goAhead = Number(b.min_seats) || 4;
   const seatsBooked = Number(b.seats_booked) || 0;
-  const cancelled = b.pledge_status === "cancelled";
-  const confirmed = !cancelled && (b.dep_status === "supplier_confirmed" || seatsBooked >= goAhead);
+
+  // LL3.1 / LL3.2 — the whole answer comes from domain.js, so it can be tested
+  // without a database. The date's own status is the first thing asked there.
+  const view = bookingLookupView({
+    departureStatus: b.dep_status,
+    pledgeStatus: b.pledge_status,
+    seatsBooked,
+    goAhead,
+  });
+
   const fmt = (s) => {
     if (!s) return "";
     const d = s instanceof Date ? s : new Date(`${s}T12:00:00`);
     return Number.isNaN(d.getTime()) ? "" : new Intl.DateTimeFormat("en", { weekday: "short", day: "numeric", month: "short", year: "numeric" }).format(d);
   };
-  const dateLabel = b.start_date ? `${fmt(b.start_date)} – ${fmt(b.end_date)}` : fmt(b.date);
+  // A day tour has a start_date and no end_date, and this read
+  // `start ? start + " – " + end : date`, so it rendered "Sat, Aug 29, 2026 – "
+  // with a dangling dash for every single-day booking. Found while checking the
+  // states above; it is the same response object, so it is corrected here.
+  const startLabel = fmt(b.start_date) || fmt(b.date);
+  const endLabel = fmt(b.end_date);
+  const dateLabel = endLabel && endLabel !== startLabel ? `${startLabel} – ${endLabel}` : startLabel;
+
+  // Where "other dates on this route" actually goes. The cancellation email
+  // offers the whole board, which is the weakest version of the offer: someone
+  // who wanted the pyramids at dawn is handed everything Sawa sells.
+  const routePath = b.product_id
+    ? tourPath({ id: b.product_id, title: b.product_title, type: b.product_type, city: b.product_city })
+    : null;
+
   res.json({ booking: {
     code: b.booking_code,
     tourTitle: b.product_title || b.route,
@@ -1084,9 +1122,8 @@ app.get("/api/public/bookings/:code", h(async (req, res) => {
     seats: Number(b.seats),
     seatsBooked,
     goAhead,
-    confirmed,
-    statusLabel: cancelled ? "Cancelled" : confirmed ? "Confirmed — GoAhead" : "Forming",
-    statusTone: cancelled ? "cancelled" : confirmed ? "go" : "pending",
+    routePath,
+    ...view,
   } });
 }));
 
@@ -1938,7 +1975,21 @@ app.post("/api/admin/departures/:id/cancel", requireAuth, requireRole("super_adm
   });
   await logAudit(req, { action: "departure.cancel", entity: "departure", entityId: departure.id, detail: { route: departure.route } });
   const dateLabel = departure.startDate ? `${departure.startDate} – ${departure.endDate}` : departure.date;
-  const recips = await pool.query(`SELECT DISTINCT customer_email FROM pledges WHERE departure_id=$1 AND customer_email IS NOT NULL`, [departure.id]);
+  // MM1 — `status <> 'cancelled'` is the whole point of this line.
+  //
+  // Without it, a traveller who had cancelled their own booking was still on
+  // the list, and was emailed about a date they were no longer on. Same defect
+  // class as the booking page telling a cancelled traveller to meet the guide:
+  // a message addressed to a named individual, stating something untrue about
+  // their booking, which they may act on.
+  //
+  // The job's own recipient list (jobs/cancel-unconfirmed.js) already filtered
+  // correctly. These two — the older code — did not.
+  const recips = await pool.query(
+    `SELECT DISTINCT customer_email FROM pledges
+      WHERE departure_id=$1 AND customer_email IS NOT NULL AND status <> 'cancelled'`,
+    [departure.id]
+  );
   for (const row of recips.rows) sendEmail(cancellationEmail({ to: row.customer_email, route: departure.route, dateLabel })).catch(() => {});
   emitDepartureSync(departure.id);
   res.json({ departure: presentDeparture(departure, req.user) });
