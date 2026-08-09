@@ -1578,7 +1578,7 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
               <section className="sec rv" style={{ borderBottom: 0, marginBottom: 0 }}>
                 <h2>Good to know</h2>
                 <div className="faq">
-                  {[["When is the trip confirmed?", "The moment the minimum travellers join the same date — then it's confirmed and running (GoAhead)."], ["Can I pick my own date?", "Yes — use 'start your own' in the dates list. Our team gives it a quick review, it opens for other travellers to join, and nothing is charged unless it reaches GoAhead."], ["What if a date doesn't fill?", "You're never charged for a trip that doesn't run. If it doesn't reach GoAhead, you're refunded in full or moved to another date."], ["Who will I travel with?", "A small mix of travellers pooled from operators registered with the Egyptian Ministry of Tourism & Antiquities — a shared group with one licensed guide, never a freelancer."], ["How do payments work?", "You hold a seat now and pay a deposit only once the date is confirmed. Funds release to the operator at GoAhead."]].map(([q, a]) => (
+                  {[["When is the trip confirmed?", "The moment this date reaches its own GoAhead number — the count is shown on the date itself."], ["Can I pick my own date?", "Yes — use 'start your own' in the dates list. Our team gives it a quick review, it opens for other travellers to join, and nothing is charged unless it reaches GoAhead."], ["What if a date doesn't fill?", "You're never charged for a trip that doesn't run. If it doesn't reach GoAhead, you're refunded in full or moved to another date."], ["Who will I travel with?", "A small mix of travellers pooled from operators registered with the Egyptian Ministry of Tourism & Antiquities — a shared group with one licensed guide, never a freelancer."], ["How do payments work?", "You hold a seat now and pay a deposit only once the date is confirmed. Funds release to the operator at GoAhead."]].map(([q, a]) => (
                     <div className="q" key={q}><h4>{q}</h4><p>{a}</p></div>
                   ))}
                 </div>
@@ -2725,7 +2725,7 @@ const FAQ_GROUPS = [
   {
     title: "GoAhead & how it works",
     items: [
-      { q: "What does GoAhead mean?", a: "GoAhead means a date has reached the minimum travellers, so the guide and vehicle are booked and the departure is confirmed to run." },
+      { q: "What does GoAhead mean?", a: "GoAhead means a date has reached its own confirmation number, so the guide and vehicle are booked and the departure is confirmed to run." },
       { q: "Can a confirmed tour still be cancelled?", a: "Once a date is GoAhead we don't cancel it for low numbers. In rare cases of safety or weather, we'll rebook or refund you." },
     ],
   },
