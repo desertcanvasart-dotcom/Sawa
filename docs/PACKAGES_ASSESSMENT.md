@@ -34,7 +34,7 @@ Please review **Section 7 (Open Questions)** — those answers drive the rest of
 - **Tests:** None.
 
 ### What the product does today
-The unique value of Sawa is **pooled pricing**: when multiple small agencies (or direct travellers) book seats on the same day tour, the **price per person drops automatically** as the group grows. When the group hits a minimum (currently hard-coded to **4 seats**), the tour is guaranteed to run ("GoAhead").
+The unique value of Sawa is **pooled pricing**: when multiple small agencies (or direct travellers) book seats on the same day tour, the **price per person drops automatically** as the group grows. When the group hits its minimum — **per product, with a floor of 4** (`min_seats`, enforced by `tour_products_min_group_size_chk`; a longer itinerary may require more) — the date is **confirmed to run** ("GoAhead"). *Corrected 2026-08-09: this previously said the minimum was hard-coded to 4 and that the tour was "guaranteed to run". Verified against runtime — every live product is currently `min_seats = 4`, but the column is per-product and the schema enforces a floor, not a fixed value. "Guaranteed" was removed from the site under P1.5: GoAhead confirms a date once its threshold is met; nothing promises a date reaches it.*
 
 The lifecycle of a tour:
 `open → minimum_reached → supplier_confirmed → closed / cancelled`

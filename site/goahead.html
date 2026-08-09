@@ -4,12 +4,12 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>GoAhead departures — Confirmed Egypt trips you can still join | Sawa</title>
-<meta name="description" content="These departures have reached four confirmed travelers — the GoAhead. Every trip on this page is guaranteed to run. Join one while seats remain." />
+<meta name="description" content="These departures have reached their GoAhead number, so they are confirmed and running. Join one while seats remain." />
 <meta property="og:image" content="https://sawa.tours/images/hero.jpg" />
 <meta name="twitter:card" content="summary_large_image" />
 <meta name="twitter:image" content="https://sawa.tours/images/hero.jpg" />
 <meta property="og:title" content="GoAhead departures — Confirmed Egypt trips you can still join | Sawa" />
-<meta property="og:description" content="These departures have reached four confirmed travelers — the GoAhead. Every trip on this page is guaranteed to run. Join one while seats remain." />
+<meta property="og:description" content="These departures have reached their GoAhead number, so they are confirmed and running. Join one while seats remain." />
 <link rel="canonical" href="https://sawa.tours/goahead" />
 <meta property="og:url" content="https://sawa.tours/goahead" />
 <link rel="icon" href="/favicon.ico" sizes="any" /><link rel="icon" type="image/png" href="/images/favicon.png" /><link rel="apple-touch-icon" href="/images/favicon.png" />
@@ -56,12 +56,17 @@
     <div class="crumbs rv"><a href="/">Home</a><span class="sep">/</span><span>GoAhead departures</span></div>
     <span class="eyebrow rv" style="margin-top:20px"><span class="live"></span>Confirmed to run</span>
     <h1 class="rv">The gold dot is <span class="gld ital">lit</span>.</h1>
-    <p class="lede rv">Every departure on this page has reached four confirmed travelers — the GoAhead. These trips are guaranteed to run, and most still have seats: join one and the shared price keeps falling as the group grows. Still forming dates live on the <a href="/departures" style="text-decoration:underline;text-underline-offset:4px">departures board</a>.</p>
+    <p class="lede rv">Every departure on this page has reached its GoAhead number, so it is confirmed and running — and most still have seats: join one and the shared price keeps falling as the group grows. Still forming dates live on the <a href="/departures" style="text-decoration:underline;text-underline-offset:4px">departures board</a>.</p>
     <div class="hero-meta rv" data-d="1" style="display:flex;gap:34px;margin-top:34px;flex-wrap:wrap">
       <div><b class="serif tnum" data-live-count aria-live="polite" style="font-family:'Fraunces',serif;font-size:1.8rem;color:var(--teal);display:block;line-height:1">—</b><span style="font-size:.84rem;color:var(--muted)">departures at GoAhead</span></div>
       <div><b class="serif tnum" data-live-count aria-live="polite" style="font-family:'Fraunces',serif;font-size:1.8rem;color:var(--teal);display:block;line-height:1">—</b><span style="font-size:.84rem;color:var(--muted)">forming — one push<br>from confirming</span></div>
-      <div><b class="serif tnum" style="font-family:'Fraunces',serif;font-size:1.8rem;color:var(--teal);display:block;line-height:1">100%</b><span style="font-size:.84rem;color:var(--muted)">guaranteed to run</span></div>
     </div>
+    <!-- A single-figure claim stood in this row, asserting that every date runs.
+         It was wrong about Sawa.s own model: GoAhead confirms a date once its
+         threshold is met; nothing promises that a date reaches its threshold.
+         Stated as a sentence rather than a figure, because the true claim is
+         conditional and a percentage cannot carry a condition. -->
+    <p class="rv" data-d="2" style="margin-top:26px;max-width:34rem;font-size:1rem;color:var(--muted)">When your date reaches its GoAhead number, the trip is confirmed and it runs. Until then you've paid nothing.</p>
   </div>
 </section>
 
@@ -103,7 +108,7 @@
         <h3 class="serif" style="font-family:'Fraunces',serif;font-weight:500;font-size:1.4rem;color:var(--teal);margin-top:14px">Nile Majesty · 5 days</h3>
         <p style="font-size:.92rem;color:var(--muted);margin-top:6px">Luxor → Aswan · example card</p>
         <div class="pbar gold" style="margin-top:18px"><i data-fill="100%"></i></div>
-        <div style="display:flex;justify-content:space-between;font-size:.82rem;color:var(--muted);margin-top:10px"><span><strong style="color:var(--teal)">4</strong> confirmed</span><span>guaranteed to run</span></div>
+        <div style="display:flex;justify-content:space-between;font-size:.82rem;color:var(--muted);margin-top:10px"><span><strong style="color:var(--teal)">4</strong> confirmed</span><span>confirmed to run</span></div>
       </div>
     </div>
   </div>
@@ -280,11 +285,12 @@
         +'<span class="rt">'+esc(p.city)+' · '+esc(p.duration||'')+'</span>'
         +'<h3>'+esc(p.title)+'</h3>'
         +'<p class="desc">'+esc((p.description||'').slice(0,120))+'</p>'
-        +'<div class="info"><span>'+CAL+esc(dateTxt)+'</span><span>'+USR+esc(p.guide||'Verified operator')+'</span></div>'
+        // No operator record, no badge, no string — see site/index.html.
+        +'<div class="info"><span>'+CAL+esc(dateTxt)+'</span>'+(p.guide?'<span>'+USR+esc(p.guide)+'</span>':'')+'</div>'
         +'<div class="prog"><div class="pt"><b>'+joined+' traveler'+(joined===1?'':'s')+' confirmed</b>'
         +'<span class="st ok">'+(left>0?(left+' seat'+(left===1?'':'s')+' left'):'Fully booked')+'</span></div>'
         +'<div class="pbar gold"><i style="width:'+pct+'"></i></div></div>'
-        +'<div class="foot"><div class="when">Guaranteed to run<b>$'+price+' USD / person</b></div>'
+        +'<div class="foot"><div class="when">Confirmed to run<b>$'+price+' USD / person</b></div>'
         +(left>0?('<a href="'+link+'" class="join">Join this trip'+ARR+'</a>'):'<span class="st ok">Full</span>')+'</div>'
         +'</div></div></article>'
       });

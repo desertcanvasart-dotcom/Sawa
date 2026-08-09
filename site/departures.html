@@ -306,7 +306,8 @@
         +'<span class="rt">'+esc(p.city)+' · '+esc(p.duration||'')+'</span>'
         +'<h3>'+esc(p.title)+'</h3>'
         +'<p class="desc">'+esc((p.description||'').slice(0,120))+'</p>'
-        +'<div class="info"><span>'+CAL+esc(dateTxt)+'</span><span>'+USR+esc(p.guide||'Verified operator')+'</span></div>'
+        // No operator record, no badge, no string — see site/index.html.
+        +'<div class="info"><span>'+CAL+esc(dateTxt)+'</span>'+(p.guide?'<span>'+USR+esc(p.guide)+'</span>':'')+'</div>'
         +'<div class="prog"><div class="pt"><b>'+joined+' of '+min+' joined</b>'
         +'<span class="st">'+(toGo===1?'1 seat to GoAhead':toGo+' seats to GoAhead')+'</span></div>'
         +'<div class="pbar teal"><i style="width:'+pct+'"></i></div></div>'
