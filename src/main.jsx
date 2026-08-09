@@ -155,7 +155,13 @@ function formatRange(start, end) {
 // capacity, live pricing, or GoAhead. Mirrors the server's rule in domain.js —
 // if this drifts, the price we show is not the price the server charges.
 function seatsTotal(pledges = []) {
-  return pledges.reduce((sum, pledge) => (pledge?.status === "canceled" ? sum : sum + Number(pledge.seats || 0)), 0);
+  // 'cancelled', two Ls, because that is what the database CHECK constraint
+  // permits — see server/db/schema_007_booking_lifecycle.sql. It is deliberately
+  // NOT the US spelling this site uses in copy: this is a database contract
+  // value, not prose. It read "canceled" here for a long time, so the comparison
+  // never matched and every cancelled booking was counted as a traveller
+  // holding a seat. Nothing threw. See scripts/check-status-literals.js.
+  return pledges.reduce((sum, pledge) => (pledge?.status === "cancelled" ? sum : sum + Number(pledge.seats || 0)), 0);
 }
 
 function safePrice(value, fallback) {
@@ -211,7 +217,7 @@ function departureFull(d) {
 
 // A product is fully booked when it HAS dates and every one is full or canceled.
 function productFullyBooked(product) {
-  const live = (product.dates || []).filter((d) => d.status !== "canceled");
+  const live = (product.dates || []).filter((d) => d.status !== "cancelled");
   return live.length > 0 && live.every(departureFull);
 }
 
@@ -235,7 +241,7 @@ function departurePast(departure, today = todayIso()) {
 
 // Bookable dates only (not past, not full, not canceled).
 function openDates(product) {
-  return (product.dates || []).filter((d) => d.status !== "canceled" && !departureFull(d) && !departurePast(d));
+  return (product.dates || []).filter((d) => d.status !== "cancelled" && !departureFull(d) && !departurePast(d));
 }
 
 function packagePriceFor(product, departure, seats, { roomingType = "double", tierId } = {}) {

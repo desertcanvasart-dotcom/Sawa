@@ -37,7 +37,7 @@ That is the one output class this project cannot retract.
 
 ---
 
-## The four preconditions
+## The preconditions
 
 | # | Precondition | Status |
 |---|---|---|
@@ -45,6 +45,31 @@ That is the one output class this project cannot retract.
 | 2 | Scheduler resolved state verified via `/api/modes` | ✅ **VERIFIED 9 Aug — `scheduler: on`, now dry by default (BB3)** |
 | 3 | Cancellation copy corrected and consistent with the Terms | **blocked on AA3.1** — the delivered text is now on the table, see JJ2.2 |
 | 4 | B4 / P3.4 zero-suppression shipped, with the three P3.3 states | ✅ **shipped JJ3** — no bare zero, no persistent loading state, State A/B/C on both boards |
+| 5 | Pledge status transitions with its departure (KK1) | **not started** — blocked on 6 |
+| 6 | Status literals match the schema (LL1) | ✅ **shipped LL1** — was live and wrong |
+
+### Two status defects, found together — KK1 and LL1
+
+**LL1, now fixed.** Six places compared against `'canceled'`; the database
+permits only `'cancelled'`. The comparison never matched. Every public board
+counted cancelled bookings as travellers holding seats, and `/goahead` showed a
+date as confirmed and running on four cancelled bookings. Live before the seed,
+and it would have made the first real cancellation invisible.
+
+`check:status-literals` now builds the permitted vocabulary from the schema's
+CHECK constraints and rejects any status literal outside it — the class, not the
+instance.
+
+**KK1 remains open.** A cancelled departure still leaves its pledges reading
+`confirmed`. Worst consequence found: `/api/public/bookings/:code` tells the
+traveller **"Confirmed — GoAhead… the guide and transport are booked"** on a
+departure that has been cancelled. Proposal pending under LL4.
+
+### Known, unfixed, and deliberately not swept into LL1
+
+`/goahead` renders bare `0` counters when nothing is confirmed. JJ3 covered the
+homepage and `/departures`; this page was not in its scope and is recorded here
+so it is not quietly lost.
 
 ### The job was rehearsed before the seed, not during it — JJ2
 
@@ -81,7 +106,7 @@ So the checks are gated on data and the data is gated on the checks.
 
 ### Resolution — stage the load
 
-1. **Complete the four preconditions as far as empty data allows.**
+1. **Complete the preconditions as far as empty data allows.**
 2. **Seed exactly one departure.**
 3. **Run the full gate against the now-non-empty states** — `audit:claims`,
    `smoke`, the P3.3 renders, and every Z2 candidate identified as possibly

@@ -24,6 +24,7 @@ Route-fetching and production queries have not produced a wrong answer yet.
 | Step | Reads | Class | Runtime observation that would confirm it |
 |---|---|---|---|
 | `check:constants` | static HTML **source** | **POINTER** | Fetch every route and assert no group-size number contradicts `shared/group-size.js`. **Added** — see below. |
+| `check:status-literals` | JS/JSX/HTML **source**, against the schema's CHECK constraints | **POINTER — but a sound one** | Both sides are read from source, and that is the point: the schema file IS the contract, so a mismatch between them is decidable without a running system. What it cannot tell you is whether the deployed database matches the schema files — migrations do not run on deploy (B5). Confirmed by rendering: a departure whose only pledge is `cancelled` shows State A rather than "3 of 4 joined". |
 | `audit:repo-truth` | comments and docs | **POINTER by definition** | It collects notes; each verdict in the register is a separate runtime check. This is the one check that is *supposed* to be a pointer. |
 | `test` | modules in isolation | **POINTER** | `smoke` — and this exact gap is proven: 176 passed while 19 routes served a raw shell. |
 | `smoke` | **running server, all 39 routes** | **VERDICT** | — |
