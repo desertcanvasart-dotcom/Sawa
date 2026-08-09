@@ -36,6 +36,22 @@
 // derivation properly. Wiring it in now would produce a check that the first
 // person to hit it disables.
 //
+// WHEN YOU RETURN TO THIS: instrument composition, do not refine matching.
+//
+// Reverse-engineering provenance from served text is a heuristic, and a better
+// heuristic is still a heuristic. Recording provenance AT composition time is a
+// fact. There are only a few composition points — seo.js's templates,
+// buildBody(), tourSlug() — and tagging their output with the sources that fed
+// it makes both remaining shapes attributable by construction:
+//
+//   runtime composition — the join is recorded, so a word-pair spanning it has
+//                         a known origin instead of appearing from nowhere
+//   derived values      — tourSlug() records that it computed the slug from a
+//                         title, so the slug is attributable to that title
+//
+// Same principle as narrowing the Autoura boundary rather than guarding it:
+// structural over heuristic. Do not start by adjusting COVERAGE.
+//
 //   node scripts/audit-surfaces.js
 //   node scripts/audit-surfaces.js --base=https://sawa.tours
 //   SMOKE_TOKEN=<jwt> node scripts/audit-surfaces.js     # includes authenticated surfaces
