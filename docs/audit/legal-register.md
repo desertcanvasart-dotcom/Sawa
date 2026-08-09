@@ -132,8 +132,9 @@ Common ownership does not make two systems one system.
   builder never receives pledge rows — `loadInventory()` selects only
   `status, seats`, so personal columns never leave Postgres.
 - The privacy policy names no affiliated system.
-- **Whether the mirror is active in production is still unknown** — `/api/modes`
-  reports `autoura: on|off` and needs an admin token to read.
+- **The mirror is ACTIVE.** Verified 9 August 2026: `/api/modes` reports
+  `autoura: on`. Departure inventory is being transmitted to the external system
+  today, on every departure write. This question is live, not hypothetical.
 
 **Blocked behind the answer.** A possible privacy policy line. Low urgency while
 only inventory crosses; it becomes urgent if the payload ever widens.
@@ -174,7 +175,7 @@ says the opposite.
 | 1 | Marketplace licensing | Low today — **but may govern answer #3** | Footer disclosure, **all payment work** |
 | 2 | Organiser status | **Highest** — packages are on sale | Terms §2/§13/§15 |
 | 3 | Rating display | None — nothing displayed | Reviews schema |
-| 4 | Autoura disclosure | Low — inventory only | A privacy policy line |
+| 4 | Autoura disclosure | Low — inventory only, **but transfer is live** | A privacy policy line |
 | 5 | Entity disclosure | Site currently states the pre-change position | All of Phase 2 |
 
 ## Send 1 and 2 together

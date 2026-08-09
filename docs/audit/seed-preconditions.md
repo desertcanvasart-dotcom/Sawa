@@ -8,7 +8,20 @@ being verifiable by inspection and starts having consequences it cannot retract.
 
 ---
 
-## The compound risk
+## ⚠️ The compound risk is REAL, not hypothetical
+
+Verified against production on 9 August 2026 via `/api/modes`:
+
+```json
+{"email":"live","scheduler":"on","autoura":"on","trustProxy":"on",
+ "canonicalHost":"on","tourTimezone":"Africa/Cairo","nodeEnv":"production"}
+```
+
+**`scheduler: on` and `email: live` together.** The auto-cancel job is running,
+and it can deliver mail. Both halves of the risk below are confirmed live — this
+is no longer a precaution against something that might be true.
+
+**Nothing may be seeded until BB3 (dry-run) lands or the scheduler is disabled.**
 
 Three facts, each established separately:
 
@@ -29,7 +42,7 @@ That is the one output class this project cannot retract.
 | # | Precondition | Status |
 |---|---|---|
 | 1 | Z2 vacuous-test sweep complete | **not started** |
-| 2 | Scheduler resolved state verified via `/api/modes` | **needs an admin token** |
+| 2 | Scheduler resolved state verified via `/api/modes` | ✅ **VERIFIED 9 Aug — `scheduler: on`** |
 | 3 | Cancellation copy corrected and consistent with the Terms | **blocked on AA3.1** |
 | 4 | B4 / P3.4 zero-suppression shipped, with the three P3.3 states | **not started** |
 
