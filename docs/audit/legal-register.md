@@ -136,8 +136,17 @@ Common ownership does not make two systems one system.
   `autoura: on`. Departure inventory is being transmitted to the external system
   today, on every departure write. This question is live, not hypothetical.
 
-**Blocked behind the answer.** A possible privacy policy line. Low urgency while
-only inventory crosses; it becomes urgent if the payload ever widens.
+**Blocked behind the answer.** A possible privacy policy line — now **drafted**,
+in `privacy-policy-revision.md`, ahead of TT1 widening which write paths
+transmit. No new field crosses; more events do.
+
+**⚠️ Correction to the facts above, established 9 August by running it:** the
+mirror has never transmitted anything. `emitDepartureSync` called a function
+that does not exist, on every path, since the feature was introduced — every
+call threw and the error was downgraded to a `console.warn`. `autoura: on` in
+`/api/modes` reports that the mirror is *configured*, which is what it has
+always meant; it was read here, and by me, as evidence that data was flowing.
+It was not. Fixed under TT1, and verified end to end against a listener.
 
 **Status:** open. Flagged rather than decided, per Y4.
 

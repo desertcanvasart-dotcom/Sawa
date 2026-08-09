@@ -22,7 +22,7 @@
 import { createHmac } from "node:crypto";
 import { mapDeparture } from "./db/mappers.js";
 import { enrichDeparture, seatsTotal } from "./domain.js";
-// NOTE: the db pool is imported lazily inside loadEnriched() so this module
+// NOTE: the db pool is imported lazily inside loadInventory() so this module
 // (and its pure payload builder) can be unit-tested without a DATABASE_URL.
 
 const BRAND = () => process.env.AUTOURA_BRAND_KEY || "sawa-tours";
@@ -30,8 +30,43 @@ const syncConfigured = () => !!(process.env.AUTOURA_SYNC_URL && process.env.AUTO
 
 const sign = (secret, t, body) => createHmac("sha256", secret).update(`${t}.${body}`).digest("hex");
 
+// TT1 — every reason a departure is NOT mirrored. One list, stated, testable.
+//
+// This decision used to live inside buildDeparturePayload as a bare
+// `if (dep.status === "pending_review") return null`. It was correct, and it was
+// invisible: `POST /api/public/departure-requests` writes a departure and does
+// not sync, which is RIGHT — but the route author did not decide that, the
+// payload builder did. Four other callers got the same question wrong, and the
+// one that got it right did so without knowing.
+//
+// That is the argument for moving the decision to the boundary rather than
+// adding a fifth call site: a caller cannot tell a deliberate silence from a
+// forgotten call, because both look like nothing happening.
+//
+// A status belongs here only WITH a reason. An entry with no reason is how the
+// next person learns the wrong general rule — and the reason is what the log
+// prints when a sync is withheld, so a silence is legible in production too.
+export const NOT_MIRRORED = {
+  pending_review:
+    "traveller-requested and not yet approved by ops — it is not inventory "
+    + "until a human says so, and a partner must not be able to sell it",
+};
+
+// NOTE what is deliberately ABSENT: `cancelled`.
+//
+// A cancelled departure IS mirrored, and must be. It is how the partner system
+// learns the date is off — and it is the correction that has never once been
+// sent, because no cancelling path called the emitter at all. Autoura has been
+// holding departures marked `open`, with their seats, indefinitely.
+export function mirrorDecision(departure) {
+  if (!departure) return { mirror: false, reason: "no such departure" };
+  const withheld = NOT_MIRRORED[departure.status];
+  if (withheld) return { mirror: false, reason: withheld };
+  return { mirror: true, reason: null };
+}
+
 // Pure: departure INVENTORY -> the wire payload. Returns null for states that
-// must not be mirrored (pending_review is Sawa-internal).
+// must not be mirrored — see NOT_MIRRORED above for which, and why.
 //
 // Y2.1 — this used to take the enriched departure, pledges and all, and read a
 // single integer off it via seatsTotal(). The rows it was handed carry customer
@@ -45,7 +80,7 @@ const sign = (secret, t, body) => createHmac("sha256", secret).update(`${t}.${bo
 // right. The test that pins the field list stays as a second line.
 export function buildDeparturePayload(inventory) {
   const dep = inventory;
-  if (!dep || dep.status === "pending_review") return null;
+  if (!mirrorDecision(dep).mirror) return null;
   return {
     brand: BRAND(),
     event: "departure.sync",
@@ -117,13 +152,13 @@ async function postWithRetry(payload) {
       if (res.ok) return true;
       // 4xx = our payload/config is wrong; retrying won't help.
       if (res.status < 500) {
-        console.warn("[autoura-sync] rejected", res.status, (await res.text()).slice(0, 200));
+        recordDivergence(payload, `rejected ${res.status}: ${(await res.text()).slice(0, 200)}`);
         return false;
       }
       throw new Error(`upstream ${res.status}`);
     } catch (e) {
       if (attempt === 3) {
-        console.warn("[autoura-sync] gave up after 3 attempts:", e.message);
+        recordDivergence(payload, `gave up after 3 attempts: ${e.message}`);
         return false;
       }
       await new Promise((r) => setTimeout(r, attempt * 2000));
@@ -132,14 +167,83 @@ async function postWithRetry(payload) {
   return false;
 }
 
+// TT2 — a sync that exhausts its retries leaves the two systems disagreeing,
+// and nothing is scheduled to notice.
+//
+// It used to be a console.warn: the same shape as every other line in the log,
+// and the same shape as a successful run, which prints nothing at all. Silent
+// divergence and a working mirror rendered identically.
+//
+// So it is an ERROR, it is counted, and the count is readable — by
+// /api/modes for a human, and by any job that wraps a write so it can exit
+// non-zero. The same three-state discipline as PP2's loud zero: synced,
+// deliberately withheld, and FAILED must never look alike.
+//
+// This does not reconcile anything. The mirror is complete after TT1; it is not
+// reliable, and a reconciliation pass is separate work. What this buys is that
+// the divergence is known rather than assumed away.
+const divergences = [];
+const MAX_REMEMBERED = 50;
+
+function recordDivergence(payload, why) {
+  const id = payload?.departure?.externalId ?? "unknown";
+  const entry = { departureId: String(id), why, at: new Date().toISOString() };
+  divergences.push(entry);
+  if (divergences.length > MAX_REMEMBERED) divergences.shift();
+  console.error(
+    `[autoura-sync] DIVERGED — departure ${entry.departureId} was not mirrored: ${why}. `
+    + "The external system now disagrees with Sawa about this date, and nothing will correct it."
+  );
+}
+
+// What /api/modes reports, and what a job can check before exiting.
+export function syncDivergences() {
+  return { count: divergences.length, entries: divergences.slice(-10) };
+}
+
+// Test seam. Never called in production — a divergence must not be clearable by
+// anything except the sync succeeding.
+export function __resetDivergences() {
+  divergences.length = 0;
+}
+
 // Fire-and-forget: callers never await this and it never throws.
+// Fire-and-forget for a route — a mirror outage must never delay a traveller's
+// booking — but the promise is RETURNED and tracked, because a short-lived
+// process has to be able to wait for it.
+//
+// Found by running this end to end: the CLI job does `pool.end()` as soon as the
+// work finishes, so every emit it started died with
+// "Cannot use a pool after calling end on the pool". Fire-and-forget and a
+// process that exits are incompatible, and nothing said so — the failure was
+// swallowed by the same .catch() that hid the ReferenceError below.
+const inFlight = new Set();
+
+export async function drainDepartureSyncs() {
+  await Promise.allSettled([...inFlight]);
+}
+
 export function emitDepartureSync(departureId) {
-  if (!syncConfigured() || !departureId) return;
-  (async () => {
-    const dep = await loadEnriched(Number(departureId));
-    const payload = buildDeparturePayload(dep);
-    if (payload) await postWithRetry(payload);
-  })().catch((e) => console.warn("[autoura-sync] emit failed:", e.message));
+  if (!syncConfigured() || !departureId) return Promise.resolve();
+  const task = (async () => {
+    // `loadEnriched` — the name this called for the whole life of the mirror.
+    // No such function has ever existed. Every emit threw a ReferenceError,
+    // which the .catch() below downgraded to a console.warn, so the mirror has
+    // NEVER sent anything and nothing said so. See TT1's report.
+    const dep = await loadInventory(Number(departureId));
+    // TT1 — a deliberate silence says why. Before this, a withheld sync and a
+    // forgotten call both produced nothing at all in the log, which is why four
+    // writers went years without anyone noticing they never emitted.
+    const decision = mirrorDecision(dep);
+    if (!decision.mirror) {
+      console.log(`[autoura-sync] #${departureId} withheld: ${decision.reason}`);
+      return;
+    }
+    await postWithRetry(buildDeparturePayload(dep));
+  })().catch((e) => recordDivergence({ departure: { externalId: departureId } }, `emit failed: ${e.message}`));
+  inFlight.add(task);
+  task.finally(() => inFlight.delete(task));
+  return task;
 }
 
 // ---- Westbound: operator blackout dates ------------------------------------

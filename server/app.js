@@ -1,7 +1,7 @@
 import "dotenv/config";
 import express from "express";
 import { z } from "zod";
-import { pool, withTransaction } from "./db/index.js";
+import { pool, withTransaction, withDepartureWrites } from "./db/index.js";
 import { mapAgency, mapCity, mapProduct, mapDeparture, mapPledge } from "./db/mappers.js";
 import {
   enrichDeparture,
@@ -41,7 +41,7 @@ import {
   buildHead, buildBody, robotsTxt, sitemapXml, llmsTxt, llmsFullTxt,
   inlineScriptJson, sliceBootstrapForRoute, clearSeoCaches, catalogueRoutes,
 } from "./seo.js";
-import { emitDepartureSync, unavailableDates } from "./autoura-sync.js";
+import { emitDepartureSync, unavailableDates, syncDivergences } from "./autoura-sync.js";
 import { tourSlug, tourPath } from "./slug.js";
 import { cancelDepartureAndPledges, reportNotifications, CANCEL_REASONS } from "./departure-cancel.js";
 
@@ -355,6 +355,11 @@ function resolvedModes() {
     // that says the job runs, this says whether it can reach a traveller.
     cancelJob: jobSchedulerEnabled() ? (cancelJobDryRun() ? "dry-run" : "live") : "off",
     autoura: process.env.AUTOURA_SYNC_URL && process.env.AUTOURA_SYNC_SECRET ? "on" : "off",
+    // TT2 — how many departure syncs exhausted their retries since boot. A
+    // non-zero count means the external system disagrees with Sawa about that
+    // many dates, and nothing is scheduled to correct it. "on" alone says the
+    // mirror is configured; this says whether it is keeping up.
+    autouraDiverged: syncDivergences().count,
     trustProxy: trustProxyRaw !== "false" && trustProxyRaw !== "0" ? "on" : "off",
     canonicalHost: process.env.CANONICAL_HOST ? "on" : "off",
     tourTimezone: TOUR_TIMEZONE,
@@ -854,7 +859,7 @@ app.post("/api/admin/tour-products/:id/reject", requireAuth, requireRole("super_
 // Admin updates pricing; cascades to that product's departures (platform staff only).
 app.post("/api/admin/tour-products/:id/pricing", requireAuth, requireRole("super_admin", "ops_staff"), h(async (req, res) => {
   const body = req.body || {};
-  const result = await withTransaction(async (c) => {
+  const result = await withDepartureWrites(async (c, touch) => {
     const product = await loadProduct(c, req.params.id);
     if (!product) throw new AppError(404, "Tour product not found.");
     const publishedRate = Number(body.publishedRate || product.publishedRate);
@@ -863,7 +868,13 @@ app.post("/api/admin/tour-products/:id/pricing", requireAuth, requireRole("super
     if (breakPrice > publishedRate) throw new AppError(422, "Break price cannot be higher than the GoAhead price.");
 
     await c.query(`UPDATE tour_products SET published_rate=$1, break_price=$2 WHERE id=$3`, [publishedRate, breakPrice, product.id]);
-    await c.query(`UPDATE departures SET published_rate=$1, break_price=$2 WHERE tour_product_id=$3`, [publishedRate, breakPrice, product.id]);
+    // TT1 — this reprices EVERY departure of the product, and the mirror's
+    // payload carries priceFrom. It has never told Autoura about a price change.
+    const repriced = await c.query(
+      `UPDATE departures SET published_rate=$1, break_price=$2 WHERE tour_product_id=$3 RETURNING id`,
+      [publishedRate, breakPrice, product.id]
+    );
+    for (const row of repriced.rows) touch(row.id);
     const updated = await loadProduct(c, product.id);
     const deps = await c.query(`SELECT id FROM departures WHERE tour_product_id=$1 ORDER BY id`, [product.id]);
     const departures = [];
@@ -1326,11 +1337,15 @@ app.post("/api/admin/departure-requests/:id/approve", requireAuth, requireRole("
 // Admin declines a traveler-requested departure (with an optional reason).
 app.post("/api/admin/departure-requests/:id/decline", requireAuth, requireRole("super_admin", "ops_staff"), h(async (req, res) => {
   const reason = String(req.body?.reason || "").trim().slice(0, 300);
-  const departure = await withTransaction(async (c) => {
+  const departure = await withDepartureWrites(async (c, touch) => {
     const dep = await loadDeparture(c, Number(req.params.id), { forUpdate: true });
     if (!dep) throw new AppError(404, "Departure not found.");
     if (dep.status !== "pending_review") throw new AppError(409, "This departure is not awaiting review.");
     await c.query(`UPDATE departures SET status='cancelled' WHERE id=$1`, [dep.id]);
+    // TT1 — a declined request moves from pending_review, which is withheld, to
+    // cancelled, which is mirrored. Without this the partner never learns the
+    // date is off, and nothing else ever corrects it.
+    touch(dep.id);
     return loadDeparture(c, dep.id);
   });
   await logAudit(req, { action: "departure_request.decline", entity: "departure", entityId: String(departure.id), detail: { reason: reason || null } });
@@ -1940,10 +1955,12 @@ app.patch("/api/admin/bookings/:id", requireAuth, requireRole("super_admin", "op
   if (!["pending", "confirmed", "paid", "cancelled"].includes(status)) throw new AppError(422, "Invalid status.");
   // Run inside a transaction and recompute the departure's status so that
   // cancelling (or reinstating) a booking frees or reclaims its seats.
-  await withTransaction(async (c) => {
+  await withDepartureWrites(async (c, touch) => {
     const r = await c.query(`UPDATE pledges SET status=$1 WHERE id=$2 RETURNING departure_id`, [status, req.params.id]);
     if (!r.rows.length) throw new AppError(404, "Booking not found.");
     await refreshStatus(c, r.rows[0].departure_id);
+    // TT1 — both seatsTaken and the departure's own status can move here.
+    touch(r.rows[0].departure_id);
   });
   await logAudit(req, { action: "booking.status", entity: "pledge", entityId: req.params.id, detail: { status } });
   res.json({ ok: true, status });
@@ -1968,10 +1985,13 @@ app.post("/api/admin/departures/:id/cancel", requireAuth, requireRole("super_adm
   // recipients AFTER the transaction, filtered on `status <> 'cancelled'`. Add
   // the pledge transition without moving that read and the list is empty every
   // time — nobody is told, and there is no scheduler log to notice it in.
-  const { departure, recipients, pledgesCancelled } = await withTransaction(async (c) => {
+  const { departure, recipients, pledgesCancelled } = await withDepartureWrites(async (c, touch) => {
     const dep = await loadDeparture(c, Number(req.params.id), { forUpdate: true });
     if (!dep) throw new AppError(404, "Departure not found.");
     const result = await cancelDepartureAndPledges(c, dep.id);
+    // TT1 — through the same boundary as the job, so the mirror learns about a
+    // cancellation whichever path performed it.
+    touch(dep.id);
     return { departure: await loadDeparture(c, dep.id), ...result };
   });
   await logAudit(req, {
@@ -1999,7 +2019,6 @@ app.post("/api/admin/departures/:id/cancel", requireAuth, requireRole("super_adm
     context: `departure ${departure.id} cancelled`,
   });
 
-  emitDepartureSync(departure.id);
   res.json({
     departure: presentDeparture(departure, req.user),
     pledgesCancelled,

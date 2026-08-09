@@ -16,7 +16,7 @@
 // second runner finds it already cancelled and skips it.
 import "dotenv/config";
 import { pathToFileURL } from "node:url";
-import { pool, withTransaction } from "../db/index.js";
+import { pool, withDepartureWrites } from "../db/index.js";
 import { mapDeparture, mapProduct } from "../db/mappers.js";
 import { missedConfirmDeadline, confirmDeadlineAt, seatsTotal, goAheadSeatsFor } from "../domain.js";
 import { cancelDepartureAndPledges, reportNotifications, CANCEL_REASONS } from "../departure-cancel.js";
@@ -49,7 +49,10 @@ async function loadCandidates() {
 }
 
 async function cancelOne({ dep, product }) {
-  return withTransaction(async (c) => {
+  // TT1 — the fourth writer that never told the mirror, and the only unattended
+  // one. Autoura has been holding auto-cancelled departures as `open`, with
+  // their seats, indefinitely: nothing else ever corrects it.
+  return withDepartureWrites(async (c, touch) => {
     // Re-read under a lock and re-check: between the scan and here, someone may
     // have booked the seat that would have confirmed it.
     const fresh = await c.query("SELECT * FROM departures WHERE id = $1 FOR UPDATE", [dep.id]);
@@ -62,6 +65,7 @@ async function cancelOne({ dep, product }) {
     // read before either. Shared with the admin cancel route so this cannot be
     // fixed on one path and not the other.
     const { recipients, pledgesCancelled } = await cancelDepartureAndPledges(c, dep.id);
+    touch(dep.id);
     await c.query(
       `INSERT INTO audit_log (actor_email, actor_role, action, entity, entity_id, detail)
        VALUES ($1,$2,$3,$4,$5,$6)`,
@@ -153,6 +157,11 @@ const isCli = process.argv[1] && pathToFileURL(process.argv[1]).href === import.
 if (isCli) {
   runCancelUnconfirmed({ dryRun: DRY_RUN })
     .then(async ({ shortfalls }) => {
+      // TT1 — the mirror emits are fire-and-forget, so a short-lived process
+      // must wait for them. Without this every sync this job started died on
+      // "Cannot use a pool after calling end on the pool", silently.
+      const { drainDepartureSyncs } = await import("../autoura-sync.js");
+      await drainDepartureSyncs();
       await pool.end();
       // A cancelled departure whose travellers were not all reached is a
       // failure, not a completed run. Cron and anything watching exit codes
