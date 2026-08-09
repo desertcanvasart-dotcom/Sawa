@@ -22,6 +22,7 @@
 import { createHmac } from "node:crypto";
 import { mapDeparture } from "./db/mappers.js";
 import { enrichDeparture, seatsTotal } from "./domain.js";
+import { recordSuccess, recordFailure } from "./effect-log.js";
 // NOTE: the db pool is imported lazily inside loadInventory() so this module
 // (and its pure payload builder) can be unit-tested without a DATABASE_URL.
 
@@ -149,7 +150,11 @@ async function postWithRetry(payload) {
         signal: controller.signal,
       });
       clearTimeout(timer);
-      if (res.ok) return true;
+      if (res.ok) {
+        // ZZ2.1 — the thing `autoura: on` never said.
+        recordSuccess("autouraSync");
+        return true;
+      }
       // 4xx = our payload/config is wrong; retrying won't help.
       if (res.status < 500) {
         recordDivergence(payload, `rejected ${res.status}: ${(await res.text()).slice(0, 200)}`);
@@ -187,6 +192,7 @@ const MAX_REMEMBERED = 50;
 
 function recordDivergence(payload, why) {
   const id = payload?.departure?.externalId ?? "unknown";
+  recordFailure("autouraSync", `#${id}: ${why}`);
   const entry = { departureId: String(id), why, at: new Date().toISOString() };
   divergences.push(entry);
   if (divergences.length > MAX_REMEMBERED) divergences.shift();

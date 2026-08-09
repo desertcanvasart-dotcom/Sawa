@@ -7,7 +7,7 @@ and no single document:
 
 | Thread | Status |
 |---|---|
-| **Autoura** — inventory transfer to an affiliated system | **drafted below (TT1.2)** — needed *before* the new sync paths go live |
+| **Autoura** — inventory transfer to an affiliated system | **drafted below, and cleared to publish ALONE (ZZ3.1)** — needed *before* the new sync paths go live |
 | **Entity** — who the controller is | blocked on the client's answer |
 | **Attribution** — behavioural data tied to an identified booker | blocked on this document existing, and on migration 023 being applied |
 
@@ -111,7 +111,7 @@ controller, so it cannot be written before thread 2 resolves.
 
 | | |
 |---|---|
-| Thread 1 (Autoura) | **can ship now** — drafted, and needed before TT1's paths go live |
+| Thread 1 (Autoura) | **ships now, alone** — ZZ3.1. It needs no entity answer: it describes what is shared and what is not, neither of which depends on who the controller is. **Publish, then the four new sync paths go live** — not the reverse, and not held behind an unrelated question. |
 | Thread 2 (entity) | client |
 | Thread 3 (attribution) | after thread 2, and before any attribution write |
 

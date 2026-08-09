@@ -42,6 +42,7 @@ import {
   inlineScriptJson, sliceBootstrapForRoute, clearSeoCaches, catalogueRoutes,
 } from "./seo.js";
 import { emitDepartureSync, unavailableDates, syncDivergences } from "./autoura-sync.js";
+import { effectReport } from "./effect-log.js";
 import { tourSlug, tourPath } from "./slug.js";
 import { cancelDepartureAndPledges, reportNotifications, CANCEL_REASONS } from "./departure-cancel.js";
 
@@ -360,6 +361,12 @@ function resolvedModes() {
     // many dates, and nothing is scheduled to correct it. "on" alone says the
     // mirror is configured; this says whether it is keeping up.
     autouraDiverged: syncDivergences().count,
+    // ZZ2 — every line above answers "is this switched on". `autoura: on` was
+    // true for the whole life of a mirror that had never transmitted, and it
+    // was read as evidence that it had. This answers "has it ever worked":
+    // lastSuccess, lastFailure, counts, and neverWorked — configured, tried,
+    // and never once succeeded, which is the state that was invisible.
+    effects: effectReport(),
     trustProxy: trustProxyRaw !== "false" && trustProxyRaw !== "0" ? "on" : "off",
     canonicalHost: process.env.CANONICAL_HOST ? "on" : "off",
     tourTimezone: TOUR_TIMEZONE,

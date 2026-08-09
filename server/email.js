@@ -8,6 +8,7 @@
 import "dotenv/config";
 import { pool } from "./db/index.js";
 import { BRAND } from "./brand.js";
+import { recordSuccess, recordFailure } from "./effect-log.js";
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
 const EMAIL_FROM = process.env.EMAIL_FROM || "Sawa Tours <onboarding@resend.dev>";
@@ -60,14 +61,18 @@ export async function sendEmail({ to, subject, html, text, kind = "generic" }) {
     if (!res.ok) {
       const body = await res.text();
       await recordEmail({ to, subject, kind, status: "failed", error: body.slice(0, 500) });
-      console.error("Resend send failed:", body);
+      recordFailure("email", `Resend rejected: ${body.slice(0, 200)}`);
       return { ok: false, mode: "live" };
     }
     await recordEmail({ to, subject, kind, status: "sent" });
+    // ZZ2.1 — `email: live` says a key is configured. This says a message has
+    // actually left the building, which is the question that mattered when the
+    // mirror turned out never to have transmitted.
+    recordSuccess("email");
     return { ok: true, mode: "live" };
   } catch (e) {
     await recordEmail({ to, subject, kind, status: "failed", error: e.message });
-    console.error("Resend send error:", e.message);
+    recordFailure("email", e.message);
     return { ok: false, mode: "live" };
   }
 }
