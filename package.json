@@ -21,6 +21,7 @@
     "sync:constants": "node scripts/sync-constants.js",
     "check:constants": "node scripts/sync-constants.js --check",
     "smoke": "node scripts/smoke-routes.js",
+    "rehearse:cancel-job": "bash scripts/rehearse-cancel-job.sh",
     "audit:claims": "node scripts/audit-claims.js",
     "preflight": "npm run check:constants && npm run audit:repo-truth && npm test && npm run smoke && npm run audit:claims",
     "audit:repo-truth": "node scripts/audit-repo-truth.js",
