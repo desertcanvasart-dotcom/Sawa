@@ -208,14 +208,14 @@ known problem rather than their own.
 
 ---
 
-## A verification is evidence about the runtime it ran on
+## A verification is evidence about the environment it ran in
 
 XX1.3. Every test result in this project until #80 was produced on Node 20 —
 a runtime the server cannot boot on. The ad-hoc verifications were split across
 both, and nothing recorded which was which, so establishing what still held
 meant reconstructing every command from the transcript.
 
-See `docs/audit/runtime-of-record.md` for that reconstruction. It should not
+See `docs/audit/environment-of-record.md` for that reconstruction. It should not
 need doing twice.
 
 **Rule:** record the runtime alongside the result — in audit documents and in
@@ -228,6 +228,33 @@ Priority when re-confirming after a runtime change: anything touching the
 database driver or connection handling, WebSocket behaviour, async ordering —
 and **anything whose result was a negative finding**, because a negative is
 precisely what a runtime difference can manufacture.
+
+### YY1 — rank incompatibilities by how quietly they fail, not by how big they look
+
+The Node split was **benign because it failed loudly.** The server refused to
+start, so the wrong runtime could never quietly produce a result. Every hour it
+cost was spent on discovery, not on damage.
+
+`canceled` versus `cancelled` is the same class of mistake — two things that
+must agree and did not — and it cost incomparably more: identical shape, no
+failure anywhere, and confidently wrong numbers on every public page for the
+whole life of the codebase.
+
+**An incompatibility that breaks is self-limiting. One that degrades silently is
+unbounded.**
+
+So a sweep should be asking **"what could disagree without failing?"**, not
+"what could fail". Known instances, all of the first kind:
+
+| | |
+|---|---|
+| `canceled` / `cancelled` | fixed — LL1, and `check:status-literals` closes the class |
+| five hand-written copies of the board rules | fixed — NN2.1, one authority plus a parity test |
+| host timezone vs Africa/Cairo | fixed — YY3, `TZ` pinned and boundary cases asserted |
+| repository schema vs applied schema | fixed — SS3.1, four states |
+| `emitDepartureSync` on some write paths only | **open** — TT1/TT2 |
+| server rules re-implemented in `AgencyDashboard` / `AdminDashboard` | **open** — NN2.3–2.5 |
+| production PostgreSQL major vs the 17.10 every proof ran on | **open** — not pinned by this repo |
 
 ---
 
