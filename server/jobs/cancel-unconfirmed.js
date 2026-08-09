@@ -82,8 +82,17 @@ async function cancelOne({ dep, product }) {
 // The work itself. Deliberately does not touch the pool or the process: the
 // scheduler inside the running server calls this too, and a job that closed the
 // connection pool or exited would take the website down with it.
-export async function runCancelUnconfirmed({ dryRun = false, log = console.log } = {}) {
-  const candidates = await loadCandidates();
+//
+// `deps` exists for one test and is never passed in production. The claim that
+// a dry run reaches neither the cancel nor the send could only be checked by
+// reading this function, and reading is not observing — see JJ2. With the seam,
+// a test can put a candidate in front of it and assert that both stay untouched.
+export async function runCancelUnconfirmed({
+  dryRun = false,
+  log = console.log,
+  deps = { loadCandidates, cancelOne, send: sendEmail },
+} = {}) {
+  const candidates = await deps.loadCandidates();
   log(`${candidates.length} departure(s) past their GoAhead deadline${dryRun ? " (dry run)" : ""}`);
 
   let cancelled = 0;
@@ -95,14 +104,14 @@ export async function runCancelUnconfirmed({ dryRun = false, log = console.log }
 
     if (dryRun) { log(line + "  [would cancel]"); continue; }
 
-    const result = await cancelOne(candidate);
+    const result = await deps.cancelOne(candidate);
     if (result.skipped) { log(line + `  [skipped: ${result.skipped}]`); continue; }
     cancelled += 1;
 
     // Email never blocks the cancellation: the date is already cancelled and
     // committed by this point, and a mail outage must not leave it open.
     for (const to of result.recipients) {
-      const sent = await sendEmail(cancellationEmail({
+      const sent = await deps.send(cancellationEmail({
         to, route: result.departure.route, dateLabel: dateLabel(result.departure),
       })).catch(() => ({ ok: false }));
       if (sent?.ok) notified += 1;

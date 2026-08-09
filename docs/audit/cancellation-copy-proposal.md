@@ -40,6 +40,44 @@ at all.** `cancellationEmail` sends a notice and a link to the departures board.
 
 **Is the transfer a real offer with a person behind it, or a link to the board?**
 
+#### What the email actually says today — JJ2.2
+
+Rendered from the real template, not paraphrased. This is the whole of what a
+traveller receives:
+
+> **Booking cancelled**
+>
+> This confirms your booking for **Giza Pyramids & Sphinx — small group** on
+> 2026-08-12 has been cancelled.
+>
+> **[ Find another departure ]**
+>
+> If you were charged anything for this booking, it is refunded in full. If this
+> cancellation wasn't expected, reply to this email and we'll look into it.
+>
+> Questions? Reply to this email or write to hello@sawa.tours.
+> Shared departures, confirmed together.
+> Capital Travel Service, trading as Sawa Tours · Giza, Egypt
+
+Subject line: `Cancellation — {route}`. The plain-text part is the one sentence
+only — no button, no note, so a plain-text reader gets the cancellation and
+nothing else.
+
+**Four things are visible here that the abstract question does not surface:**
+
+1. **As built, the transfer is a link.** "Find another departure" points at
+   `/departures`, the whole board. There is no person, and nothing route-aware.
+   Answering AA3.1 "a person" is a change to the system, not just to copy.
+2. **It never says why.** The traveller learns the trip is off but not that it
+   was because the minimum wasn't reached — which is the entire GoAhead promise,
+   at the one moment it is being kept.
+3. **The refund line is conditional** — "if you were charged anything" — on a
+   cancellation where nothing can ever have been charged. It invites the reader
+   to wonder whether they were.
+4. **The footer carries the pre-change entity.** "Capital Travel Service, trading
+   as Sawa Tours" is in every transactional email. Legal register #5 has been
+   scoped to the site; it reaches the mail templates too.
+
 Everything below follows from that answer, and the honest version of each is
 different:
 

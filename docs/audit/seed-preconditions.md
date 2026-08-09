@@ -42,9 +42,27 @@ That is the one output class this project cannot retract.
 | # | Precondition | Status |
 |---|---|---|
 | 1 | Z2 vacuous-test sweep complete | **not started** |
-| 2 | Scheduler resolved state verified via `/api/modes` | ✅ **VERIFIED 9 Aug — `scheduler: on`** |
-| 3 | Cancellation copy corrected and consistent with the Terms | **blocked on AA3.1** |
+| 2 | Scheduler resolved state verified via `/api/modes` | ✅ **VERIFIED 9 Aug — `scheduler: on`, now dry by default (BB3)** |
+| 3 | Cancellation copy corrected and consistent with the Terms | **blocked on AA3.1** — the delivered text is now on the table, see JJ2.2 |
 | 4 | B4 / P3.4 zero-suppression shipped, with the three P3.3 states | **not started** |
+
+### The job was rehearsed before the seed, not during it — JJ2
+
+Step 3 of the staged load was going to be the first time the dry path was
+observed refraining on a candidate. It was brought forward instead, against a
+throwaway database with production's exact schema: **a candidate was put in
+front of the job and the dry run cancelled nothing and sent nothing.** Full
+record in `cancel-job-rehearsal.md`, held by a test in
+`server/jobs/cancel-unconfirmed.test.js`.
+
+Two things came out of it that bear on the seed:
+
+- **No cancellation email has ever been delivered.** Of 27 `email_log` rows in
+  production, exactly one has status `sent`. Worth closing with a single send
+  from Railway **before** the seed, not after.
+- **A cancelled departure leaves its pledge reading `confirmed`.** The traveller
+  is told the booking is cancelled; the row says otherwise. Harmless while no
+  pledge exists, and a real inconsistency the moment one does.
 
 ---
 
