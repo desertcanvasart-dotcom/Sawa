@@ -260,7 +260,11 @@
      in sync. */
   function seatsOf(d){
     return (d.pledges||[]).reduce(function(s,x){
-      return x&&x.status==='canceled'?s:s+(Number(x.seats||x.pax)||1);
+      /* 'cancelled', two Ls — the database's spelling, not the US spelling this
+         site uses in copy. A status is a contract value. When this read
+         'canceled' the comparison never matched and cancelled bookings were
+         counted as travellers on the board. */
+      return x&&x.status==='cancelled'?s:s+(Number(x.seats||x.pax)||1);
     },0);
   }
   function minOf(d,p){return Number(d.minSeats||(p&&p.minSeats))||4;}

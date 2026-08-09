@@ -117,12 +117,43 @@ const stripComments = (html) => html
   .replace(/\/\*[\s\S]*?\*\//g, " ")
   .replace(/^\s*\/\/.*$/gm, " ");
 
+// LL2 — the copy standard does not reach contract values.
+//
+// The database CHECK constraint spells it 'cancelled', two Ls. That is a value,
+// not prose: it is compared against rows and it has to match them exactly. US
+// English is the standard for everything a visitor READS.
+//
+// Without this carve-out the two rules collide head-on, and the collision is not
+// hypothetical — it happened the moment the misspelling was corrected. Every
+// static board compared against 'canceled', the comparison never matched, and
+// cancelled bookings were counted as travellers holding seats. Correcting it to
+// the database's spelling made this very test fail on all three pages.
+//
+// Which is the dangerous shape: someone running the spelling sweep in good
+// faith "corrects" the status literal, the boards go quietly wrong again, and
+// the check built to prevent errors is what caused one. So the reason lives
+// here, next to the exception, rather than in a commit message nobody reads.
+//
+// Excluded from the copy spelling standard: status values, enum members,
+// database contract strings and API field names. Everything else, including
+// copy built inside <script> blocks, is still held to it.
+const stripContractValues = (text) => text
+  // row.status === 'cancelled' / p?.status !== "cancelled", either way round
+  .replace(/[\w\])]\s*\??\.\s*status\s*[=!]==?\s*["'][a-z_]+["']/gi, " ")
+  .replace(/["'][a-z_]+["']\s*[=!]==?\s*[\w\])]\s*\??\.\s*status\b/gi, " ")
+  // SQL: status <> 'cancelled', status = 'cancelled'
+  .replace(/\bstatus\s*(?:<>|=|!=)\s*'[a-z_]+'/gi, " ")
+  // SQL: status IN ('a','b'), and JS ["a","b"].includes(status)
+  .replace(/\bstatus\s+IN\s*\([^)]*\)/gi, " ");
+
+const copyOf = (html) => stripContractValues(stripComments(html));
+
 test("every static page is written in US English", () => {
   const problems = [];
   for (const file of pages()) {
     // Comments are not copy — the audit notes in these files quote the old
     // British spellings deliberately, to record what was removed.
-    const body = stripComments(read(file));
+    const body = copyOf(read(file));
     for (const uk of UK_SPELLINGS) {
       const re = new RegExp(`\\b${uk}\\b`, "gi");
       const hits = body.match(re);
@@ -132,12 +163,23 @@ test("every static page is written in US English", () => {
   assert.deepEqual(problems, [], `US English is the site standard:\n  ${problems.join("\n  ")}`);
 });
 
+test("the contract-value carve-out does not weaken the spelling standard", () => {
+  // W3 — the carve-out is a hole punched in a check, so it needs its own proof
+  // that the check still fires through it. Both strings sit on the same line:
+  // one is a value compared against a row, the other is prose a visitor reads.
+  const page = `<p>Four travellers confirm the date.</p>
+    <script>if (p.status === 'cancelled') return 0;</script>`;
+  const copy = copyOf(page);
+  assert.ok(!/\bcancelled\b/.test(copy), "the contract value should be carved out");
+  assert.ok(/\btravellers\b/.test(copy), "prose must still be checked — the carve-out removed too much");
+});
+
 test("attribute text is held to the same standard", () => {
   // placeholder, alt, aria-label and title are read by users and were invisible
   // to every check until an operator name was found sitting in a placeholder.
   const problems = [];
   for (const file of pages()) {
-    for (const m of stripComments(read(file)).matchAll(/\b(placeholder|alt|aria-label|title)="([^"]*)"/gi)) {
+    for (const m of copyOf(read(file)).matchAll(/\b(placeholder|alt|aria-label|title)="([^"]*)"/gi)) {
       for (const uk of UK_SPELLINGS) {
         if (new RegExp(`\\b${uk}\\b`, "i").test(m[2])) problems.push(`${name(file)} @${m[1]}: "${m[2].slice(0, 60)}"`);
       }
