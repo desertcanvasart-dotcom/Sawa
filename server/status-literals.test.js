@@ -11,7 +11,10 @@ import assert from "node:assert/strict";
 import { writeFileSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { schemaStatusVocabulary, scanStatusLiterals, walk } from "../scripts/check-status-literals.js";
+import {
+  schemaStatusVocabulary, scanStatusLiterals, walk,
+  APPLICATION_ONLY, APPLICATION_ONLY_CEILING,
+} from "../scripts/check-status-literals.js";
 
 const vocabulary = schemaStatusVocabulary();
 
@@ -96,4 +99,40 @@ test("the repository is clean", () => {
     [],
     "a status literal the database can never produce"
   );
+});
+
+// ---- WW4 — the exemption list is a ratchet ---------------------------------
+
+test("the schema-exemption list has not grown", () => {
+  // Every entry is a column whose permitted values live only in code — the
+  // condition this whole check exists to remove. Left unpinned, the exemption
+  // list is where the next unconstrained column goes to live.
+  assert.ok(
+    APPLICATION_ONLY.size <= APPLICATION_ONLY_CEILING,
+    `${APPLICATION_ONLY.size} entries, pinned at ${APPLICATION_ONLY_CEILING} — `
+    + "if a column genuinely cannot carry a CHECK, say why in the entry and raise the pin deliberately"
+  );
+});
+
+test("the pin is not slack — it is the current size", () => {
+  // A ceiling above the actual count would let the list grow silently up to it,
+  // which is the failure this is guarding against, arriving one entry at a time.
+  assert.equal(APPLICATION_ONLY.size, APPLICATION_ONLY_CEILING,
+    "lower the pin when an entry leaves, or the ratchet has slack in it");
+});
+
+test("every exemption states why the column cannot carry a CHECK", () => {
+  // An unexplained entry is how the next person learns the wrong general rule —
+  // the same reasoning as LL2's spelling carve-out.
+  const bare = [...APPLICATION_ONLY].filter(([, reason]) => !reason || reason.length < 25);
+  assert.deepEqual(bare.map(([v]) => v), [], "exemptions without a stated reason");
+});
+
+test("the values migration 023 reclaimed are NOT exempt any more", () => {
+  // The behaviour worth protecting: the list got shorter because the schema
+  // took the values over. If these come back, something removed the CHECK.
+  for (const value of ["published", "draft"]) {
+    assert.ok(!APPLICATION_ONLY.has(value), `"${value}" is exempt again — blog_posts_status_chk is gone?`);
+    assert.ok(vocabulary.values.has(value), `"${value}" is not in the schema vocabulary`);
+  }
 });

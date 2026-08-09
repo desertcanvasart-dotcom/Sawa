@@ -187,6 +187,48 @@ and `DRY_RUN=1` still makes it dry. This governs the unattended tick only.
 
 ---
 
+## A qualification must meet the same evidence standard as the premise
+
+I reported "migration 023's file is in `main`" under a banner explaining that
+merging is not applying, with the exact `db:migrate` command. The banner was
+reasoned from B5, which had been verified. The premise — that a migration file
+existed — had not been checked at all. It did not.
+
+**Careful hedging is itself a signal that someone checked.** A blunt wrong claim
+invites scrutiny; a carefully qualified wrong claim deflects it, because the
+qualification reads as evidence of diligence about the whole statement. Mixing a
+verified caveat with an unverified premise produces something that reads as
+entirely verified.
+
+The instruction went to the client three times and was meaningless every time.
+
+**Rule:** a qualification is held to the same evidence standard as the thing it
+qualifies. Hedging carefully is the moment to ask whether the thing being hedged
+was ever observed.
+
+---
+
+## A negative grep proves nothing until the positive case has been shown
+
+Sits underneath "never verify with a shortcut when the tool exists", and is
+narrower.
+
+While verifying migration 023 I checked whether a CHECK constraint rejected a
+bad value by grepping the output for `violates check constraint`. Nothing
+matched, so I reported the constraint **missing**. It was not — the `INSERT` had
+failed earlier, on a null `id`, and never reached the constraint at all.
+
+**An absent string is not a result.** It means either "the thing did not happen"
+or "the thing happened and did not say so" or "something else happened first",
+and a grep cannot tell them apart.
+
+**Rule:** before reading a negative result as a verdict, show that the positive
+case produces the string being searched for. This is W3 — prove the check fires
+— applied to a one-off grep rather than to a committed check. The discipline is
+identical and the ad-hoc case is the one where it gets skipped.
+
+---
+
 ## Land the read guard before the write change
 
 LL3 put a departure-status guard on `/api/public/bookings/:code` ahead of
@@ -270,6 +312,35 @@ repository.
 Every defect in this class has been in the oldest code. **Order an audit by
 file age, not by directory listing, and expect the return to fall off sharply in
 anything written recently.**
+
+## Node 22, and why the version is now pinned
+
+The repository was in two minds and neither was written down:
+
+- **The server could not boot on Node 20 at all.** `@supabase/realtime-js`
+  throws *"Node.js 20 detected without native WebSocket support"*.
+- **The test script only worked on Node 20.** `node --test server/ src/` — Node
+  22 does not resolve a bare directory there, and reports two failing "tests"
+  that are the two directories. It does not look like a toolchain problem.
+
+So the tests ran on 20, the server ran on 22, `engines` said `>=20`, and nothing
+said any of it. The pre-commit hook runs `npm test`, so **under Node 22 it
+blocked every commit, not only red ones** — a gate failing closed on a toolchain
+difference. That is worse than no gate: the first person under time pressure
+reaches for `--no-verify` and it is gone permanently. Switching Node versions to
+get past it is the benign version of the same move, and it leaves the gate broken
+for the next person.
+
+Now: `.nvmrc` pins 22, `engines.node` is `>=22` — which documents what production
+already runs, since the server cannot start on less — `npm test` enumerates its
+own files and behaves identically on both, and `check:node` fails `preflight`
+early with the reason rather than letting a version mismatch surface as failing
+tests.
+
+`npm test` prints the Node version it ran under. A check whose result depends on
+an unstated environmental condition is not a verdict.
+
+---
 
 ## Migrations do not run on deploy
 

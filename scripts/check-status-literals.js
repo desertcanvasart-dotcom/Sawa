@@ -62,6 +62,20 @@ export function schemaStatusVocabulary(dir = join(ROOT, "server", "db")) {
 // Statuses that exist only in the application, with no column to constrain them.
 // Each needs a reason, because an unexplained entry here is how a real mismatch
 // gets waved through.
+// WW4 — this list is a RATCHET. It may shrink; it may not grow silently.
+//
+// Every entry is a place the schema is NOT the authority — a column with no
+// CHECK, whose permitted values live only in code. That is the condition this
+// whole check exists to remove, so an exemption list is the natural place for
+// the next unconstrained column to go and quietly stay.
+//
+// 'published' and 'draft' left today because migration 023 gave
+// blog_posts.status a CHECK. That is the behaviour worth protecting: the list
+// got shorter because the schema took over.
+//
+// So the count is pinned below, and adding an entry means changing the pin and
+// stating in the entry WHY the column cannot carry a CHECK. "Not yet" is not a
+// reason — 023 shows what "not yet" costs.
 const APPLICATION_ONLY = new Map([
   ["logged", "email_log.status — written by email.js in log mode; the column has no CHECK"],
   ["sent", "email_log.status — written by email.js on a successful Resend send"],
@@ -74,6 +88,11 @@ const APPLICATION_ONLY = new Map([
   // entry is a place the schema is not the authority, and the list should
   // shrink.
 ]);
+
+// The pin. Lower it when an entry leaves. Raising it is a deliberate act that
+// should be argued for in the commit, not a side effect of adding a line above.
+export const APPLICATION_ONLY_CEILING = 5;
+export { APPLICATION_ONLY };
 
 // ---------------------------------------------------------------- the scan
 
@@ -172,6 +191,18 @@ if (isCli) {
   const vocabulary = schemaStatusVocabulary();
   const files = walk(ROOT);
   const problems = scanStatusLiterals(files, vocabulary);
+
+  if (APPLICATION_ONLY.size > APPLICATION_ONLY_CEILING) {
+    console.error(
+      `\nThe schema-exemption list has GROWN: ${APPLICATION_ONLY.size} entries, pinned at ${APPLICATION_ONLY_CEILING}.\n\n`
+      + "Every entry is a column whose permitted values live only in code. The list is\n"
+      + "meant to shrink as the schema takes them over — 'published' and 'draft' left it\n"
+      + "when migration 023 gave blog_posts.status a CHECK.\n\n"
+      + "If the column genuinely cannot carry a CHECK, say why in the entry and raise\n"
+      + "APPLICATION_ONLY_CEILING deliberately. \"Not yet\" is not a reason.\n"
+    );
+    process.exit(1);
+  }
 
   if (!problems.length) {
     console.log(
