@@ -412,3 +412,15 @@ section.block.tight{padding:84px 0}
   *{animation:none!important;transition-duration:.01ms!important}
   
 }
+
+/* P3.3 State A — the designed empty state, shared by the departures board and
+   any other filter that can match nothing. Not a hidden section, not a zero,
+   and not a sentence with a link buried in it. */
+.dep-empty{border:1px solid var(--line);border-radius:22px;background:rgba(23,50,58,.02);padding:clamp(36px,6vw,68px) clamp(22px,5vw,56px);text-align:center}
+.dep-empty-in{max-width:34rem;margin:0 auto}
+.dep-empty-in h3{font-family:'Fraunces',serif;font-size:clamp(1.4rem,2.6vw,1.9rem);color:var(--teal);margin:0 0 12px;font-weight:600}
+.dep-empty-in p{color:var(--muted);font-size:1.02rem;line-height:1.65;margin:0 0 26px}
+.dep-empty-cta{display:flex;gap:14px;justify-content:center;flex-wrap:wrap}
+/* P3.3 State B — the gap and the reassurance, on the forming card. */
+.card .prog .gap{margin:10px 0 0;font-size:.9rem;font-weight:600;color:var(--teal);line-height:1.4}
+.card .prog .reassure{margin:4px 0 0;font-size:.8rem;color:var(--muted);line-height:1.45}

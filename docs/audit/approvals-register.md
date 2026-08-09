@@ -14,7 +14,7 @@ A task is not closed until its effect is observable in production.
 
 ## 🔴 Approved and NOT shipped
 
-### 1. B4 / P3.4 — zero-suppression on the boards
+### 1. ✅ B4 / P3.4 — zero-suppression on the boards — SHIPPED JJ3
 
 **Approved:** Phase 0 decisions, B4 — *"Build State A/B/C (P3.3) and the
 zero-suppression logic (P3.4) **now**, so the board behaves correctly the moment
@@ -27,8 +27,16 @@ homepage still shows "Loading…"        : True
 homepage still shows "0 more forming"  : True
 ```
 
-**Never started.** This is the most serious gap in the register, and it is the
-same shape as P1.4: approved, given a "do it now", and quietly not done.
+**Was never started** — the most serious gap in the register, and the same
+shape as P1.4: approved, given a "do it now", and quietly not done.
+
+**Built under JJ3 (9 August).** Both strings are out of the served markup; the
+count ships as a skeleton and the footer ships hidden; State A is a designed
+panel on both boards with the brief's two actions; States B and C say the gap
+and what is left in words. A failed load stands the section down rather than
+claiming nothing is forming — "nothing yet" and "could not check" must not
+render the same. Held by `server/zero-suppression.test.js`, proven to fire on
+the reintroduced defect.
 
 It is also a **P3.2 precondition nobody has been counting.** The brief's own
 words: *"A departures module showing '0 travellers joined' is worse than no

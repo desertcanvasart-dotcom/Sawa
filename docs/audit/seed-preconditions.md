@@ -44,7 +44,7 @@ That is the one output class this project cannot retract.
 | 1 | Z2 vacuous-test sweep complete | **not started** |
 | 2 | Scheduler resolved state verified via `/api/modes` | ✅ **VERIFIED 9 Aug — `scheduler: on`, now dry by default (BB3)** |
 | 3 | Cancellation copy corrected and consistent with the Terms | **blocked on AA3.1** — the delivered text is now on the table, see JJ2.2 |
-| 4 | B4 / P3.4 zero-suppression shipped, with the three P3.3 states | **not started** |
+| 4 | B4 / P3.4 zero-suppression shipped, with the three P3.3 states | ✅ **shipped JJ3** — no bare zero, no persistent loading state, State A/B/C on both boards |
 
 ### The job was rehearsed before the seed, not during it — JJ2
 
