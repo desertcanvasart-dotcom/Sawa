@@ -187,6 +187,35 @@ and `DRY_RUN=1` still makes it dry. This governs the unattended tick only.
 
 ---
 
+## Land the read guard before the write change
+
+LL3 put a departure-status guard on `/api/public/bookings/:code` ahead of
+fixing the write path. The argument at the time was defensive: protection if
+the write path regressed later. That turned out not to be the reason it
+mattered.
+
+**It is what made the write change safe to apply at all.** PP5 transitions a
+cancelled departure's pledges to `cancelled`. Without LL3's ordering already in
+place, every affected traveller's booking page would have flipped from
+"Confirmed" to **"Booking cancelled"** — telling them they had cancelled, when
+the company had. The correctness fix would have produced a new falsehood on the
+same surface it was meant to repair.
+
+**Rule:** a read guard is safe under any subsequent write state. A write change
+without one propagates into every surface that reads it, and the propagation is
+invisible in the diff of the write.
+
+So when both are needed, the read guard ships first. At the time the sequencing
+looked like a preference. It was not.
+
+The same shape appeared inside PP5 itself: the admin route read its recipient
+list *after* the transaction, filtered on `status <> 'cancelled'`. Adding the
+pledge transition without moving that read would have emptied the list on every
+human-initiated cancellation — nobody notified, no cron log to catch it, and the
+change looking like a correctness improvement.
+
+---
+
 ## A guard is only as strong as the check on the contract it depends on
 
 `app.js:158` deliberately preserves a pledge's `status` through redaction, with
