@@ -1,0 +1,160 @@
+# Legal register
+
+**Created 9 August 2026.** Questions for counsel, stated so each can be handed
+over without further explanation.
+
+These have the **longest lead time of anything open on this project** — they are
+the only items that cannot be compressed by working faster. Two have been open
+since the second brief.
+
+Nothing here is a legal opinion. Each entry records the question, the facts that
+prompted it, what is blocked behind the answer, and its status.
+
+---
+
+## 1. Marketplace licensing
+
+**Question.** Does a platform that collects payment for Egyptian tours require
+its own Ministry of Tourism or ETAA registration, or does acting solely as an
+intermediary for licensed companies exempt it?
+
+**Why it arose.** Sawa is being positioned as a marketplace rather than a tour
+operator: it lists departures run by independent Egyptian travel companies. The
+site says so. Whether that positioning holds under Egyptian tourism law — and
+whether it survives Sawa collecting money, which it does not yet do — is the
+question.
+
+**Facts as they stand.**
+- No payment integration exists. No card is collected; deposits are quoted and
+  settled off-platform. See `docs/audit/payment-flow-facts.md`.
+- Every listed operator is required to hold a Ministry of Tourism license and
+  ETAA registration.
+- Capital Travel Service (ETAA 2179) is currently named in the footer as
+  operating the platform. Under the amended Phase 2 brief, Sawa is to become its
+  own entity with CTS as one operating partner.
+
+**Blocked behind the answer.** Whether the site may continue describing Sawa as
+"not a tour operator"; whether the entity needs its own registration before
+collecting payment; the wording of the P2.1-R footer disclosure.
+
+**Status:** open since the Phase 0 decisions.
+
+---
+
+## 2. Organiser status under package travel rules
+
+**Question.** For a multi-day package sold to a UK or EU consumer, is Sawa the
+*organiser* or an *intermediary* under the Package Travel Regulations, and what
+does that require in the Terms?
+
+**Why it arose.** Sawa sells 5-, 9- and 12-day packages combining accommodation,
+transport and guiding. That is the shape the regulations were written for. If
+Sawa is the organiser, insolvency protection and a defined liability regime
+attach, and the Terms need to say so.
+
+**Facts as they stand.**
+- Three multi-day packages are live: Nile Majesty (5 days, $675), Egypt in Depth
+  (9 days, $1,390), Egypt End to End (12 days, $1,520).
+- Terms §2 currently frames Sawa as a platform that "brings travelers together"
+  and names an "Operating Partner" as responsible for each departure.
+- Terms §15 offers "an equivalent or comparable alternative… credit… or a
+  refund" on a Sawa-initiated cancellation, which is regulation-shaped language
+  already.
+- No insolvency protection arrangement is described anywhere on the site.
+
+**Blocked behind the answer.** Terms §2, §13, §15; whether packages may be sold
+to UK/EU consumers at all before the arrangement exists.
+
+**Status:** open since the Phase 0 decisions. **Highest exposure of the five** —
+it is the only one where the current position could be wrong *and* already being
+relied on by a buyer.
+
+---
+
+## 3. Consumer rating display
+
+**Question.** What must be in place before an aggregate rating may be displayed
+to UK or EU consumers — provenance, verification method, sample, and how each is
+disclosed?
+
+**Why it arose.** The site displayed "4.9 average traveler rating" and per-tour
+star ratings drawn from a seeded `quality` column, with **no reviews table in the
+database and zero bookings ever taken**. All of it has been removed.
+
+**Facts as they stand.**
+- No reviews table exists. `pledges` has never held a row.
+- Ratings were removed under U1 and are not live.
+- The client has said ratings may return "later at the operator profile level,
+  tied to records, with the source stated".
+
+**Blocked behind the answer.** Whether ratings return at all, and what the
+schema must capture at the point of collection — which is cheaper to get right
+before the table exists than after.
+
+**Status:** open. Not currently causing exposure, since nothing is displayed.
+
+---
+
+## 4. Autoura disclosure
+
+**Question.** Does an inventory-only data transfer to an affiliated system
+warrant a line in the privacy policy?
+
+**Why it arose.** When `AUTOURA_SYNC_URL` and `AUTOURA_SYNC_SECRET` are set,
+every departure write is mirrored to an external system at getautoura.net.
+Common ownership does not make two systems one system.
+
+**Facts as they stand.**
+- **No personal data crosses the boundary.** The payload is route, type, dates,
+  city, min/max seats, an aggregate `seatsTaken` integer, status and price.
+- Verified by test, and the boundary was narrowed under Y2 so the payload
+  builder never receives pledge rows — `loadInventory()` selects only
+  `status, seats`, so personal columns never leave Postgres.
+- The privacy policy names no affiliated system.
+- **Whether the mirror is active in production is still unknown** — `/api/modes`
+  reports `autoura: on|off` and needs an admin token to read.
+
+**Blocked behind the answer.** A possible privacy policy line. Low urgency while
+only inventory crosses; it becomes urgent if the payload ever widens.
+
+**Status:** open. Flagged rather than decided, per Y4.
+
+---
+
+## 5. Entity disclosure
+
+**Question.** Once the Sawa entity's status is settled, what must be named,
+where — footer, Terms, Privacy, Cookies, and the JSON-LD `Organization` block?
+
+**Why it arose.** The amended Phase 2 brief states Sawa is now its own legal
+entity and a marketplace, not operated by Capital Travel Service. The site still
+says the opposite.
+
+**Facts as they stand.**
+- Footer, Terms, Privacy and Cookies all name "Capital Travel Service, trading as
+  Sawa Tours", ETAA 2179, with a Giza address.
+- JSON-LD carries `hasCredential: "Operated by Capital Travel Service — ETAA
+  licence no. 2179"` and **no `legalName`**.
+- P2.1-R's replacement copy is written and waiting, with
+  `{{SAWA_LEGAL_NAME}}` and `{{SAWA_REGISTRATION}}` as placeholders.
+- **Nothing has been built**, deliberately: a footer must not ship with a
+  placeholder entity name.
+
+**Blocked behind the answer.** All of Phase 2 — P2.1-R, P2.2-R, P2.3-R, P2.4-R.
+
+**Status:** open. Gated on incorporation, which is the client's to report.
+
+---
+
+## Summary
+
+| # | Question | Exposure now | Blocks |
+|---|---|---|---|
+| 1 | Marketplace licensing | Low — no payment collected | Footer disclosure, payment launch |
+| 2 | Organiser status | **Highest** — packages are on sale | Terms §2/§13/§15 |
+| 3 | Rating display | None — nothing displayed | Reviews schema |
+| 4 | Autoura disclosure | Low — inventory only | A privacy policy line |
+| 5 | Entity disclosure | Site currently states the pre-change position | All of Phase 2 |
+
+**#2 is the one to send first.** It is the only question where the current live
+position could be wrong and a consumer could already be relying on it.
