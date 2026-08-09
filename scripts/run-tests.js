@@ -48,13 +48,32 @@ if (!files.length) {
   process.exit(1);
 }
 
-// WW3.2 — say which Node produced this result. A check whose outcome depends on
-// an unstated environmental condition is not a verdict.
-console.log(`# node ${process.version} · ${files.length} test files`);
+// YY3.1 — pin the timezone.
+//
+// This machine's TZ is Africa/Cairo, which is the ONE timezone in which a
+// host-timezone bug in this application is invisible: every deadline, cutoff and
+// "has this date started" is Egyptian local time, so code that accidentally uses
+// the host clock agrees with code that correctly uses Cairo, and the suite
+// cannot tell them apart.
+//
+// UTC is the pin because it is what Railway runs, and because it differs from
+// Cairo by 2 or 3 hours depending on the season — so anything relying on the
+// host surfaces as a wrong instant rather than as nothing at all.
+//
+// This is a YY1 case: an incompatibility that breaks is self-limiting; one that
+// only makes the numbers wrong is unbounded. Nothing here would have failed.
+//
+// An explicit TZ is respected, so `TZ=Africa/Cairo npm test` still works for
+// checking the other side deliberately.
+const timeZone = process.env.TZ || "UTC";
+
+// WW3.2 / YY3.3 — say which environment produced this result. A check whose
+// outcome depends on an unstated environmental condition is not a verdict.
+console.log(`# node ${process.version} · TZ=${timeZone} · ${files.length} test files`);
 
 const result = spawnSync(
   process.execPath,
   ["--test", ...process.argv.slice(2), ...files.map((f) => relative(ROOT, f))],
-  { cwd: ROOT, stdio: "inherit" }
+  { cwd: ROOT, stdio: "inherit", env: { ...process.env, TZ: timeZone } }
 );
 process.exit(result.status ?? 1);

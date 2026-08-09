@@ -1,4 +1,4 @@
-# XX1 — Which runtime the evidence was produced on
+# XX1 / YY3.3 — Which environment the evidence was produced on
 
 **9 August 2026.**
 
@@ -104,6 +104,61 @@ renders State A with the stat blocks dropped and no bare zero.
 
 ---
 
+## YY3 — Node was not the only unstated dimension
+
+### Timezone, and why this host is the worst possible one
+
+Every booking cutoff, confirm deadline and *"has this date started"* resolves a
+stored date and wall-clock time as **Egyptian local time**. Egypt reinstated DST
+in 2023: EET (+2) in winter, EEST (+3) in summer. Verified against `Intl` rather
+than assumed — **2026 transitions are 24 April (+2→+3) and 30 October (+3→+2).**
+
+**This machine's `TZ` is `Africa/Cairo`.** That is the one timezone in which a
+host-timezone bug in this application is invisible: code that accidentally uses
+the host clock agrees, to the millisecond, with code that correctly uses Cairo.
+The suite could not have told them apart.
+
+Not a hypothetical — `server/tz.js` documents the real instance. Bookings closed
+**21 hours** before departure under a "24 hours before" rule, on Railway, because
+the instant was resolved in the server's zone.
+
+**A pure YY1 case.** Nothing throws. The deadline is just wrong, and stays wrong.
+
+| | |
+|---|---|
+| `npm test` | pins **`TZ=UTC`** — what Railway runs, and 2–3 hours from Cairo, so host-dependence surfaces as a wrong instant rather than as nothing |
+| override | an explicit `TZ` is honoured, so `TZ=Africa/Cairo npm test` still checks the other side |
+| `check:node` | reports Node, `TZ` and locale at the top of `preflight`, and says so out loud when the host is Cairo |
+| `npm test` | prints `# node <version> · TZ=<zone>` |
+
+### The boundary cases
+
+`server/tz-boundaries.test.js` — 11 assertions in **exact epoch milliseconds**,
+so each of the three plausible wrong implementations fails a different one:
+
+- a **fixed +2** offset fails every summer case
+- a **fixed +3** offset fails every winter case
+- **host-clock** arithmetic fails all of them, by 2 or 3 hours
+
+Covered: winter and summer; the day before, of and after **both** transitions; a
+local time that **does not exist** (00:30 on the spring-forward day — the old
+failure mode made the cutoff fail *open*, so bookings never closed at all); a
+local time that **happens twice**; a 24-hour cutoff spanning the spring
+transition; and a 7-day confirm deadline spanning the autumn one.
+
+Two of the eleven exist to keep the other nine honest:
+
+- the same inputs are computed in a child process under **four** host timezones
+  and must give identical instants
+- the naive implementation `tz.js` replaced is run against the same input and
+  must **disagree** — otherwise the exact-instant cases are not testing what they
+  claim
+
+**Proven:** run under `TZ=Africa/Cairo`, tests 1 and 11 fail — the suite detects
+that it has been placed in the one zone where it cannot prove anything.
+
+---
+
 ## XX1.3 — The rule
 
 **A verification is evidence about the runtime it ran on.**
@@ -115,10 +170,24 @@ this document is, and it should not need doing twice.
 
 **From here:**
 
-- `npm test` prints `# node <version>` on every run.
-- `check:node` fails `preflight` early, so a mismatch surfaces as itself.
-- Any audit document reporting a terminal-run result names the runtime.
+- `npm test` prints `# node <version> · TZ=<zone>` on every run.
+- `check:node` fails `preflight` early and reports Node, `TZ` and locale.
+- Any audit document reporting a terminal-run result names the environment.
 - Any commit message reporting one names it too.
+
+### The environment of record
+
+| Dimension | Value | How it is held |
+|---|---|---|
+| Node | v22.21.1 | `.nvmrc`, `engines.node >=22`, `check:node` |
+| `TZ` | **UTC** for the suite | pinned in `scripts/run-tests.js`; overridable |
+| PostgreSQL | **17.10** for every ephemeral verification | the version `brew` provides; production is Supabase-managed and **not pinned by this repo** |
+| Locale | `en-US` | reported, not pinned — no assertion depends on it today |
+
+**Not closed:** production's PostgreSQL major is Supabase's to choose and is not
+recorded here. Every constraint and read-only proof in this project ran against
+17.10 locally. That is a different-version gap of exactly the shape this document
+exists to make findable, and it is a real one — filed rather than resolved.
 
 The point is not that Node 20 results were wrong — with one exception re-run
 above, they were not. It is that **the question "which of these still holds?"

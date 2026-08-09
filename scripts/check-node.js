@@ -41,4 +41,21 @@ if (running < min) {
   process.exit(1);
 }
 
-console.log(`Node ${process.version} (engines: ${required}).`);
+// YY3.3 — the environment of record, at the top of every preflight.
+//
+// Node was not the only unstated dimension. TZ matters as much and less
+// visibly: this machine's is Africa/Cairo, the ONE zone in which a
+// host-timezone bug in this application is invisible, because host-based code
+// and Cairo-based code agree. Nothing would have failed; the deadlines would
+// just have been wrong.
+const timeZone = process.env.TZ || Intl.DateTimeFormat().resolvedOptions().timeZone;
+const locale = process.env.LANG || Intl.DateTimeFormat().resolvedOptions().locale;
+console.log(
+  `Node ${process.version} (engines: ${required}) · TZ=${timeZone} · locale=${locale}`
+);
+if (!process.env.TZ && timeZone === "Africa/Cairo") {
+  console.log(
+    "  NOTE: this host is in Africa/Cairo. `npm test` pins TZ=UTC for exactly that\n"
+    + "  reason — see server/tz-boundaries.test.js."
+  );
+}
