@@ -110,7 +110,7 @@ const CRUMB = {
   "/goahead": "GoAhead departures",
   "/goahead-promise": "The GoAhead Promise",
   "/operators": "For operators",
-  "/verify": "Become a verified operator",
+  "/verify": "List your departures",
   "/widget": "Widget",
   "/about": "About",
   "/contact": "Contact",
