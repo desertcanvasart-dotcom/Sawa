@@ -61,6 +61,19 @@ pool is no use if an auditor opens its own connection from the same URL.
 
 ## ⏳ What still needs the client — a real least-privilege role
 
+> **UU1 — the layering, stated the right way round.**
+>
+> This was found session-first, which made the session setting look like the
+> primary guarantee. It is not.
+>
+> **A session setting can be talked out of.** One
+> `SET SESSION CHARACTERISTICS AS TRANSACTION READ WRITE` and it is gone. A role
+> without write grants cannot be talked out of anything.
+>
+> So the session setting is the **convenient** layer — it works today, with the
+> credentials that already exist, without waiting for anyone. The role is the
+> **unconditional** one. It is not blocking, and it is **not closed**.
+
 The session restriction is a belt. This is the braces, and it is the only part
 that protects against a script that deliberately turns the restriction off
 (`SET SESSION CHARACTERISTICS AS TRANSACTION READ WRITE` would defeat it, and no
@@ -97,8 +110,17 @@ is yours to hold.
 
 The session restriction is live and proved. The gap it leaves is narrow and
 worth naming precisely: **a script that explicitly re-enables writes at runtime
-would succeed.** Nothing in the codebase does, and the test above would not
-catch it — it reads imports, not intent.
+would succeed.**
+
+UU1.1 adds a static check for the plausible form of that — someone hitting a
+permissions error mid-audit and reaching for the obvious unblock. It flags
+`SET SESSION CHARACTERISTICS`, `SET default_transaction_read_only`,
+`BEGIN READ WRITE`, `START TRANSACTION READ WRITE` and `SET TRANSACTION READ
+WRITE` in any `audit-*` file, and its patterns are themselves tested against the
+statements they name so a typo cannot make it pass on everything.
+
+**It is a pointer, not a verdict.** `client.query("SET SESSION " + mode)` walks
+straight past it. Only the role closes this.
 
 `email_log` remains the evidence trail either way: it is the table the incident
 touched, and any future write by an auditor would appear there or in

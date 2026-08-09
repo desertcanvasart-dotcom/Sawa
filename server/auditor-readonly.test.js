@@ -10,11 +10,20 @@
 // is NOT to keep reviewing what it does — it is to hand it a connection on which
 // a write is impossible.
 //
-// Two assertions here, because the guarantee has two halves: the pool must be
-// configured to refuse writes, and no auditor may reach past it to the writable
-// one. The first is proved against a real database in
-// docs/audit/readonly-credentials.md; a session setting cannot be observed
-// without a server, so what is checked here is that it is asked for.
+// UU1 — the layering, stated the right way round.
+//
+// It was found session-first, which made the session setting look like the
+// primary guarantee. It is not. A SESSION SETTING CAN BE TALKED OUT OF: one
+// `SET SESSION CHARACTERISTICS AS TRANSACTION READ WRITE` and it is gone. A
+// role without write grants cannot be talked out of anything.
+//
+// So the session setting is the CONVENIENT layer — it works today, with the
+// credentials that already exist, without waiting for anyone. The role is the
+// UNCONDITIONAL one, and it is still outstanding. Nothing in this file makes
+// the guarantee unconditional; see docs/audit/readonly-credentials.md.
+//
+// The checks below are a POINTER, not a verdict. A dynamically-built statement
+// string defeats every one of them.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
@@ -82,4 +91,51 @@ test("a dedicated read-only URL wins when one is provisioned", () => {
 
 test("the SQLSTATE a caller should expect is named, not guessed", () => {
   assert.equal(READ_ONLY_SQLSTATE, "25006");
+});
+
+// UU1.1 — an auditor talking the session out of being read-only.
+//
+// Cheap, and it catches the plausible case: someone hits a permissions error
+// while writing an audit and reaches for the obvious unblock.
+//
+// A POINTER, deliberately labelled: `client.query("SET SESSION " + mode)` walks
+// straight past it. Only the least-privilege role closes this, which is why
+// that role stays on the client list rather than being marked done.
+const TAMPERING = [
+  /SET\s+SESSION\s+CHARACTERISTICS/i,
+  /SET\s+(?:SESSION\s+|LOCAL\s+)?default_transaction_read_only/i,
+  /BEGIN\s+(?:TRANSACTION\s+)?READ\s+WRITE/i,
+  /START\s+TRANSACTION\s+READ\s+WRITE/i,
+  /SET\s+TRANSACTION\s+READ\s+WRITE/i,
+];
+
+test("no auditor talks its session out of being read-only", () => {
+  const problems = [];
+  for (const f of AUDITORS) {
+    const src = readFileSync(join(SCRIPTS, f), "utf8");
+    for (const re of TAMPERING) {
+      const hit = src.match(re);
+      if (hit) problems.push(`${f}: ${hit[0]}`);
+    }
+  }
+  assert.deepEqual(problems, [], `an auditor re-enables writes:\n  ${problems.join("\n  ")}`);
+});
+
+test("the tampering patterns actually match the statements they name — W3", () => {
+  // Without this, a typo in a pattern makes the test above pass on everything.
+  const shouldMatch = [
+    'await c.query("SET SESSION CHARACTERISTICS AS TRANSACTION READ WRITE")',
+    "pool.query('SET default_transaction_read_only = off')",
+    'client.query("BEGIN READ WRITE")',
+    'client.query("START TRANSACTION READ WRITE")',
+    'client.query("SET TRANSACTION READ WRITE")',
+  ];
+  for (const line of shouldMatch) {
+    assert.ok(TAMPERING.some((re) => re.test(line)), `not caught: ${line}`);
+  }
+  // And it must not fire on the setting the pool legitimately asks for.
+  assert.ok(
+    !TAMPERING.some((re) => re.test('options: "-c default_transaction_read_only=on"')),
+    "the pool's own configuration is flagged as tampering"
+  );
 });
