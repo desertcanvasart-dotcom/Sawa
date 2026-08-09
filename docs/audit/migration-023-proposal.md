@@ -25,7 +25,7 @@ never excludes anything is decoration.
 | `pledges.cancelled_reason` | ✅ | ✅ PP1 | **in** |
 | Attribution on `pledges` (D3) | ✅ | ✅ D3 | **in** |
 | Consent capture (QQ2.2) | ✅ | ✅ KK5 | **in** |
-| `blog_posts.status` CHECK | ❌ | ✅ | **in, on a different argument** — see below |
+| `blog_posts.status` CHECK | ❌ | ✅ | **in — constraint hardening**, a different argument entirely |
 | Operator verification fields (C2, P4.1) | ❌ | ✅ | **out** |
 | Anchor flags on `departures` (D1) | ❌ | ✅ | **out** |
 
@@ -113,13 +113,26 @@ Egypt, Capital Travel Service) where the visit originated. Free text rather than
 an enum: the brand list is a commercial fact that changes without a migration,
 and a CHECK here would make adding a brand a database change.
 
-#### ⚠️ This is personal data, and it is the reason QQ2.2 is not optional
+#### ⚠️ Personal data — and the blocker is transparency, not consent
 
 Touch paths and timestamps tied to a named booker are behavioural data about an
-identified person. **Do not build the write paths for this without the consent
-fields below and a privacy-policy line describing it.** The columns can land in
-this migration; the writes cannot land without that. Recorded here so the two do
-not get separated.
+identified person. The columns may land in this migration. **The writes may not
+land until the privacy notice describes the processing.**
+
+**Do not gate attribution behind `marketing_consent`.** They rest on different
+lawful bases, and conflating them would be expensive:
+
+| | the processing | basis |
+|---|---|---|
+| **Attribution** | recording how someone reached the booking they made | incidental to the transaction — no consent flow |
+| **Marketing** | emailing them afterwards | consent |
+
+Gating attribution behind a consent flow it does not need would push it past the
+early bookings, which are the entire reason for the column.
+
+The dependency is on the **privacy policy revision (RR3)**, which must describe
+the processing *before* it happens — not on the consent fields below. Recorded
+this way so it points at the right document.
 
 ---
 
@@ -152,9 +165,12 @@ proving **what** was agreed to, and the copy will change.
 the same four fields, and it should be created in the same migration so the two
 cannot drift. Its shape is otherwise blocked on KK5, which is later in the order.
 
+These fields gate **marketing**, and nothing else. Attribution has a different
+basis and a different blocker — see above.
+
 ---
 
-### 4. `blog_posts.status` — admitted on a different argument
+### 4. `blog_posts.status` — **constraint hardening**, not empty-window capture
 
 **It fails test 1**, and I am not going to pretend otherwise: nothing is
 captured, and the constraint could be added at any time.
@@ -173,8 +189,18 @@ ALTER TABLE blog_posts ADD CONSTRAINT blog_posts_status_chk
   CHECK (status IN ('draft', 'published'));
 ```
 
-If you would rather hold the migration to fields that pass both tests, drop
-this one — it is genuinely separable.
+**Label it constraint hardening, not empty-window capture.** The two arguments
+are different and only one of them generalises. A correct change recorded under
+the wrong justification is how the next person derives the wrong rule — here,
+*"the empty window justifies schema"* rather than *"a constraint gets harder to
+add as rows accumulate"*.
+
+With B5 making every migration a manual production action, batching a cheap
+constraint into a migration that is already being run has real value. That is
+the whole argument, and it is enough on its own.
+
+Genuinely separable if you would rather hold the migration to fields that pass
+both tests.
 
 ---
 
@@ -272,6 +298,22 @@ paths follow, per field, in the work that needs them — and for attribution, no
 before the consent fields and the privacy-policy line exist.
 
 ---
+
+## What each field is waiting on before anything WRITES it
+
+The columns are independent. The write paths are not.
+
+| Field | Blocked on |
+|---|---|
+| `cancelled_reason`, `cancelled_at` | nothing — PP5 writes them |
+| Attribution | **the privacy policy revision (RR3)** — transparency, not consent |
+| Consent fields | KK5's capture flow, and the same RR3 revision |
+| `blog_posts` CHECK | nothing — it constrains, it does not capture |
+
+RR3 is one document revision carrying three threads that have each been sitting
+as a footnote elsewhere: the Autoura inventory transfer, the controlling entity,
+and this. It is in the legal register as an item with a dependency of its own —
+the entity naming, which is the client's to report.
 
 ## Recommendation
 
