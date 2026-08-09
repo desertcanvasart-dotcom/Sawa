@@ -121,6 +121,24 @@ before the table exists than after.
 **Question.** Does an inventory-only data transfer to an affiliated system
 warrant a line in the privacy policy?
 
+> ### ⚠️ ZZ3.3 — this question's premise was wrong, and the register carried it
+>
+> It was framed **retrospectively**: *has an undisclosed transfer been
+> occurring?* It has not. The mirror has never transmitted anything —
+> `emitDepartureSync` called a function that does not exist, on every path,
+> since the feature was introduced.
+>
+> Restated **prospectively: this transfer is about to begin.** That is the better
+> position to be in, and the paragraph now documents new processing rather than
+> existing processing.
+>
+> **The register carried an inferred fact.** `/api/modes` reported `autoura: on`,
+> which says the mirror is *configured*; I read it as evidence data was flowing
+> and wrote that here as established. This document is meant to be the reliable
+> one, so the failure is recorded rather than quietly corrected — and it is the
+> same failure the whole project keeps finding: a representation read as the
+> system.
+
 **Why it arose.** When `AUTOURA_SYNC_URL` and `AUTOURA_SYNC_SECRET` are set,
 every departure write is mirrored to an external system at getautoura.net.
 Common ownership does not make two systems one system.
@@ -132,9 +150,14 @@ Common ownership does not make two systems one system.
   builder never receives pledge rows — `loadInventory()` selects only
   `status, seats`, so personal columns never leave Postgres.
 - The privacy policy names no affiliated system.
-- **The mirror is ACTIVE.** Verified 9 August 2026: `/api/modes` reports
-  `autoura: on`. Departure inventory is being transmitted to the external system
-  today, on every departure write. This question is live, not hypothetical.
+- **The mirror is CONFIGURED but has never transmitted.** `/api/modes` reports
+  `autoura: on`, which says the env vars are set. Verified 9 August by running
+  the emitter end to end against a listener: every call threw a `ReferenceError`
+  and the `.catch()` logged it at warn level. Nothing has ever crossed.
+- **It will start transmitting on the next deploy.** TT1 fixed the emitter and
+  widened which write paths reach it. `/api/modes` now also reports
+  `effects.autouraSync` — last success, last failure, and `neverWorked` — so
+  "configured" and "working" are no longer the same answer.
 
 **Blocked behind the answer.** A possible privacy policy line — now **drafted**,
 in `privacy-policy-revision.md`, ahead of TT1 widening which write paths
@@ -148,7 +171,16 @@ call threw and the error was downgraded to a `console.warn`. `autoura: on` in
 always meant; it was read here, and by me, as evidence that data was flowing.
 It was not. Fixed under TT1, and verified end to end against a listener.
 
-**Status:** open. Flagged rather than decided, per Y4.
+**Status:** open, and **prospective**. The paragraph is drafted in
+`privacy-policy-revision.md`.
+
+**ZZ3.1 / ZZ3.2 — it publishes alone, and it publishes first.** It needs no
+entity answer: it describes what is shared and what is not, and neither depends
+on who the controller is. Threads 2 and 3 of that revision stay blocked; this one
+does not wait behind them.
+
+**Sequence: the paragraph is published, THEN the four new sync paths go live.**
+Not the reverse, and not held indefinitely behind an unrelated open question.
 
 ---
 
@@ -184,7 +216,7 @@ says the opposite.
 | 1 | Marketplace licensing | Low today — **but may govern answer #3** | Footer disclosure, **all payment work** |
 | 2 | Organiser status | **Highest** — packages are on sale | Terms §2/§13/§15 |
 | 3 | Rating display | None — nothing displayed | Reviews schema |
-| 4 | Autoura disclosure | Low — inventory only, **but transfer is live** | A privacy policy line |
+| 4 | Autoura disclosure | Low — inventory only, and **prospective**: nothing has ever been transmitted | A privacy policy line, **drafted**, publishes alone |
 | 5 | Entity disclosure | Site currently states the pre-change position | All of Phase 2 |
 
 ## Send 1 and 2 together
