@@ -136,7 +136,7 @@
 
   var COPY = {
     functional: ["Functional", "Remembers optional preferences and the partner link you arrived through, so the right operator is credited if you book."],
-    analytics: ["Analytics", "Google Analytics, so we can see which pages people use and how travellers find us. Never used to identify you."],
+    analytics: ["Analytics", "Google Analytics, so we can see which pages people use and how travelers find us. Never used to identify you."],
   };
 
   var node = null, scrim = null, lastFocus = null;

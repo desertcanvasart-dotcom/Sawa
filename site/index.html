@@ -507,7 +507,7 @@ section.block{padding:120px 0}
     <div class="hero-copy rv">
       <span class="eyebrow"><span class="live"></span>Shared departures across Egypt</span>
       <h1>See Egypt the way<br>it's meant to be — <span class="ital gld">together</span>.</h1>
-      <p class="lede">Sawa pools travelers from verified Egyptian operators into one shared departure. Four travelers on the same route, and the trip is locked in — we call that moment the <strong>GoAhead</strong>. Join a date that's forming, <span style="text-decoration:underline;text-decoration-color:var(--gold-deep);text-decoration-thickness:2px;text-underline-offset:5px">or pick any tour and start your own</span>.</p>
+      <p class="lede">Sawa pools travelers from Ministry-licensed Egyptian operators into one shared departure. Four travelers on the same route, and the trip is locked in — we call that moment the <strong>GoAhead</strong>. Join a date that's forming, <span style="text-decoration:underline;text-decoration-color:var(--gold-deep);text-decoration-thickness:2px;text-underline-offset:5px">or pick any tour and start your own</span>.</p>
       <div class="hero-cta">
         <a href="/itineraries" class="btn teal">Browse the tours
           <span class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
@@ -592,9 +592,9 @@ section.block{padding:120px 0}
 
     <div>
       <div class="how-steps">
-        <div class="hstep rv"><div class="idx tnum">01</div><div><h3>Find a date that's forming — or start one</h3><p>Browse real routes from verified Egyptian operators — Giza, the Nile, the desert, the Red Sea — each with a live count of how close it is to going. Don't see your day? Start it on any tour page.</p></div></div>
+        <div class="hstep rv"><div class="idx tnum">01</div><div><h3>Find a date that's forming — or start one</h3><p>Browse real routes from Ministry-licensed Egyptian operators — Giza, the Nile, the desert, the Red Sea — each with a live count of how close it is to going. Don't see your day? Start it on any tour page.</p></div></div>
         <div class="hstep rv" data-d="1"><div class="idx tnum">02</div><div><h3>Take your seat — for free</h3><p>Reserve with no charge and watch the group fill in real time. You're pooled with travelers from around the world, all heading out on the same date.</p></div></div>
-        <div class="hstep rv" data-d="2"><div class="idx tnum">03</div><div><h3>Four travelers, and you're going</h3><p>The minute the date reaches four, the gold dot lights up: the trip is confirmed and only now does payment begin — a deposit at GoAhead, the balance before you travel. No cancelled trips, no solo surcharge. <strong>Never more than twelve. Ever.</strong></p></div></div>
+        <div class="hstep rv" data-d="2"><div class="idx tnum">03</div><div><h3>Four travelers, and you're going</h3><p>The minute the date reaches four, the gold dot lights up: the trip is confirmed and only now does payment begin — a deposit at GoAhead, the balance before you travel. No canceled trips, no solo surcharge. <strong>Never more than twelve. Ever.</strong></p></div></div>
       </div>
 
       <div class="how-card rv" data-d="2" style="margin-top:28px">
@@ -699,7 +699,7 @@ section.block{padding:120px 0}
       <div class="ops-inner" style="padding:42px 44px;display:flex;align-items:center;justify-content:space-between;gap:34px;flex-wrap:wrap">
         <div style="position:relative;z-index:2;max-width:38rem">
           <span class="eyebrow on-dark" style="margin-bottom:16px">Run tours in Egypt?</span>
-          <h3 style="font-family:'Fraunces',serif;font-weight:500;font-size:clamp(1.6rem,3vw,2.1rem);color:var(--cream);line-height:1.1;letter-spacing:-.01em;margin-top:14px">Stop cancelling tours you <span style="font-style:italic;color:var(--gold)">almost</span> filled.</h3>
+          <h3 style="font-family:'Fraunces',serif;font-weight:500;font-size:clamp(1.6rem,3vw,2.1rem);color:var(--cream);line-height:1.1;letter-spacing:-.01em;margin-top:14px">Stop canceling tours you <span style="font-style:italic;color:var(--gold)">almost</span> filled.</h3>
           <p style="color:rgba(247,243,234,.72);margin-top:12px;font-size:1.02rem">List the departures you can't fill alone. Sawa pools demand across operators — and travelers can start dates on your tours, bringing demand you didn't source. Zero upfront cost, keep your brand and margin.</p>
         </div>
         <a href="/operators" class="btn gold" style="position:relative;z-index:2;flex:0 0 auto">For operators
@@ -744,7 +744,7 @@ section.block{padding:120px 0}
         <circle class="dot" cx="23" cy="40" r="5.5"/><circle class="dot" cx="31" cy="74" r="5.5"/><circle class="dot" cx="70" cy="62" r="5.5"/>
         <circle class="go" cx="74" cy="30" r="6.5"/>
       </svg><span class="nm"><b>Sawa</b><i>Tours &middot; Egypt</i></span></a>
-        <p class="fblurb">Shared departures, confirmed together. Sawa pools travelers across verified Egyptian operators so the tours you want actually run &mdash; minimum four, and a gold dot you can trust.</p>
+        <p class="fblurb">Shared departures, confirmed together. Sawa pools travelers across Ministry-licensed Egyptian operators so the tours you want actually run &mdash; minimum four, and a gold dot you can trust.</p>
       </div>
       <div class="fcol">
         <h4>Travel</h4>
@@ -840,13 +840,13 @@ section.block{padding:120px 0}
          production the live API succeeds and this fallback is never used. */
       .catch(function(){return fetch('/_dev_bootstrap.json').then(function(r){return r.json();});});
   }
-  /* One entry per DEPARTURE with at least one traveller aboard — the same
+  /* One entry per DEPARTURE with at least one traveler aboard — the same
      rule as the /departures and /goahead boards. A date with zero bookings is
      inventory and belongs on the itinerary pages, not here.
      Mirrors isFormingDeparture/isGoAheadDeparture in server/domain.js. */
   function seatsOf(d){
     return (d.pledges||[]).reduce(function(s,x){
-      return x&&x.status==='cancelled'?s:s+(Number(x.seats||x.pax)||1);
+      return x&&x.status==='canceled'?s:s+(Number(x.seats||x.pax)||1);
     },0);
   }
   loadData().then(function(data){
@@ -884,10 +884,10 @@ section.block{padding:120px 0}
     });
     withTravelers.sort(function(a,b){return a.start<b.start?-1:a.start>b.start?1:0;});
     starters.sort(function(a,b){return a.start<b.start?-1:a.start>b.start?1:0;});
-    /* Fallback, not fiction: when no date has a traveller aboard yet, the
+    /* Fallback, not fiction: when no date has a traveler aboard yet, the
        section switches to the published dates and says so — "be the first" —
        instead of rendering an empty card next to "Loading…". The strict
-       ≥1-traveller rule still governs the /departures board itself; the
+       ≥1-traveler rule still governs the /departures board itself; the
        homepage's job at zero bookings is to sell the FIRST seat. */
     var starterMode=!withTravelers.length;
     var pool=starterMode?starters:withTravelers;

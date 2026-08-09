@@ -101,6 +101,27 @@ so no future change can export them. **Structural impossibility over vigilance.*
 Bypass with `git commit --no-verify` only in a genuine emergency, and say so in
 the message.
 
+## Never verify with a shortcut when the tool exists
+
+`audit-claims.js` was built because approximations kept producing confident wrong
+answers. Then a quick `sed` pipeline was used to check *its* output, and it
+reported two claims as still live that had already gone — it could not strip
+multi-line HTML comments or `<script>` blocks, so it matched the removal notes
+explaining what had been taken out.
+
+Ninth instance of the same error, and the cheapest to avoid: **if a tool exists
+for the question, use the tool.**
+
+## A task is not closed until it is observable in production
+
+An approval is a representation of work. Only shipped code is the system.
+
+P1.4 was approved with a stated default action, never happened, and surfaced five
+phases later because a meta description was too long. `docs/audit/approvals-register.md`
+lists every approved decision and whether it is live. Update it when a task
+closes — and "closes" means verified against production, not against a commit
+message.
+
 ## Never re-run to diagnose an intermittent
 
 A fresh run is a **different system state**. Greping it reads a representation of
