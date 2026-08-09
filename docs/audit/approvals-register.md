@@ -112,6 +112,32 @@ yet. Listed for completeness rather than as failures.
 
 ---
 
+## 🟠 MM2.1 — Shipped, but not across its full stated scope
+
+A third category, because the register was only catching **omission**. P1.4 was
+invisible because nobody was looking. B4/P3.4 was re-broken because **the task
+looked done** — and a task that looks done is checked by no one.
+
+**An approved item is closed only when it has shipped across its full stated
+scope.** "Shipped" and "shipped everywhere it was approved for" are different
+verdicts and must render differently.
+
+| Item | Approved scope | Shipped | Gap |
+|---|---|---|---|
+| **B4 / P3.4** zero-suppression | *"no bare zero, never a persistent loading state"* — **anywhere** | homepage + `/departures` (JJ3) | ❌ `/goahead` kept serving a bare `0` beside "departures at GoAhead". **Closed in MM2.** |
+| **P1.6** "verified" comes down | every surface | `/about` and 7 fallback sites | re-checked: no other live surface asserts it |
+| **U4.3** US English | *"anything I have supplied, including previously applied copy"* | all 20 static pages, attributes included | re-checked: the assertion runs over every page and every attribute. **Full scope.** |
+| **W3** proven-fires | *"retrofit it to every check already in the gate"* | every check added after W3, plus `check:status-literals` | ❌ `check:constants`, `audit:repo-truth` and `smoke`'s pre-W3 assertions still unretrofitted — **already tracked, now correctly classified as partial rather than pending** |
+| **Y2** Autoura boundary | payload builder never receives pledge rows | `loadInventory` selects `status, seats` only | full scope, test-pinned |
+
+Two partials found by applying the standard: **B4/P3.4** (fixed) and **W3**
+(reclassified). W3 was already on the list, but as *"not done yet"* rather than
+*"half done, and the half that shipped makes it look finished"* — which is the
+distinction that matters, because the first invites work and the second invites
+nobody.
+
+---
+
 ## ✅ Approved and shipped — verified in production
 
 | Item | Evidence |

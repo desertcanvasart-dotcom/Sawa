@@ -210,10 +210,20 @@
     var sort=activeValue('sort-tabs','date');
     var shown=allItems.filter(function(it){return region==='all'||it.region===region;});
     shown.sort(SORTS[sort]||SORTS.date);
+    /* P3.3 State A, the shape shipped in JJ3. This page's empty state is not
+       "start a date" — a date reaches GoAhead by filling, so the action that
+       actually moves someone toward this board is joining one that is forming. */
     grid.innerHTML=shown.length
       ? shown.map(function(it){return it.html;}).join('')
-      : '<p class="desc" style="grid-column:1/-1;text-align:center;padding:48px 0;color:var(--muted)">'
-        +'No confirmed departures in this region right now. <a href="/departures" style="text-decoration:underline">Join a forming date</a> and be the traveler who tips it to GoAhead.</p>';
+      : '<div class="dep-empty" style="grid-column:1/-1"><div class="dep-empty-in">'
+        +'<h3>Nothing has reached GoAhead '+(region==='all'?'yet':'in this part of Egypt yet')+'.</h3>'
+        +'<p>A date reaches GoAhead when four travelers have joined it. '
+        +'Join one that is forming and you may be the traveler who tips it.</p>'
+        +'<div class="dep-empty-cta">'
+        +'<a href="/departures" class="btn teal">See what\'s forming'
+        +'<span class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></a>'
+        +'<a href="/contact" class="btn plain">Tell me when a group forms</a>'
+        +'</div></div></div>';
   }
   function wireTabs(){
     ['region-tabs','sort-tabs'].forEach(function(id){
@@ -305,9 +315,19 @@
     /* Second stat is the FORMING count on purpose: when this page is empty,
        "0 seats still open" next to it read like a failing report card. The
        forming number points the visitor at the live momentum instead. */
+    /* MM2 / P3.4 — a count is rendered only when it is real AND above zero.
+       JJ3 applied this to the homepage and /departures and stopped there, so
+       this page kept serving a bare "0" beside "departures at GoAhead". The
+       rule was "no bare zero anywhere"; two pages out of three is not that.
+       The stat is dropped rather than zeroed, because an em dash would read as
+       a failed load and a 0 reads as a headline. */
     var stats=document.querySelectorAll('.hero-meta [data-live-count]');
-    if(stats[0])stats[0].textContent=items.length;
-    if(stats[1])stats[1].textContent=formingCount;
+    [[stats[0],items.length],[stats[1],formingCount]].forEach(function(pair){
+      var el=pair[0],n=pair[1];
+      if(!el)return;
+      if(n>0){el.textContent=n;return;}
+      if(el.parentNode)el.parentNode.style.display='none';
+    });
   }).catch(function(){/* Counters stay "—" rather than showing an invented number. */});
 })();
 </script>
