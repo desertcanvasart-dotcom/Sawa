@@ -19,6 +19,7 @@ import { pathToFileURL } from "node:url";
 import { pool, withTransaction } from "../db/index.js";
 import { mapDeparture, mapProduct } from "../db/mappers.js";
 import { missedConfirmDeadline, confirmDeadlineAt, seatsTotal, goAheadSeatsFor } from "../domain.js";
+import { cancelDepartureAndPledges, reportNotifications, CANCEL_REASONS } from "../departure-cancel.js";
 import { sendEmail, cancellationEmail } from "../email.js";
 
 const DRY_RUN = process.env.DRY_RUN === "1";
@@ -57,7 +58,10 @@ async function cancelOne({ dep, product }) {
     const current = mapDeparture(fresh.rows[0], pledges.rows);
     if (!missedConfirmDeadline(current, product)) return { skipped: "no longer qualifies" };
 
-    await c.query("UPDATE departures SET status = 'cancelled' WHERE id = $1", [dep.id]);
+    // PP5 — the date and its pledges change together, and the recipient list is
+    // read before either. Shared with the admin cancel route so this cannot be
+    // fixed on one path and not the other.
+    const { recipients, pledgesCancelled } = await cancelDepartureAndPledges(c, dep.id);
     await c.query(
       `INSERT INTO audit_log (actor_email, actor_role, action, entity, entity_id, detail)
        VALUES ($1,$2,$3,$4,$5,$6)`,
@@ -65,17 +69,18 @@ async function cancelOne({ dep, product }) {
         "system@sawa.tours", "system", "departure.auto_cancel", "departure", String(dep.id),
         JSON.stringify({
           reason: "minimum not reached by the GoAhead deadline",
+          // The machine-readable form. Migration 023 proposes carrying this on
+          // the pledge row itself; until it is applied this is where it lives.
+          cancelledReason: CANCEL_REASONS.MINIMUM_NOT_REACHED,
           seats: seatsTotal(current.pledges),
           minSeats: goAheadSeatsFor(current),
+          pledgesCancelled,
+          notifying: recipients.length,
           deadline: new Date(confirmDeadlineAt(current, product)).toISOString(),
         }),
       ]
     );
-    // Who to tell — direct travellers carry an email; agency pledges do not.
-    const recipients = current.pledges
-      .filter((p) => p.status !== "cancelled" && p.customerEmail)
-      .map((p) => p.customerEmail);
-    return { cancelled: true, recipients: [...new Set(recipients)], departure: current };
+    return { cancelled: true, recipients, pledgesCancelled, departure: current };
   });
 }
 
@@ -90,6 +95,10 @@ async function cancelOne({ dep, product }) {
 export async function runCancelUnconfirmed({
   dryRun = false,
   log = console.log,
+  // Separate from `log` so a shortfall cannot be swallowed by a caller that
+  // discards ordinary output — the scheduler passes a quiet log and this must
+  // still be heard.
+  logError = console.error,
   deps = { loadCandidates, cancelOne, send: sendEmail },
 } = {}) {
   const candidates = await deps.loadCandidates();
@@ -97,6 +106,7 @@ export async function runCancelUnconfirmed({
 
   let cancelled = 0;
   let notified = 0;
+  let shortfalls = 0;
   for (const candidate of candidates) {
     const { dep } = candidate;
     const seats = seatsTotal(dep.pledges);
@@ -110,24 +120,45 @@ export async function runCancelUnconfirmed({
 
     // Email never blocks the cancellation: the date is already cancelled and
     // committed by this point, and a mail outage must not leave it open.
+    //
+    // PP2 — the intended count is fixed before any send, and checked after.
+    const intended = result.recipients.length;
+    let reached = 0;
     for (const to of result.recipients) {
       const sent = await deps.send(cancellationEmail({
         to, route: result.departure.route, dateLabel: dateLabel(result.departure),
       })).catch(() => ({ ok: false }));
-      if (sent?.ok) notified += 1;
+      if (sent?.ok) { reached += 1; notified += 1; }
     }
-    log(line + `  [cancelled, ${result.recipients.length} traveller(s) emailed]`);
+    log(line + `  [cancelled, ${result.pledgesCancelled} booking(s) released]`);
+    if (!reportNotifications({ intended, sent: reached, context: `  #${dep.id}`, log, error: logError })) {
+      shortfalls += 1;
+    }
   }
 
-  if (!dryRun) log(`cancelled ${cancelled}, emails sent ${notified}`);
-  return { candidates: candidates.length, cancelled, notified };
+  if (!dryRun) {
+    log(`cancelled ${cancelled}, emails sent ${notified}`);
+    if (shortfalls) {
+      logError(
+        `${shortfalls} departure(s) were cancelled WITHOUT reaching every traveller on them. `
+        + "This is not a quiet zero — somebody was not told."
+      );
+    }
+  }
+  return { candidates: candidates.length, cancelled, notified, shortfalls };
 }
 
 // Run as a script (npm run job:cancel-unconfirmed) rather than imported.
 const isCli = process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url;
 if (isCli) {
   runCancelUnconfirmed({ dryRun: DRY_RUN })
-    .then(() => pool.end())
+    .then(async ({ shortfalls }) => {
+      await pool.end();
+      // A cancelled departure whose travellers were not all reached is a
+      // failure, not a completed run. Cron and anything watching exit codes
+      // must see it.
+      if (shortfalls) process.exit(1);
+    })
     .catch((e) => {
       console.error("cancel-unconfirmed failed:", e.message);
       process.exit(1);

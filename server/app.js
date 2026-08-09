@@ -43,6 +43,7 @@ import {
 } from "./seo.js";
 import { emitDepartureSync, unavailableDates } from "./autoura-sync.js";
 import { tourSlug, tourPath } from "./slug.js";
+import { cancelDepartureAndPledges, reportNotifications, CANCEL_REASONS } from "./departure-cancel.js";
 
 import { BRAND } from "./brand.js";
 import { startJobScheduler, jobSchedulerEnabled, cancelJobDryRun } from "./jobs/scheduler.js";
@@ -1960,32 +1961,54 @@ app.patch("/api/admin/tour-products/:id", requireAuth, requireRole("super_admin"
 
 // Admin: cancel a departure (platform staff).
 app.post("/api/admin/departures/:id/cancel", requireAuth, requireRole("super_admin", "ops_staff"), h(async (req, res) => {
-  const departure = await withTransaction(async (c) => {
+  // PP5 / PP2.2 — the same helper the job uses. The date and its pledges change
+  // together, and the recipient list is read BEFORE either.
+  //
+  // This route is where the PP2 failure would actually have bitten: it read
+  // recipients AFTER the transaction, filtered on `status <> 'cancelled'`. Add
+  // the pledge transition without moving that read and the list is empty every
+  // time — nobody is told, and there is no scheduler log to notice it in.
+  const { departure, recipients, pledgesCancelled } = await withTransaction(async (c) => {
     const dep = await loadDeparture(c, Number(req.params.id), { forUpdate: true });
     if (!dep) throw new AppError(404, "Departure not found.");
-    await c.query(`UPDATE departures SET status='cancelled' WHERE id=$1`, [dep.id]);
-    return loadDeparture(c, dep.id);
+    const result = await cancelDepartureAndPledges(c, dep.id);
+    return { departure: await loadDeparture(c, dep.id), ...result };
   });
-  await logAudit(req, { action: "departure.cancel", entity: "departure", entityId: departure.id, detail: { route: departure.route } });
+  await logAudit(req, {
+    action: "departure.cancel", entity: "departure", entityId: departure.id,
+    detail: {
+      route: departure.route,
+      cancelledReason: CANCEL_REASONS.DATE_CANCELLED,
+      pledgesCancelled,
+      notifying: recipients.length,
+    },
+  });
   const dateLabel = departure.startDate ? `${departure.startDate} – ${departure.endDate}` : departure.date;
-  // MM1 — `status <> 'cancelled'` is the whole point of this line.
-  //
-  // Without it, a traveller who had cancelled their own booking was still on
-  // the list, and was emailed about a date they were no longer on. Same defect
-  // class as the booking page telling a cancelled traveller to meet the guide:
-  // a message addressed to a named individual, stating something untrue about
-  // their booking, which they may act on.
-  //
-  // The job's own recipient list (jobs/cancel-unconfirmed.js) already filtered
-  // correctly. These two — the older code — did not.
-  const recips = await pool.query(
-    `SELECT DISTINCT customer_email FROM pledges
-      WHERE departure_id=$1 AND customer_email IS NOT NULL AND status <> 'cancelled'`,
-    [departure.id]
-  );
-  for (const row of recips.rows) sendEmail(cancellationEmail({ to: row.customer_email, route: departure.route, dateLabel })).catch(() => {});
+
+  // PP2.1 — a human did this and will not read a cron log, so the shortfall has
+  // to be visible where they are. It is reported in the response as well as
+  // logged: "cancelled, nobody notified" must never look like "cancelled".
+  let reached = 0;
+  for (const to of recipients) {
+    const sent = await sendEmail(cancellationEmail({ to, route: departure.route, dateLabel }))
+      .catch(() => ({ ok: false }));
+    if (sent?.ok) reached += 1;
+  }
+  const notificationsClean = reportNotifications({
+    intended: recipients.length, sent: reached,
+    context: `departure ${departure.id} cancelled`,
+  });
+
   emitDepartureSync(departure.id);
-  res.json({ departure: presentDeparture(departure, req.user) });
+  res.json({
+    departure: presentDeparture(departure, req.user),
+    pledgesCancelled,
+    notified: reached,
+    notificationsIntended: recipients.length,
+    // The caller is told plainly rather than left to compare two numbers.
+    notificationWarning: notificationsClean ? null
+      : `${recipients.length - reached} traveller(s) on this departure were not reached. They have not been told it is cancelled.`,
+  });
 }));
 
 // Upload a tour image. Open to platform staff AND agency users, since agencies
