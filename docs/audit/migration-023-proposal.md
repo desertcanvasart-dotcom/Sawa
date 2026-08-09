@@ -1,0 +1,282 @@
+# QQ4 — Migration 023: everything that must be captured at write time
+
+**9 August 2026. Proposal. Nothing built, nothing applied.**
+
+`pledges` holds **0 rows** — confirmed against production while writing this.
+That is the asset, and it is temporary. This document exists so the schema
+decisions that depend on it are taken **once, as one piece**, rather than
+accumulated after the first booking makes half of them impossible.
+
+---
+
+## The filter — QQ1
+
+A field goes in **only if both hold**:
+
+1. **Capturable only at write time.** It cannot be reconstructed later.
+2. **Already committed** in an approved plan. Not anticipated — committed.
+
+Applied honestly, the filter rejects two of the six candidates and admits one on
+a different argument. That is reported rather than smoothed over: a filter that
+never excludes anything is decoration.
+
+| Candidate | 1. unrecoverable? | 2. committed? | Verdict |
+|---|---|---|---|
+| `pledges.cancelled_reason` | ✅ | ✅ PP1 | **in** |
+| Attribution on `pledges` (D3) | ✅ | ✅ D3 | **in** |
+| Consent capture (QQ2.2) | ✅ | ✅ KK5 | **in** |
+| `blog_posts.status` CHECK | ❌ | ✅ | **in, on a different argument** — see below |
+| Operator verification fields (C2, P4.1) | ❌ | ✅ | **out** |
+| Anchor flags on `departures` (D1) | ❌ | ✅ | **out** |
+
+---
+
+## ✅ In
+
+### 1. `pledges.cancelled_reason`
+
+**Why it cannot wait.** `'cancelled'` is one value covering two different
+events: *the traveller cancelled* and *the date was cancelled under them*. LL3
+spent real effort keeping those apart on the read side. Collapsed at the data
+layer, "12 cancellations" means nothing until someone joins `audit_log` to find
+out which kind — and `audit_log` records the **departure** being cancelled, not
+which pledges were on it at the time.
+
+Added after real bookings exist, the backfill is a guess about which
+cancellations were whose choice. It cannot be recovered because it was never
+written.
+
+```sql
+ALTER TABLE pledges ADD COLUMN IF NOT EXISTS cancelled_reason TEXT;
+ALTER TABLE pledges ADD COLUMN IF NOT EXISTS cancelled_at TIMESTAMPTZ;
+-- NULL is the normal case: a pledge that has not been cancelled has no reason.
+-- The constraint therefore permits NULL and constrains only the values.
+ALTER TABLE pledges ADD CONSTRAINT pledges_cancelled_reason_chk
+  CHECK (cancelled_reason IS NULL OR cancelled_reason IN
+    ('traveler', 'date_cancelled', 'minimum_not_reached', 'admin', 'operator'));
+```
+
+| value | written by |
+|---|---|
+| `minimum_not_reached` | `jobs/cancel-unconfirmed.js` `cancelOne()` — the unattended path |
+| `date_cancelled` | `POST /api/admin/departures/:id/cancel` — a human cancels the date |
+| `traveler` | `DELETE /api/public/departures/:id/bookings/:pledgeId` |
+| `admin` | `PATCH /api/admin/bookings/:id` when staff set `cancelled` |
+| `operator` | reserved — no path writes it yet, and none should until one exists |
+
+`operator` is declared and unwritten deliberately. Adding a permitted value
+later is an `ALTER … DROP CONSTRAINT` plus an `ADD` on a table that will by then
+hold real rows; declaring it now costs nothing. **It must not appear in any UI
+until something writes it** — an empty category rendered as a filter is the
+"coming soon data that renders as if real" the ground rules prohibit.
+
+`cancelled_at` is included because it has the same property: the moment a
+booking was cancelled is not recoverable from `created_at`, and `audit_log`
+records the departure event rather than the row.
+
+---
+
+### 2. Attribution on `pledges` — D3
+
+**The strongest candidate on the list.** A booking's origin exists for exactly
+one instant. Reconstructed afterwards it is not attribution, it is a guess, and
+the bookings that most need it are the earliest ones — the evidence the content
+programme works *before* there is enough volume to see it in aggregate.
+
+**What already exists**, so this does not duplicate it:
+
+- `pledges.ref_code` — partner/affiliate widget code (`?ref=CODE`), migration 011
+- `pledges.source` — how it was created: `admin`, `public`, `public_request`
+
+Neither answers "which article sent this person".
+
+```sql
+ALTER TABLE pledges ADD COLUMN IF NOT EXISTS origin_article   TEXT;
+ALTER TABLE pledges ADD COLUMN IF NOT EXISTS first_touch_at   TIMESTAMPTZ;
+ALTER TABLE pledges ADD COLUMN IF NOT EXISTS first_touch_path TEXT;
+ALTER TABLE pledges ADD COLUMN IF NOT EXISTS last_touch_at    TIMESTAMPTZ;
+ALTER TABLE pledges ADD COLUMN IF NOT EXISTS last_touch_path  TEXT;
+ALTER TABLE pledges ADD COLUMN IF NOT EXISTS referral_source  TEXT;
+ALTER TABLE pledges ADD COLUMN IF NOT EXISTS referral_brand   TEXT;
+
+CREATE INDEX IF NOT EXISTS idx_pledges_origin_article ON pledges(origin_article);
+CREATE INDEX IF NOT EXISTS idx_pledges_first_touch    ON pledges(first_touch_at);
+```
+
+**Deliberately NOT constrained by a foreign key** to `blog_posts`. An article can
+be deleted or its slug changed, and losing the attribution of a real booking
+because a post was renamed is worse than a dangling reference. The slug is
+recorded as the historical fact it is.
+
+`referral_brand` names the sister brand (Travel2Egypt, Sillage Égypte, Afford
+Egypt, Capital Travel Service) where the visit originated. Free text rather than
+an enum: the brand list is a commercial fact that changes without a migration,
+and a CHECK here would make adding a brand a database change.
+
+#### ⚠️ This is personal data, and it is the reason QQ2.2 is not optional
+
+Touch paths and timestamps tied to a named booker are behavioural data about an
+identified person. **Do not build the write paths for this without the consent
+fields below and a privacy-policy line describing it.** The columns can land in
+this migration; the writes cannot land without that. Recorded here so the two do
+not get separated.
+
+---
+
+### 3. Consent — QQ2.2
+
+Same property as `cancelled_reason`: it exists only at the moment of the write.
+Added afterwards, consent cannot be proven for existing rows, and the early
+alerts list — the one the content programme depends on — becomes unmailable.
+
+```sql
+ALTER TABLE pledges ADD COLUMN IF NOT EXISTS marketing_consent      BOOLEAN;
+ALTER TABLE pledges ADD COLUMN IF NOT EXISTS marketing_consent_at   TIMESTAMPTZ;
+ALTER TABLE pledges ADD COLUMN IF NOT EXISTS marketing_consent_text TEXT;
+ALTER TABLE pledges ADD COLUMN IF NOT EXISTS lawful_basis           TEXT;
+
+ALTER TABLE pledges ADD CONSTRAINT pledges_lawful_basis_chk
+  CHECK (lawful_basis IS NULL OR lawful_basis IN ('consent', 'contract', 'legitimate_interest'));
+```
+
+`marketing_consent` is deliberately **nullable, with no default**. Three states
+are needed and they must not collapse: *given*, *refused*, and *never asked*. A
+`DEFAULT false` would turn every existing row into a refusal, which is a
+different claim from having no record.
+
+`marketing_consent_text` stores the exact wording shown at the moment of
+consent. This is the part that is genuinely unrecoverable: proving consent means
+proving **what** was agreed to, and the copy will change.
+
+**The alerts table (KK5) is not designed here**, per QQ2.2 — but it must carry
+the same four fields, and it should be created in the same migration so the two
+cannot drift. Its shape is otherwise blocked on KK5, which is later in the order.
+
+---
+
+### 4. `blog_posts.status` — admitted on a different argument
+
+**It fails test 1**, and I am not going to pretend otherwise: nothing is
+captured, and the constraint could be added at any time.
+
+The argument for including it is different, and weaker, so it is stated
+plainly:
+
+- The column is unconstrained today, which is why `'published'` and `'draft'`
+  sit in `check:status-literals` as `APPLICATION_ONLY` exceptions. Every
+  exception in that list is a place the schema is not the authority.
+- Production holds **one row, `published`** — verified. The constraint is safe
+  now and gets riskier with every post written.
+
+```sql
+ALTER TABLE blog_posts ADD CONSTRAINT blog_posts_status_chk
+  CHECK (status IN ('draft', 'published'));
+```
+
+If you would rather hold the migration to fields that pass both tests, drop
+this one — it is genuinely separable.
+
+---
+
+## ❌ Out — and why, since both were named
+
+### Operator verification fields (C2, P4.1)
+
+Licence number, ETAA registration, insurance expiry, last-verified date,
+founding-partner flag.
+
+**Fails test 1.** Every one of these is a durable fact about a company that can
+be entered at any time — a licence number does not stop being knowable. Nothing
+is lost by adding the columns the day the operator profile template is built.
+
+They are committed, so they will be needed. They are not *urgent*, and the empty
+window is not what makes them cheap.
+
+**One caveat.** `last_verified_at` has a whiff of test 1 about it, because a
+verification performed and not recorded is not recoverable. But no verification
+is being performed today — P4 has slipped, `/verification-standard` does not
+exist, and P1.6's condition was never met. **There is nothing to capture yet.**
+Add it with the process, not before it.
+
+### Anchor flags on `departures` (D1)
+
+`is_anchor`, `anchor_month`.
+
+**Fails test 1.** An anchor date is an editorial decision made by an admin, in a
+UI, whenever they choose. Marking a departure as an anchor next month records
+exactly the same fact as marking it today.
+
+It is committed (D1, P3.5) and it will be needed before content publishes. It
+belongs with the admin toggle that sets it, in the migration that ships that
+feature.
+
+---
+
+## 🚫 Excluded on principle — QQ3
+
+**No payment schema.** Not deposit state, not transaction records, not refund
+state, not gateway identifiers.
+
+This is not a deferral on cost. Legal question 1 asks whether a marketplace
+collecting payment for Egyptian tours requires its own Ministry or ETAA
+registration. If the answer is that Sawa may not hold the funds, then payment
+schema is not merely premature — **it encodes a model that may be prohibited,
+and it reads as intent.**
+
+Schema is a statement about what the system is designed to do. A future auditor
+reading `pledges.gateway_transaction_id` will not find a comment explaining that
+nobody had decided yet.
+
+The empty-table argument is strong and it does not apply here. It is a reason to
+capture what cannot be recaptured, not a reason to build ahead of a decision
+that has not been made.
+
+**Legal question 1 now gates this migration's boundary as well as answer #3.**
+
+---
+
+## What becomes impossible if this is deferred
+
+| Deferred field | What is lost, permanently |
+|---|---|
+| `cancelled_reason` | Which cancellations were the traveller's choice and which were Sawa's. Churn becomes unreadable, and the distinction LL3 protects on the read side has nothing behind it. |
+| Attribution | Every booking taken before the migration is unattributable — and they are the ones the content programme most needs, because early evidence cannot be recovered from aggregate volume later. |
+| Consent | Consent cannot be proven for existing rows. The early alerts list becomes unmailable, which is the list KK5 exists to build. |
+| `blog_posts` CHECK | Nothing permanent. Only riskier, one post at a time. |
+
+---
+
+## The migration, and how to run it
+
+**Migration 023.** One file, `server/db/schema_023_write_time_capture.sql`,
+registered in `server/db/migrate.js` like every other. Idempotent — `IF NOT
+EXISTS` on every column, and the `pg_constraint` guard used by 021 and 022 on
+every constraint.
+
+**Migrations do not run on deploy** (B5). After merging, run by hand:
+
+```bash
+DATABASE_URL=<production> npm run db:migrate
+```
+
+Safe on current data, verified against production while writing this:
+
+- `pledges` holds **0 rows** — every new column and constraint is trivially
+  satisfied.
+- `blog_posts` holds **1 row**, status `published` — inside the proposed CHECK.
+
+**Nothing writes any of these columns in this migration.** Adding a column and
+adding the code that fills it are separate changes, and shipping them together
+would mean a schema change and a behaviour change reviewed as one. The write
+paths follow, per field, in the work that needs them — and for attribution, not
+before the consent fields and the privacy-policy line exist.
+
+---
+
+## Recommendation
+
+Take all four. If you want the migration to hold only fields that pass both
+tests, drop the `blog_posts` constraint — it is the one that does not, and it is
+the one that separates cleanly.
+
+**Nothing here is built or applied.**
