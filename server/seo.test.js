@@ -176,48 +176,6 @@ test("robots.txt: declares the sitemap", () => {
 
 // ---- sitemap.xml -----------------------------------------------------------
 
-test("sitemap.xml: uses the real sitemaps.org namespace", async () => {
-  // Regression: this read "http://www.sitemap.org/..." (no "s"), which is not
-  // the sitemap protocol namespace — the document was invalid and could be
-  // rejected wholesale.
-  const xml = await sitemapXml();
-  assert.ok(
-    xml.includes('xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"'),
-    "sitemap must declare the sitemaps.org namespace"
-  );
-  assert.ok(!xml.includes("www.sitemap.org"), "the sitemap.org typo must not come back");
-});
-
-test("sitemap.xml: is structurally well formed", async () => {
-  const xml = await sitemapXml();
-  assert.match(xml, /^<\?xml version="1\.0" encoding="UTF-8"\?>/);
-  assert.match(xml, /<\/urlset>\s*$/);
-  const opens = (xml.match(/<url>/g) || []).length;
-  const closes = (xml.match(/<\/url>/g) || []).length;
-  const locs = (xml.match(/<loc>/g) || []).length;
-  assert.equal(opens, closes);
-  assert.equal(opens, locs);
-  assert.ok(locs > 0, "sitemap should not be empty");
-});
-
-test("sitemap.xml: includes the commercially important routes", async () => {
-  // The three catalogue surfaces (/itineraries, /departures, /goahead) plus
-  // the pages advertised in llms.txt as core.
-  const xml = await sitemapXml();
-  for (const path of ["/itineraries", "/departures", "/goahead", "/how-it-works", "/booking", "/faq", "/blog", "/contact"]) {
-    assert.ok(xml.includes(`<loc>https://sawa.tours${path}</loc>`), `sitemap missing ${path}`);
-  }
-});
-
-test("sitemap.xml: every loc is absolute and XML-escaped", async () => {
-  const xml = await sitemapXml();
-  for (const [, loc] of xml.matchAll(/<loc>([^<]*)<\/loc>/g)) {
-    assert.match(loc, /^https?:\/\//, `relative loc: ${loc}`);
-    assert.ok(!/[<>"]/.test(loc), `unescaped character in loc: ${loc}`);
-    assert.ok(!loc.includes("&") || /&(amp|lt|gt|quot|#\d+);/.test(loc), `raw ampersand in loc: ${loc}`);
-  }
-});
-
 // ---- llms.txt --------------------------------------------------------------
 
 test("llms.txt: leads with the brand and lists the core pages", () => {
@@ -251,11 +209,3 @@ test("iso drops unparseable values rather than emitting invalid XML content", ()
   for (const v of ["not-a-date", "0000-00-00", {}, NaN]) assert.equal(iso(v), null);
 });
 
-test("the static portion of the sitemap carries no lastmod", async () => {
-  // Nothing on disk gives an honest per-page modified date — a deploy rewrites
-  // every file mtime — so the marketing pages deliberately have none. Only
-  // database-backed URLs (tours, packages, posts) can claim one.
-  const xml = await sitemapXml();
-  assert.ok(xml.includes("<loc>"), "sitemap should still list the static pages");
-  assert.equal(xml.includes("<lastmod>"), false);
-});

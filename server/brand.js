@@ -18,8 +18,13 @@ export const BRAND = {
   // wordmark on white.
   image: "https://sawa.tours/images/hero.jpg",
   positioning: "Shared departures, confirmed together.",
+  // This said day tours and packages "are guaranteed to run", which is the
+  // claim the whole sweep exists to remove — and it was the worst-placed copy
+  // of it on the site. One string, three outputs: the /about meta description,
+  // the JSON-LD Organization description, and llms.txt. Google and the AI
+  // engines were reading it directly.
   description:
-    "Sawa is a Cairo-based shared-tour platform. We pool small bookings from independent travellers onto the same date, so day tours and multi-day packages across Egypt are guaranteed to run — you hold a seat for free and only pay once your departure is confirmed (GoAhead).",
+    "Sawa is a Cairo-based shared-tour platform. We pool small bookings from independent travellers onto the same date, so day tours and multi-day packages across Egypt reach the numbers they need to run — you hold a seat for free and only pay once your departure is confirmed (GoAhead).",
   foundingDate: "", // TODO e.g. "2024"
   founders: [], // TODO e.g. [{ name: "…", jobTitle: "Founder" }]
   email: "hello@sawa.tours",

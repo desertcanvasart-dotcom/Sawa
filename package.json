@@ -14,10 +14,17 @@
     "db:sanitize-html": "node server/db/sanitize-existing-html.js",
     "job:cancel-unconfirmed": "node server/jobs/cancel-unconfirmed.js",
     "test": "node --test server/ src/",
-    "build": "vite build",
+    "build": "node scripts/sync-constants.js && vite build",
     "start": "node server/app.js",
     "preview": "vite preview --host 0.0.0.0",
-    "sync:partials": "node scripts/sync-partials.js"
+    "sync:partials": "node scripts/sync-partials.js",
+    "sync:constants": "node scripts/sync-constants.js",
+    "check:constants": "node scripts/sync-constants.js --check",
+    "smoke": "node scripts/smoke-routes.js",
+    "audit:claims": "node scripts/audit-claims.js",
+    "preflight": "npm run check:constants && npm run audit:repo-truth && npm test && npm run smoke && npm run audit:claims",
+    "audit:repo-truth": "node scripts/audit-repo-truth.js",
+    "test:integration": "node --test server/seo-sitemap.integration.mjs"
   },
   "engines": {
     "node": ">=20"

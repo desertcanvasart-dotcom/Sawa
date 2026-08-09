@@ -1,22 +1,28 @@
 // Pure business rules: pricing, status, deposits. No DB, no HTTP — easy to test.
 import { zonedDateTimeToUtc } from "./tz.js";
 
-export const DEFAULT_GO_AHEAD = 4;
 export const DEFAULT_DAY_TOUR_DEPOSIT = 10;
 export const DEFAULT_PACKAGE_DEPOSIT = 20;
 
 // The booking conditions say "every Sawa departure runs with a minimum of 4 and
 // a maximum of 12 travelers", and the how-it-works page says the same. That is
 // a term of the contract, not a default, so nothing may publish a date that
-// exceeds it. Changing this number means changing those pages too.
-export const MAX_GROUP_SIZE = 12;
+// exceeds it — and a listing may require MORE than four (the card shows "2 of 6
+// joined", so nothing is hidden) but never fewer.
+//
+// Both now come from shared/group-size.js and are re-exported here, so every
+// existing `import { MAX_GROUP_SIZE } from "./domain.js"` keeps working. They
+// moved because the React app could not import this module — domain.js imports
+// tz.js, tz.js reads process.env, and the browser has no process — so the SPA
+// carried its own copy of the number and the two were free to drift apart.
+export { DEFAULT_GO_AHEAD, MAX_GROUP_SIZE } from "../shared/group-size.js";
+import { DEFAULT_GO_AHEAD, MAX_GROUP_SIZE } from "../shared/group-size.js";
 
-// The other end of the same sentence. A date that confirms below four breaks
-// the promise in the direction that matters to a traveller: they booked
-// expecting to share the trip with at least three other people, and a minimum
-// of two would run it with one. A listing may require MORE than four — the
-// card shows "2 of 6 joined", so nothing is hidden — but never fewer.
-export const MIN_GROUP_SIZE = 4;
+// MIN_GROUP_SIZE is the floor a listing may not go below, which is the same
+// number as the default threshold. Named separately because they mean different
+// things: one is what a date confirms at unless told otherwise, the other is
+// what no date may confirm below.
+export const MIN_GROUP_SIZE = DEFAULT_GO_AHEAD;
 
 // Returns an error string, or null when the capacity is publishable.
 export function capacityError(minSeats, maxSeats) {

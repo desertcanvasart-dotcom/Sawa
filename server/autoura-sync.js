@@ -30,9 +30,21 @@ const syncConfigured = () => !!(process.env.AUTOURA_SYNC_URL && process.env.AUTO
 
 const sign = (secret, t, body) => createHmac("sha256", secret).update(`${t}.${body}`).digest("hex");
 
-// Pure: enriched departure -> the wire payload. Returns null for states
-// that must not be mirrored (pending_review is Sawa-internal).
-export function buildDeparturePayload(dep) {
+// Pure: departure INVENTORY -> the wire payload. Returns null for states that
+// must not be mirrored (pending_review is Sawa-internal).
+//
+// Y2.1 — this used to take the enriched departure, pledges and all, and read a
+// single integer off it via seatsTotal(). The rows it was handed carry customer
+// names, emails, phones and booking codes, so exporting personal data to an
+// external system was one field away, added in good faith, with nothing at the
+// call site to suggest it was a boundary.
+//
+// It now receives seatsTaken already counted and never holds a pledge. A field
+// added here cannot leak a traveller's details because those details are not in
+// scope — structural impossibility rather than a guard that has to keep being
+// right. The test that pins the field list stays as a second line.
+export function buildDeparturePayload(inventory) {
+  const dep = inventory;
   if (!dep || dep.status === "pending_review") return null;
   return {
     brand: BRAND(),
@@ -48,7 +60,7 @@ export function buildDeparturePayload(dep) {
       city: dep.city || null,
       minSeats: Number(dep.minSeats) || 4,
       maxSeats: Number(dep.maxSeats) || 12,
-      seatsTaken: seatsTotal(dep.pledges || []),
+      seatsTaken: Number(dep.seatsTaken) || 0,
       status: dep.status,
       priceFrom: Number(dep.livePrice) || Number(dep.publishedRate) || null,
       currency: "USD",
@@ -56,15 +68,31 @@ export function buildDeparturePayload(dep) {
   };
 }
 
-async function loadEnriched(departureId) {
+// Loads the departure and reduces it to INVENTORY before returning.
+//
+// The pledge rows never leave this function. They are counted here and the
+// count is what travels onward, so nothing downstream — this module's payload
+// builder or anything added to it later — is holding personal data it could
+// accidentally serialise.
+async function loadInventory(departureId) {
   const { pool } = await import("./db/index.js");
   const dep = await pool.query("SELECT * FROM departures WHERE id=$1", [departureId]);
   if (!dep.rows.length) return null;
   const pledges = await pool.query(
-    "SELECT * FROM pledges WHERE departure_id=$1 ORDER BY created_at ASC, id ASC",
+    "SELECT status, seats FROM pledges WHERE departure_id=$1 ORDER BY created_at ASC, id ASC",
     [departureId]
   );
-  return enrichDeparture(mapDeparture(dep.rows[0], pledges.rows));
+  const enriched = enrichDeparture(mapDeparture(dep.rows[0], pledges.rows));
+  const seatsTaken = seatsTotal(enriched.pledges || []);
+  return {
+    id: enriched.id, route: enriched.route, type: enriched.type,
+    date: enriched.date, startDate: enriched.startDate, endDate: enriched.endDate,
+    time: enriched.time, city: enriched.city,
+    minSeats: enriched.minSeats, maxSeats: enriched.maxSeats,
+    status: enriched.status, livePrice: enriched.livePrice,
+    publishedRate: enriched.publishedRate,
+    seatsTaken,
+  };
 }
 
 async function postWithRetry(payload) {

@@ -12,6 +12,7 @@ import { BRAND, ORG_ID, SITE_ID, travelAgencySchema, websiteSchema } from "./bra
 // hand. Three hand-written copies of a URL is three chances for the warmer to
 // warm a URL the catalogue does not link to.
 import { tourSlug, tourPath } from "./slug.js";
+import { GROUP_MAX_WORD } from "../shared/group-size.js";
 import { cleanHtml } from "./sanitize.js";
 
 const esc = (s) => String(s == null ? "" : s)
@@ -40,19 +41,49 @@ function breadcrumb(items) {
   };
 }
 
-// ---- Static page meta ----
-const STATIC = {
-  "/": {
-    title: `${BRAND.name} — ${BRAND.positioning}`,
-    description: "Shared day tours and multi-day packages across Cairo, Luxor and Aswan. Hold a seat free; you only pay once your date is confirmed to run.",
-  },
+// ---- Default meta ----
+//
+// The fallback title and description for any route that reaches buildHead()
+// without an entry in STATIC — every tour page, package page and blog post
+// before its own metadata is resolved, and the 404 screen.
+//
+// This used to be STATIC["/"], read as `STATIC["/"].title`. Deleting that entry
+// as an unreachable route config took the defaults with it: buildHead threw on
+// every SPA route, each fell back to the bare shell, and /itineraries, /blog
+// and /booking served no title, no description and no JSON-LD at all. The
+// source still parsed and all 176 tests still passed — only fetching the routes
+// showed it.
+//
+// Named for what it does, so it can no longer be mistaken for the config of a
+// route that does not use it.
+export const DEFAULTS = {
+  title: `${BRAND.name} — ${BRAND.positioning}`,
+  description: "Shared day tours and multi-day packages across Cairo, Luxor and Aswan. Hold a seat free; you only pay once your date is confirmed to run.",
+};
+
+// ---- Meta for the SPA routes ----
+//
+// ONLY these three routes consume this map: /itineraries, /booking and /blog.
+// They are the public routes with no file in /site, so they are the only ones
+// that reach buildHead() at all.
+//
+// Everything else the public can see — /, /about, /contact, /faq,
+// /how-it-works, /privacy, /terms, /cookies, /departures, /goahead,
+// /goahead-promise, /operators, /verify, /widget and every /destinations page —
+// is a hand-written file in /site, served straight off disk with its own
+// <title> and <meta description>. To change one of those, edit that file.
+//
+// Seven entries used to sit here for routes in that second list. They rendered
+// nowhere. That is worse than clutter: a claim gets "corrected" here while the
+// served string sits untouched in the HTML, and the next audit finds the fixed
+// copy and moves on. It happened — the /how-it-works title was corrected under
+// P1.5 and was never on the site.
+//
+// Exported so scripts/audit-claims.js can compare every entry against what the
+// route actually serves and fail if one stops being consumed; --json reports
+// `deadConfig`.
+export const STATIC = {
   "/itineraries": { title: `Egypt Tour Itineraries — Day Tours & Packages | ${BRAND.name}`, description: "Browse every Sawa itinerary: shared Egypt day tours and multi-day packages. Open one to join a forming date or start your own — every date is confirmed before you pay.", crumb: "Itineraries" },
-  "/how-it-works": { title: `How Sawa Works — Guaranteed Shared Tours | ${BRAND.name}`, description: "How Sawa's GoAhead model works: join a forming date or start your own, the group fills, and your departure is guaranteed before you pay a deposit.", crumb: "How it works" },
-  "/about": { title: `About Sawa Tours — Shared Departures in Egypt | ${BRAND.name}`, description: BRAND.description, crumb: "About" },
-  "/contact": { title: `Contact ${BRAND.name}`, description: "Reach Sawa Tours on WhatsApp or email. We reply within two hours, 9am–9pm Cairo time.", crumb: "Contact" },
-  "/faq": { title: `FAQ — Booking, GoAhead & Cancellations | ${BRAND.name}`, description: "Answers about holding a seat, what GoAhead means, payment, meeting points and cancellations for Sawa shared tours.", crumb: "FAQ" },
-  "/privacy": { title: `Privacy Policy | ${BRAND.name}`, description: "How Sawa Tours collects, uses and protects your information.", crumb: "Privacy" },
-  "/terms": { title: `Terms of Service | ${BRAND.name}`, description: "The terms for booking shared tours with Sawa, including the GoAhead model, payment and cancellations.", crumb: "Terms" },
   "/booking": { title: `Check Your Booking | ${BRAND.name}`, description: "Enter your booking code to see whether your Sawa departure has reached GoAhead.", crumb: "Booking" },
   "/blog": { title: `Blog — Notes from the Nile | ${BRAND.name}`, description: "Guides, history and practical tips for travelling Egypt the shared way, from the people who run the tours.", crumb: "Blog" },
 };
@@ -216,13 +247,12 @@ export async function buildHead(pathname) {
   const path = clean(pathname);
   const url = BRAND.url + (path === "/" ? "" : path);
   const graph = [travelAgencySchema(), websiteSchema()];
-  let m = { title: STATIC["/"].title, description: STATIC["/"].description, ogType: "website", ogImage: DEFAULT_OG, noindex: false, extraMeta: "" };
+  let m = { title: DEFAULTS.title, description: DEFAULTS.description, ogType: "website", ogImage: DEFAULT_OG, noindex: false, extraMeta: "" };
   const crumbs = [{ name: "Home", url: BRAND.url }];
 
   if (STATIC[path]) {
     m = { ...m, ...STATIC[path] };
     if (STATIC[path].crumb) crumbs.push({ name: STATIC[path].crumb, url });
-    if (path === "/") graph.push({ "@type": "WebPage", url, name: m.title, description: m.description, isPartOf: { "@id": SITE_ID } });
   } else if (/^\/(tour|package)\/[^/]+$/.test(path)) {
     // Tours and packages both live in tour_products, so the same schema builder
     // covers both. (Packages were previously falling through to "Page not found".)
@@ -530,7 +560,7 @@ export async function buildBody(pathname) {
     deps.forEach((d) => byProduct.set(d.productId, (byProduct.get(d.productId) || 0) + 1));
     return wrapBody(`
 <h1>Egypt tour itineraries — shared day tours &amp; packages</h1>
-<p>Every itinerary Sawa runs, operated by Ministry-licensed Egyptian operators. Open one to join a forming date or start your own. Every date is confirmed (GoAhead) at its minimum travellers; you only pay once it confirms. Dates already filling are on <a href="/departures">the departures board</a>; confirmed trips are on <a href="/goahead">the GoAhead board</a>.</p>
+<p>Every itinerary Sawa runs is operated by an Egyptian travel company licensed by the Ministry of Tourism and registered with ETAA. Open one to join a forming date or start your own. Each date shows exactly how many travellers it needs to confirm — that moment is the GoAhead — and no Sawa group ever goes above ${GROUP_MAX_WORD}. You pay nothing until your date confirms. Dates already filling are on <a href="/departures">the departures board</a>; confirmed trips are on <a href="/goahead">the GoAhead board</a>.</p>
 <ul>${catalogueListHtml(rows, byProduct)}</ul>`);
   }
 
@@ -548,7 +578,7 @@ ${BRAND.description}
 - [Itineraries](/itineraries): browse every shared day tour and multi-day package we run.
 - [Departures](/departures): dates currently forming — each already has travellers aboard and shows live seat counts.
 - [GoAhead departures](/goahead): dates confirmed to run (four or more travellers) that can still be joined.
-- [How it works](/how-it-works): the GoAhead model — join a forming date or start your own, hold a seat free, and the date is guaranteed before you pay.
+- [How it works](/how-it-works): the GoAhead model — join a forming date or start your own, hold a seat free, and the date is confirmed before you pay.
 - [Blog](/blog): guides, history and travel tips for Egypt.
 - [About](/about): who Sawa is and why shared departures.
 - [Contact](/contact): WhatsApp and email; replies within two hours.

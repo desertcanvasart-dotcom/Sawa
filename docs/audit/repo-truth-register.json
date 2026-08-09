@@ -1,0 +1,46 @@
+{
+  "reviewed": {
+    "57ef14eafc46": {
+      "where": "server/domain.js:160",
+      "text": "pending_review: traveler-requested, not yet approved by ops \u2014 never",
+      "verdict": "AGREES",
+      "contradicts": null,
+      "note": "pending_review departures are excluded from the anonymous bootstrap payload and from buildBody. Verified in rendered output: no pending_review row reaches a public surface."
+    },
+    "19313a38cc25": {
+      "where": "docs/PACKAGES_ASSESSMENT.md:37",
+      "text": "The unique value of Sawa is **pooled pricing**: when multiple small agencies (or direct travellers) book seats on the same day tour, the **price per person drops automatically** as the group grows. When the group hits a minimum (currently hard-coded to **4 seats**), the tour is guaranteed to run (\"G",
+      "verdict": "CONTRADICTS",
+      "contradicts": "the corrected GoAhead model (B1) and the removed guarantee language",
+      "note": "Says the minimum is 'hard-coded to 4 seats' and the tour is 'guaranteed to run'. Both are wrong now: min_seats is per product with a floor of 4 (schema_022), and 'guaranteed' was removed sitewide under P1.5. Internal strategy doc, not public \u2014 no live claim depends on it, but it is the document a writer would reach for."
+    },
+    "bbd0ebac2d0e": {
+      "where": "docs/production-readiness/10-decisions-needed.md:10",
+      "text": "Right now deposits are shown but not *collected* online. Do you want real payment collection (card/Fawry/etc.) in this build, or do agencies keep settling payment off-platform for now? *(Adds significant scope and compliance if in.)*",
+      "verdict": "CONFIRMED",
+      "contradicts": "the deposit displays inventoried in V1.3",
+      "note": "Duplicate of the PRODUCTION_READINESS_ASSESSMENT statement, in the decisions register."
+    },
+    "af0d41f2a9b1": {
+      "where": "docs/STATUS.md:12",
+      "text": "Phase 5 \u2014 Email** | Invite, booking-confirmation, GoAhead, cancellation. Log-mode; real delivery one env var away. |",
+      "verdict": "STALE",
+      "contradicts": null,
+      "note": "Says email is in log-mode. It is NOT: email_log shows 26 'logged' rows all dated on or before 24 Jul 2026, one 'sent' on 6 Aug 2026, and ZERO non-sent rows after that. Delivery is live in production. Had this been trusted as ground truth it would have produced a confident false report that confirmation emails are not delivered. The 14 logged booking_confirmations belong to test bookings since purged \u2014 pledges is empty \u2014 so no real traveller is affected."
+    },
+    "2ca7745dc873": {
+      "where": "docs/RUNBOOK.md:64",
+      "text": "> is requested, no processor is integrated and no authorisation hold is placed.\"",
+      "verdict": "AGREES",
+      "contradicts": null,
+      "note": "Reviewed under W1.3; no public claim depends on it."
+    },
+    "3cd051dfbc8a": {
+      "where": "docs/RUNBOOK.md:75",
+      "text": "`docs/STATUS.md` says email runs in log-mode. It does not \u2014 production has been",
+      "verdict": "AGREES",
+      "contradicts": null,
+      "note": "Reviewed under W1.3; no public claim depends on it."
+    }
+  }
+}

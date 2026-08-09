@@ -464,9 +464,17 @@
 .sx .book{background:var(--paper);padding:9px;border-radius:var(--r-xl);border:1px solid rgba(255,255,255,.7);box-shadow:var(--shadow-amb);scroll-margin-top:96px}
 .sx .book-in{background:var(--paper);border-radius:calc(var(--r-xl) - 9px);overflow:hidden}
 .sx .book-top{padding:24px 24px 22px;border-bottom:1px solid var(--line)}
-.sx .book-price{display:flex;align-items:baseline;gap:8px}
+/* wrap: the two P1.3 lines below sit on their own rows under the figure,
+   rather than trailing after "USD / person" on the baseline. */
+.sx .book-price{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
 .sx .book-price b{font-family:'Fraunces',serif;font-weight:600;font-size:2.4rem;color:var(--teal);letter-spacing:-.02em;line-height:1}
 .sx .book-price span{font-size:.92rem;color:var(--muted)}
+.sx .book-price .book-promise,
+.sx .book-price .book-threshold{flex-basis:100%;font-size:.83rem;line-height:1.5}
+/* The ceiling is the marketed promise, so it carries the brand colour and the
+   weight. The threshold under it is information, not a claim. */
+.sx .book-price .book-promise{margin-top:10px;color:var(--teal);font-weight:600}
+.sx .book-price .book-threshold{color:var(--muted)}
 .sx .go-status{display:flex;align-items:center;gap:9px;margin-top:16px;font-size:.86rem;color:var(--teal);font-weight:600}
 .sx .go-status .pill{display:inline-flex;align-items:center;gap:7px;font-size:.66rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--teal);background:var(--gold);padding:5px 11px;border-radius:999px}
 .sx .go-status .pill.form{background:rgba(23,50,58,.08);color:var(--teal-700)}

@@ -1,0 +1,27 @@
+#!/bin/sh
+# Blocks a commit when the unit suite is red.
+#
+# The rule "a failing test is a stop, not a commit" was stated, agreed, and then
+# broken anyway (d24d6cb, committed at 182/183). The response to that is not more
+# care — it is that the commit cannot happen. Same principle as loadInventory():
+# the personal columns do not leave Postgres, so no future change can export
+# them. Structural impossibility over vigilance.
+#
+# Only the UNIT suite runs here. It no longer touches a network, so this costs
+# about a second. The integration suite (npm run test:integration) needs the
+# database and is not a commit-time concern.
+#
+# Enabled by `git config core.hooksPath .githooks`, which is checked in via
+# docs/RUNBOOK.md. To bypass in a genuine emergency: git commit --no-verify —
+# and say so in the commit message.
+if ! npm test --silent >/tmp/sawa-precommit.log 2>&1; then
+  echo "pre-commit: unit suite FAILED — commit blocked."
+  echo
+  grep -E "^not ok" -A 6 /tmp/sawa-precommit.log | head -30
+  grep -E "^# (tests|pass|fail)" /tmp/sawa-precommit.log
+  echo
+  echo "Full output: /tmp/sawa-precommit.log"
+  echo "Do not re-run to diagnose — read that file. A fresh run is a different run."
+  exit 1
+fi
+exit 0

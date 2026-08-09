@@ -9,7 +9,7 @@
 | **Phase 1 — Reliability** | PostgreSQL (Supabase) + Express, transactions, row-locking. Oversell test passed. |
 | **Phase 2 — Auth & tenancy** | Supabase Auth, 4 roles, role-gated dashboards, tenant isolation. 9/9 E2E. |
 | **Phase 3 — Staff/agency mgmt** | Owners manage workers; admin creates agencies + owners. 7/7 E2E. |
-| **Phase 5 — Email** | Invite, booking-confirmation, GoAhead, cancellation. Log-mode; real delivery one env var away. |
+| **Phase 5 — Email** | Invite, booking-confirmation, GoAhead, cancellation. **Live delivery via Resend.** *Verified against runtime 2026-08-09: `email_log` holds 26 `logged` rows all dated on or before 24 Jul 2026, one `sent` row on 6 Aug 2026, and zero non-sent rows after it.* |
 | **Phase 6 — Hardening** | Audit log, rate limiting, helmet, CORS, 13/13 unit tests. |
 | **Admin dashboard** | Left-nav: Overview / Tours & Packages / Departures / Bookings / Agencies / Activity. |
 | **Add tour / package** | Full editor (incl. itinerary + hotel tiers) in the dashboard. Verified. |
@@ -17,7 +17,7 @@
 
 ## Still missing — needs YOU
 1. **Rotate the leaked Supabase keys + DB password** (shared in chat). Do before launch.
-2. **Turn on real email** — add `RESEND_API_KEY` + `EMAIL_FROM` (verified domain) to `.env`.
+2. ~~Turn on real email~~ — **done.** `RESEND_API_KEY` and `EMAIL_FROM` are set in production; first live send 6 Aug 2026. *Verified against runtime 2026-08-09.*
 3. **Production hosting** — deploy to Railway (app) against the Supabase DB.
 
 ## Still missing — small build items

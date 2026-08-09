@@ -31,35 +31,23 @@ import "./redesign.css";
 import { supabase, apiFetch, API_BASE } from "./supabaseClient";
 import { tourSlug } from "../server/slug.js";
 import { toDate } from "./dates.js";
+// The booking conditions, from the one place they are declared. This file used
+// to carry its own `const DEFAULT_GO_AHEAD = 4`, free to drift from the server
+// that enforces it and from the twenty static pages that state it.
+import { DEFAULT_GO_AHEAD, MAX_GROUP_SIZE, GROUP_MAX_WORD, numberWord } from "../shared/group-size.js";
 // Lazy-loaded so the heavy authenticated portal (admin desk + TipTap editor)
 // is split out of the public bundle and never downloaded by visitors.
 const LoginGate = lazy(() => import("./LoginGate").then((m) => ({ default: m.LoginGate })));
 const AdminDashboard = lazy(() => import("./AdminDashboard").then((m) => ({ default: m.AdminDashboard })));
 const AgencyDashboard = lazy(() => import("./AgencyDashboard").then((m) => ({ default: m.AgencyDashboard })));
 
-const DEFAULT_GO_AHEAD = 4;
 
-const reviews = [
-  {
-    name: "Marta Llorente",
-    location: "Valencia, Spain",
-    trip: "Cairo Pyramids · May 2026",
-    text: "We joined a confirmed Cairo date instead of paying for a private car. Pickup was on time, the guide knew every corner of Giza, and the shared price stayed fair the whole way.",
-  },
-  {
-    name: "Daniel Krüger",
-    location: "Munich, Germany",
-    trip: "Luxor East Bank · May 2026",
-    text: "The GoAhead status made the decision easy. We knew the tour was running before we booked anything else for the day.",
-  },
-  {
-    name: "Nora Al-Hashimi",
-    location: "Abu Dhabi, UAE",
-    trip: "Aswan Philae · May 2026",
-    text: "Good shared transport and no confusing WhatsApp back-and-forth. The agency confirmed our seats within the hour.",
-  },
-];
-
+// Three named traveller quotes lived here — Valencia, Munich, Abu Dhabi, each
+// against a named trip in May 2026. No traveller has ever been on a Sawa
+// departure: the pledges table has never held a row. They were invented to
+// dress a design and there is nothing to reinstate them from, so they are gone
+// rather than commented out.
+//
 const articles = [
   {
     title: "Why shared tours usually get cancelled, and how we fix it",
@@ -1479,7 +1467,12 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
                 <span className="f"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /></svg><b>{goAhead}–{tour.maxSeats}</b> travellers</span>
                 <span className="dot" />
                 <span className="f"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M3 11l19-9-9 19-2-8-8-2z" /></svg>{cityLabel}</span>
-                {tour.quality ? (<><span className="dot" /><span className="rating"><span className="stars" aria-label={`${tour.quality} of 5`}>{[0, 1, 2, 3, 4].map((i) => <SxStar key={i} />)}</span><b style={{ color: "var(--teal)" }}>{Number(tour.quality).toFixed(1)}</b><span style={{ color: "var(--muted)", fontSize: ".86rem" }}>· verified travellers</span></span></>) : null}
+                {/* A star rating labelled "verified travellers" used to render here from
+                    tour_products.quality — seeded values of 4.7 and 4.9 on a platform
+                    that has taken zero bookings. There is no reviews table, so nothing
+                    could evidence where the number came from or who gave it.
+                    A rating returns when there are retained records behind it and a
+                    stated source, per the amended acceptance criteria. */}
               </div>
             </div>
             <div className="share-row">
@@ -1557,31 +1550,30 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
                 </section>
               )}
 
-              <section className="sec rv">
-                <h2>Your operator</h2>
-                <div className="op-card"><div className="op-inner">
-                  <div className="op-logo">{(tour.guide || "Sawa").charAt(0)}</div>
-                  <div className="op-meta">
-                    <span className="vr"><SxCheck />Verified operator</span>
-                    <h3>{tour.guide || "Licensed Egyptian operator"}</h3>
-                    <p>Vetted by Sawa · {tour.vehicle || "inspected transport"} · small shared groups</p>
-                  </div>
-                  <SpaLink navigate={navigate} to="/about" className="btn plain">About Sawa<span className="chip" aria-hidden="true"><SxArrow /></span></SpaLink>
-                </div></div>
-              </section>
-
-              <section className="sec rv">
-                <h2>What travellers said</h2>
-                <div className="rev-grid">
-                  {[["Yara Mansour", "YM", "We were two and worried the trip would fall through. Sawa filled it and the date locked a week before. The guide knew every carving by name."], ["Tom Eberhardt", "TE", "Small group, no rushing, and far nicer than the price suggested. Booking through Sawa was painless."]].map(([nm, av, txt]) => (
-                    <div className="review" key={nm}>
-                      <div className="top"><span className="av">{av}</span><div><b>{nm}</b><span>Verified traveller</span></div></div>
-                      <div className="stars">{[0, 1, 2, 3, 4].map((i) => <SxStar key={i} />)}</div>
-                      <p>“{txt}”</p>
+              {/* "Your operator" used to render tour.guide as the operating company,
+                  under a "Verified operator" badge and the line "Vetted by Sawa".
+                  Every live product has guide = "Licensed Egyptologist" — a job
+                  description, not a company — so the card named a verified operator
+                  that does not exist, and the badge rendered whether or not there was
+                  anything behind it.
+                  It returns with the operator record in P2.3-R/P4.2, where the name,
+                  the ETAA registration and the verification date come from a row.
+                  Until then the honest thing is what the guide field can actually
+                  support: who is leading the tour. No badge, no company name, and
+                  nothing at all if the field is empty — never a fallback string
+                  standing in for missing data. */}
+              {tour.guide ? (
+                <section className="sec rv">
+                  <h2>Your guide</h2>
+                  <div className="op-card"><div className="op-inner">
+                    <div className="op-meta">
+                      <h3>{tour.guide}</h3>
+                      <p>Every Sawa departure is run by an Egyptian travel company licensed by the Ministry of Tourism and Antiquities. The company responsible for this departure is named before you book.</p>
                     </div>
-                  ))}
-                </div>
-              </section>
+                    <SpaLink navigate={navigate} to="/about" className="btn plain">About Sawa<span className="chip" aria-hidden="true"><SxArrow /></span></SpaLink>
+                  </div></div>
+                </section>
+              ) : null}
 
               <section className="sec rv" style={{ borderBottom: 0, marginBottom: 0 }}>
                 <h2>Good to know</h2>
@@ -1597,7 +1589,16 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
               <div className="book rv">
                 <div className="book-in">
                   <div className="book-top">
-                    <div className="book-price"><b className="tnum">${pp}</b><span>USD / person</span></div>
+                    {/* P1.3 — the ceiling is universal and is the promise worth
+                        marketing, so it sits against the price on every tour and
+                        package. The threshold beside it is per product and comes
+                        from the record, never from copy: this listing may confirm
+                        at more than the default. */}
+                    <div className="book-price">
+                      <b className="tnum">${pp}</b><span>USD / person</span>
+                      <span className="book-promise">Never more than {GROUP_MAX_WORD}. Ever.</span>
+                      <span className="book-threshold">This date confirms at {numberWord(goAhead)} traveller{goAhead === 1 ? "" : "s"}.</span>
+                    </div>
                     <div className="go-status">{reqMode
                       ? (<><span className="pill form"><span className="d" />New date</span> Your day — travellers join you</>)
                       : (<><span className={`pill${confirmed ? "" : " form"}`}><span className="d" />{confirmed ? "GoAhead" : "Forming"}</span> {confirmed ? "Confirmed — this date is running" : `${Math.max(0, goAhead - booked)} more to confirm`}</>)}</div>
@@ -1793,7 +1794,7 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
               <div className="assur rv">
                 <div className="a"><span className="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7l8-4Z" /><path d="M9 12l2 2 4-4" /></svg></span><div><b>You only pay if it runs</b><span>Funds held until GoAhead.</span></div></div>
                 <div className="a"><span className="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /></svg></span><div><b>Small, real groups</b><span>Shared departures, one guide.</span></div></div>
-                <div className="a"><span className="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><path d="M22 4 12 14.01l-3-3" /></svg></span><div><b>Verified operator</b><span>Licensed &amp; vetted by Sawa.</span></div></div>
+                <div className="a"><span className="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><path d="M22 4 12 14.01l-3-3" /></svg></span><div><b>Licensed Egyptian operator</b><span>Ministry of Tourism licensed, ETAA registered.</span></div></div>
               </div>
             </aside>
           </div>
@@ -2039,7 +2040,7 @@ function PublicSite({
             <section className="how reveal" id="how-it-works">
               <div className="how-head">
                 <SectionHeading kicker="How Sawa works" title="Your date is confirmed before you pay a cent." />
-                <p className="how-lead">Sawa pools small bookings into one shared group. You hold a seat for free; once enough travellers join the same date, it is guaranteed to run.</p>
+                <p className="how-lead">Sawa pools small bookings into one shared group. You hold a seat for free; once enough travellers join the same date, it is confirmed to run.</p>
               </div>
               <div className="how-grid">
                 <article className="how-step">
@@ -2054,7 +2055,7 @@ function PublicSite({
                 </article>
                 <article className="how-step is-go">
                   <span className="how-num">03</span>
-                  <h3>It runs, guaranteed</h3>
+                  <h3>It runs — confirmed.</h3>
                   <p>At minimum seats we confirm the guide and vehicle and take your deposit. If it never fills, you pay nothing.</p>
                 </article>
               </div>
@@ -2107,34 +2108,13 @@ function PublicSite({
               </div>
             </section>
 
-            <section className="reviews2 reveal" id="reviews">
-              <aside className="reviews2-aside">
-                <p className="reviews2-kicker">After the tour ran</p>
-                <h2>Travellers who actually went.</h2>
-                <div className="reviews2-rating">
-                  <span className="reviews2-num">4.9</span>
-                  <span className="reviews2-stars" aria-label="4.9 out of 5">★★★★★</span>
-                  <span className="reviews2-meta">from 312 confirmed travellers</span>
-                </div>
-                <ul className="reviews2-trust">
-                  <li><Users size={17} /> Small groups, never crowded</li>
-                  <li><ShieldCheck size={17} /> Verified, licensed operators</li>
-                  <li><CalendarDays size={17} /> Real departures, confirmed before you pay</li>
-                </ul>
-              </aside>
-              <div className="reviews2-quotes">
-                {reviews.map((review) => (
-                  <figure className="reviews2-quote" key={review.name}>
-                    <span className="reviews2-stars" aria-label="5 out of 5">★★★★★</span>
-                    <blockquote>{review.text}</blockquote>
-                    <figcaption>
-                      <strong>{review.name}</strong>
-                      <span>{review.location} · {review.trip}</span>
-                    </figcaption>
-                  </figure>
-                ))}
-              </div>
-            </section>
+            {/* A review wall stood here: "4.9 ★★★★★ from 312 confirmed travellers",
+                headed "Travellers who actually went", above named five-star quotes.
+                The pledges table has never held a row, so no traveller has been on a
+                Sawa departure and none of it could be evidenced.
+                It was already unreachable — this branch does not render — but it
+                shipped in the bundle and was one conditional away from being live
+                again, so it goes rather than staying as something to rediscover. */}
           </>
         )}
       </section>
@@ -2536,7 +2516,11 @@ function ToursPage({ navigate, customerCalendars, cityStats, selectedCity, setSe
       <PageHead
         eyebrow="Itineraries"
         title="Every Sawa itinerary, on one page."
-        lead="The full catalogue of shared day tours and multi-day packages. Open any itinerary to join a forming date or start your own — you only pay once a date reaches GoAhead. Dates already filling live on the departures board."
+        // The ceiling is the universal promise and is rendered from the
+        // constant; the threshold is per product and is never stated here,
+        // because it is not the same number on every itinerary. Each card and
+        // each date carries its own.
+        lead={`Every itinerary Sawa runs is operated by an Egyptian travel company licensed by the Ministry of Tourism and registered with ETAA. Open one to join a forming date or start your own. Each date shows exactly how many travellers it needs to confirm — that moment is the GoAhead — and no Sawa group ever goes above ${GROUP_MAX_WORD}. You pay nothing until your date confirms.`}
       />
 
       <div className="tours-toolbar reveal in">
@@ -2595,7 +2579,7 @@ function HowItWorksPage({ navigate, customerSummary }) {
   const steps = [
     { n: "01", t: "Hold a seat, free", d: "Pick a date and reserve your spot with no card and no deposit. You're simply joining the group that's forming for that day." },
     { n: "02", t: "The group fills", d: "As more travellers book the same date, it moves toward GoAhead. The shared cost of the guide and vehicle is split across everyone, so the price stays fair." },
-    { n: "03", t: "It runs — guaranteed", d: "Once the minimum number of travellers is reached, we confirm the guide and transport and take your deposit. If a date never fills, you pay nothing." },
+    { n: "03", t: "It runs — confirmed.", d: "Once the minimum number of travellers is reached, we confirm the guide and transport and take your deposit. If a date never fills, you pay nothing." },
   ];
   return (
     <div className="page-wrap">
@@ -2627,7 +2611,7 @@ function HowItWorksPage({ navigate, customerSummary }) {
       <section className="how2-trust reveal in">
         <div className="how2-trust-item"><Users size={20} /><div><strong>Small groups</strong><span>Shared, never crowded — a real guide, not a mega-bus.</span></div></div>
         <div className="how2-trust-item"><ShieldCheck size={20} /><div><strong>Verified operators</strong><span>Licensed Egyptian guides and checked vehicles on every trip.</span></div></div>
-        <div className="how2-trust-item"><BadgeCheck size={20} /><div><strong>No payment until confirmed</strong><span>You're only charged once the date is guaranteed to run.</span></div></div>
+        <div className="how2-trust-item"><BadgeCheck size={20} /><div><strong>No payment until confirmed</strong><span>You're only charged once the date is confirmed to run.</span></div></div>
       </section>
 
       <PageCTA navigate={navigate} note={`${customerSummary?.goAheadDates ?? 0} groups going ahead right now`} />
@@ -2642,13 +2626,13 @@ function AboutPage({ navigate, customerSummary }) {
       <PageHead
         eyebrow="About Sawa"
         title="Shared departures, confirmed together."
-        lead="Sawa is a Cairo-based shared-tour platform. We connect independent travellers heading the same way on the same day, so small bookings become real, guaranteed group departures across Egypt."
+        lead="Sawa is a Cairo-based shared-tour platform. We connect independent travellers heading the same way on the same day, so small bookings become real, confirmed group departures across Egypt."
       />
 
       <section className="about-lead reveal in">
         <div className="about-lead-text">
           <h2>Why we built it</h2>
-          <p>Booking a day tour in Egypt usually means two bad options: pay a premium for a private car, or book a cheap group tour that quietly gets cancelled when not enough people sign up. Sawa fixes the second problem. By pooling bookings from multiple agencies and travellers into one shared group, a date only needs a handful of people to become guaranteed — and everyone shares a fair price.</p>
+          <p>Booking a day tour in Egypt usually means two bad options: pay a premium for a private car, or book a cheap group tour that quietly gets cancelled when not enough people sign up. Sawa fixes the second problem. By pooling bookings from multiple agencies and travellers into one shared group, a date only needs a handful of people to be confirmed — and everyone shares a fair price.</p>
           <p>You hold your seat for free and watch the group fill in real time. The moment it reaches GoAhead, the guide and vehicle are locked in. You only pay when the trip is real.</p>
         </div>
         <aside className="about-stats">
@@ -2741,7 +2725,7 @@ const FAQ_GROUPS = [
   {
     title: "GoAhead & how it works",
     items: [
-      { q: "What does GoAhead mean?", a: "GoAhead means a date has reached the minimum travellers, so the guide and vehicle are booked and the departure is guaranteed to run." },
+      { q: "What does GoAhead mean?", a: "GoAhead means a date has reached the minimum travellers, so the guide and vehicle are booked and the departure is confirmed to run." },
       { q: "Can a confirmed tour still be cancelled?", a: "Once a date is GoAhead we don't cancel it for low numbers. In rare cases of safety or weather, we'll rebook or refund you." },
     ],
   },
