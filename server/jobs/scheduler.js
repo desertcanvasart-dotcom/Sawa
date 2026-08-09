@@ -39,6 +39,34 @@ export function jobSchedulerEnabled(env = process.env) {
   return env.NODE_ENV === "production" || env.ENABLE_JOB_SCHEDULER === "1";
 }
 
+// BB3 — the scheduled run is DRY BY DEFAULT.
+//
+// This is the only code path that emails a traveller without a human action,
+// and production is confirmed running it: /api/modes reports scheduler: on with
+// email: live. A departure that misses its deadline is cancelled and everyone
+// on it is emailed — copy that currently describes a refund which cannot occur,
+// because no payment is ever taken.
+//
+// So the default is inverted from the usual. Going live is an explicit act:
+//
+//   CANCEL_JOB_DRY_RUN=0   the job cancels and emails
+//   anything else          it logs exactly what it WOULD do, and does neither
+//
+// Chosen this way round because the failure modes are not symmetric. A dry run
+// that should have been live leaves stale departures on the board, visible and
+// fixable. A live run that should have been dry sends mail to real people, and
+// that cannot be taken back.
+//
+// The manual path is unchanged: `DRY_RUN=1 npm run job:cancel-unconfirmed` still
+// works, and a human running it without that flag still gets a live run. This
+// governs the unattended, scheduled tick only.
+//
+// Revert to live when the cancellation copy is settled (AA3) and seeded data has
+// been through at least one tick.
+export function cancelJobDryRun(env = process.env) {
+  return env.CANCEL_JOB_DRY_RUN !== "0";
+}
+
 async function runSafely(name, fn) {
   const started = Date.now();
   try {
@@ -57,9 +85,10 @@ export function startJobScheduler(env = process.env) {
     return null;
   }
 
+  const dryRun = cancelJobDryRun(env);
   const tick = () => runSafely("cancel-unconfirmed", async (opts) => {
     const { runCancelUnconfirmed } = await import("./cancel-unconfirmed.js");
-    return runCancelUnconfirmed(opts);
+    return runCancelUnconfirmed({ ...opts, dryRun });
   });
 
   const first = setTimeout(tick, FIRST_RUN_DELAY_MS);
@@ -70,5 +99,8 @@ export function startJobScheduler(env = process.env) {
   repeat.unref();
 
   console.log(`[jobs] scheduler on — cancel-unconfirmed in ${FIRST_RUN_DELAY_MS / 1000}s, then every 24h`);
+  console.log(dryRun
+    ? "[jobs] cancel-unconfirmed is DRY-RUN — it will log what it would cancel and email, and do neither. Set CANCEL_JOB_DRY_RUN=0 to go live."
+    : "[jobs] cancel-unconfirmed is LIVE — it will cancel departures and email travellers.");
   return () => { clearTimeout(first); clearInterval(repeat); };
 }

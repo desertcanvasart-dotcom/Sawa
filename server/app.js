@@ -41,7 +41,7 @@ import {
 import { emitDepartureSync, unavailableDates } from "./autoura-sync.js";
 import { tourSlug } from "./slug.js";
 import { BRAND } from "./brand.js";
-import { startJobScheduler, jobSchedulerEnabled } from "./jobs/scheduler.js";
+import { startJobScheduler, jobSchedulerEnabled, cancelJobDryRun } from "./jobs/scheduler.js";
 import { TOUR_TIMEZONE } from "./tz.js";
 import { cleanHtml, cleanItinerary } from "./sanitize.js";
 import { canonicalRedirect } from "./canonical.js";
@@ -345,6 +345,10 @@ function resolvedModes() {
   return {
     email: process.env.RESEND_API_KEY ? "live" : "log",
     scheduler: jobSchedulerEnabled() ? "on" : "off",
+    // Whether the scheduled cancel job would actually cancel and email, or only
+    // log what it would do. The distinction matters more than "scheduler: on":
+    // that says the job runs, this says whether it can reach a traveller.
+    cancelJob: jobSchedulerEnabled() ? (cancelJobDryRun() ? "dry-run" : "live") : "off",
     autoura: process.env.AUTOURA_SYNC_URL && process.env.AUTOURA_SYNC_SECRET ? "on" : "off",
     trustProxy: trustProxyRaw !== "false" && trustProxyRaw !== "0" ? "on" : "off",
     canonicalHost: process.env.CANONICAL_HOST ? "on" : "off",
