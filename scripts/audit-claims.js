@@ -57,8 +57,22 @@ export const RULES = [
     re: /\b\d{1,3}\s*(?:yrs|years)\s*(?:operating|in business|of experience)/gi },
   { id: "availability", why: "must be ONE string from ONE config value; four contradictory ones were live",
     re: /24\/7|24 hours a day|around the clock|within (?:two|2) hours|9\s*am\s*[–-]\s*9\s*pm/gi },
-  { id: "verified-operator", why: "must never render as a fallback where operator data is absent",
-    re: /verified operators?|verified travell?ers?|verified by/gi },
+  // HH1 — this flags "verified" as a STATUS, not the word.
+  //
+  // The distinction matters twice over. /verification-standard, when it
+  // publishes, has to use the correct verb to describe what it does — a blanket
+  // string ban makes its own subject unspeakable. And a rule that flags true
+  // statements ("we verify this licence with the Ministry before approval" is a
+  // concrete, checkable action) teaches people to write around it, which is how
+  // a check stops being read.
+  //
+  // So: a badge, a filter value, an attribute, a thing an operator BECOMES —
+  // flagged. A verb describing an action Sawa performs — not flagged.
+  { id: "verified-status", why: "'verified' as a status implies a published standard; there is none until /verification-standard exists",
+    re: /\bverified\s+(?:operators?|travell?ers?|partners?|compan(?:y|ies)|guides?)\b|\bbecome\s+(?:a\s+)?verified\b|\bget\s+verified\b|\bgold\s+shield\b|\bverification\s+(?:badge|shield|status|standard)\b|\bvetted\b/gi,
+    // "we verify / verifies / verifying <thing> with <authority>" is an action,
+    // not a badge. So is a link to the standard once it exists.
+    ok: (ctx) => /\b(?:we|sawa|they)\s+verif|verif\w+\s+(?:it|this|them|documents?|licen[cs]es?)\s+with\b|verification-standard/i.test(ctx) },
   { id: "seed-operator", why: "seed records were purged; no placeholder operator may appear anywhere",
     re: /Nile Gate Travel|Cairo Discovery|LuxWay Tours|Heritage Desk|Lotus Day Trips|Nile Valley Travel|Aswan Heritage Tours/gi },
   // Company-SHAPED, not a fixed list. The seed purge failed because it checked

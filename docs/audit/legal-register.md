@@ -37,6 +37,27 @@ question.
 "not a tour operator"; whether the entity needs its own registration before
 collecting payment; the wording of the P2.1-R footer disclosure.
 
+### ⚠️ This question may already have settled client answer #3
+
+Client answer #3 — the post-GoAhead payment model — has been tracked throughout
+as a **product decision**: does money move offline through the operator, or is a
+gateway built?
+
+**It may not be the client's decision to make.** If a marketplace collecting
+payment for Egyptian tours requires its own Ministry or ETAA registration, then
+whether Sawa *may hold the money at all* is settled by law, and the product
+choice is constrained by it — possibly eliminated.
+
+The difference is between building a payment gateway and discovering afterwards
+that Sawa cannot legally hold the funds that pass through it.
+
+**So answer #3 is reclassified: provisionally blocked on this question, not a
+free product decision.**
+
+**No payment integration work should begin until this is answered.** That
+includes schema for payment state, gateway selection and any change to the
+deposit displays that assumes money will be collected on-platform.
+
 **Status:** open since the Phase 0 decisions.
 
 ---
@@ -150,11 +171,31 @@ says the opposite.
 
 | # | Question | Exposure now | Blocks |
 |---|---|---|---|
-| 1 | Marketplace licensing | Low — no payment collected | Footer disclosure, payment launch |
+| 1 | Marketplace licensing | Low today — **but may govern answer #3** | Footer disclosure, **all payment work** |
 | 2 | Organiser status | **Highest** — packages are on sale | Terms §2/§13/§15 |
 | 3 | Rating display | None — nothing displayed | Reviews schema |
 | 4 | Autoura disclosure | Low — inventory only | A privacy policy line |
 | 5 | Entity disclosure | Site currently states the pre-change position | All of Phase 2 |
 
-**#2 is the one to send first.** It is the only question where the current live
-position could be wrong and a consumer could already be relying on it.
+## Send 1 and 2 together
+
+**#2 is the most urgent** — the only question where the current live position
+could be wrong and a consumer could already be relying on it.
+
+**#1 must go with it, and not merely for efficiency.** Until it is answered, the
+client is being asked to decide something the law may have already decided.
+Sequencing them apart risks the payment model being chosen, built, and then
+constrained.
+
+### Dependency
+
+```
+Legal Q1 (marketplace licensing)
+        └── constrains or determines ──> Client answer #3 (payment model)
+                                                └── gates ──> deposit displays,
+                                                              refund copy,
+                                                              payment schema
+```
+
+Client answer #3 is **provisionally blocked on legal question 1**, not open for
+decision.
