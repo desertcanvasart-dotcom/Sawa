@@ -83,7 +83,7 @@ export const DEFAULTS = {
 // route actually serves and fail if one stops being consumed; --json reports
 // `deadConfig`.
 export const STATIC = {
-  "/itineraries": { title: `Egypt Tour Itineraries — Day Tours & Packages | ${BRAND.name}`, description: "Browse every Sawa itinerary: shared Egypt day tours and multi-day packages. Open one to join a forming date or start your own — every date is confirmed before you pay.", crumb: "Itineraries" },
+  "/itineraries": { title: `Egypt Tour Itineraries — Day Tours & Packages | ${BRAND.name}`, description: "Every Sawa itinerary: shared Egypt day tours and multi-day packages. Join a date that's forming or start your own — nothing is charged until it confirms.", crumb: "Itineraries" },
   "/booking": { title: `Check Your Booking | ${BRAND.name}`, description: "Enter your booking code to see whether your Sawa departure has reached GoAhead.", crumb: "Booking" },
   "/blog": { title: `Blog — Notes from the Nile | ${BRAND.name}`, description: "Guides, history and practical tips for travelling Egypt the shared way, from the people who run the tours.", crumb: "Blog" },
 };
