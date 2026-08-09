@@ -187,6 +187,50 @@ and `DRY_RUN=1` still makes it dry. This governs the unattended tick only.
 
 ---
 
+## A gate that cannot be passed will be routed around
+
+XX2. The pre-commit hook blocked every commit under Node 22, not only red ones.
+I switched Node versions to get past it and carried on.
+
+That is the benign version of `--no-verify`: nothing was bypassed, the suite did
+run, the commit was legitimate. **And the gate was left broken behind me.** The
+next person hits the same wall with less patience.
+
+**The route-around is usually invisible in the diff.** Nothing in that commit
+recorded that the hook had failed or why; the only trace was a sentence in the
+report. A gate that has been quietly worked around looks exactly like a gate
+that is working.
+
+**Rule:** when a gate blocks something it should not, fixing the gate is the
+task — not getting past it. If getting past it is unavoidable, say so in the
+commit message, because that is where the next person will find out it is a
+known problem rather than their own.
+
+---
+
+## A verification is evidence about the runtime it ran on
+
+XX1.3. Every test result in this project until #80 was produced on Node 20 —
+a runtime the server cannot boot on. The ad-hoc verifications were split across
+both, and nothing recorded which was which, so establishing what still held
+meant reconstructing every command from the transcript.
+
+See `docs/audit/runtime-of-record.md` for that reconstruction. It should not
+need doing twice.
+
+**Rule:** record the runtime alongside the result — in audit documents and in
+commit messages — so an environment change makes the affected evidence findable
+rather than invisible. `npm test` now prints `# node <version>`, and
+`check:node` fails `preflight` early so a mismatch surfaces as itself rather
+than as failing tests.
+
+Priority when re-confirming after a runtime change: anything touching the
+database driver or connection handling, WebSocket behaviour, async ordering —
+and **anything whose result was a negative finding**, because a negative is
+precisely what a runtime difference can manufacture.
+
+---
+
 ## A qualification must meet the same evidence standard as the premise
 
 I reported "migration 023's file is in `main`" under a banner explaining that
