@@ -2,6 +2,25 @@
 
 **9 August 2026. Proposal. Nothing built, nothing applied.**
 
+> ## ⚠️ SS3.2 — Merging is not applying
+>
+> Merging this ships a **file**. It does not touch the database. Someone must
+> run the command against production:
+>
+> ```bash
+> DATABASE_URL=<production> npm run db:migrate
+> ```
+>
+> **Until that is run, all of the following remain false:**
+>
+> - `pledges.cancelled_reason` and `cancelled_at` do not exist
+> - the attribution columns do not exist
+> - the consent columns do not exist
+> - the `blog_posts.status` constraint is not enforced
+>
+> **Any code written against them before it runs is an outage**, not a bug. This
+> is the B5 trap in its exact shape, and it reads as done when it is not.
+
 `pledges` holds **0 rows** — confirmed against production while writing this.
 That is the asset, and it is temporary. This document exists so the schema
 decisions that depend on it are taken **once, as one piece**, rather than
@@ -296,6 +315,41 @@ adding the code that fills it are separate changes, and shipping them together
 would mean a schema change and a behaviour change reviewed as one. The write
 paths follow, per field, in the work that needs them — and for attribution, not
 before the consent fields and the privacy-policy line exist.
+
+---
+
+## SS2 — when this lands, split the question rather than flipping the precedence
+
+`cancelled_reason` closes a real imprecision: a traveller who cancelled their
+own booking **before** the date later died currently reads *"this date didn't
+reach the four travelers it needed"* — true, but it implies the date's failure
+rather than their choice.
+
+**The fix must not be a reversal of LL3's ordering.** One ordering is currently
+answering two different questions, and they have different correct answers:
+
+| Question | What decides it |
+|---|---|
+| **Is this date running?** | The **departure's** status, always. This is LL3 and it must not weaken. |
+| **Why is this person not on it?** | The **pledge's** reason, when it has one. |
+
+An implementation that simply asks the pledge first brings LL3's defect back in
+a new form: a traveller holding an **active** booking on a cancelled date would
+be told about their pledge state instead of the cancellation — which is the
+original bug with the polarity reversed.
+
+The shape that works:
+
+```
+if departure is cancelled  -> the date is not running   (LL3, unchanged)
+     and if the pledge's own reason is `traveler`
+         -> add that they had already cancelled, without
+            changing what the date's status says
+```
+
+Recorded here, while the reasoning is available. **An implementation written
+later from a one-line note will collapse the two questions**, because collapsing
+them is the shorter code.
 
 ---
 
