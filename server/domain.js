@@ -395,3 +395,42 @@ export function bookingLookupView(input) {
     note: bookingStateNote(state, goAhead),
   };
 }
+
+// ---- PP3 — the admin overview's "departures needing action" panel -----------
+//
+// Extracted from the route so it can be tested. It had no status guard at all:
+// a cancelled or closed date counted as `open`, or as `readyToConfirm` if it
+// still held seats, and `atRisk` flagged any cancelled date starting within a
+// fortnight. That is not a wrong number on a dashboard — it sends ops to chase
+// a departure that does not exist.
+//
+// Deliberately not a census. Cancelled, closed and pending_review dates are
+// dropped rather than given buckets of their own, because none of them is
+// waiting on anything this panel can prompt: pending_review is waiting on a
+// human's decision, not on travellers.
+//
+// `seatsFor` is a lookup rather than a pledge list because the caller
+// aggregates seats in SQL. The threshold comes from statusFor, so this is not a
+// third hand-written reading of "seats >= min" (NN2.1).
+export const AT_RISK_DAYS = 14;
+
+export function departureActionBuckets(rows = [], seatsFor = () => 0, nowMs = Date.now()) {
+  const buckets = { open: 0, readyToConfirm: 0, confirmed: 0, atRisk: 0, excluded: 0 };
+  for (const row of rows) {
+    if (["cancelled", "closed", "pending_review"].includes(row?.status)) {
+      buckets.excluded += 1;
+      continue;
+    }
+    const seats = Number(seatsFor(row.id)) || 0;
+    if (row.status === "supplier_confirmed") { buckets.confirmed += 1; continue; }
+    if (statusFor(row, [{ seats, status: "confirmed" }]) === "minimum_reached") {
+      buckets.readyToConfirm += 1;
+      continue;
+    }
+    buckets.open += 1;
+    const start = new Date(row.start_date || row.startDate || row.date);
+    const daysOut = (start - nowMs) / 86400000;
+    if (daysOut >= 0 && daysOut <= AT_RISK_DAYS) buckets.atRisk += 1;
+  }
+  return buckets;
+}

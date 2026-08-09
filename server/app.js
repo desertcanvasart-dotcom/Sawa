@@ -18,6 +18,8 @@ import {
   MIN_GROUP_SIZE,
   DEFAULT_GO_AHEAD,
   bookingLookupView,
+  statusFor,
+  departureActionBuckets,
 } from "./domain.js";
 import { attachUser, requireAuth, requireRole, isPlatform, isAgency, AuthError } from "./auth.js";
 import { supabaseAdmin } from "./supabase.js";
@@ -1872,19 +1874,10 @@ app.get("/api/admin/stats", requireAuth, requireRole("super_admin", "ops_staff")
     if (p.created_at && new Date(p.created_at) >= new Date(now.getTime() - 7 * 864e5)) bookingsThisWeek++;
   }
 
-  let readyToConfirm = 0, confirmed = 0, open = 0, atRisk = 0;
-  for (const d of deps.rows) {
-    const seats = seatsByDep.get(d.id) || 0;
-    const min = Math.max(1, d.min_seats || 4);
-    if (d.status === "supplier_confirmed") confirmed++;
-    else if (seats >= min) readyToConfirm++;
-    else {
-      open++;
-      const start = new Date(d.start_date || d.date);
-      const daysOut = (start - now) / 864e5;
-      if (daysOut >= 0 && daysOut <= 14 && seats < min) atRisk++;
-    }
-  }
+  // PP3 — the bucketing lives in domain.js so it can be tested; see the note
+  // there for what it used to count.
+  const { open, readyToConfirm, confirmed, atRisk } =
+    departureActionBuckets(deps.rows, (id) => seatsByDep.get(id) || 0, now.getTime());
 
   res.json({
     totals: {
