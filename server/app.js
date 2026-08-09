@@ -41,7 +41,8 @@ import {
 import { emitDepartureSync, unavailableDates } from "./autoura-sync.js";
 import { tourSlug } from "./slug.js";
 import { BRAND } from "./brand.js";
-import { startJobScheduler } from "./jobs/scheduler.js";
+import { startJobScheduler, jobSchedulerEnabled } from "./jobs/scheduler.js";
+import { TOUR_TIMEZONE } from "./tz.js";
 import { cleanHtml, cleanItinerary } from "./sanitize.js";
 import { canonicalRedirect } from "./canonical.js";
 import { injectStaticSchema } from "./static-seo.js";
@@ -320,9 +321,54 @@ function parse(schema, body) {
 
 // ============================ ROUTES ============================
 
+// X2 — the RESOLVED mode of every environment-gated behaviour.
+//
+// Eight variables change what this app does, at boot, with no code change, no
+// migration and no record. One of them — RESEND_API_KEY — flipped the system
+// from logging emails to delivering them on 6 Aug 2026, and docs/STATUS.md went
+// on saying "log-mode" for three days because nothing observes the environment.
+//
+// This makes the running configuration observable, so a check can assert it
+// instead of a document asserting it. Modes only, never values: no key
+// material, no partial keys, and nothing that reveals more than the resolved
+// state. "email: live" says mail is being delivered; it does not say by whom,
+// from what address, or with what key.
+//
+// Deliberately unauthenticated, matching the healthcheck Railway already polls.
+// The tradeoff is real — mode-only output is still reconnaissance, and it tells
+// an attacker whether the rate limiter is keyed per visitor. It is published
+// because the alternative demonstrated itself: the state nobody could see was
+// the state that drifted. If that tradeoff is unwanted, gate `modes` behind
+// requireAuth and have the smoke check authenticate; the shape does not change.
+function resolvedModes() {
+  const trustProxyRaw = process.env.TRUST_PROXY ?? (process.env.NODE_ENV === "production" ? "1" : "false");
+  return {
+    email: process.env.RESEND_API_KEY ? "live" : "log",
+    scheduler: jobSchedulerEnabled() ? "on" : "off",
+    autoura: process.env.AUTOURA_SYNC_URL && process.env.AUTOURA_SYNC_SECRET ? "on" : "off",
+    trustProxy: trustProxyRaw !== "false" && trustProxyRaw !== "0" ? "on" : "off",
+    canonicalHost: process.env.CANONICAL_HOST ? "on" : "off",
+    tourTimezone: TOUR_TIMEZONE,
+    nodeEnv: process.env.NODE_ENV || "unset",
+  };
+}
+
+// Liveness only, and deliberately nothing else. This is what Railway polls,
+// so it is unauthenticated — and an unauthenticated caller has no business
+// learning whether the rate limiter is keyed per visitor, whether an external
+// mirror is running, or whether email is live. Each of those is useful to
+// someone probing the system and to nobody else.
 app.get("/api/health", h(async (_req, res) => {
   await pool.query("SELECT 1");
   res.json({ ok: true });
+}));
+
+// The resolved configuration, behind auth. The drift argument for publishing
+// this needs VISIBILITY, not PUBLIC visibility: the smoke check reads it with
+// credentials, and every property of that argument survives while the
+// reconnaissance value does not.
+app.get("/api/modes", requireAuth, h(async (_req, res) => {
+  res.json({ modes: resolvedModes() });
 }));
 
 // Who am I (frontend uses this after login).
