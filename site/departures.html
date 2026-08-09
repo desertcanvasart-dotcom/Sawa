@@ -168,6 +168,7 @@
     </div>
   </div>
 </footer>
+<script src="/assets/rules.js"></script>
 <script src="/assets/sawa.js"></script>
 <script>
 /* Render REAL Sawa departures from the live API into the designed grid.
@@ -258,16 +259,14 @@
      itinerary pages), and confirmed dates live on /goahead.
      Mirrors isFormingDeparture/isGoAheadDeparture in server/domain.js — keep
      in sync. */
-  function seatsOf(d){
-    return (d.pledges||[]).reduce(function(s,x){
-      /* 'cancelled', two Ls — the database's spelling, not the US spelling this
-         site uses in copy. A status is a contract value. When this read
-         'canceled' the comparison never matched and cancelled bookings were
-         counted as travellers on the board. */
-      return x&&x.status==='cancelled'?s:s+(Number(x.seats||x.pax)||1);
-    },0);
-  }
-  function minOf(d,p){return Number(d.minSeats||(p&&p.minSeats))||4;}
+  /* NN2.1 — the board rules come from /assets/rules.js, generated from
+     shared/departure-state.js. This page used to carry its own copy of them,
+     and the copy had diverged: a seatless pledge row counted as one traveller,
+     and a `pax` field the database does not have was read as seats. */
+  var R=window.SawaRules;
+  function withMin(d,p){var o={};for(var k in d)o[k]=d[k];if(o.minSeats==null&&p)o.minSeats=p.minSeats;return o;}
+  function seatsOf(d){return R.seatsTotal(d.pledges);}
+  function minOf(d,p){return R.goAheadSeatsFor(withMin(d,p));}
   /* P3.3 State B — the gap, said out loud. "1 of 4 joined" leaves the reader
      to do the subtraction; this is the sentence the brief asked for. Words up
      to ten, digits past it, and never a zero: at zero the date is confirmed
@@ -284,15 +283,8 @@
       : capitalize(count(toGo,'more traveler'))+' and this date is confirmed.';
   }
   function capitalize(s){return s.charAt(0).toUpperCase()+s.slice(1);}
-  function isForming(d,p){
-    if(d.status!=='open')return false;
-    var s=seatsOf(d);
-    return s>=1&&s<minOf(d,p);
-  }
-  function isGoAhead(d,p){
-    if(d.status==='minimum_reached'||d.status==='supplier_confirmed')return true;
-    return d.status==='open'&&seatsOf(d)>=minOf(d,p);
-  }
+  function isForming(d,p){return R.isFormingDeparture(withMin(d,p));}
+  function isGoAhead(d,p){return R.isGoAheadDeparture(withMin(d,p));}
   loadData().then(function(data){
     var byId={};
     (data.tourProducts||[]).forEach(function(p){if(p.active!==false&&(!p.status||p.status==='approved'))byId[p.id]=p;});

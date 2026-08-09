@@ -835,6 +835,9 @@ section.block{padding:120px 0}
   });
 </script>
 
+<!-- The board rules, generated from shared/departure-state.js. Must load
+     before the script below, which is the only consumer. -->
+<script src="/assets/rules.js"></script>
 <script>
 /* Render REAL Sawa tours from the live API into the home "Open departures"
    section — the featured card (left) and the live board (right). Same data and
@@ -871,15 +874,10 @@ section.block{padding:120px 0}
      rule as the /departures and /goahead boards. A date with zero bookings is
      inventory and belongs on the itinerary pages, not here.
      Mirrors isFormingDeparture/isGoAheadDeparture in server/domain.js. */
-  function seatsOf(d){
-    return (d.pledges||[]).reduce(function(s,x){
-      /* 'cancelled', two Ls — the database's spelling, not the US spelling this
-         site uses in copy. A status is a contract value. When this read
-         'canceled' the comparison never matched and cancelled bookings were
-         counted as travellers on the board. */
-      return x&&x.status==='cancelled'?s:s+(Number(x.seats||x.pax)||1);
-    },0);
-  }
+  /* NN2.1 — the board rules come from /assets/rules.js, generated from
+     shared/departure-state.js. This page used to carry its own copy of them. */
+  var R=window.SawaRules;
+  function seatsOf(d){return R.seatsTotal(d.pledges);}
   /* P3.4 — the board count has exactly two end states: a real figure, or
      nothing. There is no third state that says "still trying", because a
      visitor cannot tell one that is still trying from one that has given up. */
@@ -948,11 +946,15 @@ section.block{padding:120px 0}
       if(!p)return;
       var start=d.startDate||d.date;
       if(new Date(start+'T00:00:00')<today)return;
-      if(d.status!=='open'&&d.status!=='minimum_reached'&&d.status!=='supplier_confirmed')return;
+      /* A fourth hand-written copy of the rule lived here. `confirmed` trusted a
+         STORED minimum_reached, so a date whose bookings had since been
+         cancelled still rendered as confirmed and running. */
+      var withProduct={};for(var k in d)withProduct[k]=d[k];
+      if(withProduct.minSeats==null)withProduct.minSeats=p.minSeats;
+      if(!R.isFormingDeparture(withProduct)&&!R.isGoAheadDeparture(withProduct))return;
       var joined=seatsOf(d);
-      var min=Number(d.minSeats||p.minSeats)||4;
-      var confirmed=d.status==='minimum_reached'||d.status==='supplier_confirmed'
-        ||(d.status==='open'&&joined>=min);
+      var min=R.goAheadSeatsFor(withProduct);
+      var confirmed=R.isGoAheadDeparture(withProduct);
       var isPkg=(d.type||p.type)==='package';
       /* A listing with no photos yet must not render a broken <img> with its
          alt text bleeding under the badge — fall back to the site's own hero

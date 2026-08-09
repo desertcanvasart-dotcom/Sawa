@@ -16,7 +16,17 @@ export const DEFAULT_PACKAGE_DEPOSIT = 20;
 // tz.js, tz.js reads process.env, and the browser has no process — so the SPA
 // carried its own copy of the number and the two were free to drift apart.
 export { DEFAULT_GO_AHEAD, MAX_GROUP_SIZE } from "../shared/group-size.js";
+
+// NN2.1 — the board rules moved to shared/departure-state.js and are re-exported
+// here, so every `import { seatsTotal } from "./domain.js"` keeps working. They
+// moved for the same reason the constants did: the React app and the three
+// static pages each carried a hand-written copy, the copies had already
+// diverged three ways, and nothing compared them.
+export {
+  goAheadSeatsFor, seatsTotal, statusFor, isFormingDeparture, isGoAheadDeparture,
+} from "../shared/departure-state.js";
 import { DEFAULT_GO_AHEAD, MAX_GROUP_SIZE, numberWord } from "../shared/group-size.js";
+import { goAheadSeatsFor, seatsTotal, statusFor } from "../shared/departure-state.js";
 
 // MIN_GROUP_SIZE is the floor a listing may not go below, which is the same
 // number as the default threshold. Named separately because they mean different
@@ -52,18 +62,8 @@ export function isPackage(item) {
   return item && item.type === "package";
 }
 
-export function goAheadSeatsFor(item) {
-  return Math.max(1, Number(item?.minSeats || item?.min_seats || DEFAULT_GO_AHEAD));
-}
-
 export function defaultDepositFor(item) {
   return isPackage(item) ? DEFAULT_PACKAGE_DEPOSIT : DEFAULT_DAY_TOUR_DEPOSIT;
-}
-
-export function seatsTotal(pledges = []) {
-  // Cancelled pledges no longer hold their seats, so they must not count toward
-  // capacity, live pricing, or the go-ahead threshold.
-  return pledges.reduce((sum, p) => (p?.status === "cancelled" ? sum : sum + Number(p.seats || 0)), 0);
 }
 
 function clampPrice(value, fallback) {
@@ -154,40 +154,6 @@ export function validatePriceTiers(raw, { minSeats, maxSeats } = {}) {
 // the listing. Merges it in so pricing reads one object.
 export function withPriceTiers(departure, product) {
   return product?.priceTiers ? { ...departure, priceTiers: product.priceTiers } : departure;
-}
-
-export function statusFor(departure, pledges) {
-  // pending_review: traveler-requested, not yet approved by ops — never
-  // auto-advances from pledge counts (Phase A of the traveler-initiated
-  // departures addendum).
-  if (["pending_review", "supplier_confirmed", "closed", "cancelled"].includes(departure.status)) {
-    return departure.status;
-  }
-  return seatsTotal(pledges) >= goAheadSeatsFor(departure) ? "minimum_reached" : "open";
-}
-
-// Which public board a departure belongs on. One definition, used by the
-// server-rendered lists (seo.js) and mirrored by the inline scripts on
-// /departures and /goahead (site/*.html — keep in sync, like slug.js).
-//
-// A departure is "forming" only once a real traveller holds a seat: an
-// admin-published date with zero pledges is inventory, not a departure, and
-// stays off the board (it is still bookable from its itinerary page). It
-// leaves the board in either direction — down when its last booking cancels
-// (seats drop to 0), up when it reaches its minimum and moves to /goahead.
-export function isFormingDeparture(departure, pledges = departure?.pledges) {
-  if (departure?.status !== "open") return false;
-  const seats = seatsTotal(pledges);
-  return seats >= 1 && seats < goAheadSeatsFor(departure);
-}
-
-// Confirmed to run: at or past its minimum. `closed` and `cancelled` are
-// deliberately excluded — the GoAhead board advertises trips a traveller can
-// still join or at least celebrate, not history.
-export function isGoAheadDeparture(departure, pledges = departure?.pledges) {
-  return ["minimum_reached", "supplier_confirmed"].includes(
-    statusFor(departure, pledges || [])
-  );
 }
 
 export function findTier(product, tierId) {

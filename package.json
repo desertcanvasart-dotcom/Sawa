@@ -22,9 +22,11 @@
     "check:constants": "node scripts/sync-constants.js --check",
     "smoke": "node scripts/smoke-routes.js",
     "check:status-literals": "node scripts/check-status-literals.js",
+    "sync:rules": "node scripts/sync-departure-rules.js",
+    "check:rules": "node scripts/sync-departure-rules.js --check",
     "rehearse:cancel-job": "bash scripts/rehearse-cancel-job.sh",
     "audit:claims": "node scripts/audit-claims.js",
-    "preflight": "npm run check:constants && npm run check:status-literals && npm run audit:repo-truth && npm test && npm run smoke && npm run audit:claims",
+    "preflight": "npm run check:constants && npm run check:status-literals && npm run check:rules && npm run audit:repo-truth && npm test && npm run smoke && npm run audit:claims",
     "audit:repo-truth": "node scripts/audit-repo-truth.js",
     "test:integration": "node --test server/seo-sitemap.integration.mjs"
   },
