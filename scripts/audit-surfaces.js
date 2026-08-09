@@ -99,7 +99,12 @@ async function buildSources() {
 
   // 4. Database text. The surface that exists in no file at all.
   try {
-    const { pool } = await import("../server/db/index.js");
+    // X1 — a read-only session. An auditor must have no side effects, and the
+  // way to guarantee that is not to keep reviewing what it does: a write
+  // through this pool raises 25006 whatever the credentials permit. This
+  // audit is the one that once called sendEmail and wrote to email_log.
+  const { readOnlyPool } = await import("../server/db/readonly.js");
+  const pool = readOnlyPool();
     for (const [table, cols] of [
       ["blog_posts", ["title", "excerpt", "body_html", "meta_title", "meta_description", "tldr", "key_takeaways", "faq", "author", "author_credentials"]],
       ["tour_products", ["title", "description", "overview_html", "itinerary", "included", "not_included", "policies_html", "meeting_point", "guide", "vehicle", "city", "duration"]],

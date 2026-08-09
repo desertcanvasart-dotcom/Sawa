@@ -348,7 +348,12 @@ export async function auditEmailTemplates() {
 // Every text column that reaches a public surface. Reported in full even when
 // clean, so the inventory exists for the next sweep.
 export async function auditDatabase() {
-  const { pool } = await import("../server/db/index.js");
+  // X1 — a read-only session. An auditor must have no side effects, and the
+  // way to guarantee that is not to keep reviewing what it does: a write
+  // through this pool raises 25006 whatever the credentials permit. This
+  // audit is the one that once called sendEmail and wrote to email_log.
+  const { readOnlyPool } = await import("../server/db/readonly.js");
+  const pool = readOnlyPool();
   const TARGETS = [
     ["blog_posts", "slug", ["title", "excerpt", "body_html", "meta_title", "meta_description",
       "tldr", "key_takeaways", "faq", "author", "author_credentials", "keywords", "geo_place"]],
