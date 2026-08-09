@@ -330,6 +330,26 @@ section.block{padding:120px 0}
 .board-top .bt .live{position:relative;width:7px;height:7px;border-radius:50%;background:var(--gold)}
 .board-top .bt .live::after{content:"";position:absolute;inset:-5px;border-radius:50%;border:1.5px solid var(--gold);animation:ping 2.6s var(--ease-2) infinite}
 .board-top .cnt{font-size:.76rem;color:var(--muted);font-weight:500}
+/* P3.4 — a count that is not known yet is a skeleton, never a word and never a
+   number. "Loading…" shipped in the markup and stayed forever whenever the
+   fetch failed; a literal 0 shipped in the footer and was indistinguishable
+   from a real zero. Neither may be rendered as if it were data. */
+.sk{display:inline-block;border-radius:999px;background:linear-gradient(90deg,rgba(23,50,58,.07),rgba(23,50,58,.13),rgba(23,50,58,.07));background-size:200% 100%;animation:skwipe 1.4s ease-in-out infinite;vertical-align:middle}
+.sk-cnt{width:92px;height:.68rem}
+@keyframes skwipe{0%{background-position:200% 0}100%{background-position:-200% 0}}
+@media (prefers-reduced-motion:reduce){.sk{animation:none}}
+.vh{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+/* P3.3 State A — the designed empty state. Not a hidden section and not a zero. */
+.dep-empty{border:1px solid var(--line);border-radius:22px;background:rgba(23,50,58,.02);padding:clamp(36px,6vw,68px) clamp(22px,5vw,56px);text-align:center}
+.dep-empty-in{max-width:34rem;margin:0 auto}
+.dep-empty-in p{color:var(--muted);font-size:1.02rem;line-height:1.65;margin:0 0 26px}
+.dep-empty-cta{display:flex;gap:14px;justify-content:center;flex-wrap:wrap}
+/* P3.3 States B and C — the gap sentence and the reassurance under the bar. */
+.card .prog .gap{margin:10px 0 0;font-size:.9rem;font-weight:600;color:var(--teal);line-height:1.4}
+.card .prog .reassure{margin:4px 0 0;font-size:.8rem;color:var(--muted);line-height:1.45}
+/* Every card on this board is drawn by script. Without it the section is an
+   empty shell around a skeleton that never resolves, which is the persistent
+   loading state in its purest form. */
 .board-rows{display:flex;flex-direction:column;flex:1}
 .drow{display:grid;grid-template-columns:auto 1fr auto;gap:17px;align-items:center;padding:17px 22px;border-top:1px solid var(--line);cursor:pointer;position:relative;transition:background .45s var(--ease)}
 .drow:hover{background:rgba(23,50,58,.035)}
@@ -459,6 +479,7 @@ section.block{padding:120px 0}
   
 }
 </style>
+<noscript><style>#departures{display:none}</style></noscript>
 <script defer src="/assets/consent.js"></script>
 <script defer src="/assets/analytics.js"></script>
 </head>
@@ -643,11 +664,17 @@ section.block{padding:120px 0}
         <div class="board-in">
           <div class="board-top">
             <span class="bt"><span class="live"></span>Forming now</span>
-            <span class="cnt tnum">Loading…</span>
+            <!-- P3.4: no count ships in the markup. A skeleton until the real
+                 figure arrives, and if it never arrives the skeleton is
+                 replaced with nothing rather than left spinning. -->
+            <span class="cnt tnum" data-board-count><span class="sk sk-cnt"></span><span class="vh">Counting open departures</span></span>
           </div>
           <div class="board-rows"></div>
           <div class="board-foot">
-            <span><b class="tnum">0</b> more forming this month</span>
+            <!-- Empty and hidden until there is a number above zero to put in
+                 it. "0 more forming this month" was a fabricated zero: it
+                 shipped in the HTML and read exactly like a real count of none. -->
+            <span data-board-more hidden></span>
             <a href="/departures" class="join">View board<span class="c"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></a>
           </div>
         </div>
@@ -849,6 +876,64 @@ section.block{padding:120px 0}
       return x&&x.status==='canceled'?s:s+(Number(x.seats||x.pax)||1);
     },0);
   }
+  /* P3.4 — the board count has exactly two end states: a real figure, or
+     nothing. There is no third state that says "still trying", because a
+     visitor cannot tell one that is still trying from one that has given up. */
+  /* P3.3 States B and C — say the gap, and say what is left, in words.
+     "1 of 4 joined" makes the reader subtract; "3 of 12 seats left" makes them
+     divide their attention. Both numbers are true either way — these are the
+     sentences the brief asked for. Never used at zero: at zero the date is
+     confirmed (State C) or full, and neither uses the gap. */
+  var WORDS=['','one','two','three','four','five','six','seven','eight','nine','ten','eleven','twelve'];
+  function count(n,noun){
+    var w=(n>=1&&n<WORDS.length)?WORDS[n]:String(n);
+    return w+' '+noun+(n===1?'':'s');
+  }
+  function cap(s){return s.charAt(0).toUpperCase()+s.slice(1);}
+  function gapSentence(toGo){
+    if(toGo<=0)return '';
+    return cap(count(toGo,'more traveler'))+' and this date is confirmed.';
+  }
+  function confirmedSentence(seatsLeft,max){
+    return seatsLeft>0
+      ? 'Confirmed and running — '+count(seatsLeft,'seat')+' left of '+(WORDS[max]||max)+'.'
+      : 'Confirmed and running — full.';
+  }
+  function boardCountEl(){return document.querySelector('[data-board-count]');}
+  function setBoardCount(text){var el=boardCountEl();if(el)el.textContent=text;}
+  function clearBoardCount(){var el=boardCountEl();if(el)el.textContent='';}
+  /* P3.3 State A — nothing forming. No counts, no zeros, two real actions.
+     "Start a date" goes to the itineraries, which is where a date is actually
+     started. "Tell me when a group forms" goes to /contact, because that is a
+     channel that exists and is answered; there is no alerts table, and a form
+     that captured an address and told nobody would be the same fabrication in
+     a politer shape. Swap the href the day the capture is built. */
+  function renderStateA(){
+    var layout=document.querySelector('#departures .dep-layout');
+    var foot=document.querySelector('#departures .dep-foot');
+    if(foot)foot.style.display='none';
+    /* The region tabs filter a board that is not there. A control that cannot
+       do anything is its own small untruth. */
+    var tabs=document.querySelector('#departures .tabs');
+    if(tabs)tabs.style.display='none';
+    var eb=document.querySelector('#departures .head .eyebrow');
+    if(eb)eb.innerHTML='<span class="live"></span>Open departures';
+    var h2=document.querySelector('#departures .head h2');
+    if(h2)h2.innerHTML='No group is forming <span class="ital">yet</span>.';
+    var lead=document.querySelector('#departures .head p');
+    if(!layout)return;
+    layout.className='dep-empty';
+    layout.innerHTML='<div class="dep-empty-in">'
+      +'<p>Every departure on Sawa starts with one traveler picking a date. '
+      +'Nothing is forming right now — pick an itinerary and set the date yourself, '
+      +'and we will open it for others to join.</p>'
+      +'<div class="dep-empty-cta">'
+      +'<a href="/itineraries" class="btn teal">Start a date'
+      +'<span class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></a>'
+      +'<a href="/contact" class="btn plain">Tell me when a group forms</a>'
+      +'</div></div>';
+    if(lead)lead.remove();
+  }
   loadData().then(function(data){
     var byId={};
     (data.tourProducts||[]).forEach(function(p){if(p.active!==false&&(!p.status||p.status==='approved'))byId[p.id]=p;});
@@ -892,12 +977,13 @@ section.block{padding:120px 0}
     var starterMode=!withTravelers.length;
     var pool=starterMode?starters:withTravelers;
     if(!pool.length){
-      /* No dates in the system at all — a fresh catalogue under the
-         first-booking rule. Demo cards would be fiction and an empty featured
-         card is a hole, so the section bows out; the itineraries page is the
-         whole story until the first booking lands. */
-      var sec=document.getElementById('departures');
-      if(sec)sec.style.display='none';
+      /* P3.3 State A — no dates in the system at all.
+         This used to hide the section. Hiding is not a state: it removes the
+         one moment where a visitor could be told plainly that nothing is
+         forming yet AND given something to do about it. Demo cards would be
+         fiction and an empty featured card is a hole, so neither — a designed
+         empty state, with the two actions the brief specifies. */
+      renderStateA();
       /* The hero stat counts dates, and there are none — but leaving the em
          dash reads as "failed to load" rather than "nothing yet". Count what
          actually exists instead: the itineraries someone can start today. */
@@ -907,6 +993,13 @@ section.block{padding:120px 0}
       if(heroN&&nProducts){
         heroN.textContent=nProducts;
         if(heroLbl)heroLbl.innerHTML='itineraries<br>ready to start';
+      }else if(heroN){
+        /* Nothing to count in either direction. The em dash was a reasonable
+           default while the number was merely late; left standing it is a
+           permanent "—" beside the words "dates open across Egypt", which
+           reads as a page that failed rather than a catalogue that is empty. */
+        var heroBlock=heroN.closest('.m');
+        if(heroBlock)heroBlock.style.display='none';
       }
       return;
     }
@@ -939,6 +1032,15 @@ section.block{padding:120px 0}
     var fWhenTop=f.confirmed?(seatsLeft>0?'Almost full':'Running'):(starterMode?'Awaiting its first traveler':'Forming now');
     var fWhenB=(f.confirmed&&seatsLeft>0)?(seatsLeft+' seat'+(seatsLeft===1?'':'s')+' left'):('$'+f.price+' USD / person');
     var fCta=starterMode?'Start this date':'Reserve a seat';
+    /* P3.3 — the featured card is the one place both states are reachable, so
+       both get their sentence. State C states what is left; State B states the
+       gap and, under it, that reserving costs nothing. */
+    var fState=f.confirmed
+      ? '<p class="gap">'+esc(confirmedSentence(seatsLeft,f.max))+'</p>'
+      : '<p class="gap">'+esc(starterMode
+          ? 'Be the first — '+count(f.toGo,'traveler')+' confirms this date.'
+          : gapSentence(f.toGo))+'</p>'
+        +'<p class="reassure">Reserving is free — you pay nothing until it confirms.</p>';
     featEl.setAttribute('onclick',"location.href='"+f.link+"'");
     featEl.innerHTML='<div class="core"><div class="media">'
       +'<img src="'+esc(f.img)+'" alt="'+esc(f.alt)+'" />'
@@ -953,7 +1055,7 @@ section.block{padding:120px 0}
       // missing. The whole span is dropped when there is nothing to name.
       +'<div class="info"><span>'+CAL+esc(f.dateTxt)+'</span>'+(f.p.guide?'<span>'+USR+esc(f.p.guide)+'</span>':'')+'</div>'
       +'<div class="prog"><div class="pt"><b>'+f.joined+' of '+f.min+' joined</b>'+fSt+'</div>'
-      +'<div class="pbar '+(f.confirmed?'gold':'teal')+'"><i style="width:'+f.pct+'"></i></div></div>'
+      +'<div class="pbar '+(f.confirmed?'gold':'teal')+'"><i style="width:'+f.pct+'"></i></div>'+fState+'</div>'
       +'<div class="foot"><div class="when">'+fWhenTop+'<b>'+fWhenB+'</b></div>'
       +'<a href="'+f.link+'" class="join">'+fCta+JARR+'</a></div>'
       +'</div></div>';
@@ -976,18 +1078,39 @@ section.block{padding:120px 0}
       }).join('');
     }
 
-    /* ---- counts ---- */
+    /* ---- counts (P3.4) ----
+       Only ever rendered from a real figure above zero. `pool.length` is
+       already known to be ≥1 here — the empty case returned above — so the
+       count is safe; the footer's `moreN` is not, and stays hidden at zero. */
     var openCount=pool.length;
-    var cntEl=document.querySelector('.board-top .cnt');
-    if(cntEl)cntEl.textContent=openCount+(starterMode?' date'+(openCount===1?'':'s')+' ready':' departure'+(openCount===1?'':'s')+' open');
+    setBoardCount(openCount+(starterMode?' date'+(openCount===1?'':'s')+' ready':' departure'+(openCount===1?'':'s')+' open'));
     /* Same number in the hero. Left as an em dash if the fetch fails — the
        figure is only ever shown when it is real. */
     var heroCount=document.querySelector('[data-live-departures]');
     if(heroCount)heroCount.textContent=openCount;
     var moreN=Math.max(0,openCount-1-board.length);
-    var footEl=document.querySelector('.board-foot span');
-    if(footEl)footEl.innerHTML='<b class="tnum">'+moreN+'</b>'+(starterMode?' more dates you could start':' more forming this month');
-  }).catch(function(){/* keep the static demo cards on failure */});
+    var footEl=document.querySelector('[data-board-more]');
+    if(footEl){
+      if(moreN>0){
+        footEl.innerHTML='<b class="tnum">'+moreN+'</b>'+(starterMode?' more dates you could start':' more forming this month');
+        footEl.hidden=false;
+      }else{
+        /* Zero more is not news. Saying "0 more forming this month" states a
+           fact nobody asked for in the shape of a disappointment. */
+        footEl.hidden=true;
+      }
+    }
+  }).catch(function(){
+    /* The fetch failed, so nothing on this board is known. The old handler did
+       nothing at all, which left "Loading…" and a literal 0 on screen
+       permanently — a broken load presented as data.
+       Deliberately NOT State A: State A asserts that nothing is forming, and a
+       failed fetch does not know that. "Nothing yet" and "could not check" must
+       not render the same. So the section stands down and says nothing. */
+    clearBoardCount();
+    var sec=document.getElementById('departures');
+    if(sec)sec.style.display='none';
+  });
 })();
 </script>
 <script src="/assets/sawa.js"></script>

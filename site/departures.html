@@ -220,10 +220,21 @@
     var sort=activeValue('sort-tabs','goahead');
     var shown=allItems.filter(function(it){return region==='all'||it.region===region;});
     shown.sort(SORTS[sort]||SORTS.goahead);
+    /* P3.3 State A — a filter that matches nothing gets the designed empty
+       state, with both actions, not a sentence with a link buried in it.
+       No count is rendered here: "0 departures" and "no departures" carry the
+       same information and only one of them reads like a broken page. */
     grid.innerHTML=shown.length
       ? shown.map(function(it){return it.html;}).join('')
-      : '<p class="desc" style="grid-column:1/-1;text-align:center;padding:48px 0;color:var(--muted)">'
-        +'No departures forming in this region right now. <a href="/itineraries" style="text-decoration:underline">Pick an itinerary and be the first to start a date.</a></p>';
+      : '<div class="dep-empty" style="grid-column:1/-1"><div class="dep-empty-in">'
+        +'<h3>No group forming '+(region==='all'?'yet':'on this part of Egypt yet')+'.</h3>'
+        +'<p>Every departure here started with one traveler picking a date. '
+        +'Pick an itinerary, set the date yourself, and we will open it for others to join.</p>'
+        +'<div class="dep-empty-cta">'
+        +'<a href="/itineraries" class="btn teal">Start a date'
+        +'<span class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></a>'
+        +'<a href="/contact" class="btn plain">Tell me when a group forms</a>'
+        +'</div></div></div>';
   }
   function wireTabs(){
     ['region-tabs','sort-tabs'].forEach(function(id){
@@ -253,6 +264,22 @@
     },0);
   }
   function minOf(d,p){return Number(d.minSeats||(p&&p.minSeats))||4;}
+  /* P3.3 State B — the gap, said out loud. "1 of 4 joined" leaves the reader
+     to do the subtraction; this is the sentence the brief asked for. Words up
+     to ten, digits past it, and never a zero: at zero the date is confirmed
+     and it is State C, which does not use this. */
+  var WORDS=['','one','two','three','four','five','six','seven','eight','nine','ten'];
+  function count(n,noun){
+    var w=(n>=1&&n<WORDS.length)?WORDS[n]:String(n);
+    return w+' '+noun+(n===1?'':'s');
+  }
+  function gapSentence(toGo){
+    if(toGo<=0)return '';
+    return toGo===1
+      ? 'One more traveler and this date is confirmed.'
+      : capitalize(count(toGo,'more traveler'))+' and this date is confirmed.';
+  }
+  function capitalize(s){return s.charAt(0).toUpperCase()+s.slice(1);}
   function isForming(d,p){
     if(d.status!=='open')return false;
     var s=seatsOf(d);
@@ -308,9 +335,16 @@
         +'<p class="desc">'+esc((p.description||'').slice(0,120))+'</p>'
         // No operator record, no badge, no string — see site/index.html.
         +'<div class="info"><span>'+CAL+esc(dateTxt)+'</span>'+(p.guide?'<span>'+USR+esc(p.guide)+'</span>':'')+'</div>'
+        /* P3.3 State B — forming, below the minimum. Every card on this board
+           is in this state by definition, so this is the screen the model is
+           sold on. The true count, then the gap stated as a sentence rather
+           than left for the reader to subtract, then the reassurance inline
+           where the decision is actually made. */
         +'<div class="prog"><div class="pt"><b>'+joined+' of '+min+' joined</b>'
         +'<span class="st">'+(toGo===1?'1 seat to GoAhead':toGo+' seats to GoAhead')+'</span></div>'
-        +'<div class="pbar teal"><i style="width:'+pct+'"></i></div></div>'
+        +'<div class="pbar teal"><i style="width:'+pct+'"></i></div>'
+        +'<p class="gap">'+esc(gapSentence(toGo))+'</p>'
+        +'<p class="reassure">Reserving is free — you pay nothing until it confirms.</p></div>'
         +'<div class="foot"><div class="when">'+(joined>=min-1?'Almost there':'Forming now')+'<b>$'+price+' USD / person</b></div>'
         +'<a href="'+link+'" class="join">Reserve a seat'+ARR+'</a></div>'
         +'</div></div></article>'
@@ -321,9 +355,19 @@
     wireTabs();
     /* Target the two counters explicitly: '.hero-meta b' also matched the "$0
        to reserve a seat" figure, so the mapping depended on DOM order. */
+    /* P3.4 — a count is rendered only when it is real AND above zero. A "0"
+       here would be true and still wrong: it is a headline statistic, and the
+       page's own empty state already says nothing is forming, in words, with
+       something to do about it. The whole stat is dropped rather than shown
+       at zero, because an em dash would read as a failed load. */
     var stats=document.querySelectorAll('.hero-meta [data-live-count]');
-    if(stats[0])stats[0].textContent=items.length;
-    if(stats[1])stats[1].textContent=goCount;
+    [[stats[0],items.length],[stats[1],goCount]].forEach(function(pair){
+      var el=pair[0],n=pair[1];
+      if(!el)return;
+      if(n>0){el.textContent=n;return;}
+      var block=el.parentNode;
+      if(block)block.style.display='none';
+    });
   }).catch(function(){/* Counters stay "—" rather than showing an invented number. */});
 })();
 </script>
