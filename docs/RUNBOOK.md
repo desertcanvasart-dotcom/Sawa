@@ -165,6 +165,28 @@ passed because the tables were empty when it was written.
 
 ---
 
+## The cancel job is dry by default
+
+`/api/modes` reports `cancelJob: live | dry-run | off`.
+
+The scheduled tick logs what it *would* cancel and email, and does neither,
+unless `CANCEL_JOB_DRY_RUN=0` is set. It is the only code path that emails a
+traveller with no human action, and production runs it — `scheduler: on` with
+`email: live`, verified 9 August 2026.
+
+The default is inverted from the usual because the failure modes are not
+symmetric. **A dry run that should have been live** leaves stale departures on
+the board: visible, and fixable in a minute. **A live run that should have been
+dry** sends mail to real people, and that cannot be recalled.
+
+Go live when the cancellation copy is settled (AA3) and seeded data has been
+through at least one tick.
+
+The manual path is unchanged — `npm run job:cancel-unconfirmed` still runs live,
+and `DRY_RUN=1` still makes it dry. This governs the unattended tick only.
+
+---
+
 ## Migrations do not run on deploy
 
 `npm start` is `node server/app.js`. There is **no migrate step**. Every

@@ -25,7 +25,22 @@ this time.
 
 ---
 
-## X3.1 — `TRUST_PROXY`: no defect found, but the state is not yet observable
+## ✅ RESOLVED 9 August 2026 — production reports
+
+```json
+{"email":"live","scheduler":"on","autoura":"on","trustProxy":"on",
+ "canonicalHost":"on","tourTimezone":"Africa/Cairo","nodeEnv":"production"}
+```
+
+| Mode | Verdict |
+|---|---|
+| `trustProxy: on` | **X3.1 closed — no defect.** `NODE_ENV=production`, so the default applies and the rate limiter is keyed per visitor. My W2.4 report was wrong; the correction stands. |
+| `scheduler: on` | **The auto-cancel job is running.** Seed precondition 2 answered, and answered the dangerous way. |
+| `autoura: on` | **X3.3 closed — the mirror is ACTIVE.** Departure data is being transmitted to the external system today. |
+| `email: live` | Confirms the `email_log` evidence. |
+| `nodeEnv: production` | The default that drives `trustProxy`. |
+
+## X3.1 — the original investigation (superseded by the above)
 
 Rate limiting in production, observed from outside:
 
