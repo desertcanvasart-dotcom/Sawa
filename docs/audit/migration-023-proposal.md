@@ -2,6 +2,15 @@
 
 **9 August 2026. Proposal. Nothing built, nothing applied.**
 
+> ## ✅ VV2 — the migration now EXISTS
+>
+> This document is the proposal. `server/db/schema_023_write_time_capture.sql`
+> is the migration, written from it and registered in `migrate.js`.
+>
+> **For several turns this document was reported as though it were the
+> migration.** It was not — a proposal is not a migration, and #74 added one
+> file: this one. Corrected under VV1.
+>
 > ## ⚠️ SS3.2 — Merging is not applying
 >
 > Merging this ships a **file**. It does not touch the database. Someone must

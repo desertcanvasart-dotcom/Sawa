@@ -31,6 +31,7 @@ const MIGRATIONS = [
   { name: "020_price_tiers", file: "schema_020_price_tiers.sql" },
   { name: "021_max_group_size", file: "schema_021_max_group_size.sql" },
   { name: "022_min_group_size", file: "schema_022_min_group_size.sql" },
+  { name: "023_write_time_capture", file: "schema_023_write_time_capture.sql" },
 ];
 
 async function main() {
