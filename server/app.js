@@ -2,6 +2,8 @@ import "dotenv/config";
 import express from "express";
 import { z } from "zod";
 import { pool, withTransaction, withDepartureWrites } from "./db/index.js";
+import { pendingGoAheads, alertPayload } from "./goahead-alert.js";
+import { refreshStatus } from "./departure-status.js";
 import { mapAgency, mapCity, mapProduct, mapDeparture, mapPledge } from "./db/mappers.js";
 import {
   enrichDeparture,
@@ -1393,6 +1395,30 @@ app.post("/api/admin/departure-requests/:id/approve", requireAuth, requireRole("
   res.json({ departure: presentDeparture(departure, req.user) });
 }));
 
+// DIR-20.3 — the payment-link queue.
+//
+// The email is the prompt; THIS is the record. An unread email is
+// indistinguishable from no departure needing a link, and here that costs
+// revenue directly — so the portal must be able to ask the question directly
+// rather than trusting an inbox.
+//
+// Derived from audit_log, which 024 made append-only: a departure cannot be
+// removed from this queue by anything except an alert actually being recorded
+// against it.
+app.get("/api/admin/goahead-queue", requireAuth, requireRole("super_admin", "ops_staff"), h(async (req, res) => {
+  const due = await pendingGoAheads();
+  const items = [];
+  for (const departure of due) {
+    const pledges = (await pool.query(`SELECT * FROM pledges WHERE departure_id = $1`, [departure.id])).rows;
+    const agency = (await pool.query(
+      `SELECT a.* FROM agencies a JOIN tour_products p ON p.agency_id = a.id WHERE p.id = $1`,
+      [departure.tour_product_id])).rows[0] || null;
+    items.push({ ...alertPayload({ departure, pledges, agency, portalBase: process.env.APP_URL || "" }),
+      confirmedAt: departure.confirmed_at });
+  }
+  res.json({ waiting: items.length, items });
+}));
+
 // Admin declines a traveler-requested departure (with an optional reason).
 app.post("/api/admin/departure-requests/:id/decline", requireAuth, requireRole("super_admin", "ops_staff"), h(async (req, res) => {
   const reason = String(req.body?.reason || "").trim().slice(0, 300);
@@ -1664,30 +1690,7 @@ async function insertPledge(c, departureId, p) {
   await refreshStatus(c, departureId);
 }
 
-async function refreshStatus(c, departureId) {
-  const dep = await c.query(`SELECT * FROM departures WHERE id=$1`, [departureId]);
-  const row = dep.rows[0];
-  // pending_review must not auto-advance from pledge counts — only an admin
-  // approval moves it to 'open' (traveler-initiated departures, Phase A).
-  //
-  // BBBB1.1 — `minimum_reached` is in this list now. Once a date reaches
-  // GoAhead it runs, so nothing recomputes it downward.
-  //
-  // Without this, the sequence was: four seats -> minimum_reached, travellers
-  // told it is confirmed; one cancels -> refreshStatus writes `open` again;
-  // past the confirm deadline the unattended job selects it (it queries
-  // WHERE status = 'open') and CANCELS A CONFIRMED DEPARTURE, emailing everyone
-  // that it will not run. The cancellation email is already built and live.
-  if (["pending_review", "minimum_reached", "supplier_confirmed", "closed", "cancelled"].includes(row.status)) return;
-  // Cancelled pledges have freed their seats — exclude them from the count.
-  const seats = (await c.query(
-    `SELECT COALESCE(SUM(seats),0) AS s FROM pledges WHERE departure_id=$1 AND status <> 'cancelled'`,
-    [departureId]
-  )).rows[0].s;
-  const required = Math.max(1, Number(row.min_seats) || DEFAULT_GO_AHEAD);
-  const status = Number(seats) >= required ? "minimum_reached" : "open";
-  await c.query(`UPDATE departures SET status=$1 WHERE id=$2`, [status, departureId]);
-}
+
 
 // ============================ STAFF & AGENCY MANAGEMENT ============================
 // Email isn't built until Phase 5, so creating an account returns a one-time

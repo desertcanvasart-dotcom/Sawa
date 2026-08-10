@@ -410,6 +410,35 @@ export function departureRequestDeclinedEmail({ to, customerName, route, dateLab
 // TTT3.3 — this is only ever sent on DRIFT or STALENESS. A daily mail saying
 // nothing changed trains the recipient to filter it, and then the one that
 // matters is filtered too.
+// DIR-20.2 — everything needed to create a payment link without opening
+// anything else. Internal: this goes to ops, never to a traveller.
+export function goAheadPaymentLinkEmail({ to, payload }) {
+  const p = payload;
+  const money = (n) => (n == null ? "—" : `$${Number(n).toLocaleString()}`);
+  const rows = p.travellers.map((t) =>
+    `  ${t.name || "(no name recorded)"} — ${t.seats} seat(s) — ${t.contact || "(no contact)"}\n`
+    + `      booking ${t.bookingCode || "—"} · total ${money(t.total)} · deposit due ${money(t.depositDue)}`
+    + `${t.balanceDue != null ? ` · balance ${money(t.balanceDue)}${t.balanceDueDate ? ` by ${t.balanceDueDate}` : ""}` : ""}`
+  ).join("\n");
+
+  const subject = `GoAhead — payment link needed: ${p.route} on ${p.date}`;
+  const text =
+    `${p.route}\n${p.date}\n\n`
+    + `Confirmed with ${p.seatsConfirmed} of ${p.minSeats ?? "?"} seats.\n`
+    + `Operator: ${p.operator || "NOT RECORDED"}${p.operatorContact ? ` (${p.operatorContact})` : ""}\n\n`
+    + `Travellers:\n${rows}\n\n`
+    + `Total deposits due: ${money(p.depositTotal)}\n`
+    + (p.portalLink ? `\nDeparture: ${p.portalLink}\n` : "")
+    // Never silently. A missing operator or an uncaptured total changes what
+    // the person reading this has to do next.
+    + (p.unknowns.length ? `\n⚠️ ${p.unknowns.join("\n⚠️ ")}\n` : "")
+    + `\nThis departure stays in the payment-link queue until a link is recorded against it. `
+    + `This email is the prompt, not the record — if it is lost, the queue still has it.`;
+
+  return { to, subject, text, html: `<pre style="font:14px/1.5 ui-monospace,monospace">${
+    text.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</pre>`, kind: "goahead_payment_link" };
+}
+
 export function auditDriftEmail({ to, base, lines = [], stale }) {
   const subject = stale
     ? `Sawa: the claims watcher has not run for ${stale}`

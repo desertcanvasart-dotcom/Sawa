@@ -99,6 +99,21 @@ async function alert(log, { base, lines, stale }) {
   });
 }
 
+// DIR-20 — DRY by default, for BB3's reason, and one more.
+//
+// cancel-unconfirmed is dry by default because a mistake cancels real
+// departures. This one cannot cancel anything — but it emails, and an
+// accidental first live tick would alert ops about EVERY departure ever
+// confirmed, in one burst. The queue is derived from history, so the backlog on
+// first run is the whole history.
+//
+// Go live by setting GOAHEAD_ALERT_DRY_RUN=0 once the recipient is agreed.
+const HOUR_MS = 60 * 60 * 1000;
+
+export function goAheadAlertDryRun(env = process.env) {
+  return env.GOAHEAD_ALERT_DRY_RUN !== "0";
+}
+
 export function auditWatchBase(env = process.env) {
   return (env.AUDIT_WATCH_BASE || env.APP_URL || "https://sawa.tours").replace(/\/$/, "");
 }
@@ -216,24 +231,42 @@ export function startJobScheduler(env = process.env) {
     return { routes: r.current.routes, findings: r.all.length, regressed: r.regressed, schema: schemaState };
   });
 
+  // DIR-20 — the third tick. Hourly rather than daily: a confirmed departure
+  // waiting a day for its payment link is a day of a traveller wondering
+  // whether anything happened. Offset from the other two so the three never
+  // contend for the pooler's 15-connection limit.
+  const goAheadDry = goAheadAlertDryRun(env);
+  const alertTick = () => runSafely("goahead-alert", async (opts) => {
+    const { runGoAheadAlerts } = await import("./alert-goahead.js");
+    return runGoAheadAlerts({ ...opts, dryRun: goAheadDry });
+  });
+
   const first = setTimeout(tick, FIRST_RUN_DELAY_MS);
   const repeat = setInterval(tick, DAY_MS);
   const auditFirst = setTimeout(auditTick, FIRST_RUN_DELAY_MS * 5);
   const auditRepeat = setInterval(auditTick, DAY_MS);
+  const alertFirst = setTimeout(alertTick, FIRST_RUN_DELAY_MS * 9);
+  const alertRepeat = setInterval(alertTick, HOUR_MS);
   // unref so neither timer holds the process open during a shutdown. Drift is
   // irrelevant for a rule measured in whole days.
   first.unref();
   repeat.unref();
   auditFirst.unref();
   auditRepeat.unref();
+  alertFirst.unref();
+  alertRepeat.unref();
 
   console.log(`[jobs] scheduler on — cancel-unconfirmed in ${FIRST_RUN_DELAY_MS / 1000}s, then every 24h`);
   console.log(dryRun
     ? "[jobs] cancel-unconfirmed is DRY-RUN — it will log what it would cancel and email, and do neither. Set CANCEL_JOB_DRY_RUN=0 to go live."
     : "[jobs] cancel-unconfirmed is LIVE — it will cancel departures and email travellers.");
   console.log(`[jobs] audit-watch in ${(FIRST_RUN_DELAY_MS * 5) / 1000}s, then every 24h, against ${auditWatchBase(env)} — read-only, writes nothing`);
+  console.log(goAheadDry
+    ? "[jobs] goahead-alert is DRY-RUN — it will log which confirmed departures need a payment link and email nobody. Set GOAHEAD_ALERT_DRY_RUN=0 to go live."
+    : `[jobs] goahead-alert is LIVE — hourly, to ${env.GOAHEAD_ALERT_TO || "hello@sawa.tours"}.`);
   return () => {
     clearTimeout(first); clearInterval(repeat);
     clearTimeout(auditFirst); clearInterval(auditRepeat);
+    clearTimeout(alertFirst); clearInterval(alertRepeat);
   };
 }
