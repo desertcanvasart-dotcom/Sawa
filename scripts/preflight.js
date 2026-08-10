@@ -53,6 +53,10 @@ export const STEPS = [
   { name: "test", script: "scripts/run-tests.js" },
   { name: "smoke", script: "scripts/smoke-routes.js", needsTarget: true },
   { name: "audit:claims", script: "scripts/audit-claims.js", needsTarget: true },
+  // OOO1.2 — the other half of the interface-promise rule. Needs a target for
+  // the same reason audit:claims does: it reads the payload production serves,
+  // and a promise checked against a local fixture proves nothing about the site.
+  { name: "audit:promises", script: "scripts/audit-promises.js", args: [], needsTarget: true },
 ];
 
 const isProductionTarget = /^https:\/\//.test(BASE);
