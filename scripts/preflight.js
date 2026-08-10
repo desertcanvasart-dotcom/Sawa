@@ -49,6 +49,10 @@ export const STEPS = [
   // database which migrations are recorded. CI cannot run it and must not
   // report it as passed — see scripts/ci-gate.js.
   { name: "check:applied-schema", script: "scripts/check-applied-schema.js", needsProductionDb: true },
+  // EEEE3.1 — four claims end the instant `pledges` stops being empty, and
+  // nothing else would notice. Needs production for the same reason
+  // check:applied-schema does: the question is about the live database.
+  { name: "check:seed-expiry", script: "scripts/check-seed-expiry.js", needsProductionDb: true },
   { name: "audit:repo-truth", script: "scripts/audit-repo-truth.js" },
   { name: "test", script: "scripts/run-tests.js" },
   { name: "smoke", script: "scripts/smoke-routes.js", needsTarget: true },

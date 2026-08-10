@@ -182,6 +182,29 @@ export function startJobScheduler(env = process.env) {
     // has not been applied is a failure, not a change. It does not resolve
     // itself and every hour it stays open is an hour the schema the code
     // expects is not the schema that exists.
+    // EEEE3.1 — four claims end the instant `pledges` stops being empty, and
+    // nothing in the repository would notice. A preflight step only helps
+    // someone who runs preflight; the seed will be run by the client, against
+    // production, on a day nobody is watching. This tick is.
+    //
+    // Read-only: it counts rows and reads files. It cannot end E-2 itself.
+    try {
+      const { verdict: seedVerdict, auditRestatements } = await import("../../scripts/check-seed-expiry.js");
+      const { readOnlyPool, readOnlyUrl } = await import("../db/readonly.js");
+      if (readOnlyUrl(env)) {
+        const p = readOnlyPool(env);
+        let n = null;
+        try { n = (await p.query("SELECT count(*)::int n FROM pledges")).rows[0].n; }
+        finally { await p.end(); }
+        const v = seedVerdict({ pledgeCount: n, restatements: auditRestatements() });
+        if (!v.pass) log(v.line);
+      }
+    } catch (e) {
+      rethrowIfProgrammerError(e);
+      // Unable to ask is not "empty". Reported, never swallowed.
+      log(`SEED EXPIRY: could not be checked — ${e.message.split("\n")[0]}`);
+    }
+
     let schema = null;
     let schemaState = "not-checked";
     try {
