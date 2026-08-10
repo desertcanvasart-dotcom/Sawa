@@ -981,3 +981,104 @@ Two entries are worth reading first:
 `pledges.seats NOT NULL`, `loadDeparture` enriching, `cancelled_reason` still
 unwritten, the 50-divergence bound — so relaxing one fails the gate rather than
 going quiet.
+
+## BBBB — confirmed means confirmed
+
+**Client settled 10 August 2026:** once a departure reaches GoAhead it runs, even
+if travellers drop out afterwards.
+
+### BBBB1 — scoped to headcount, and it must stay scoped
+
+The client's phrasing was *"it will be executed no matter what."* **That cannot
+go into copy.** If a site closes, a vehicle fails or there is a safety
+situation, the trip does not run — which is the exact shape of *"100%
+guaranteed to run"*, removed under P1.5 for promising something outside Sawa's
+control. Restoring it in new wording would undo that work.
+
+What Sawa controls is headcount:
+
+> **Once your date is confirmed, we don't cancel it for low numbers. If someone
+> drops out, your trip still runs.**
+
+And the two events are stated separately, or a reader assumes a group of three
+was never valid: **four to confirm; once confirmed, it runs.**
+
+Force majeure, operator failure and safety stay in the Terms under cause 2.
+
+### BBBB2 — DELETED from scope, with the reason
+
+Recorded so a later reader does not rebuild a mechanic the client removed. **A
+hold no longer exists**, so everything resting on one goes with it:
+
+| Deleted | |
+|---|---|
+| **LLL3** — the hold state on the departure page, booking lookup and email | there is no state between confirmed and cancelled |
+| the **fourth booking-lookup state** alongside running, cancelled, forming | three states, not four |
+| the *"one traveller wasn't able to complete their booking"* email | describes an event that no longer changes anything |
+| **XXX4** — free withdrawal during a hold | holds do not exist |
+| the refund-everyone path for a confirmed group dropping below minimum | it does not drop; it runs |
+| **departure-level hold fields in LLL4** | `route_alerts` and the payment schema keep their own fields; the hold columns are not built |
+| the hold references in DIR-9's cancellation email, third case | three causes, not four |
+
+### BBBB3 — three cancellation causes
+
+1. **Never reached its minimum** — nothing charged, nothing to refund
+2. **Sawa or the operator cancels a confirmed departure** — full refund, no
+   scale; covers force majeure and operator failure
+3. **Traveller cancels** — the scale for packages, free until 24 hours for day
+   tours
+
+An unpaid balance falls under 3: deposit retained, **and the tour runs regardless
+of headcount.**
+
+### BBBB4 — the job could cancel a confirmed departure. Fixed.
+
+Found by reading the candidate selection, as asked. It was real:
+
+1. four seats → `refreshStatus` writes `minimum_reached`, travellers told it is confirmed
+2. one traveller leaves → **`refreshStatus` recomputed and wrote `open` again**
+3. past the deadline → `loadCandidates` queries `WHERE status = 'open'`,
+   `missedConfirmDeadline` agrees, and the job **cancels a confirmed departure
+   and emails everyone that it will not run**
+
+Masked only by `departures` being empty and the job being dry-run by default
+(BB3). **Both masks disappear at the seed.**
+
+Two ratchets, because a reader-only fix leaves the database saying `open` and the
+job queries the database:
+
+| | |
+|---|---|
+| `shared/departure-state.js` | `minimum_reached` joins the terminal list in `statusFor` |
+| `server/app.js` — `refreshStatus` | the same, so nothing writes `open` back |
+
+`server/confirmed-never-cancelled.test.js` asserts it, **and proves it fires**: a
+date that never reached its minimum is still a candidate.
+
+### BBBB4.1 — this inverts L-3, and the inversion is the interesting part
+
+**L-3 in the latent-defect register (PR #110, unmerged at the time of writing)
+must be amended when that lands.** It reads:
+
+> *"A departure stored `minimum_reached` whose bookings were later cancelled.
+> The copies trusted the stored value and called it confirmed and running; the
+> server recomputes and calls it open."*
+
+Under the old policy the server was right. **Under the client's settled rule the
+copies were right** — the stored value is authoritative, and recomputing
+downward is the defect.
+
+The consequence, and it is worth reading twice: **the old hand-written copies
+were accidentally correct about a policy that did not exist yet.** They were
+replaced for being divergent, and the divergence turned out to be in the
+server's favour only until the business rule was decided.
+
+This showed up as a failing test rather than as an opinion. The NN2.1 parity
+proof asserts the old implementation diverges on **three** known cases; after the
+ratchet it diverges on **two**, because that case now agrees. The threshold moved
+3 → 2 with the reason recorded in the test, plus a new assertion that the case
+**must** agree — *"a confirmed date that dropped below its minimum is diverging
+again — the BBBB1 ratchet is gone."*
+
+Lowering a threshold is how a check gets gutted, so it is stated where it
+happened rather than in a commit message nobody re-reads.

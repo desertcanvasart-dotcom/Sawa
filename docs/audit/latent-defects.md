@@ -65,8 +65,26 @@ never fired, and because a pledge object is not always a pledge row.
 | **What would arm it** | A new query that maps rows directly and presents them — see [DIR-6](boundary-proposal.md), which found this holds through **two doors**, not fourteen sites of discipline. |
 | **Where that is defined** | `server/app.js` — `loadDeparture`; `server/domain.js` — `enrichDeparture` |
 
-The traveller-visible failure is the severe one: a cancelled date shown as
-running, on the page a traveller checks before travelling.
+**⚠️ INVERTED 10 August 2026 by BBBB1, hours after this entry was written.**
+
+The client settled the opposite rule: **once a date reaches GoAhead it runs.** So
+the stored value is now *authoritative*, and recomputing downward is the defect.
+`minimum_reached` is terminal in both `statusFor` and `refreshStatus`.
+
+The entry stays, because what it revealed outlives it: **the old hand-written
+copies trusted the stored value, and were therefore accidentally right about a
+policy that did not exist yet.** They were replaced for diverging from the
+server, and that divergence was in the server's favour only until the business
+rule was decided.
+
+It surfaced as a failing test rather than as an opinion. The NN2.1 parity proof
+asserted three known divergences and now finds two, with the reason recorded
+there and a new assertion that the case **must** agree — *"a confirmed date that
+dropped below its minimum is diverging again — the BBBB1 ratchet is gone."*
+
+**The severe failure is now the mirror of what this entry described.** It was: a
+cancelled date shown as running. It is now: **a confirmed date shown as forming,
+or cancelled by the unattended job** — which it could be, until BBBB4 fixed it.
 
 ---
 
