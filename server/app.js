@@ -47,7 +47,7 @@ import { effectReport, recordFailure } from "./effect-log.js";
 // this file is email, and its wrapper lives in email.js next to the contract it
 // depends on. A second place to write that expression is a second place for it
 // to be written differently.
-import { rethrowIfProgrammerError } from "./errors.js";
+import { rethrowIfProgrammerError, surfaceProgrammerError } from "./errors.js";
 import { tourSlug, tourPath } from "./slug.js";
 import { cancelDepartureAndPledges, reportNotifications, CANCEL_REASONS } from "./departure-cancel.js";
 
@@ -2465,8 +2465,15 @@ if (existsSync(distDir)) {
           await buildPage(path).catch((e) => {
             // AAA2 — a page that cannot be built because the code is wrong is
             // not a slow page, and warming it again in 45 seconds will not help.
-            rethrowIfProgrammerError(e);
-            console.warn("[warm] failed for", path, "-", e.message);
+            //
+            // CCC2.2 — but it is surfaced, not fatal. This is a CACHE WARM on a
+            // timer. Rethrowing here made a broken template in one page kill the
+            // web server for every page, to protect an optimisation. Nothing
+            // awaits this, so a throw would have become an unhandled rejection
+            // with no handler anywhere above it.
+            if (!surfaceProgrammerError("pageWarm", e)) {
+              console.warn("[warm] failed for", path, "-", e.message);
+            }
           });
         }
       } finally {
@@ -2476,8 +2483,10 @@ if (existsSync(distDir)) {
 
     const run = () => {
       sweep().catch((e) => {
-        rethrowIfProgrammerError(e);
-        console.warn("[warm] sweep failed —", e.message);
+        // CCC2.2 — same reasoning. Nothing awaits a setInterval callback.
+        if (!surfaceProgrammerError("pageWarm", e)) {
+          console.warn("[warm] sweep failed —", e.message);
+        }
       });
     };
     run();
@@ -2526,7 +2535,11 @@ app.listen(port, "0.0.0.0", () => {
       startPageWarmer?.();
     })
     .catch((e) => {
-      rethrowIfProgrammerError(e);
-      console.warn("[boot] catalogue warm-up skipped —", e.message);
+      // CCC2.2 — surfaced. This runs after app.listen(): the server is already
+      // accepting requests, and a failed catalogue warm-up means slower first
+      // responses, not wrong ones.
+      if (!surfaceProgrammerError("pageWarm", e)) {
+        console.warn("[boot] catalogue warm-up skipped —", e.message);
+      }
     });
 });

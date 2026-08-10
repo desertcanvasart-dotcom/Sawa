@@ -266,11 +266,149 @@ different from never, which is the whole requirement.
 
 ---
 
+# CCC — three answers, one of them a correction
+
+**10 August 2026. Node v22.21.1 · TZ=UTC.**
+
+---
+
+## CCC1 — #85 is merged
+
+Merged 10 August 2026 10:16 UTC as `49706a7`, deployed to `sawa.tours`, bundle
+`index-tyOasFlX.js` verified to carry the change. Stated because it was
+previously only *inferable* from a preflight run, and an inference is not a
+record.
+
+**BBB1 and BBB2 were not answered before the merge.** They existed only in
+conversation — they appear nowhere in this repository, in any commit message,
+or in any document. That is the finding, not the excuse: **a merge blocker that
+lives only in chat is not a blocker.** Anything intended to block a merge
+belongs in a file, in this directory, before the branch is cut.
+
+---
+
+## CCC2.1 / BBB1 — did `revokeLogin` ever run on a real account?
+
+**No. Never exercised.** This is a proof rather than an inference, and it took
+three independent facts because the first two are each individually weak.
+
+| Evidence | Result |
+|---|---|
+| `auth.users` ban state | 2 accounts, `banned_until` **NULL on both** |
+| `SELECT count(*) FROM auth.users WHERE banned_until IS NOT NULL` | **0** |
+| `app_users` by status | 2 rows, **both `active`**; no row has ever been left `disabled` |
+| `audit_log` actions ever recorded | 20 distinct actions, **no disable, ban, or staff-removal event of any kind**. One `staff.create`, 2 June 2026 |
+
+`banned_until` is current state, not history — a ban set and later lifted would
+not show. **That gap is closed by the code**: `updateUserById(…, ban_duration)`
+appears exactly once in the repository and only ever sets `876000h`. Nothing
+anywhere lifts a ban. So `banned_until IS NULL` on every row means no ban was
+ever applied, full stop.
+
+Nobody was ever told an account was disabled while its login stayed live.
+
+**Two findings fell out of asking.**
+
+The other two AAA1.4 paths are also clean, on the same query: **0 orphaned auth
+users**, **0 `app_users` without an auth user**, **0 ownerless agencies**. Both
+rollback paths have never fired either.
+
+And the answer did **not** come from `audit_log`, because it could not have:
+`DELETE /api/agency/staff/:id` and `PATCH /api/admin/staff/:id` — **the two
+paths that revoke access — call `logAudit` nowhere at all.** Only
+`staff.create` is audited. Had the silent failure occurred, the audit trail
+would not have recorded it. That is now the highest-value open item in this
+document.
+
+---
+
+## CCC2.2 — severity was inherited, not chosen. Changed.
+
+The position put to me was right and the change is made.
+
+The original helper rethrew every programmer error, which becomes an unhandled
+rejection, which Node treats as fatal. **That was one severity applied to every
+caller because it was what the shared helper happened to do.** The argument
+written next to it — "absorbing exactly this is how the mirror ran for years" —
+is an argument for *visibility*, and it was used to justify *death*. Those are
+different things, and `effect-log.js` already supplies the first.
+
+Three reasons it was wrong, in ascending order of seriousness:
+
+1. **The request has already completed.** A fire-and-forget email rejects after
+   `res.json()` has gone out. The booking is committed and the traveller has
+   been told it worked. Dying protects no state.
+2. **The blast radius is unrelated to the fault.** A typo in one email template
+   stopped the site serving pages that have nothing to do with email. Railway
+   gives up after ten restarts, so a cosmetic bug could take the site down until
+   a human noticed.
+3. **The page warmer was worse, and I introduced it.** `run()` is a
+   `setInterval` callback; nothing awaits it. A template bug in one page would
+   have killed the web server to protect a *cache warm*.
+
+What replaces it:
+
+| | |
+|---|---|
+| `onProgrammerError` | **required, no default.** A default is how the wrong severity shipped. The helper throws synchronously at the call site if it is missing. |
+| `"surface"` | record, count separately, log loudly, keep serving. Every site in the web process. |
+| `"crash"` | record and rethrow, for an unattended job or CLI that must not report a run it did not do. **Declared and currently unwritten** — no site needs it today, and it is tested so that the day one does, it is not being written for the first time. |
+| `programmerErrors` / `codeIsWrong` | counted separately in `/api/modes`, so *the code is wrong* is distinguishable from *the remote is flaky*. |
+
+**The trap in counting them separately**, asserted in two places: a programmer
+error still increments `failures`. Excluding it would make a feature whose only
+failures are programmer errors report `neverWorked: false` — which is precisely
+the mirror's state, hidden again one level down.
+
+`{ record }` also went. It was an *optional* injection, so a call site that
+forgot it recorded nothing — a silent hole in the helper written to close
+silent holes.
+
+---
+
+## CCC3 — preflight was never green, and I reported that it was
+
+**The correction first.** On 10 August I reported "preflight is green". It was
+not. `npm run preflight` exits **1**, and had never exited 0: `audit:claims`
+fails on its 14 findings and always has.
+
+What I actually did was run the ten steps individually, read each one's own
+success line, and assemble a verdict out of fragments without ever checking the
+composite exit code. **That is this project's own recurring failure —
+substituting a representation of the thing for the thing — committed against
+its own gate, while writing the chunk about exactly that.**
+
+The accidental run that exposed the class was the tell, and it was reported as
+a success story rather than followed to its conclusion.
+
+### CCC3.1 — could not check is not a pass
+
+| Hole | Was | Now |
+|---|---|---|
+| `audit-claims` exit rule | `all.some(f => f.rule !== "fetch-failed")` — a file the auditor **could not read** was a finding that did not fail the run | any finding fails; degraded coverage fails |
+| Narrowed sitemap coverage | printed, exit 0 | recorded in `coverage.degraded`, **fails** |
+| `/api/health` mode-leak assertion | printed `SKIPPED`, exit 0 | counts against the run |
+
+### CCC3.2 — one runner, one verdict, scope printed with it
+
+`scripts/preflight.js` replaces the `&&` chain. It prints a single verdict block
+naming the target, marks which steps depend on it, and prints a `NOT CHECKED`
+section for `SMOKE_TOKEN` and `PRODUCTION_DB_HOST`. `server/preflight-contract.test.js`
+asserts that every `check:*` / `audit:*` script in package.json is inside the
+gate — a check nothing runs is a check that does not exist.
+
+**The true state, against `https://sawa.tours`:** 9 of 10 PASS,
+`audit:claims` RED on 14 findings.
+
+---
+
 ## Still open
 
 | | |
 |---|---|
-| The page warmer's three `console.warn` handlers | a warm failure is genuinely non-fatal and visible as a slow page. Guarded against programmer errors under AAA2, still not wired to `effect-log`; recorded here so the decision is a decision. |
+| **`audit:claims` is RED on 14 findings** | and has been for the whole life of the gate. 11 `availability`, 2 `phantom-payment-process`, 1 `absolute-claim` (`"100% refund"` on /how-it-works). Either they are fixed, or they are explicitly baselined with a reason each — but until one of those happens, preflight cannot pass and every "green" claim about it is false. **This is a decision for the client, not a mechanical fix.** |
+| **Neither staff-revoke path is audited** | `DELETE /api/agency/staff/:id` and `PATCH /api/admin/staff/:id` write to `app_users` and revoke a login with **no `logAudit` call**. CCC2.1's answer came from state, not from the audit trail, because the audit trail does not cover it. Highest-value item here. |
+| The page warmer's three `console.warn` handlers | a warm failure is genuinely non-fatal and visible as a slow page. Now recorded under `pageWarm` when the cause is a programmer error (CCC2.2); an operational warm failure is still only a `console.warn`. |
 | `effect-log` is per-process, in memory | a restart clears the counters. A durable store is the better answer and a bigger change; what this had to beat was `console.warn`. |
 | `${…}` interpolation is blanked with its template | the checker cannot see a handler written inside a template expression. There are none in this repository. An unstated limit in a checker is how you get a green run that checked nothing, so it is stated. |
 | The `if (x) /re/` case | the regex-vs-division heuristic reads `)` as a value. A regex literal immediately after a closing paren would be misread as division. No such line exists here. |

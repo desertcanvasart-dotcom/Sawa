@@ -21,7 +21,13 @@ const effects = new Map();
 
 function entry(kind) {
   if (!effects.has(kind)) {
-    effects.set(kind, { succeeded: null, failed: null, successes: 0, failures: 0, lastError: null });
+    effects.set(kind, {
+      succeeded: null, failed: null, successes: 0, failures: 0, lastError: null,
+      // CCC2.2 — "the code is wrong" and "the remote is flaky" call for
+      // different people on different days, and a single counter cannot say
+      // which is happening.
+      programmerErrors: 0, lastProgrammerError: null,
+    });
   }
   return effects.get(kind);
 }
@@ -42,6 +48,25 @@ export function recordFailure(kind, why) {
   console.error(`[${kind}] FAILED — ${e.lastError} (${e.failures} since boot, last success: ${e.succeeded || "never"})`);
 }
 
+// CCC2.2 — a failure that is this repository's fault.
+//
+// Counted SEPARATELY so the two questions stay apart: "is this feature
+// working" and "is this feature's code correct". A run of failures against a
+// flaky partner is an operations problem that may clear on its own; a run of
+// ReferenceErrors is a build that cannot work until someone edits a file, and
+// no amount of waiting helps.
+//
+// It also increments `failures`, deliberately. `neverWorked` must stay true for
+// a feature whose ONLY failures are programmer errors — that is precisely the
+// state the mirror was in, and excluding these from the count would hide it
+// again one level down.
+export function recordProgrammerError(kind, why) {
+  const e = entry(kind);
+  e.programmerErrors += 1;
+  e.lastProgrammerError = String(why || "unknown").slice(0, 300);
+  recordFailure(kind, why);
+}
+
 // What /api/modes reports. `succeeded: null` with `failures > 0` is the state
 // that was invisible for the mirror's entire life.
 export function effectReport() {
@@ -54,6 +79,10 @@ export function effectReport() {
       failures: e.failures,
       // The headline. Configured, tried, and never once worked.
       neverWorked: e.successes === 0 && e.failures > 0,
+      // The second headline. Waiting will not fix this one.
+      programmerErrors: e.programmerErrors,
+      codeIsWrong: e.programmerErrors > 0,
+      lastProgrammerError: e.lastProgrammerError,
       lastError: e.lastError,
     };
   }

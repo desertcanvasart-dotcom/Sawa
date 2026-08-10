@@ -167,11 +167,14 @@ try {
     modeFailures++;
   }
 } catch (e) {
-  // AAA1.3 — the route loop below does report an unreachable server, so this
-  // does not need to fail twice for the same cause. What it does need to say is
-  // that the assertion was NOT MADE, because a check that silently did not run
-  // is reported identically to one that ran and passed.
+  // AAA1.3 — a check that silently did not run is reported identically to one
+  // that ran and passed, so it says so.
+  //
+  // CCC3.1 — and it COUNTS. Saying "skipped" while still exiting 0 leaves the
+  // reader with a green run whose meaning depends on a line they may not have
+  // read. Could not check is not a pass.
   console.error(`SKIPPED /api/health mode-leak assertion — ${e.message}`);
+  modeFailures++;
 }
 
 const routes = await publicRoutes();

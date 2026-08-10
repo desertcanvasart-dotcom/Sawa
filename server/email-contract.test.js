@@ -94,15 +94,25 @@ test("sendEmailInBackground swallows an operational failure", async () => {
   );
 });
 
-test("sendEmailInBackground rethrows a programmer error", async () => {
-  // Nobody awaits this in production, so the rejection is unhandled and Node
-  // treats it as fatal. That is the deliberate cost recorded in errors.js: a
-  // broken template takes the process down instead of being absorbed thirteen
-  // times a day for years.
+test("sendEmailInBackground surfaces a programmer error without taking the site down", async () => {
+  // CCC2.2 — the severity decision at this call site. Nobody awaits this, so
+  // rethrowing would be an unhandled rejection and Node would treat it as
+  // fatal. By the time it rejects, res.json() has already gone out: the booking
+  // is committed and the traveller has been told it worked. Dying protects no
+  // state, and it would stop the site serving pages unrelated to email.
+  //
+  // Visibility is what the mirror lacked, and visibility is what it gets.
+  const { __resetEffects, effectReport } = await import("./effect-log.js");
+  __resetEffects();
   await withFetch(
     async () => { throw new ReferenceError("bookingCode is not defined"); },
-    () => assert.rejects(() => sendEmailInBackground(message), ReferenceError)
+    () => sendEmailInBackground(message)
   );
+
+  const r = effectReport().email;
+  assert.equal(r.programmerErrors, 1, "a broken template must be counted as this repository's fault");
+  assert.equal(r.codeIsWrong, true);
+  assert.equal(r.neverWorked, true, "and it must still count as never having worked");
 });
 
 test("no caller discards a sendEmail result any more", () => {

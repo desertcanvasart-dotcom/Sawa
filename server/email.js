@@ -104,8 +104,14 @@ export async function sendEmail({ to, subject, html, text, kind = "generic" }) {
 //
 // Callers that want the result — the direct traveller receipt — still await
 // sendEmail. This is for the ones that genuinely must not block the response.
+// CCC2.2 — "surface", not "crash". Every caller is a request handler, and by
+// the time this rejects the response has already gone out: the booking is
+// committed and the traveller has been told it succeeded. Killing the process
+// then protects no state, and it would stop the site serving pages that have
+// nothing to do with email. A broken template is recorded, counted under
+// `programmerErrors`, and reported by `codeIsWrong` in /api/modes.
 export function sendEmailInBackground(message) {
-  return fireAndForget("email", sendEmail(message), { record: recordFailure });
+  return fireAndForget("email", sendEmail(message), { onProgrammerError: "surface" });
 }
 
 // ---- Templates -------------------------------------------------------------

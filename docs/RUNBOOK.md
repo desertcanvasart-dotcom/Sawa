@@ -3,8 +3,17 @@
 ## Before anything ships
 
 ```bash
-npm run preflight
+npm run preflight -- --base=https://sawa.tours
 ```
+
+**Pass `--base`, or the answer is about localhost.** `smoke` and `audit:claims`
+default to `http://localhost:8795`, so a bare run says nothing about production.
+The runner prints the target in its verdict and lists what it could NOT check
+(`SMOKE_TOKEN`, `PRODUCTION_DB_HOST`) — CCC3.
+
+One runner prints one verdict. It used to be a `&&` chain in which every step
+printed its own success line and nothing printed the whole, which is how
+"preflight green" got reported for a command that exits 1.
 
 Runs, cheapest first:
 
