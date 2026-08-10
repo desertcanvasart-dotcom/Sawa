@@ -52,7 +52,11 @@ const CASES = [
   // ---- the three that had actually diverged --------------------------------
   // Stored `minimum_reached`, bookings since cancelled. The hand-written copies
   // trusted the stored value and called it confirmed and running; the server
-  // recomputes and calls it open.
+  // recomputed and called it open.
+  //
+  // BBBB1 — the server now agrees with the copies. Once a date reaches GoAhead
+  // it runs, so this case is here to prove the two sides AGREE rather than to
+  // prove they diverge.
   ["stored minimum_reached, bookings since cancelled",
     { status: "minimum_reached", minSeats: 4, pledges: [{ seats: 4, status: "cancelled" }, { seats: 1, status: "confirmed" }] }],
   // `Number(x.seats || x.pax) || 1` turned a seatless row into one traveller.
@@ -121,18 +125,35 @@ test("it fires when the copies diverge — W3", () => {
     || old.isFormingDeparture(d) !== server.isFormingDeparture(d)
     || old.isGoAheadDeparture(d) !== server.isGoAheadDeparture(d));
 
+  // BBBB1 — this expected THREE until 10 August 2026, and the drop to two is
+  // not the check weakening. It is a policy change landing.
+  //
+  // "stored minimum_reached, bookings since cancelled" no longer diverges,
+  // because the old hand-written copies TRUSTED the stored value and the server
+  // now does too. Under the old rule the copies were wrong; under the client's
+  // settled rule — once a date reaches GoAhead it runs — they were accidentally
+  // right about a policy that did not exist yet.
+  //
+  // The two that remain are genuine implementation defects and must still fire.
   assert.ok(
-    diverged.length >= 3,
-    `the old implementation should disagree with the server on at least three cases; it disagreed on ${diverged.length}`
+    diverged.length >= 2,
+    `the old implementation should disagree with the server on at least two cases; it disagreed on ${diverged.length}`
   );
   const labels = diverged.map(([l]) => l);
   for (const expected of [
-    "stored minimum_reached, bookings since cancelled",
     "a pledge row carrying no seats value",
     "a pledge row using pax",
   ]) {
     assert.ok(labels.includes(expected), `the known divergence "${expected}" was not detected`);
   }
+
+  // And the third case must now AGREE, for the stated reason. Asserted rather
+  // than deleted: if it starts diverging again, the ratchet has been lost and
+  // the promise on the site is no longer true.
+  assert.ok(
+    !labels.includes("stored minimum_reached, bookings since cancelled"),
+    "a confirmed date that dropped below its minimum is diverging again — the BBBB1 ratchet is gone"
+  );
 });
 
 test("the checked-in browser copy is what the generator produces", () => {

@@ -62,11 +62,33 @@ export function seatsTotal(pledges = []) {
 // Terminal and human-controlled states are returned as stored: pending_review
 // is waiting on ops and must never auto-advance from a pledge count, and
 // supplier_confirmed, closed and cancelled are decisions nobody's booking may
-// undo. Everything else is derived from the seats held right now — including a
-// stored `minimum_reached` whose bookings have since been cancelled, which is
-// how a date can fall back to `open`.
+// undo. Everything else is derived from the seats held right now.
+//
+// ---------------------------------------------------------------------------
+// BBBB1 — `minimum_reached` JOINED THAT LIST ON 10 AUGUST 2026, AND THAT IS A
+// REVERSAL OF A DOCUMENTED DECISION, NOT A BUG FIX.
+//
+// This comment used to end: "including a stored `minimum_reached` whose
+// bookings have since been cancelled, which is how a date can fall back to
+// `open`." That was deliberate and, under the old policy, right: a date short
+// of its minimum was not running, however it got there.
+//
+// The client has settled the opposite rule. Once a departure reaches GoAhead it
+// runs, even if travellers drop out afterwards — so reaching the minimum is an
+// EVENT, not a running total, and a date cannot un-confirm itself.
+//
+// What this is scoped to, precisely: HEADCOUNT. Sawa does not cancel a
+// confirmed date for low numbers. A site closure, an operator failure or a
+// safety situation still cancels it, with a full refund — that lives in the
+// Terms, not in this rule, and not in any promise on the site (P1.5).
+//
+// The consequence worth stating: the stored value is now AUTHORITATIVE once it
+// says `minimum_reached`. A date confirmed at four and since dropped to three
+// reads `minimum_reached` here, stays on /goahead, stays off the forming board,
+// and — the reason this matters most — is no longer a candidate for the
+// unattended cancel job.
 export function statusFor(departure, pledges = departure?.pledges) {
-  if (["pending_review", "supplier_confirmed", "closed", "cancelled"].includes(departure?.status)) {
+  if (["pending_review", "minimum_reached", "supplier_confirmed", "closed", "cancelled"].includes(departure?.status)) {
     return departure.status;
   }
   return seatsTotal(pledges) >= goAheadSeatsFor(departure) ? "minimum_reached" : "open";

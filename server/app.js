@@ -1669,7 +1669,16 @@ async function refreshStatus(c, departureId) {
   const row = dep.rows[0];
   // pending_review must not auto-advance from pledge counts — only an admin
   // approval moves it to 'open' (traveler-initiated departures, Phase A).
-  if (["pending_review", "supplier_confirmed", "closed", "cancelled"].includes(row.status)) return;
+  //
+  // BBBB1.1 — `minimum_reached` is in this list now. Once a date reaches
+  // GoAhead it runs, so nothing recomputes it downward.
+  //
+  // Without this, the sequence was: four seats -> minimum_reached, travellers
+  // told it is confirmed; one cancels -> refreshStatus writes `open` again;
+  // past the confirm deadline the unattended job selects it (it queries
+  // WHERE status = 'open') and CANCELS A CONFIRMED DEPARTURE, emailing everyone
+  // that it will not run. The cancellation email is already built and live.
+  if (["pending_review", "minimum_reached", "supplier_confirmed", "closed", "cancelled"].includes(row.status)) return;
   // Cancelled pledges have freed their seats — exclude them from the count.
   const seats = (await c.query(
     `SELECT COALESCE(SUM(seats),0) AS s FROM pledges WHERE departure_id=$1 AND status <> 'cancelled'`,
