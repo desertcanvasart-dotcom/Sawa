@@ -146,16 +146,6 @@ absence of reconciliation, not a claim about it.
 
 ---
 
-### L-9 — Two implementations of the referral code rule
-
-| | |
-|---|---|
-| **What is divergent** | `server/app.js`'s `cleanRefCode` and `src/main.jsx`'s `cleanRef` are the same rule under two names. A code generated client-side and cleaned server-side by separate implementations can disagree, and a partner's attribution is a commission. |
-| **What masks it** | They currently agree. |
-| **What would arm it** | Either being edited. **The derived duplication catalogue cannot see this**, because neither is in `shared/` — it answers *"is an authority being copied"*, not *"is this thing an authority"*. |
-| **Where that is defined** | `server/app.js:322`; `src/main.jsx:2286`; the limit is recorded in [invariant-doors.md](invariant-doors.md) |
-
----
 
 ### L-10 — "Four" is a per-product number stated universally
 
@@ -187,6 +177,7 @@ Removing these would lose the reasoning that makes the live entries legible.
 |---|---|---|
 | **`check:status-literals` could not read `CHECK (col IS NULL OR col IN (…))`** — correct for the forms it knew, silently incomplete for one it did not, hiding five permitted values | no migration used that form until 023 | the parser now reads both shapes |
 | **Five static pages carried a pre-fix `tourSlug`** emitting a 301 loop for a title that slugifies to nothing | **every live title happening to contain a non-stop-word ASCII token** — enforced nowhere | DIR-8; one authority, one generated file, `check:slug` |
+| **L-9 — two implementations of the referral code rule.** `cleanRefCode` in `server/app.js`, `cleanRef` in `src/main.jsx`: byte-identical bodies, two names. The client reads `?ref=` from the URL and the server stores what it is sent — normalise differently and a referral is captured under one string and recorded under another, with **no error and no failed request** | **both were correct, so nothing could observe the risk** — and `grep cleanRef` found only one of them | `shared/ref-code.js`; `check:duplication` now owns the name |
 | **Instructions that were wrong when written.** `server/slug.js`'s header asked the next person to keep the copies in sync and named **three of nine** | — following it correctly still left six stale | DIR-8 |
 | **A table created after 024 has no RLS.** 024's `REVOKE` carries forward via `ALTER DEFAULT PRIVILEGES`; **RLS does not** | 024 was the most recent migration for three days | 026 enables it on itself; a test asserts every later table does |
 | **`consent.js` dropped a throwing consent listener**, so consent could be granted and the thing it grants never happen | the listeners did not throw | AAA1 fix; the scanner's roots now include `site` |

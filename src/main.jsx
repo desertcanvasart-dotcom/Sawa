@@ -45,6 +45,8 @@ const SUPPORT_AVAILABILITY = INTERIM_COPY["support-availability"];
 // used to carry hand-written copies of seatsTotal and goAheadFor with a comment
 // asking the next person to keep them in sync with domain.js.
 import { seatsTotal, goAheadSeatsFor } from "../shared/departure-state.js";
+import { livePriceFor, priceFromTiers, clampPrice } from "../shared/pricing.js";
+import { cleanRefCode } from "../shared/ref-code.js";
 // Lazy-loaded so the heavy authenticated portal (admin desk + TipTap editor)
 // is split out of the public bundle and never downloaded by visitors.
 const LoginGate = lazy(() => import("./LoginGate").then((m) => ({ default: m.LoginGate })));
@@ -103,10 +105,14 @@ function isPackage(item) {
   return item && item.type === "package";
 }
 
-// NN2.1 — `goAheadFor` is the authority's `goAheadSeatsFor` under the name this
-// file already used everywhere. The local copy differed: it read `minSeats`
-// only, where the server also accepts a raw `min_seats` row.
-const goAheadFor = goAheadSeatsFor;
+// NN2.1 kept `goAheadSeatsFor` under a local alias `goAheadFor`, because this
+// file already used that name everywhere. The alias is gone: a second name for
+// one function is a second thing to grep for, and `grep goAheadSeatsFor` should
+// find every place the threshold is read. Same reason the `slugify` alias went.
+//
+// The original finding stands and is why the alias existed at all: the local
+// copy read `minSeats` only, where the authority also accepts a raw `min_seats`
+// row straight from the database.
 
 function confidenceFor(seats, goAhead = DEFAULT_GO_AHEAD) {
   if (seats >= goAhead) return { label: "GoAhead confirmed", tone: "go" };
@@ -162,40 +168,8 @@ function formatRange(start, end) {
   return `${monthFmt.format(startDate)} ${dayFmt.format(startDate)}${startYear} – ${monthFmt.format(endDate)} ${dayFmt.format(endDate)}${endYear}`;
 }
 
-function safePrice(value, fallback) {
-  const price = Number(value);
-  return Number.isFinite(price) && price > 0 ? price : fallback;
-}
 
-// Mirror of priceFromTiers in server/domain.js. These two must agree exactly:
-// this one decides the price a traveler is shown, that one decides the price
-// they are charged, and a disagreement is a quote the server won't honour.
-function priceFromTiers(tiers, seats) {
-  if (!Array.isArray(tiers) || !tiers.length) return null;
-  const sorted = tiers
-    .map((t) => ({ seats: Number(t?.seats), price: Number(t?.price) }))
-    .filter((t) => Number.isFinite(t.seats) && Number.isFinite(t.price) && t.seats > 0 && t.price > 0)
-    .sort((a, b) => a.seats - b.seats);
-  if (!sorted.length) return null;
-  const n = Number(seats) || 0;
-  let match = sorted[0];
-  for (const t of sorted) if (n >= t.seats) match = t;
-  return Math.round(match.price);
-}
 
-// Mirror of livePriceFor in server/domain.js — same caveat as above.
-function livePriceFor(item, seats) {
-  const goAhead = goAheadFor(item);
-  const startPrice = safePrice(item.publishedRate, 80);
-  const breakPrice = Math.min(startPrice, safePrice(item.breakPrice, Math.round(startPrice * 0.8)));
-  const maxSeats = Math.max(Number(item.maxSeats || goAhead), goAhead);
-  const effectiveSeats = Math.min(maxSeats, Math.max(goAhead, Number(seats || 0)));
-  const fromTable = priceFromTiers(item?.priceTiers, effectiveSeats);
-  if (fromTable != null) return fromTable;
-  const steps = Math.max(1, maxSeats - goAhead);
-  const progress = Math.min(1, Math.max(0, effectiveSeats - goAhead) / steps);
-  return Math.round(startPrice - (startPrice - breakPrice) * progress);
-}
 
 function rateFor(departure) {
   return livePriceFor(departure, seatsTotal(departure.pledges));
@@ -291,7 +265,7 @@ function PaymentTimeline() {
 // exactly what a copy does.
 function departureStatusLabel(departure) {
   const seats = seatsTotal(departure.pledges);
-  const goAhead = goAheadFor(departure);
+  const goAhead = goAheadSeatsFor(departure);
   if (departure.status === "supplier_confirmed") return "Supplier confirmed";
   if (seats >= goAhead) return "GoAhead";
   const need = goAhead - seats;
@@ -527,12 +501,12 @@ function App() {
   const selectedRate = useMemo(() => {
     if (!selected) return 0;
     if (isPackage(selected)) {
-      const projected = Math.max(seatsTotal(selected.pledges) + Number(seatCount || 0), goAheadFor(selected));
+      const projected = Math.max(seatsTotal(selected.pledges) + Number(seatCount || 0), goAheadSeatsFor(selected));
       return packagePriceFor(selectedProduct, selected, projected, { roomingType, tierId });
     }
     return rateFor(selected);
   }, [selected, selectedProduct, seatCount, roomingType, tierId]);
-  const goAheadSelected = selected ? goAheadFor(selected) : DEFAULT_GO_AHEAD;
+  const goAheadSelected = selected ? goAheadSeatsFor(selected) : DEFAULT_GO_AHEAD;
   const isConfirmed = selected ? selectedSeats >= goAheadSelected : false;
 
   // Reset/sync package-specific form fields when switching selection
@@ -551,7 +525,7 @@ function App() {
       const cityProducts = tourProducts.filter((product) => product.city === cityName);
       const cityDepartures = departures.filter((departure) => departure.city === cityName);
       const seats = cityDepartures.reduce((sum, departure) => sum + seatsTotal(departure.pledges), 0);
-      const goAhead = cityDepartures.filter((departure) => seatsTotal(departure.pledges) >= goAheadFor(departure) || departure.status === "supplier_confirmed").length;
+      const goAhead = cityDepartures.filter((departure) => seatsTotal(departure.pledges) >= goAheadSeatsFor(departure) || departure.status === "supplier_confirmed").length;
       return { name: cityName, products: cityProducts.length, departures: cityDepartures.length, seats, goAhead };
     });
   }, [cities, departures, tourProducts]);
@@ -561,7 +535,7 @@ function App() {
       seats: visibleDepartures.reduce((sum, departure) => sum + seatsTotal(departure.pledges), 0),
       departures: visibleDepartures.length,
       products: visibleProducts.length,
-      goAhead: visibleDepartures.filter((departure) => seatsTotal(departure.pledges) >= goAheadFor(departure) || departure.status === "supplier_confirmed").length,
+      goAhead: visibleDepartures.filter((departure) => seatsTotal(departure.pledges) >= goAheadSeatsFor(departure) || departure.status === "supplier_confirmed").length,
     };
   }, [visibleDepartures, visibleProducts]);
 
@@ -580,7 +554,7 @@ function App() {
 
   const customerSummary = useMemo(() => {
     const goAheadDates = visibleDepartures.filter((departure) => {
-      return departure.status === "supplier_confirmed" || seatsTotal(departure.pledges) >= goAheadFor(departure);
+      return departure.status === "supplier_confirmed" || seatsTotal(departure.pledges) >= goAheadSeatsFor(departure);
     }).length;
     return {
       tours: visibleProducts.length,
@@ -1312,7 +1286,7 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
   const [blockedDates, setBlockedDates] = useState(null); // operator blackouts (Autoura feed)
 
   const dep = tour.dates.find((d) => Number(d.id) === Number(depId)) || lead;
-  const goAhead = goAheadFor(tour);
+  const goAhead = goAheadSeatsFor(tour);
   const booked = dep ? seatsTotal(dep.pledges) : 0;
   const remaining = dep ? Math.max(0, dep.maxSeats - booked) : 0;
   const nSeats = Math.max(1, Number(seats || 1));
@@ -1624,7 +1598,7 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
                       <div className="lbl">{reqMode ? "Start your own date" : "Live dates for this tour"}</div>
                       {!reqMode && tour.dates.map((d) => {
                         const s = seatsTotal(d.pledges); const left = d.maxSeats - s; const on = Number(d.id) === Number(depId);
-                        const ga = goAheadFor(d); const cf = d.status === "supplier_confirmed" || s >= ga;
+                        const ga = goAheadSeatsFor(d); const cf = d.status === "supplier_confirmed" || s >= ga;
                         return (
                           <button
                             type="button"
@@ -1687,7 +1661,7 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
                             <div style={{ marginTop: 10 }}>
                               <div className="lbl">Groups already forming near that date — joining confirms a trip faster:</div>
                               {reqMatches.map((m) => {
-                                const ms = seatsTotal(m.pledges); const mga = goAheadFor(m);
+                                const ms = seatsTotal(m.pledges); const mga = goAheadSeatsFor(m);
                                 return (
                                   <button type="button" className="date-opt" key={m.id} onClick={() => { setDepId(m.id); setReqMode(false); setReqMatches(null); }}>
                                     <div className="d-left"><b>{formatDate(m.date, { alwaysYear: true })}{m.time ? ` · ${m.time}` : ""}</b><span>{ms} of {mga} joined</span></div>
@@ -1771,7 +1745,7 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
                           not one they can rely on. */}
                       {dep?.confirmDeadline && (
                         <div className="nt">
-                          This date confirms or cancels by <b>{formatDate(dep.confirmDeadline, { alwaysYear: true })}</b> — {dep.confirmDeadlineDays} days before departure. If it hasn't reached {goAheadFor(dep)} travelers by then it's canceled and you're charged nothing.
+                          This date confirms or cancels by <b>{formatDate(dep.confirmDeadline, { alwaysYear: true })}</b> — {dep.confirmDeadlineDays} days before departure. If it hasn't reached {goAheadSeatsFor(dep)} travelers by then it's canceled and you're charged nothing.
                         </div>
                       )}
                       <PaymentTimeline />
@@ -1817,7 +1791,7 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
               <h2 style={{ fontFamily: "'Fraunces',serif", fontWeight: 500, color: "var(--teal)", fontSize: "clamp(1.9rem,3.6vw,2.6rem)", letterSpacing: "-.02em" }}>You might also join</h2>
               <div className="rel-grid">
                 {related.map((p) => {
-                  const ld = openDates(p)[0] || p.dates[0]; const s = ld ? seatsTotal(ld.pledges) : 0; const ga = goAheadFor(p);
+                  const ld = openDates(p)[0] || p.dates[0]; const s = ld ? seatsTotal(ld.pledges) : 0; const ga = goAheadSeatsFor(p);
                   const cf = ld && (ld.status === "supplier_confirmed" || s >= ga); const pr = ld ? livePriceFor({ ...p, ...ld }, s) : livePriceFor(p, ga);
                   // Was an <a> with no href and an onClick to /tour/<raw id>:
                   // not keyboard-reachable, no open-in-new-tab, invisible to
@@ -1894,8 +1868,8 @@ function PublicSite({
     const bLead = b.dates[0];
     const aSeats = aLead ? seatsTotal(aLead.pledges) : 0;
     const bSeats = bLead ? seatsTotal(bLead.pledges) : 0;
-    const aConfirmed = aSeats >= goAheadFor(aLead || a) ? 1 : 0;
-    const bConfirmed = bSeats >= goAheadFor(bLead || b) ? 1 : 0;
+    const aConfirmed = aSeats >= goAheadSeatsFor(aLead || a) ? 1 : 0;
+    const bConfirmed = bSeats >= goAheadSeatsFor(bLead || b) ? 1 : 0;
     return bConfirmed - aConfirmed || bSeats - aSeats;
   });
 
@@ -2289,11 +2263,8 @@ function observeReveal(root, selector, options) {
 // ---- Referral attribution (?ref=CODE) ----
 const REF_KEY = "sawa_ref";
 const REF_TTL = 30 * 24 * 60 * 60 * 1000; // remember the partner for 30 days
-function cleanRef(raw) {
-  return String(raw || "").toLowerCase().replace(/[^a-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 48);
-}
 function refFromUrl() {
-  try { return cleanRef(new URLSearchParams(window.location.search).get("ref")); } catch (e) { return ""; }
+  try { return cleanRefCode(new URLSearchParams(window.location.search).get("ref")); } catch (e) { return ""; }
 }
 // On a real landing (not the embed itself): remember the partner + count one
 // click-through. Stored client-side; sent with the booking later.
@@ -2433,9 +2404,9 @@ function EmbedWidget({ type, product }) {
   const pkg = isPackage(product);
   const lead = openDates(product)[0] || product.dates[0];
   const seats = lead ? seatsTotal(lead.pledges) : 0;
-  const goAhead = goAheadFor(product);
+  const goAhead = goAheadSeatsFor(product);
   const livePrice = lead ? livePriceFor({ ...product, ...lead }, seats) : livePriceFor(product, goAhead);
-  const breakPrice = safePrice(product.breakPrice, Math.round(product.publishedRate * 0.8));
+  const breakPrice = clampPrice(product.breakPrice, Math.round(product.publishedRate * 0.8));
   const url = withEmbedRef(`${SITE_URL}/${pkg ? "package" : "tour"}/${product.id}`);
   const facts = pkg
     ? `${(product.cities || [product.city]).join(" · ")}`
@@ -2530,7 +2501,7 @@ function ToursPage({ navigate, customerCalendars, cityStats, selectedCity, setSe
   items = items.slice().sort((a, b) => {
     const al = a.dates[0], bl = b.dates[0];
     const as = al ? seatsTotal(al.pledges) : 0, bs = bl ? seatsTotal(bl.pledges) : 0;
-    const ac = as >= goAheadFor(al || a) ? 1 : 0, bc = bs >= goAheadFor(bl || b) ? 1 : 0;
+    const ac = as >= goAheadSeatsFor(al || a) ? 1 : 0, bc = bs >= goAheadSeatsFor(bl || b) ? 1 : 0;
     return bc - ac || bs - as;
   });
 
@@ -3185,14 +3156,14 @@ function CardLink(props) {
 }
 
 function TourCard({ navigate, product }) {
-  const goAhead = goAheadFor(product);
-  const goAheadDates = product.dates.filter((departure) => departure.status === "supplier_confirmed" || seatsTotal(departure.pledges) >= goAheadFor(departure)).length;
+  const goAhead = goAheadSeatsFor(product);
+  const goAheadDates = product.dates.filter((departure) => departure.status === "supplier_confirmed" || seatsTotal(departure.pledges) >= goAheadSeatsFor(departure)).length;
   const leadDate = openDates(product)[0] || product.dates[0];
   const seats = leadDate ? seatsTotal(leadDate.pledges) : 0;
   const confidence = confidenceFor(seats, goAhead);
   const stops = routeStops[product.id] || [product.city, product.title];
   const livePrice = leadDate ? livePriceFor({ ...product, ...leadDate }, seats) : livePriceFor(product, goAhead);
-  const breakPrice = safePrice(product.breakPrice, Math.round(product.publishedRate * 0.8));
+  const breakPrice = clampPrice(product.breakPrice, Math.round(product.publishedRate * 0.8));
   const full = productFullyBooked(product);
 
   return (
@@ -3243,13 +3214,13 @@ function TourCard({ navigate, product }) {
 }
 
 function PackageCard({ navigate, product }) {
-  const goAhead = goAheadFor(product);
+  const goAhead = goAheadSeatsFor(product);
   const leadDate = openDates(product)[0] || product.dates[0];
   const seats = leadDate ? seatsTotal(leadDate.pledges) : 0;
   const confidence = confidenceFor(seats, goAhead);
   const cities = product.cities || [product.city];
   const livePrice = leadDate ? livePriceFor({ ...product, ...leadDate }, seats) : livePriceFor(product, goAhead);
-  const breakPrice = safePrice(product.breakPrice, Math.round(product.publishedRate * 0.8));
+  const breakPrice = clampPrice(product.breakPrice, Math.round(product.publishedRate * 0.8));
   const full = productFullyBooked(product);
 
   return (
@@ -3401,7 +3372,7 @@ function AgencyDesk(props) {
           <div className="departure-list">
             {filtered.map((departure) => {
               const seats = seatsTotal(departure.pledges);
-              const ga = goAheadFor(departure);
+              const ga = goAheadSeatsFor(departure);
               const dIsPackage = isPackage(departure);
               return (
                 <button key={departure.id} className={`departure-row ${selected.id === departure.id ? "selected" : ""}`} onClick={() => setSelectedId(departure.id)}>

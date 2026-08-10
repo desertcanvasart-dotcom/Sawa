@@ -27,6 +27,11 @@ export {
 } from "../shared/departure-state.js";
 import { DEFAULT_GO_AHEAD, MAX_GROUP_SIZE, numberWord } from "../shared/group-size.js";
 import { goAheadSeatsFor, seatsTotal, statusFor } from "../shared/departure-state.js";
+// One pricing implementation, in shared/, because the price shown and the price
+// charged were two copies guarded by a comment saying they must agree.
+// Re-exported so existing importers of server/domain.js are unaffected.
+import { clampPrice, priceFromTiers, livePriceFor } from "../shared/pricing.js";
+export { clampPrice, priceFromTiers, livePriceFor };
 
 // MIN_GROUP_SIZE is the floor a listing may not go below, which is the same
 // number as the default threshold. Named separately because they mean different
@@ -66,51 +71,8 @@ export function defaultDepositFor(item) {
   return isPackage(item) ? DEFAULT_PACKAGE_DEPOSIT : DEFAULT_DAY_TOUR_DEPOSIT;
 }
 
-function clampPrice(value, fallback) {
-  const price = Number(value);
-  return Number.isFinite(price) && price > 0 ? price : fallback;
-}
 
-// Explicit per-headcount pricing, when an operator wants it.
-//
-// Stored as breakpoints rather than one row per traveller, because real costs
-// step rather than slide: a 7-seater up to six people, a minibus beyond. The
-// price for N travellers is the last breakpoint at or below N, so a sparse
-// table like 4→$110, 7→$85, 10→$60 prices every group size in between without
-// the operator typing each one.
-//
-// Returns null when there is no usable table, which is the signal to fall back
-// to the published/break interpolation.
-export function priceFromTiers(tiers, seats) {
-  if (!Array.isArray(tiers) || !tiers.length) return null;
-  const sorted = tiers
-    .map((t) => ({ seats: Number(t?.seats), price: Number(t?.price) }))
-    .filter((t) => Number.isFinite(t.seats) && Number.isFinite(t.price) && t.seats > 0 && t.price > 0)
-    .sort((a, b) => a.seats - b.seats);
-  if (!sorted.length) return null;
-  const n = Number(seats) || 0;
-  // Below the first breakpoint, the first breakpoint's price applies — the
-  // table is validated to start at the minimum group size, so this only comes
-  // up for a legacy row that predates that rule.
-  let match = sorted[0];
-  for (const t of sorted) if (n >= t.seats) match = t;
-  return Math.round(match.price);
-}
 
-export function livePriceFor(item, seats) {
-  const goAhead = goAheadSeatsFor(item);
-  const startPrice = clampPrice(item.publishedRate, 80);
-  const breakPrice = Math.min(startPrice, clampPrice(item.breakPrice, Math.round(startPrice * 0.8)));
-  const maxSeats = Math.max(Number(item.maxSeats || goAhead), goAhead);
-  const effectiveSeats = Math.min(maxSeats, Math.max(goAhead, Number(seats || 0)));
-  // Clamped first: a party of 20 on a twelve-seat tour pays the twelve price,
-  // under the table exactly as under the curve.
-  const fromTable = priceFromTiers(item?.priceTiers, effectiveSeats);
-  if (fromTable != null) return fromTable;
-  const steps = Math.max(1, maxSeats - goAhead);
-  const progress = Math.min(1, Math.max(0, effectiveSeats - goAhead) / steps);
-  return Math.round(startPrice - (startPrice - breakPrice) * progress);
-}
 
 // Validates an operator-supplied table. Returns { tiers } or { error }.
 //
