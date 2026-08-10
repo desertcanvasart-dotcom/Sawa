@@ -33,11 +33,18 @@ import { join, dirname, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+import { INTERIM_COPY } from "../shared/site-copy.js";
+
 const arg = (name, dflt) => {
   const hit = process.argv.find((a) => a.startsWith(`--${name}=`));
   return hit ? hit.slice(name.length + 3) : dflt;
 };
 const BASE = arg("base", "http://localhost:8795").replace(/\/$/, "");
+
+// The agreed support-availability string, from the one place that owns it.
+// null while undecided, in which case every availability phrasing is a finding
+// again — which is the correct behaviour for "nobody has decided yet".
+const AGREED_AVAILABILITY = INTERIM_COPY["support-availability"];
 const AS_JSON = process.argv.includes("--json");
 
 // ---------------------------------------------------------------- patterns
@@ -55,8 +62,20 @@ export const RULES = [
     re: /\b[\d,]{3,}\+?\s*(?:travell?ers|travelers|customers|guests|bookings)\s*(?:hosted|served|carried)?/gi },
   { id: "tenure", why: "BRAND.foundingDate is empty; a tenure claim needs a subject and a record",
     re: /\b\d{1,3}\s*(?:yrs|years)\s*(?:operating|in business|of experience)/gi },
+  // DIR-17.1 — this rule tests DRIFT, not phrasing.
+  //
+  // Its `why` has always said "must be ONE string from ONE config value". The
+  // regex only ever tested the first half: it flagged any availability wording,
+  // so once the four variants were replaced by the single agreed string it went
+  // on flagging all nine renderings of the correct answer. A check that cannot
+  // pass when the defect is fixed is not measuring the defect.
+  //
+  // `ok` derives the permitted phrasing from the config itself, so the auditor
+  // and the site cannot disagree about what the one string is — the same
+  // one-authority argument the rule exists to enforce, applied to the rule.
   { id: "availability", why: "must be ONE string from ONE config value; four contradictory ones were live",
-    re: /24\/7|24 hours a day|around the clock|within (?:two|2) hours|9\s*am\s*[–-]\s*9\s*pm/gi },
+    re: /24\/7|24 hours a day|around the clock|within (?:two|2) hours|9\s*am\s*[–-]\s*9\s*pm/gi,
+    ok: (ctx) => AGREED_AVAILABILITY != null && ctx.includes(AGREED_AVAILABILITY) },
   // HH1 — this flags "verified" as a STATUS, not the word.
   //
   // The distinction matters twice over. /verification-standard, when it
