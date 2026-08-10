@@ -37,6 +37,9 @@ test("every page loads the shared stylesheet, ahead of its own styles", () => {
 });
 
 test("the footer and reveal rules are defined once, in shared.css", () => {
+  // DIR-14 — a loop is a claim about every member and says nothing about
+  // whether there are any. This test is worthless on an empty set.
+  assert.ok(pages().length > 10, `only ${pages().length} pages`);
   // One rule from each group is enough to catch a copy coming back.
   const owned = [".fbot{", ".fcol a{", ".socials{", ".rv{"];
   const shared = read(join(root, "site/assets/shared.css"));

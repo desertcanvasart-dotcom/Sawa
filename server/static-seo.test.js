@@ -85,6 +85,9 @@ const PAGES = {
 };
 
 test("every static page declares the brand and the site", () => {
+  // DIR-14 — a loop is a claim about every member and says nothing about
+  // whether there are any. This test is worthless on an empty set.
+  assert.ok(Object.keys(PAGES).length > 10, `only ${Object.keys(PAGES).length} pages — PAGES is not being read`);
   // The reason this module exists: /" carried no Organization entity at all,
   // which is where the logo is read from.
   for (const [path, file] of Object.entries(PAGES)) {
@@ -223,6 +226,9 @@ test("trailing slashes and query strings resolve to the same page", () => {
 });
 
 test("the static page set and the sitemap have not drifted apart", () => {
+  // DIR-14 — a loop is a claim about every member and says nothing about
+  // whether there are any. This test is worthless on an empty set.
+  assert.ok(Object.keys(PAGES).length > 10, `only ${Object.keys(PAGES).length} pages — PAGES is not being read`);
   // These are the URLs the sitemap advertises; each one needs a file to serve.
   for (const [path, file] of Object.entries(PAGES)) {
     assert.ok(existsSync(join(siteDir, file)), `${path} has no file at site/${file}`);

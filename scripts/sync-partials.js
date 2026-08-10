@@ -20,11 +20,28 @@ import { fileURLToPath } from "node:url";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const siteDir = join(root, "site");
 
+// DIR-14 — the one guard, at the source, rather than in twelve tests.
+//
+// Nine tests loop over this to assert something about every page. If it ever
+// returned an empty list — a moved directory, a changed extension, a glob that
+// stops matching — every one of them would pass having asserted nothing, and a
+// vacuous pass renders identically to a real one.
+//
+// This repository has already paid for that exact shape: a check used
+// `fs.globSync`, which does not exist on Node 20, found zero files and exited 0.
+// scripts/run-tests.js refuses an empty run for the same reason.
+//
+// Guarding here rather than in each caller means a tenth test written next month
+// inherits it without anyone remembering to add a line.
 export function pages() {
   const top = readdirSync(siteDir).filter((f) => f.endsWith(".html")).map((f) => join(siteDir, f));
   const dest = readdirSync(join(siteDir, "destinations"))
     .filter((f) => f.endsWith(".html")).map((f) => join(siteDir, "destinations", f));
-  return [...top, ...dest].sort();
+  const all = [...top, ...dest].sort();
+  if (!all.length) {
+    throw new Error("sync-partials: no pages found under site/. Refusing to report a pass on an empty set.");
+  }
+  return all;
 }
 
 // The partial carries a note explaining that it is the source. That belongs in

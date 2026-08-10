@@ -40,6 +40,9 @@ test("it stops on travel prose, which is what the site is mostly made of", () =>
 });
 
 test("the UK spelling list matches the one the static-page test enforces", () => {
+  // DIR-14 — a loop is a claim about every member and says nothing about
+  // whether there are any. This test is worthless on an empty set.
+  assert.ok(UK_SPELLINGS.length > 10, `only ${UK_SPELLINGS.length} words — the list is not being read`);
   // Two lists would drift, and the drift would be invisible: each would pass on
   // its own surface. Same MM3 argument as everywhere else here.
   const constants = readFileSync(join(ROOT, "server", "constants.test.js"), "utf8");

@@ -253,6 +253,9 @@ test("a page may not mark a key that has no value", () => {
 });
 
 test("every key in site-copy.js is either decided or listed as undecided", () => {
+  // DIR-14 — a loop is a claim about every member and says nothing about
+  // whether there are any. This test is worthless on an empty set.
+  assert.ok(Object.keys(INTERIM_COPY).length, "INTERIM_COPY is empty — this asserts nothing");
   for (const [key, value] of Object.entries(INTERIM_COPY)) {
     if (value == null) assert.ok(UNDECIDED.includes(key), `${key} is null but not listed in UNDECIDED`);
     else assert.ok(typeof value === "string" && value.trim(), `${key} must be a non-empty string`);
