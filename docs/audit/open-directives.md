@@ -362,32 +362,26 @@ are not lost in the meantime.
 
 ---
 
-## LLL6 — Current order
+## Current order
 
-Set by the client 10 Aug 2026. Items 1–4 and 7 use labels that are **not in this
-repository** — see the note below.
+Revised by the client 10 Aug 2026, after the consolidated directives below were
+issued. Every label now has a home in this repository.
 
 | # | Item | State |
 |---|---|---|
-| 1 | **GGG3** availability — 11 findings | gated on the WhatsApp number being live; copy may be written, not published |
-| 2 | **FFF2.1** payment copy — 3 findings | gate goes green |
-| 3 | **III2 / JJJ1.3** pricing authority — who can change a price today | |
-| 4 | **GGG1** entity disclosure | once the registered name and number arrive |
-| 5 | **DIR-14** vacuous-test sweep | per LLL5.2. **First item not blocked on a client answer.** |
-| 6 | **LLL4** payment, refund and hold schema | shaped by LLL1.1, LLL2.2, LLL3.3 |
-| 7 | **GGG4** the payment-link alert | |
-| 8 | **LLL3** the hold state across page, lookup and email | |
-| 9 | **DIR-3** latent defects, **DIR-5** invariant enumeration | |
-| 10 | Staged seed | LLL5.1 first |
+| 1 | Capture the consolidated directives, then merge #91 | **done — this document** |
+| 2 | **DIR-17** availability — 11 findings | gated on the WhatsApp number being live |
+| 3 | **DIR-18** payment copy — 3 findings | gate goes green |
+| 4 | **DIR-21** pricing authority | **report only** — do not resolve by choosing |
+| 5 | **DIR-19** entity disclosure | once the registered name and number arrive |
+| 6 | **DIR-14** vacuous-test sweep | per LLL5.2 |
+| 7 | **LLL4** payment, refund and hold schema | corrected per LLL1.1 |
+| 8 | **DIR-20** the payment-link alert | |
+| 9 | **LLL3** the hold state across page, lookup and email | |
+| 10 | **DIR-3** latent defects, **DIR-5** invariant enumeration | |
+| 11 | Staged seed | LLL5.1 re-derivations first |
 
-**Held:** HHH2 and III4 — Terms and the transactional email rewrite, pending the
-pricing answer.
-
-> **Labels not held.** `GGG1`, `GGG3`, `GGG4`, `FFF2.1`, `HHH2`, `III2`, `III4`,
-> `JJJ1`, `JJJ1.3` appear nowhere in this repository — no commit, no branch, no
-> document. They are BBB1's shape again: work that exists only in conversation.
-> Items 1, 2, 3, 4 and 7 of the order cannot be started from what is written
-> down. **They need capturing here before they can be picked up.**
+**Held:** DIR-22, pending DIR-21.
 
 ---
 
@@ -417,3 +411,196 @@ pricing answer.
 | 11 | Verification checks performed today | `/verification-standard` |
 | 12 | Read-only role, `DATABASE_URL_READONLY` | closes the runtime-`SET` gap (DIR-3, E-8) |
 | 13 | `PRODUCTION_DB_HOST` | upgrades the schema check to its strong form |
+
+---
+
+# Consolidated directives — availability, payment copy, entity, alert, pricing, agency
+
+**Issued in chat 10 August 2026 and captured here before any of it is worked.**
+BBB1's shape a fourth time; refusing to guess at the labels was the right call
+and this is the fix.
+
+Verification pass run at capture time. **VERIFIED** blocks are what was checked
+against the repository; anything without one was not.
+
+---
+
+## LLL1.1 — ANSWERED: the hold inherits the confirm deadline
+
+**The hold period inherits `confirmDeadlineDaysFor`. It does not flatten to 7.**
+
+The reasoning, recorded so it is not later "tidied" into a constant: the confirm
+deadline exists because a package needs lead time — hotel rooms, cruise cabins
+and internal flights must be sourced. A package confirming at T-8 cannot be
+delivered. Day tours are 7 because a guide and a vehicle can be arranged
+quickly. **The deadline already encodes operational reality per product type,
+and the hold inherits it.**
+
+- **LLL2.1 final:** payment is due within 3 days, or by the departure's confirm
+  deadline, whichever is sooner — against `confirmDeadlineDaysFor`, never a
+  literal.
+- **LLL2.2 splits by product type.** Option B closes package bookings at T-30
+  and day tours at T-7. Whether the two warrant different answers is itself the
+  client decision.
+- The collision table starts at **T-33** for packages.
+
+Separately with the client: whether 30 days is the right package deadline at
+all, or whether it costs bookings operators could in fact fulfil.
+
+---
+
+## DIR-17 — Availability copy *(was GGG3)*
+
+Client confirmed: **support is genuinely staffed 24/7, via WhatsApp.**
+
+- **17.1** — one string from the config already built, replacing all four live
+  variants. Locations: `/contact`, `/faq`, the `/faq` JSON-LD,
+  `/goahead-promise` ×2, `/terms`, `llms.txt`, `llms-full.txt`, bundle ×3.
+- **17.2** — name the channel: **"WhatsApp, answered 24/7"**. "24/7 support" is
+  not checkable; naming the channel makes it verifiable on a first message.
+- **17.3** — **do not publish before the number is reachable on the site.** A
+  24/7 promise with no visible way to reach anyone is worse than no promise.
+  Verify the number renders in served output first.
+
+Expected: **11 findings clear.**
+
+> **VERIFIED — the config exists and is null, as briefed.**
+> `shared/site-copy.js:35` → `"support-availability": null`, with the header
+> already recording *"live in six places saying four different things"* and a
+> sync that refuses to render a null. The four strings appear across
+> `site/contact.html`, `site/faq.html`, `site/goahead-promise.html`,
+> `site/terms.html`, `server/seo.js`, `shared/site-copy.js` and `src/main.jsx`.
+> **The mechanism is built; only the value and the gate are missing.**
+
+---
+
+## DIR-18 — Payment copy *(was FFF2.1)*
+
+Model: **secure payment link after GoAhead, into Sawa's own merchant account,
+sent manually for now.** Balance in cash on arrival or by a further link.
+
+- **18.1** — deposit displays can now be true: *due once your date confirms,
+  paid by secure link.* Propose per location.
+- **18.2** — split `"100% refunded if a date never confirms"`, which cannot
+  cover all three cases: (1) never reached minimum — nothing charged, nothing to
+  refund, DIR-9's wording; (2) cancelled after confirmation and payment — a real
+  refund with a stated timeframe; (3) **dropped below minimum after payment**
+  because a traveller did not pay — those who paid are refunded in full, and the
+  copy must explain why a confirmed date stopped being confirmed **without
+  blaming the traveller who did not pay.**
+- **18.3** — `/terms` refund lines aligned to the same three cases.
+
+Expected: **3 findings clear. Gate goes green.**
+
+---
+
+## DIR-19 — Entity disclosure *(was GGG1)*
+
+Client confirmed **Sawa is separately incorporated**, and counsel has cleared it
+to collect payment under Egyptian law. **Registered name and number to be
+supplied. Do not proceed with placeholders.**
+
+- **19.1** — footer, About "Who runs Sawa" (carrying the restored 1993 founder
+  history), JSON-LD `legalName`/`address`/registration identifiers, privacy
+  controller identity and the attribution paragraph, and the mail templates
+  reading *"Capital Travel Service, trading as Sawa Tours"*.
+- **19.2** — sweep for the old entity string using the **response-derived**
+  method; it appears in transactional email and may sit in a partial or a
+  database field rather than obvious source.
+- **19.3** — Capital Travel Service becomes an **operator record** with the
+  founding-partner label, no longer the operator of the platform.
+
+> **VERIFIED — the sweep is larger than "the footer".** `Capital Travel Service`
+> appears in at least **10 `site/*.html` files**: index, about, goahead-promise,
+> contact, cookies, terms, how-it-works, departures, operators, goahead. 19.2's
+> response-derived method is the right instrument — a source grep alone will
+> miss the mail templates and anything stored in a column.
+
+---
+
+## DIR-20 — The payment-link alert *(was GGG4)*
+
+When a departure reaches GoAhead, email the portal that a payment link needs
+creating.
+
+- **20.1** — trigger **from wherever the transition is authoritative, not from a
+  route handler.** It must fire whether the departure confirms via a booking, an
+  admin action, or any future path.
+- **20.2** — contents sufficient to act without opening anything else: route,
+  date, operator, travellers confirmed, seats, each traveller's name, contact
+  and amount due, and a direct portal link to the departure.
+- **20.3** — **email is the prompt, not the record.** Pair with a payment-state
+  queue in the portal: an unread email is indistinguishable from no departure
+  needing a link — the mirror's shape, and here it costs revenue directly.
+- **20.4** — PP2 discipline: record intended sends, assert they happened, fail
+  loudly on shortfall. A GoAhead with no alert sent is an **error**, not a quiet
+  success.
+
+> **VERIFIED — 20.1 has a specific home.** `refreshStatus(c, departureId)` at
+> `server/app.js:1653` is where status is recomputed after a write, and it is
+> already called from inside transactions by multiple paths. That, or the
+> `withDepartureWrites` boundary that TT1 established for the mirror, is the
+> "authoritative" place 20.1 is asking for — and the mirror is the worked
+> precedent for exactly this mistake.
+
+---
+
+## DIR-21 — Pricing authority *(was III2 / JJJ1.3)*
+
+**A contradiction in the client's answers. DIR-22 is held on it.**
+
+- *"the operator prices the package and Sawa takes a commission out of it"*
+- *"sawa admin change the price — no matter what"*
+
+| Version | Position |
+|---|---|
+| Operator agrees the retail price; Sawa enters it because operators cannot | administrative data entry — **agency intact** |
+| Operator quotes a net rate; Sawa decides the traveller-facing price | buying net, reselling at a margin — **principal** |
+
+"Commission" does not settle it. **Who chooses the number** settles it.
+
+- **21.1** — report what the system permits.
+- **21.2** — **do not resolve it by choosing.** Record both statements in the
+  legal register, dated, with the reconciliation question stated. The pricing
+  route is audited as of this week, so the record will now accumulate evidence
+  about the arrangement — the code and the contract should agree before it does.
+
+> **VERIFIED — the code implements BOTH statements simultaneously, so it cannot
+> settle the question. That is the finding.**
+>
+> | | |
+> |---|---|
+> | **Operators *can* price** | `upsertTourProduct` writes `published_rate`, `break_price`, `base_cost` and `price_tiers`, and is reachable from `POST /api/agency/tour-products`. `validatePriceTiers`' own comment: *"the server charges what this returns."* |
+> | **In practice they do not** | **All 14 approved products have `agency_id IS NULL`** — every live listing was created platform-side, and every price on the site is one Sawa entered. Two `listing.submit` events exist (July); neither is a currently-approved agency listing. |
+> | **Sawa can override anything** | `POST /api/admin/tour-products/:id/pricing` rewrites the product **and every departure under it** in one request. |
+> | **⚠️ The absence of `product.pricing` audit rows proves nothing** | that route was **unaudited until #88 (10 Aug 2026)**. Zero rows is the expected reading of a counter that started this week, not evidence the route was never used. |
+>
+> So: the permission model supports the agency reading, and **current practice
+> is the principal reading** — Sawa chose every number now live. Recorded, not
+> resolved, per 21.2.
+
+---
+
+## DIR-22 — Agency structure in the Terms *(was HHH2 / III4)* — **HELD pending DIR-21**
+
+Client's position: Sawa is the **agent**, the operator is the contracting party,
+Sawa collects payment **on the operator's behalf**, and the booking confirmation
+must say so.
+
+- **22.1** — §15 currently reads as **principal**: *"we will offer, as
+  appropriate: an equivalent or comparable alternative, with any price
+  difference clearly explained."* An agent's version states what the **operator**
+  will do and that Sawa will assist. Identical outcome for the traveller,
+  opposite legal posture.
+- **22.2** — review the whole Terms for the same pattern. Report every clause
+  where Sawa is stated or implied to provide, supply, arrange or stand behind
+  the tour. **Expect several** — Terms written before a structure is settled
+  default to principal language because it sounds reassuring.
+- **22.3** — three things become explicit: the **contracting party** named
+  before booking on the departure page (the operator name is shown; the
+  statement of **role** is missing); **payment collected on the operator's
+  behalf**, which is what makes collecting money consistent with not being the
+  organiser; and **the booking confirmation** saying both, or it undoes what the
+  Terms establish.
+- **22.4** — **propose only.** Client and counsel approve before anything is
+  applied. Bundle with DIR-19.2 and DIR-9 — one review, not three.

@@ -200,9 +200,20 @@ the emptiness itself.
 |---|---|
 | **LLL2.2** — dates confirming inside the deadline (A or B, and whether packages differ) | client |
 | **LLL3.3** — can a paid traveller withdraw during a hold | client |
-| **LLL1.1** — does the hold period follow the confirm deadline per product type, or is 7 days intended as a flat override of it? | **client — this one is new, and the brief did not know it was a question** |
+| ~~**LLL1.1**~~ | **ANSWERED 10 Aug 2026 — see below** |
 
-LLL1.1 is the one to answer first. Both LLL2 and LLL4 are shaped by it, and it
-cannot be resolved from the code: the code says packages are 30 days, but
-whether the *hold policy* should follow that or flatten it to 7 is a commercial
-choice, not a technical one.
+## LLL1.1 — ANSWERED: the hold inherits the confirm deadline
+
+**It does not flatten to 7.** Recorded with the reasoning so it is not later
+"tidied" into a constant: the confirm deadline exists because a package needs
+lead time — hotel rooms, cruise cabins and internal flights must be sourced. A
+package confirming at T-8 cannot be delivered. Day tours are 7 because a guide
+and a vehicle can be arranged quickly. The deadline already encodes operational
+reality per product type, and the hold inherits it.
+
+So LLL1.2 above is the rule, and **LLL2.2 splits by product type** — option B
+closes package bookings at T-30 and day tours at T-7. Whether they warrant
+different answers is itself the client decision.
+
+Raised separately with the client: whether 30 days is the right package deadline
+at all, or whether it costs bookings operators could in fact fulfil.
