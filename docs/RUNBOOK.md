@@ -486,3 +486,28 @@ work that is not yet done, and the client answers each item waits on.
 there before the branch is cut.** BBB1 was raised as a merge blocker for #85,
 lived only in conversation, and did not block anything — the session that merged
 had no way to know it existed. Chat is not a record.
+
+---
+
+## W3 — prove it fires. Prove it stops.
+
+A check must demonstrate **both** states.
+
+**Prove it fires.** Plant the defect and assert the check reports it. A check
+that has never been shown to find anything is indistinguishable from one that
+cannot.
+
+**Prove it stops** — NNN1. Construct a correct implementation and assert the
+check accepts it. A check that reports a finding regardless of the code gets
+baselined, exempted or ignored within a fortnight, and then it is gone along
+with whatever it was protecting.
+
+The instructive case is `audit-claims`' availability rule. Its `why` had always
+read *"must be ONE string from ONE config value"*; the regex only ever tested
+the first clause. Stated intent and implementation had diverged from the day it
+was written — and **nothing could have surfaced that except fixing the defect
+and watching the check refuse to acknowledge it** (DIR-17, 11 findings became 9,
+not 0).
+
+So where a rule carries a stated intent, assert the implementation tests all of
+it. That gap is invisible until the defect is fixed.
