@@ -167,8 +167,63 @@ and LLL1.2 is why: the rule depends on the product's confirm deadline, which an
 operator can change. Deriving it would let an override silently move a deadline
 that has already been communicated.
 
-Not written until LLL2.2 and LLL3.3 are answered — the permitted values of the
-departure-level hold field depend on both.
+**PARTLY BUILT 10 Aug 2026.** The split is the point:
+
+| | |
+|---|---|
+| **the per-pledge payment record** | **proposed — `server/db/schema_028_payment_window.sql`, not applied (B5)** |
+| **the departure-level hold fields** | **still held**, exactly as this paragraph says: their permitted values depend on LLL2.2 and LLL3.3, both open with the client. Writing them now would answer two client questions by declaration. |
+
+### `shared/payment-window.js` — LLL1.2 as one authority
+
+> Payment is due within 3 days, or by the confirm deadline, whichever is sooner.
+
+Expressed against `confirmDeadlineAt`, never against 7. LLL1.1 is why: a
+hard-coded 7 is wrong for the four live packages today and for every override
+ever set. Proved with a package and a day tour taking **different answers from
+the same instant**, and with a per-listing override moving the window.
+
+**Three states, not two.** A window is `full`, `compressed`, or
+**`already-closed`** — a date confirmed manually after its own deadline. Calling
+that "compressed" would tell a traveller they have time when they have none, and
+`paymentDueAt` deliberately does **not** clamp the instant forward: a deadline
+that quietly moves itself is the thing storing it prevents.
+
+`payment_window_bound_by` is stored beside the instant, so *"why do I have until
+Tuesday"* has an answer after the fact.
+
+### One departure from the brief, stated rather than made quietly
+
+LLL4 lists **`overdue`** as a stored state. It is not one here. It is entirely
+determined by `payment_due_at` and `paid_at`, both stored — so a stored copy is a
+second answer to one question, needing a job to keep it true. **That is BBBB4's
+shape exactly**: a status recomputed from underlying facts, disagreeing with them
+between ticks, with an unattended job acting on the stale one.
+
+Derived, it cannot be stale, and it is indexed:
+
+```sql
+payment_due_at < now() AND paid_at IS NULL AND payment_state = 'link_sent'
+```
+
+If a stored flag is wanted — for a hand-marked exception — that is a fair answer
+and the migration comment is where it should be recorded. It should not arrive by
+default.
+
+### Verified against an ephemeral Postgres 17
+
+Full schema plus all 28 migrations. Two controls that must be accepted (a pledge
+with **no** payment record; a complete one), three constraints that must reject
+(an invented state, a due date with no link ever sent, an invented bound-by), the
+overdue query answered with no `overdue` column, and idempotency. Cluster
+destroyed.
+
+### Relationship to DIR-20, stated so it is not read as duplication
+
+`departure.goahead_alert` records that **ops were asked** to create a link, per
+departure. `payment_state` records what happened to **one traveller's payment**.
+Different grains, different facts — the DIR-20 queue does not become stale when
+this lands, and this does not re-answer it.
 
 ---
 
