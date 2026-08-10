@@ -1,0 +1,43 @@
+# UUU1 — the gate that runs without anyone remembering.
+#
+# The step list lives in scripts/preflight.js and is derived by
+# scripts/ci-gate.js. It is deliberately NOT restated here: a check added to
+# preflight but not to CI would be invisible in exactly the situation CI exists
+# for, and this repository has paid for that class of duplication more than once.
+#
+# No secrets. Nothing here needs production credentials — ci-gate supplies a
+# dummy DATABASE_URL that never connects, so modules building a pool at import
+# time still load. Verified: 390/390 with no .env present.
+#
+# What cannot run here is reported UNVERIFIED, never absent and never green.
+name: PR gate
+
+on:
+  pull_request:
+    branches: [main]
+
+# A second push to the same PR cancels the first — an in-flight run against
+# superseded code is a verdict about nothing.
+concurrency:
+  group: pr-gate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      # WW3/XX1 — which runtime produced the evidence. The project pins >=22 and
+      # check:node fails the gate on anything older, so this must match or the
+      # first step reports a toolchain difference rather than a defect.
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - run: npm ci
+
+      - name: Run the credential-free gate
+        run: node scripts/ci-gate.js

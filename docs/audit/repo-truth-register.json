@@ -55,6 +55,13 @@
    "verdict": "AGREES",
    "contradicts": null,
    "note": "Internal, and true as written. 024 exists in the repository and is not applied to production — check:applied-schema is RED on exactly that, and the Data API exposure it closes is still live. The statement explains why the watchdog heartbeat went into audit_log rather than a new table, and it makes no public claim: nothing on any served surface says anything about migrations. Re-verify when 024 is applied — the sentence becomes historical at that point, which is E-shaped and belongs in the evidence register if it is ever quoted outside this file."
+  },
+  "a79f6f11a77d": {
+   "where": "docs/RUNBOOK.md:602",
+   "text": "`contact.html` | a comment documenting an all-zero placeholder number read as a second live number |",
+   "verdict": "AGREES",
+   "contradicts": null,
+   "note": "Internal and historical, and verified when written: site/contact.html carries an HTML comment recording that +20 100 000 0000 / wa.me/201000000000 was once a live all-zero placeholder. It is a comment, not a rendered number — the served page shows only +20 109 284 7613. The runbook cites it as one of four cases where a search matched the searcher's own writing. No public surface makes any claim about it."
   }
  }
 }

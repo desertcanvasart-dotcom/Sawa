@@ -86,6 +86,12 @@ Seed with:
   by the role
 - the `check:status-literals` `IS NULL OR` parser gap — correct for the forms it
   knew, silently incomplete for one it did not
+- **instructions that were wrong when written.** `server/slug.js`'s header asked
+  the next person to keep the copies in sync and named **three of nine**.
+  Following it correctly would still have left six stale — and five of those six
+  carried a 301-loop defect. The masking invariant was every live title
+  happening to slugify to something, which nothing enforced. Closed by DIR-8;
+  kept as the worked example of a defect whose carrier is a comment.
 
 > **VERIFIED 10 Aug 2026 — the register does not exist; OPEN.** Two seed entries
 > need restating before they go in:
@@ -774,3 +780,38 @@ a writer who is not the person who authored the 16 product descriptions.
 **Both parties producing copy for this site default to British without
 noticing.** That is observed rather than inferred, which makes it stronger
 evidence than the market argument. Recorded against QQQ1.
+
+---
+
+## UUU1 — CI, because discipline is a promise
+
+`npm run preflight` before every commit is a promise. Twice it was not kept, and
+the second time was three days after the rule meant to prevent it was written.
+
+`.github/workflows/pr.yml` runs on every pull request against `main`. The step
+list is **derived from `scripts/preflight.js`**, not restated in YAML — a check
+added to preflight but not to CI would be invisible in exactly the situation CI
+exists for.
+
+**No secrets.** `ci-gate.js` supplies a dummy `DATABASE_URL` that never
+connects; verified at 390/390 with no `.env` present.
+
+**Three steps cannot run and are reported UNVERIFIED**, never absent and never
+green: `check:applied-schema` (needs the production database), `smoke` and
+`audit:claims` (need a running site). The PR summary states the scope, so a green
+badge carries it.
+
+**Proven both ways (NNN1), and the firing case is the real one:** unregistering
+the `server/watchdog.js` build-truth statement — recreating #99 exactly — turns
+the gate RED on `audit:repo-truth`. **The mechanism catches the specific failure
+that motivated it.**
+
+### UUU5.4 — the dependency chain for `/verification-standard`
+
+```
+/verification-standard  →  needs the agencies schema (OOO3.1 / UUU5)
+                        →  needs the client's list of checks actually performed
+```
+
+**Both are blockers, not one.** The client's answer alone is not sufficient: a
+verification performed and unrecorded is unrecoverable the moment it is done.
