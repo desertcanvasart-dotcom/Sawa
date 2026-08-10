@@ -1369,3 +1369,41 @@ What is already built and waiting for that row:
 | the promise checker | **OOO1.2** — `licence` starts passing on its own the day a record carries one; nothing asserts absence |
 | `/verification-standard` | blocked on the client's list of checks, not on schema (OOO3) |
 | operator name on a departure | renders from `agencyId` → `agencies.name`; **0 of 16 products link to one** |
+
+---
+
+## DDDD6.1 — the launch blocker is larger than "no signed operator"
+
+**Found 10 Aug 2026, while checking whether the DIR-19.3 insert would publish
+anything.** It would not — and the reason is the finding.
+
+**There is no public path to an operator name at all.**
+
+| | |
+|---|---|
+| `agencies` | `server/app.js:530` — `agencies: isPlatform(user) ? agencies.rows.map(mapAgency) : []`. **Anonymous callers get an empty array.** |
+| the public product payload | carries `agencyId` and **no name** — verified live against `/api/public/tour-products/:id` |
+
+So even with a signed operator attached to a product tomorrow, **the site could
+not display its name.** DDDD6 is owned by the client and correctly stated as
+commercial; this is the technical half nobody had written down, and it is a code
+change, not a data one.
+
+### It also broke my own checker, in the way that checker exists to catch
+
+OOO1.2's `name` probe reads `payload.agencies`. Anonymously that is always
+empty, so the probe would have reported **`unmet` forever** — including on the
+day a real operator was attached. **A probe that cannot pass**, which is exactly
+NNN1.2's failure, inside the tool written to embody it. Third time this session.
+
+`unservable` is now a state of its own: *the question was not answered*, never
+*the answer was no*. Proved both ways — it fires when the payload carries no
+agencies, and stops the moment one does.
+
+### What is actually needed, when an operator is signed
+
+1. an operator name on the **public** payload — denormalised onto the product, or
+   a public agency projection carrying **name and verification state only**
+2. **not** the whole `agencies` row: it holds `contact_name`, `phone`, and 025's
+   licence and insurance numbers. Publishing that to fix a copy promise would be
+   the Data API exposure again, by hand.
