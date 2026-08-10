@@ -24,6 +24,7 @@
     "smoke": "node scripts/smoke-routes.js",
     "check:status-literals": "node scripts/check-status-literals.js",
     "check:catch-handlers": "node scripts/check-catch-handlers.js",
+    "check:audit-coverage": "node scripts/audit-coverage.js",
     "check:applied-schema": "node scripts/check-applied-schema.js",
     "sync:rules": "node scripts/sync-departure-rules.js",
     "check:rules": "node scripts/sync-departure-rules.js --check",

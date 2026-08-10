@@ -209,6 +209,52 @@ says the opposite.
 
 ---
 
+## 6. Data API exposure — personal data readable by anyone
+
+**Question.** Does a period during which staff identities, email recipient
+addresses and a full activity log were readable over the internet by anyone
+holding a public key constitute a notifiable personal data breach, and if so to
+whom and within what period?
+
+**Why it arose.** Found 10 August 2026 while auditing `audit_log` integrity.
+Four facts composed: row-level security was disabled on all 13 tables, `anon`
+and `authenticated` held full DML on every one, the Supabase Data API was live,
+and the anon key is published in the site's JavaScript by design. A request
+carrying that key returned rows.
+
+**Facts as they stand.** Full technical record in
+`docs/audit/data-api-exposure.md`.
+
+| Table | Rows | Personal data readable |
+|---|---|---|
+| `app_users` | 2 | email, full name, role, status — staff identities, including which account is `super_admin` |
+| `email_log` | 28 | recipient addresses and subjects of real sends |
+| `audit_log` | 63 | actor email, action, entity, timestamp — a full activity history |
+| `pledges` | **0** | traveller name, email, phone — **none exposed; the table is empty** |
+| `operator_applications` | **0** | applicant contact details — **none exposed; empty** |
+
+- **No traveller personal data was exposed**, because no traveller data exists
+  yet. That is a fact about timing, not about the control.
+- **Period:** from project creation until migration 024 is applied to
+  production. The earliest firm date available internally is 2026-05-22.
+- **Evidence of access:** `pg_stat_statements` records **seven** Data API
+  requests by `anon` in its retained window (since 2026-05-31 14:37 UTC), and
+  all seven are the probes issued during this investigation. Nothing else.
+- **The limit of that evidence, stated:** it covers 71 days, not the whole
+  period, and Postgres attributes no request to an IP, origin or user-agent.
+  **"No evidence of access within the retained window" is not "no access
+  occurred."** Supabase's dashboard API logs are the only source that can
+  narrow this further, and they must be pulled before their retention expires.
+
+**Blocked behind the answer.** Whether notification is required, and to whom.
+Note this does **not** block the fix: 024 should be applied regardless of the
+legal answer, and applying it does not concede anything.
+
+**Status:** open. **Two actions are time-sensitive and independent of counsel:**
+apply 024, and pull the dashboard API logs before they roll off.
+
+---
+
 ## Summary
 
 | # | Question | Exposure now | Blocks |
@@ -218,6 +264,7 @@ says the opposite.
 | 3 | Rating display | None — nothing displayed | Reviews schema |
 | 4 | Autoura disclosure | Low — inventory only, and **prospective**: nothing has ever been transmitted | A privacy policy line, **drafted**, publishes alone |
 | 5 | Entity disclosure | Site currently states the pre-change position | All of Phase 2 |
+| 6 | **Data API exposure** | **Live until 024 is applied** — staff identities, email recipients and the activity log readable by anyone. No traveller data, because there is none yet | Notification decision. **Does not block the fix.** |
 
 ## Send 1 and 2 together
 

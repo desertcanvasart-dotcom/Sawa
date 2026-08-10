@@ -40,6 +40,7 @@ export const STEPS = [
   { name: "check:constants", script: "scripts/sync-constants.js", args: ["--check"] },
   { name: "check:status-literals", script: "scripts/check-status-literals.js" },
   { name: "check:catch-handlers", script: "scripts/check-catch-handlers.js" },
+  { name: "check:audit-coverage", script: "scripts/audit-coverage.js" },
   { name: "check:rules", script: "scripts/sync-departure-rules.js", args: ["--check"] },
   { name: "check:applied-schema", script: "scripts/check-applied-schema.js" },
   { name: "audit:repo-truth", script: "scripts/audit-repo-truth.js" },
