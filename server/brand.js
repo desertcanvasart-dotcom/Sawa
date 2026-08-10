@@ -40,7 +40,22 @@ export const BRAND = {
   sameAs: [], // TODO social profile URLs: Instagram, Facebook, TripAdvisor, etc.
   awards: [], // TODO e.g. ["…"]
   // Shown to search engines as hasCredential, and printed in every footer.
-  accreditations: ["Operated by Capital Travel Service — ETAA licence no. 2179"],
+  // DIR-19 / DDDD2 — the operating entity. Rendered EXACTLY as supplied: no
+  // legal-form suffix was given, so none is added. Inventing "LLC" or "S.A.E."
+  // would be a claim about a company's registered form that nobody made.
+  legalName: "Online Era",
+  registrationNumber: "148500",
+
+  // ⚠️ ETAA 2179 IS NOT ONLINE ERA'S. It is Capital Travel Service's travel-agency
+  // registration, and it used to sit in the footer because CTS was presented as
+  // the operator of the platform. Under DIR-19.3 CTS becomes an OPERATOR RECORD
+  // — a founding partner — and the number goes with it.
+  //
+  // Leaving it here would present one company's licence as another's, which is
+  // the exact class this project removes. If Online Era holds its own tourism
+  // registration, that is a fact the client has not supplied, and an empty list
+  // is the honest state until they do.
+  accreditations: [],
   knowsAbout: [
     "Egypt day tours", "Shared group tours", "Cairo tours", "Giza Pyramids",
     "Grand Egyptian Museum", "Luxor tours", "Valley of the Kings", "Aswan tours",
@@ -77,6 +92,14 @@ export function travelAgencySchema() {
       postalCode: BRAND.address.postalCode || undefined,
       addressCountry: BRAND.address.addressCountry || undefined,
     },
+    legalName: BRAND.legalName || undefined,
+    // The registration number as a typed identifier rather than free text, so a
+    // consumer can read it without parsing a sentence. `name` says only
+    // "Registration" — the registry it belongs to was not supplied and is not
+    // guessed.
+    identifier: BRAND.registrationNumber
+      ? { "@type": "PropertyValue", name: "Registration", value: BRAND.registrationNumber }
+      : undefined,
     contactPoint: {
       "@type": "ContactPoint",
       contactType: "customer service",

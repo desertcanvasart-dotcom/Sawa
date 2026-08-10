@@ -1201,7 +1201,7 @@ function SxFooter() {
           <div className="fcol"><h4>Operators</h4><a href="/operators">List a tour</a><a href="/verify">List with Sawa</a><a href="/widget">Get the widget</a></div>
           <div className="fcol"><h4>Company</h4><a href="/about">About Sawa</a><a href="/contact">Support</a><a href="/privacy">Privacy Policy</a><a href="/cookies">Cookies</a><a href="/terms">Terms and Conditions</a></div>
         </div>
-        <div className="fbot"><span>© 2026 Sawa Tours · Operated by Capital Travel Service · ETAA 2179</span></div>
+        <div className="fbot"><span>© 2026 Sawa Tours · Operated by Online Era · Registration 148500</span></div>
       </div>
     </div>
   );
