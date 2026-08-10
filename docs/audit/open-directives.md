@@ -1082,3 +1082,28 @@ again — the BBBB1 ratchet is gone."*
 
 Lowering a threshold is how a check gets gutted, so it is stated where it
 happened rather than in a commit message nobody re-reads.
+
+---
+
+## BBBB6 — the Terms, and what DIR-22 may not touch
+
+**Proposed 10 Aug 2026, `docs/audit/terms-proposal.md`. Nothing applied.**
+
+- **§8 already carries BBBB1.1's promise**, published, with a source comment
+  asserting the code did not need to enforce it. **That assertion was false**
+  until BBBB4 — the job could cancel exactly the date §8 says it will not.
+- **§15 lists six causes in one sentence**, including an unbounded *"another
+  legitimate operational reason"* that reads onto §8's promise. Proposed:
+  three separated causes, force majeure and operator failure explicit under
+  cause 2, the residual bounded to *impossible or unsafe to run as confirmed*.
+- **No cancellation records its cause.** `departures` has no reason column;
+  `pledges.cancelled_reason` is declared and deliberately unwritten (023). The
+  Terms distinguish six causes and the record distinguishes none. **Not folded
+  in** — a code change, filed separately.
+- **DIR-22 stays held.** §2 states the agency reading as fact while all 16
+  approved products have `agency_id IS NULL`. Rewriting it either way resolves
+  DIR-21 by drafting, which 21.2 forbids. §15's *remedies* are left untouched
+  for the same reason.
+
+**Order: BBBB4, then BBBB5, then this.** BBBB5 and BBBB6 say the same thing in
+two registers and should be approved together.
