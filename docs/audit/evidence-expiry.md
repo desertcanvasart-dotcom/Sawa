@@ -87,7 +87,10 @@ More depends on this one sentence than on any other in the repository:
   *"pledges has never held a row; no traveller has been carried"*. The auditor's
   own calibration expires with it.
 - **`docs/audit/cancel-job-rehearsal.md`** — the rehearsal was run against an
-  ephemeral database specifically so this sentence would survive
+  ephemeral database specifically so this sentence would survive. **Re-run
+  10 Aug 2026 against the post-BBBB4 job**, with the confirmed-then-dropped
+  scenario and its counter-proof; the 9 Aug run predates the fix and proves
+  nothing about it.
 - **EEE3** — "no traveller personal data was exposed" during the Data API
   window is true *because of this*, not because of any control
 
