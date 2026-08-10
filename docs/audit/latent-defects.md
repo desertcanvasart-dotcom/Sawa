@@ -166,10 +166,16 @@ absence of reconciliation, not a claim about it.
 | **What would arm it** | One operator, or one admin, setting a different minimum on one listing. |
 | **Where that is defined** | `server/db/schema.sql` — `min_seats`; `shared/departure-state.js` — `goAheadSeatsFor`; the `universal-threshold` rule in `scripts/audit-claims.js` |
 
-The project has already decided this once: the live FAQ says *"usually four"*,
-and the audit rule's `ok` predicate accepts *"its minimum travellers"*. The
-BBBB5 copy proposal names the rule and lets the number follow it, for this
-reason.
+**The hedge is withdrawn (CCCC1).** *"Usually four"* solves a data problem with
+words and spends the clearest sentence on the site doing it — and the site
+already says *"four"* flatly in **eight** places, so hedging would have
+introduced vagueness rather than avoided a claim.
+
+The resolution is to make four true **by rule**. Held on CCCC2 — *does Sawa ever
+want a product requiring more than four to run?* Migration 027 is prepared and
+verified for the NO branch; `docs/audit/group-size-decision.md` sets out both.
+**L-10 closes either way once that is answered** — by constraint, or by the
+number ceasing to be universal and being rendered per departure.
 
 ---
 
