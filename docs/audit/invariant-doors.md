@@ -52,7 +52,7 @@ Fixed, with every listener still running: one failing must not stop the others.
 
 | Invariant | Door | What skips it |
 |---|---|---|
-| **A departure served to a client has been normalised** | `enrichDeparture` | **caller discipline.** `presentDeparture(enriched, user)` names its parameter `enriched` and spreads whatever it is given — 15 call sites, and the expectation is documented in a parameter name. **DIR-6's job:** move it to the boundary. |
+| **A departure served to a client has been normalised** | `loadDeparture`, plus one explicit call | **a new query that maps rows directly.** *Corrected 10 Aug 2026 by DIR-6:* all 14 `presentDeparture` sites currently receive an enriched object — 13 via `loadDeparture`, which enriches internally, and one explicitly. The risk is **latent, not live**, and holds through two doors rather than fourteen. `mapDeparture` is called in three places and two wrap it immediately. See [boundary-proposal.md](boundary-proposal.md). |
 | Every state change is audited | **the route** | `check:audit-coverage` is per-ROUTE. A write inside a job, a helper or a one-off script is invisible to it — including `reset-fabricated-inventory.js`, which deletes. |
 | Copy is US English | **static files** | `constants.test.js` iterates `pages()`. **All 16 product descriptions come from the database and have never been checked** — 30 findings live (PPP1). |
 | The auditor cannot write | `readOnlyPool` | anything else querying production. The X1 guarantee is per-connection, not per-process. |
