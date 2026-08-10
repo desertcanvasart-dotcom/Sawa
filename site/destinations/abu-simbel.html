@@ -415,6 +415,7 @@ section.block{padding:110px 0}
      applies inert, aria-expanded and focus handling when it opens and closes. */
   /* Scroll reveal lives in /assets/sawa.js. */
 </script>
+<script src="/assets/slug.js"></script>
 <script>
 (function(){
   var grid=document.getElementById('dtours'); if(!grid) return;
@@ -422,11 +423,11 @@ section.block{padding:110px 0}
   var USR='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>';
   var JN='<span class="c"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>';
   var MO=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  var STOP={the:1,a:1,an:1,of:1,and:1,or:1},CITY={Cairo:'cairo',Luxor:'luxor',Aswan:'aswan'};
+  /* slug rule: /assets/slug.js, generated from shared/slug.js */
+  var slugify=window.SawaSlug.slugify,tourSlug=window.SawaSlug.tourSlug;
   function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
   function fmt(d){var t=new Date(d+'T00:00:00');if(isNaN(t))return '';return t.getDate()+' '+MO[t.getMonth()]+' '+t.getFullYear();}
-  function slugify(s){return String(s==null?'':s).normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/&/g,' ').replace(/[^a-z0-9]+/g,' ').trim().split(/\s+/).filter(function(w){return w&&!STOP[w];}).join('-');}
-  function tourSlug(p){var isPkg=(p.type||'day_tour')==='package';var s=slugify(p.title);if(!isPkg&&p.city){var c=CITY[p.city]||slugify(p.city);if(c&&s.indexOf(c)<0)s+='-from-'+c;}return s||String(p.id||'');}
+
   function MATCH(p){ return /abu\s*simbel/i.test(p.title); }
   function load(){return fetch('/api/bootstrap',{headers:{'accept':'application/json'}}).then(function(r){if(!r.ok)throw 0;return r.json();}).catch(function(){return fetch('/_dev_bootstrap.json').then(function(r){return r.json();});});}
   load().then(function(data){
