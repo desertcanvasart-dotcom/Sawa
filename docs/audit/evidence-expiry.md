@@ -256,6 +256,22 @@ signal (TTT1).
 
 ---
 
+### E-13 — Every product title slugifies to something
+
+| | |
+|---|---|
+| **Status** | **LIVE** — and it is the invariant holding a 301-loop defect closed |
+| **The claim** | The five `site/destinations/*.html` pages carry a pre-fix `tourSlug` that emits `-from-cairo` or `pkg_xyz789` for a title that slugifies to nothing. No live product does. |
+| **Rests on** | **SNAPSHOT.** All 16 approved titles contain at least one non-stop-word ASCII token. Nothing enforces that — no constraint, no check, no validation on the admin form. |
+| **What would arm it** | **One product with an Arabic title, or a title of only stop-words.** The catalogue is being extended now; two products were added during the session that found this. |
+| **Where that is defined** | `site/destinations/*.html`; the authority is `server/slug.js`, whose comments describe both failure modes in advance |
+
+The consequence if armed: a URL the server 301s to itself, from the SEO landing
+pages the content programme is built on, cached permanently by the browser.
+Full report in [slug-divergence.md](slug-divergence.md).
+
+---
+
 ## What this register does not do
 
 It does not make any of these arguments stronger. An argument from absence is
