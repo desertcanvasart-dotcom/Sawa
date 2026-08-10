@@ -204,6 +204,24 @@ window between the check and the run in which it can quietly stop being true.
 
 ---
 
+### E-11 — No listed product has an operating company attached
+
+| | |
+|---|---|
+| **Status** | **LIVE** |
+| **The claim** | MMM1: `agencies` holds one row ("adham", no phone), no approved product is linked to any agency, and no product page names an operating company. |
+| **Rests on** | a reading of production on **10 August 2026**, plus all 14 rendered product pages. |
+| **What would arm it** | **The first signed operator.** One `agencies` row with a real company, or one product with `agency_id` set, ends it — and at that point the site's eleven "Ministry-licensed operators" claims start being backed by a record instead of an arrangement held outside the system. |
+| **Where that is defined** | `docs/audit/operator-records.md`; `agencies`; `tour_products.agency_id` |
+
+Also expires the narrower reading in the same document: `departures` held **0
+rows** at the reading. It has held rows before (95 inserts, 65 deletes since
+2026-05-22), so this one is a snapshot rather than a never — **unlike
+[E-2](#e-2--no-traveller-has-ever-been-carried), which is a never.** The two
+must not be quoted as though they were the same kind of statement.
+
+---
+
 ## What this register does not do
 
 It does not make any of these arguments stronger. An argument from absence is
