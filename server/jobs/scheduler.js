@@ -79,6 +79,11 @@ async function runSafely(name, fn) {
   }
 }
 
+// PPP1.1 — where the scheduled audit points. Its own origin in production.
+export function auditWatchBase(env = process.env) {
+  return (env.AUDIT_WATCH_BASE || env.APP_URL || "https://sawa.tours").replace(/\/$/, "");
+}
+
 export function startJobScheduler(env = process.env) {
   if (!jobSchedulerEnabled(env)) {
     console.log("[jobs] scheduler off (set ENABLE_JOB_SCHEDULER=1 to run it outside production)");
@@ -91,16 +96,55 @@ export function startJobScheduler(env = process.env) {
     return runCancelUnconfirmed({ ...opts, dryRun });
   });
 
+  // PPP1.1 — the second job, and the header above argues for one.
+  //
+  // Both conditions that made in-process right for cancel-unconfirmed hold here,
+  // and one holds more strongly: THIS JOB WRITES NOTHING. It runs on the
+  // read-only pool (X1), which raises 25006 on any write whatever the
+  // credentials permit — so the worst a bug in it can do is report a wrong
+  // number. cancel-unconfirmed can cancel a departure.
+  //
+  // What it does cost, stated because it weakens the header's first condition:
+  // seconds rather than milliseconds. It fetches every public route from this
+  // process. Deliberately offset from the cancel tick so the two never contend
+  // for the pooler's connection limit, which is 15 in session mode and has
+  // already produced a spurious db-error once.
+  const auditTick = () => runSafely("audit-watch", async ({ log }) => {
+    const { runAuditWatch } = await import("../../scripts/audit-watch.js");
+    const { recordSuccess, recordFailure } = await import("../effect-log.js");
+    const r = await runAuditWatch({ base: auditWatchBase(env) });
+
+    // PPP1.2 — reported whether or not it fails. A new route is information.
+    if (r.routeChange) log(`ROUTE COUNT ${r.routeChange.was} -> ${r.routeChange.now} — production data moved with no deploy behind it`);
+    for (const d of r.drift) log(`${d.now > d.was ? "WORSE" : "better"} ${d.rule}: ${d.was} -> ${d.now}`);
+
+    if (r.regressed || r.degraded) {
+      recordFailure("claimsAudit", r.degraded
+        || `finding(s) appeared with no deploy: ${r.drift.filter((d) => d.now > d.was).map((d) => `${d.rule} ${d.was}->${d.now}`).join(", ")}`);
+    } else {
+      recordSuccess("claimsAudit");
+    }
+    return { routes: r.current.routes, findings: r.all.length, regressed: r.regressed };
+  });
+
   const first = setTimeout(tick, FIRST_RUN_DELAY_MS);
   const repeat = setInterval(tick, DAY_MS);
+  const auditFirst = setTimeout(auditTick, FIRST_RUN_DELAY_MS * 5);
+  const auditRepeat = setInterval(auditTick, DAY_MS);
   // unref so neither timer holds the process open during a shutdown. Drift is
   // irrelevant for a rule measured in whole days.
   first.unref();
   repeat.unref();
+  auditFirst.unref();
+  auditRepeat.unref();
 
   console.log(`[jobs] scheduler on — cancel-unconfirmed in ${FIRST_RUN_DELAY_MS / 1000}s, then every 24h`);
   console.log(dryRun
     ? "[jobs] cancel-unconfirmed is DRY-RUN — it will log what it would cancel and email, and do neither. Set CANCEL_JOB_DRY_RUN=0 to go live."
     : "[jobs] cancel-unconfirmed is LIVE — it will cancel departures and email travellers.");
-  return () => { clearTimeout(first); clearInterval(repeat); };
+  console.log(`[jobs] audit-watch in ${(FIRST_RUN_DELAY_MS * 5) / 1000}s, then every 24h, against ${auditWatchBase(env)} — read-only, writes nothing`);
+  return () => {
+    clearTimeout(first); clearInterval(repeat);
+    clearTimeout(auditFirst); clearInterval(auditRepeat);
+  };
 }

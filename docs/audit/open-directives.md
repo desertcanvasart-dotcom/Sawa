@@ -728,3 +728,49 @@ to ask about.
 **It cannot give intent or authorisation.** *"Under what process"* is a
 governance question, and no amount of auditing will answer it. Stated here so
 nobody later expects the trail to.
+
+---
+
+## SSS — the line, and protecting zero
+
+The claims audit reached **0 findings** on 10 August 2026. The backlog no longer
+runs as one sequence.
+
+### Launch-blocking — must be true before any article publishes
+
+| # | Item | Why |
+|---|---|---|
+| 1 | **Migration 024** | Data API exposure. **Client action.** |
+| 2 | **DIR-15 route alerts table** | the primary conversion action for the content programme's first six months; "tell me when a group forms" points at `/contact` |
+| 3 | **DIR-8 `slugify` / `tourSlug`** | articles link to dated departure URLs; drift breaks every published link at once |
+| 4 | **QQQ1 spelling standard** | fifty articles in the wrong register is expensive to undo, free to avoid now |
+| 5 | **One real operator record** with OOO3.1's fields | the trust pillar names the operating company before booking, and nothing can name one |
+| 6 | **DIR-14**, then the **staged seed** | an article pointing at an empty board is worse than no article |
+
+### Parallel — no reader sees it
+
+DIR-3, DIR-5, DIR-6, DIR-7, the rest of DIR-8, NNN1.2, DIR-13, DIR-19, DIR-20,
+LLL3, LLL4, OOO1.2. **Held:** DIR-22 pending MMM2.
+
+### SSS4 — protecting zero
+
+Zero is a state, not an achievement, and it decays. Three things keep it, and
+they come **before new rules** — a rule that exists and is trusted is worth more
+than a rule that merely exists.
+
+| | |
+|---|---|
+| **PPP1.1** | **done.** `audit:watch` compares production against a committed baseline and runs daily on the job scheduler. |
+| **NNN1.2** | pass-state audit — a rule that cannot pass gets baselined, and then protects nothing |
+| **QQQ1.4** | extend the spelling check to database copy — the surface that produced 30 findings with nothing watching |
+
+---
+
+## SSS3 — the spelling evidence is now two independent writers
+
+The US gate caught British spelling **twice in two consecutive copy tasks**, from
+a writer who is not the person who authored the 16 product descriptions.
+
+**Both parties producing copy for this site default to British without
+noticing.** That is observed rather than inferred, which makes it stronger
+evidence than the market argument. Recorded against QQQ1.

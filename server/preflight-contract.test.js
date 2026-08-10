@@ -25,6 +25,7 @@ const pkg = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8"));
 const NOT_IN_PREFLIGHT = {
   "test:integration": "needs a live database; named and excluded on purpose",
   "check:node": "in the gate — listed here only so the filter below is explicit",
+  "audit:watch": "compares production against a committed baseline and runs on the job\n    scheduler (PPP1.1). It answers \"did production drift since the last deploy\",\n    which is a different question from \"is this commit shippable\".",
   "audit:page": "takes explicit page arguments; it is the building block for the scheduled\n    production audit (PPP1.1), not a whole-site gate. Running it with no arguments\n    audits nothing, which must not be able to read as a pass.",
 };
 
