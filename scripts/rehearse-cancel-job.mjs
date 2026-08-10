@@ -8,7 +8,7 @@
 // which builds the cluster, runs every step in order, and destroys it.
 //
 // Usage: DATABASE_URL=postgres://sawa@127.0.0.1:55432/sawa_rehearsal \
-//          node scripts/rehearse-cancel-job.mjs <seed|state|dry|live|purge|email>
+//          node scripts/rehearse-cancel-job.mjs <seed|state|dry|live|unratchet|purge|email>
 import "dotenv/config";
 import { pool } from "../server/db/index.js";
 import { runCancelUnconfirmed } from "../server/jobs/cancel-unconfirmed.js";
@@ -17,6 +17,18 @@ import { cancellationEmail } from "../server/email.js";
 const MARK = "REHEARSAL-JJ2";
 const DEP_ID = 999001;
 const PLEDGE_ID = `${MARK}-PLEDGE`;
+
+// BBBB4 — the departure the job must NOT touch. Identical to the candidate above
+// in every respect the job examines except one: it reached its minimum once, so
+// its stored status is `minimum_reached`, and one traveller has since left.
+//
+// Under the pre-BBBB4 code `refreshStatus` recomputed from live seats and wrote
+// `open` back over it, and this row was cancelled by the next tick. The whole of
+// the fix is that the stored value now ratchets. This rehearsal exists to show
+// that at the level of the real job and a real database, rather than by reading
+// the SQL — which is all `confirmed-never-cancelled.test.js` can do.
+const CONFIRMED_ID = 999002;
+const CONFIRMED_PLEDGE = `${MARK}-PLEDGE-CONFIRMED`;
 const INTERNAL_TO = "hello@sawa.tours";
 
 if (!/127\.0\.0\.1:55432\/sawa_rehearsal/.test(process.env.DATABASE_URL || "")) {
@@ -60,7 +72,36 @@ async function seed() {
      VALUES ($1, $2, 1, $3, $4, 'confirmed', $5)`,
     [PLEDGE_ID, DEP_ID, INTERNAL_TO, `${MARK} — synthetic traveller`, MARK]
   );
-  console.log(`seeded: departure #${DEP_ID} starting ${start}, 1 of 4 seats, pledge -> ${INTERNAL_TO}`);
+  // BBBB4's row: 3 of 4 seats, stored `minimum_reached`, same expired deadline.
+  // 3 < 4, so missedConfirmDeadline's seat check does NOT save it — the stored
+  // status is the only thing standing between this date and cancellation.
+  await pool.query(
+    `INSERT INTO departures
+       (id, type, tour_product_id, route, date, start_date, city, min_seats, max_seats,
+        published_rate, status, notes, created_by)
+     VALUES ($1, 'day_tour', $2, $3, $4, $4, $5, 4, 12, 100, 'minimum_reached', $6, 'admin')`,
+    [CONFIRMED_ID, `${MARK}-PRODUCT`, `${MARK} — synthetic CONFIRMED departure, DO NOT SHIP`,
+      start, `${MARK}-CITY`, `${MARK}: BBBB4 rehearsal; confirmed then dropped below minimum`]
+  );
+  await pool.query(
+    `INSERT INTO pledges (id, departure_id, seats, customer_email, customers, status, source)
+     VALUES ($1, $2, 3, $3, $4, 'confirmed', $5)`,
+    [CONFIRMED_PLEDGE, CONFIRMED_ID, INTERNAL_TO, `${MARK} — synthetic travellers`, MARK]
+  );
+
+  console.log(`seeded: #${DEP_ID} open, 1 of 4 seats        <- the job MUST cancel this`);
+  console.log(`seeded: #${CONFIRMED_ID} minimum_reached, 3 of 4  <- the job MUST NOT touch this`);
+}
+
+// The counter-proof. Writes `open` over the confirmed row — exactly what
+// refreshStatus did before BBBB4 — leaving everything else identical.
+//
+// Without this the rehearsal proves only that nothing happened, and nothing
+// happening is also what a job that silently found no rows looks like. NNN1:
+// a check that cannot be shown to fire is not evidence.
+async function unratchet() {
+  await pool.query("UPDATE departures SET status = 'open' WHERE id = $1", [CONFIRMED_ID]);
+  console.log(`#${CONFIRMED_ID} forced back to 'open' — the pre-BBBB4 state, nothing else changed`);
 }
 
 async function state(label) {
@@ -76,8 +117,8 @@ async function state(label) {
 }
 
 async function purge() {
-  await pool.query("DELETE FROM pledges WHERE id = $1", [PLEDGE_ID]);
-  await pool.query("DELETE FROM departures WHERE id = $1", [DEP_ID]);
+  await pool.query("DELETE FROM pledges WHERE id = ANY($1)", [[PLEDGE_ID, CONFIRMED_PLEDGE]]);
+  await pool.query("DELETE FROM departures WHERE id = ANY($1)", [[DEP_ID, CONFIRMED_ID]]);
   await pool.query("DELETE FROM tour_products WHERE id = $1", [`${MARK}-PRODUCT`]);
   await pool.query("DELETE FROM cities WHERE id = $1", [`${MARK}-CITY`]);
   await pool.query("DELETE FROM agencies WHERE id = $1", [`${MARK}-AGENCY`]);
@@ -112,6 +153,7 @@ try {
   else if (cmd === "state") await state("state");
   else if (cmd === "dry") await runCancelUnconfirmed({ dryRun: true });
   else if (cmd === "live") await runCancelUnconfirmed({ dryRun: false });
+  else if (cmd === "unratchet") await unratchet();
   else if (cmd === "purge") await purge();
   else if (cmd === "email") renderEmail();
   else { console.error("unknown command"); process.exit(1); }

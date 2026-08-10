@@ -50,7 +50,9 @@ cd "$ROOT"
 
 run() { node scripts/rehearse-cancel-job.mjs "$1"; }
 
-echo; echo "### 1 — one synthetic candidate, past its deadline"
+echo; echo "### 1 — two synthetic departures, both past the same deadline"
+echo "###     #999001 open, 1 of 4          — the job MUST cancel it"
+echo "###     #999002 minimum_reached, 3 of 4 — BBBB4: the job MUST NOT touch it"
 run seed
 run state
 
@@ -65,7 +67,15 @@ run state
 echo; echo "### a second DRY tick — the terminal state must hold"
 run dry
 
-echo; echo "### 4 — purge"
+echo; echo "### 4 — BBBB4 COUNTER-PROOF. Force #999002 back to 'open' — what"
+echo "###     refreshStatus wrote before the ratchet — and change nothing else."
+run unratchet
+run live
+run state
+echo "###     If #999002 is now cancelled, the stored status was the only thing"
+echo "###     protecting it, and the ratchet is what the fix consists of."
+
+echo; echo "### 5 — purge"
 run purge
 run state
 

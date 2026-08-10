@@ -202,3 +202,68 @@ npm run rehearse:cancel-job
 
 The script refuses to run against any `DATABASE_URL` but the ephemeral rehearsal
 cluster. It is not capable of writing to production.
+
+---
+
+# BBBB4 — the rehearsal re-run against the fixed job
+
+**10 August 2026.** The rehearsal above was run on **9 August**, one day before
+BBBB4 landed. It proved the dry path refrains on a candidate; it could not have
+proved anything about BBBB4, because at the time the defect was still there.
+
+`server/confirmed-never-cancelled.test.js` asserts the fix six ways, but two of
+its six read source text — the shape of `refreshStatus`, and the job's `WHERE`
+clause. **That is reading the function, which this project does not accept as
+evidence.** So the harness was extended to put the BBBB4 scenario in front of the
+real job, against a real database.
+
+## What was seeded — two departures, identical to the job except in one column
+
+| | `#999001` | `#999002` |
+|---|---|---|
+| stored status | `open` | **`minimum_reached`** |
+| seats | 1 of 4 | 3 of 4 |
+| deadline | expired | expired, same date |
+| **should the job cancel it** | **yes** | **no — BBBB1.1** |
+
+3 of 4 matters: `missedConfirmDeadline`'s seat check returns false only at or
+above the minimum, so it does **not** save `#999002`. **The stored status is the
+only thing standing between that date and cancellation.**
+
+## What happened
+
+**DRY** — one candidate, not two:
+
+> `1 departure(s) past their GoAhead deadline (dry run)`
+> `#999001 — 1/4 seats — [would cancel]`
+
+**LIVE** — it fires on one and refrains on the other, in the same tick:
+
+> `#999001 — [cancelled, 1 booking(s) released]` · `cancelled 1, emails sent 1`
+> `#999002 — status still minimum_reached, pledge still confirmed, no email`
+
+## The counter-proof — the half that makes the rest mean anything
+
+Nothing happening is also what a job that quietly matched no rows looks like
+(NNN1). So `#999002` was forced back to `open` — **precisely what `refreshStatus`
+wrote before the ratchet** — and nothing else was touched:
+
+> `#999002 forced back to 'open' — the pre-BBBB4 state, nothing else changed`
+> `1 departure(s) past their GoAhead deadline`
+> `#999002 — 3/4 seats — [cancelled, 1 booking(s) released]`
+> `#999002: 1 of 1 traveller(s) notified`
+
+**The BBBB4 defect, reproduced live.** A confirmed departure cancelled, its
+traveller emailed that the trip will not run. One column's value is the whole
+difference, and the ratchet is what keeps that column.
+
+## What this does not show
+
+- **No email left the machine.** `email_log.status` is `logged` throughout;
+  the rehearsal cluster does not send. What a traveller would receive is
+  rendered at the end of the run, not delivered.
+- **Ephemeral cluster, not production.** Same schema, applied from the same
+  files, destroyed afterwards. E-1's sentence — *"`pledges` has never held a
+  row"* — is still true of production, and was written to survive exactly this.
+- **The synthetic rows were purged**; the `audit_log` entries for both
+  auto-cancels were deliberately left, since 024 made that table append-only.
