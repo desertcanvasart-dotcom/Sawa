@@ -71,7 +71,17 @@ if (isCli) {
   const wanted = generate();
   const check = process.argv.includes("--check");
   let current = "";
-  try { current = readFileSync(OUT, "utf8"); } catch { /* not generated yet */ }
+  // AAA1.3 — a missing file is the expected first-run case and "" is the right
+  // substitute for it, so the substitution is written in the code rather than
+  // described in a comment. A permissions or I/O error is NOT that case and
+  // would otherwise be reported as "stale", sending the reader to regenerate a
+  // file they cannot write.
+  try {
+    current = readFileSync(OUT, "utf8");
+  } catch (e) {
+    if (e.code !== "ENOENT") throw e;
+    current = "";
+  }
 
   if (current === wanted) {
     console.log("site/assets/rules.js matches shared/departure-state.js.");

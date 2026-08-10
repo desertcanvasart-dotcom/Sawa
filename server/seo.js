@@ -26,6 +26,8 @@ const esc = (s) => String(s == null ? "" : s)
 // handled that. There is one implementation now, shared with static-seo.js.
 // Re-exported because app.js imports inlineScriptJson from this module.
 import { ldScript } from "./inline-json.js";
+import { recordFailure } from "./effect-log.js";
+import { rethrowIfProgrammerError } from "./errors.js";
 export { inlineScriptJson } from "./inline-json.js";
 const meta = (attr, key, val) => (val ? `<meta ${attr}="${esc(key)}" content="${esc(val)}">` : "");
 const abs = (u) => (u && !u.startsWith("http") ? BRAND.url + (u.startsWith("/") ? "" : "/") + u : u);
@@ -431,7 +433,16 @@ export async function sitemapXml() {
     tours.rows.forEach((t) => add(tourPath(t), iso(t.lastmod), "weekly"));
     const posts = await pool.query("SELECT slug, updated_at FROM blog_posts WHERE status='published'");
     posts.rows.forEach((p) => add(`/blog/${encodeURIComponent(p.slug)}`, iso(p.updated_at), "monthly"));
-  } catch { /* DB optional */ }
+  } catch (e) {
+    // AAA1.3 — the DB genuinely is optional here, and a comment saying so is
+    // not an effect. During a database outage this block drops every tour and
+    // blog URL, and what comes out — the 23 static routes above, HTTP 200,
+    // well-formed — is indistinguishable from a correct sitemap. Production
+    // serves 38 URLs (ZZ1), so that is well over a third of the catalogue
+    // vanishing with nothing in this process saying a word.
+    rethrowIfProgrammerError(e);
+    recordFailure("sitemapDb", `serving ${urls.length} static URLs only — ${e.message}`);
+  }
   const body = urls.map((u) =>
     `  <url><loc>${esc(u.loc)}</loc>${u.lastmod ? `<lastmod>${esc(u.lastmod)}</lastmod>` : ""}${u.freq ? `<changefreq>${u.freq}</changefreq>` : ""}</url>`
   ).join("\n");
@@ -637,8 +648,15 @@ ${(() => {
         : "- No public departures forming at the moment — travellers can start a date on any itinerary page.";
     })()}
 `;
-  } catch {
+  } catch (e) {
     // Live data is a bonus; the curated guide must never fail because of it.
+    //
+    // AAA1.3 — "must not fail" is not "must not be reported". This is the block
+    // ZZ1 had to fetch /llms-full.txt by hand to prove was working. If it starts
+    // throwing, the page still serves and the only symptom is a section that
+    // quietly stops existing — which is the check ZZ1 ran, run again, forever.
+    rethrowIfProgrammerError(e);
+    recordFailure("llmsLiveBlock", e.message);
   }
   return llmsTxt() + live + `
 

@@ -27,7 +27,7 @@ import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import { logAudit } from "./audit.js";
 import {
-  sendEmail, emailMode,
+  sendEmail, sendEmailInBackground, emailMode,
   inviteEmail, bookingConfirmationEmail, goAheadEmail, cancellationEmail,
   listingApprovedEmail, listingRejectedEmail,
   departureRequestReceivedEmail, departureRequestApprovedEmail, departureRequestDeclinedEmail,
@@ -42,7 +42,12 @@ import {
   inlineScriptJson, sliceBootstrapForRoute, clearSeoCaches, catalogueRoutes,
 } from "./seo.js";
 import { emitDepartureSync, unavailableDates, syncDivergences } from "./autoura-sync.js";
-import { effectReport } from "./effect-log.js";
+import { effectReport, recordFailure } from "./effect-log.js";
+// fireAndForget is not imported here on purpose: the only fire-and-forget in
+// this file is email, and its wrapper lives in email.js next to the contract it
+// depends on. A second place to write that expression is a second place for it
+// to be written differently.
+import { rethrowIfProgrammerError } from "./errors.js";
 import { tourSlug, tourPath } from "./slug.js";
 import { cancelDepartureAndPledges, reportNotifications, CANCEL_REASONS } from "./departure-cancel.js";
 
@@ -673,12 +678,12 @@ app.post("/api/admin/departures", requireAuth, requireRole("super_admin", "ops_s
     detail: { tourProductId: body.tourProductId, date: departure.startDate || departure.date, seats: travelerSeats, source: "admin" },
   });
   if (travelerEmail) {
-    sendEmail(bookingConfirmationEmail({
+    sendEmailInBackground(bookingConfirmationEmail({
       to: travelerEmail, customerName: travelerName, route: departure.route,
       dateLabel: departure.startDate ? `${departure.startDate} – ${departure.endDate}` : departure.date,
       seats: travelerSeats, depositDue: result.pricing.depositDue, balanceDue: result.pricing.balanceDue,
       balanceDueDate: result.pricing.balanceDueDate, bookingCode: result.bookingCode,
-    })).catch(() => {});
+    }));
   }
   res.status(201).json({ departure: presentDeparture(departure, req.user), bookingCode: result.bookingCode });
 }));
@@ -838,7 +843,7 @@ app.post("/api/admin/tour-products/:id/approve", requireAuth, requireRole("super
   await logAudit(req, { action: "listing.approve", entity: "tour_product", entityId: product.id, detail: { title: product.title } });
   const contact = await listingOwnerContact(product);
   if (contact?.email) {
-    sendEmail(listingApprovedEmail({ to: contact.email, fullName: contact.full_name, title: product.title })).catch(() => {});
+    sendEmailInBackground(listingApprovedEmail({ to: contact.email, fullName: contact.full_name, title: product.title }));
   }
   res.json({ product, notified: !!contact?.email });
 }));
@@ -858,7 +863,7 @@ app.post("/api/admin/tour-products/:id/reject", requireAuth, requireRole("super_
   await logAudit(req, { action: "listing.reject", entity: "tour_product", entityId: product.id, detail: { title: product.title, reason } });
   const contact = await listingOwnerContact(product);
   if (contact?.email) {
-    sendEmail(listingRejectedEmail({ to: contact.email, fullName: contact.full_name, title: product.title, reason })).catch(() => {});
+    sendEmailInBackground(listingRejectedEmail({ to: contact.email, fullName: contact.full_name, title: product.title, reason }));
   }
   res.json({ product, notified: !!contact?.email });
 }));
@@ -921,7 +926,7 @@ app.post("/api/admin/departures/:id/confirm", requireAuth, requireRole("super_ad
     [departure.id]
   );
   for (const row of recips.rows) {
-    sendEmail(goAheadEmail({ to: row.customer_email, route: departure.route, dateLabel })).catch(() => {});
+    sendEmailInBackground(goAheadEmail({ to: row.customer_email, route: departure.route, dateLabel }));
   }
   emitDepartureSync(departure.id);
   res.json({ departure: presentDeparture(departure, req.user) });
@@ -1004,12 +1009,12 @@ app.post("/api/public/departures/:id/bookings", writeLimiter, h(async (req, res)
   await logAudit(req, { action: "booking.create", entity: "pledge", entityId: result.booking.id, detail: { departureId: Number(req.params.id), seats: input.seats, source: "public" } });
   if (input.customerEmail) {
     const d = result.departure;
-    sendEmail(bookingConfirmationEmail({
+    sendEmailInBackground(bookingConfirmationEmail({
       to: input.customerEmail, customerName: input.customerName, route: d.route,
       dateLabel: d.startDate ? `${d.startDate} – ${d.endDate}` : d.date, seats: input.seats,
       depositDue: result.booking.depositDue, balanceDue: result.booking.balanceDue,
       balanceDueDate: result.booking.balanceDueDate, bookingCode: result.booking.bookingCode,
-    })).catch(() => {});
+    }));
   }
   // The direct traveller gets their own booking receipt back in full.
   emitDepartureSync(result.departure.id);
@@ -1079,8 +1084,8 @@ app.post("/api/operator-applications", writeLimiter, h(async (req, res) => {
     detail: { company: input.company, city: input.city },
   });
   const payload = { ...input, reference };
-  sendEmail(operatorApplicationEmail({ to: BRAND.email, ...payload })).catch(() => {});
-  sendEmail(operatorApplicationReceiptEmail({ to: input.email, ...payload })).catch(() => {});
+  sendEmailInBackground(operatorApplicationEmail({ to: BRAND.email, ...payload }));
+  sendEmailInBackground(operatorApplicationReceiptEmail({ to: input.email, ...payload }));
   res.status(201).json({ reference, copy: operatorApplicationText(input) });
 }));
 
@@ -1311,11 +1316,11 @@ app.post("/api/public/departure-requests", writeLimiter, h(async (req, res) => {
     detail: { tourProductId: input.tourProductId, date: input.date, seats: input.seats, source: "public" },
   });
   const d = result.departure;
-  sendEmail(departureRequestReceivedEmail({
+  sendEmailInBackground(departureRequestReceivedEmail({
     to: input.customerEmail, customerName: input.customerName, route: d.route,
     dateLabel: d.startDate ? `${d.startDate} – ${d.endDate}` : d.date,
     seats: input.seats, bookingCode: result.booking.bookingCode,
-  })).catch(() => {});
+  }));
   res.status(201).json({ departure: presentDeparture(result.departure, req.user), booking: result.booking });
 }));
 
@@ -1331,11 +1336,11 @@ app.post("/api/admin/departure-requests/:id/approve", requireAuth, requireRole("
   await logAudit(req, { action: "departure_request.approve", entity: "departure", entityId: String(departure.id) });
   const seed = departure.pledges.find((p) => p.source === "public_request");
   if (seed?.customerEmail) {
-    sendEmail(departureRequestApprovedEmail({
+    sendEmailInBackground(departureRequestApprovedEmail({
       to: seed.customerEmail, customerName: seed.customers, route: departure.route,
       dateLabel: departure.startDate ? `${departure.startDate} – ${departure.endDate}` : departure.date,
       bookingCode: seed.bookingCode,
-    })).catch(() => {});
+    }));
   }
   emitDepartureSync(departure.id);
   res.json({ departure: presentDeparture(departure, req.user) });
@@ -1358,11 +1363,11 @@ app.post("/api/admin/departure-requests/:id/decline", requireAuth, requireRole("
   await logAudit(req, { action: "departure_request.decline", entity: "departure", entityId: String(departure.id), detail: { reason: reason || null } });
   const seed = departure.pledges.find((p) => p.source === "public_request");
   if (seed?.customerEmail) {
-    sendEmail(departureRequestDeclinedEmail({
+    sendEmailInBackground(departureRequestDeclinedEmail({
       to: seed.customerEmail, customerName: seed.customers, route: departure.route,
       dateLabel: departure.startDate ? `${departure.startDate} – ${departure.endDate}` : departure.date,
       reason: reason || undefined,
-    })).catch(() => {});
+    }));
   }
   res.json({ departure: presentDeparture(departure, req.user) });
 }));
@@ -1673,10 +1678,47 @@ async function provisionUser({ email, fullName, role, agencyId }) {
     );
   } catch (e) {
     // Roll back the auth user if the profile insert fails, so we don't orphan it.
-    await supabaseAdmin.auth.admin.deleteUser(data.user.id).catch(() => {});
+    //
+    // AAA1.4 — and if the ROLLBACK fails, an auth user exists that no app_users
+    // row will ever match. That person can sign in and the application cannot
+    // say who they are. Discarding that failure left the orphan with no record
+    // of its existence anywhere.
+    //
+    // `e` is still what propagates: the original cause is the useful one, and a
+    // rollback's own error must not replace it. So this records rather than
+    // rethrows — which is a console.error, a counter, and a line in /api/modes,
+    // not silence.
+    await supabaseAdmin.auth.admin.deleteUser(data.user.id).catch((err) => {
+      recordFailure("authRollback", `orphaned auth user ${data.user.id}: ${err.message}`);
+    });
     throw e;
   }
   return { id: data.user.id, tempPassword: password };
+}
+
+// AAA1.4 — disabling an account is two writes, and only one of them was
+// allowed to fail out loud.
+//
+// `UPDATE app_users SET status='disabled'` and the Supabase ban are a pair. The
+// ban's failure used to be discarded, so every admin screen would read
+// `disabled` while the account could still sign in — a failure printing exactly
+// what success prints, on the one path where that is a security question rather
+// than an inconvenience.
+//
+// Returns what actually happened, and the caller reports it.
+async function revokeLogin(userId) {
+  // Not "revoked": in log mode there is no auth provider and so no login to
+  // revoke. That is a third state, and collapsing it into either of the other
+  // two is how "on" came to mean "working".
+  if (!supabaseAdmin) return "no-auth-provider";
+  try {
+    await supabaseAdmin.auth.admin.updateUserById(userId, { ban_duration: "876000h" });
+    return "revoked";
+  } catch (e) {
+    rethrowIfProgrammerError(e);
+    recordFailure("loginRevoke", `${userId} is disabled in app_users but can still sign in: ${e.message}`);
+    return "failed";
+  }
 }
 
 const newStaffSchema = z.object({
@@ -1707,7 +1749,7 @@ app.post("/api/agency/staff", requireAuth, requireRole("agency_owner"), writeLim
   const row = (await pool.query(`SELECT id,email,full_name,role,status,created_at FROM app_users WHERE id=$1`, [created.id])).rows[0];
   const agencyName = (await pool.query(`SELECT name FROM agencies WHERE id=$1`, [req.user.agencyId])).rows[0]?.name;
   await logAudit(req, { action: "staff.create", entity: "user", entityId: created.id, detail: { email: input.email, role: input.role, agencyId: req.user.agencyId } });
-  sendEmail(inviteEmail({ to: input.email, fullName: input.fullName, agencyName, tempPassword: created.tempPassword, role: input.role })).catch(() => {});
+  sendEmailInBackground(inviteEmail({ to: input.email, fullName: input.fullName, agencyName, tempPassword: created.tempPassword, role: input.role }));
   res.status(201).json({ staff: mapStaff(row), tempPassword: created.tempPassword, emailMode });
 }));
 
@@ -1733,8 +1775,7 @@ app.delete("/api/agency/staff/:id", requireAuth, requireRole("agency_owner"), h(
   if (req.params.id === req.user.id) throw new AppError(409, "You cannot remove your own account.");
   // Deactivate (keeps history + bookings intact) and revoke the login.
   await pool.query(`UPDATE app_users SET status='disabled' WHERE id=$1`, [target.id]);
-  if (supabaseAdmin) await supabaseAdmin.auth.admin.updateUserById(target.id, { ban_duration: "876000h" }).catch(() => {});
-  res.json({ ok: true });
+  res.json({ ok: true, login: await revokeLogin(target.id) });
 }));
 
 async function loadAgencyStaff(id, agencyId) {
@@ -1795,7 +1836,7 @@ app.post("/api/admin/staff", requireAuth, requireAdmin(), writeLimiter, h(async 
   const created = await provisionUser({ email: input.email, fullName: input.fullName, role: input.role, agencyId: null });
   const row = (await pool.query(`SELECT id,email,full_name,role,status,created_at FROM app_users WHERE id=$1`, [created.id])).rows[0];
   await logAudit(req, { action: "staff.create", entity: "user", entityId: created.id, detail: { email: input.email, role: input.role, platform: true } });
-  sendEmail(inviteEmail({ to: input.email, fullName: input.fullName, agencyName: "Sawa Operations", tempPassword: created.tempPassword, role: input.role })).catch(() => {});
+  sendEmailInBackground(inviteEmail({ to: input.email, fullName: input.fullName, agencyName: "Sawa Operations", tempPassword: created.tempPassword, role: input.role }));
   res.status(201).json({ staff: mapStaff(row), tempPassword: created.tempPassword, emailMode });
 }));
 
@@ -1808,9 +1849,9 @@ app.patch("/api/admin/staff/:id", requireAuth, requireAdmin(), h(async (req, res
   if (role && !["ops_staff", "super_admin"].includes(role)) throw new AppError(422, "Invalid role.");
   if (status && !["active", "disabled"].includes(status)) throw new AppError(422, "Invalid status.");
   await pool.query(`UPDATE app_users SET role=COALESCE($1,role), status=COALESCE($2,status) WHERE id=$3`, [role || null, status || null, target.id]);
-  if (status === "disabled" && supabaseAdmin) await supabaseAdmin.auth.admin.updateUserById(target.id, { ban_duration: "876000h" }).catch(() => {});
+  const login = status === "disabled" ? await revokeLogin(target.id) : undefined;
   const row = (await pool.query(`SELECT id,email,full_name,role,status,created_at FROM app_users WHERE id=$1`, [target.id])).rows[0];
-  res.json({ staff: mapStaff(row) });
+  res.json({ staff: mapStaff(row), ...(login ? { login } : {}) });
 }));
 
 const newAgencySchema = z.object({
@@ -1845,13 +1886,19 @@ app.post("/api/admin/agencies", requireAuth, requireAdmin(), writeLimiter, h(asy
     });
   } catch (e) {
     // Undo the agency if owner provisioning failed, so we don't leave an ownerless agency.
-    await pool.query(`DELETE FROM agencies WHERE id=$1`, [agencyId]).catch(() => {});
+    //
+    // AAA1.4 — same argument as the auth rollback above: record the failed undo
+    // and still throw the original cause. An ownerless agency row nobody knows
+    // about is the thing worth a line in the log.
+    await pool.query(`DELETE FROM agencies WHERE id=$1`, [agencyId]).catch((err) => {
+      recordFailure("agencyRollback", `ownerless agency ${agencyId}: ${err.message}`);
+    });
     throw e;
   }
 
   const agencyRow = (await pool.query(`SELECT * FROM agencies WHERE id=$1`, [agencyId])).rows[0];
   await logAudit(req, { action: "agency.create", entity: "agency", entityId: agencyId, detail: { name: input.name, ownerEmail: input.ownerEmail } });
-  sendEmail(inviteEmail({ to: input.ownerEmail, fullName: input.ownerName, agencyName: input.name, tempPassword: owner.tempPassword, role: "agency_owner" })).catch(() => {});
+  sendEmailInBackground(inviteEmail({ to: input.ownerEmail, fullName: input.ownerName, agencyName: input.name, tempPassword: owner.tempPassword, role: "agency_owner" }));
   res.status(201).json({ agency: mapAgency(agencyRow), ownerEmail: input.ownerEmail, tempPassword: owner.tempPassword, emailMode });
 }));
 
@@ -2017,8 +2064,13 @@ app.post("/api/admin/departures/:id/cancel", requireAuth, requireRole("super_adm
   // logged: "cancelled, nobody notified" must never look like "cancelled".
   let reached = 0;
   for (const to of recipients) {
+    // AAA2 — this handler substitutes a value and says why, which the ban on
+    // empty handlers permits. It is still wrong for one class: a broken
+    // template would be counted as a traveller not reached, and PP2.1's
+    // "cancelled, nobody notified" would send an operator chasing a mail
+    // outage that is not happening.
     const sent = await sendEmail(cancellationEmail({ to, route: departure.route, dateLabel }))
-      .catch(() => ({ ok: false }));
+      .catch((e) => { rethrowIfProgrammerError(e); return { ok: false }; });
     if (sent?.ok) reached += 1;
   }
   const notificationsClean = reportNotifications({
@@ -2410,14 +2462,24 @@ if (existsSync(distDir)) {
       try {
         for (const path of await routes()) {
           if (cacheState(pageCache.get(path), Date.now(), PAGE_TTL, PAGE_STALE_TTL) === "fresh") continue;
-          await buildPage(path).catch((e) => console.warn("[warm] failed for", path, "-", e.message));
+          await buildPage(path).catch((e) => {
+            // AAA2 — a page that cannot be built because the code is wrong is
+            // not a slow page, and warming it again in 45 seconds will not help.
+            rethrowIfProgrammerError(e);
+            console.warn("[warm] failed for", path, "-", e.message);
+          });
         }
       } finally {
         sweeping = false;
       }
     };
 
-    const run = () => { sweep().catch((e) => console.warn("[warm] sweep failed —", e.message)); };
+    const run = () => {
+      sweep().catch((e) => {
+        rethrowIfProgrammerError(e);
+        console.warn("[warm] sweep failed —", e.message);
+      });
+    };
     run();
     const timer = setInterval(run, everyMs);
     // unref so the timer never holds the process open during a shutdown.
@@ -2463,5 +2525,8 @@ app.listen(port, "0.0.0.0", () => {
       // and starting them first would have every one of them build its own.
       startPageWarmer?.();
     })
-    .catch((e) => console.warn("[boot] catalogue warm-up skipped —", e.message));
+    .catch((e) => {
+      rethrowIfProgrammerError(e);
+      console.warn("[boot] catalogue warm-up skipped —", e.message);
+    });
 });

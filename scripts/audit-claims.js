@@ -171,7 +171,14 @@ export async function publicRoutes() {
     dynamic = [...body.matchAll(/<loc>([^<]+)<\/loc>/g)]
       .map((m) => m[1].replace(/^https?:\/\/[^/]+/, ""))
       .filter((p) => /^\/(tour|package|blog)\//.test(p));
-  } catch { /* sitemap optional */ }
+  } catch (e) {
+    // AAA1.3 — this is the auditor's own blind spot, and it was commented
+    // rather than reported. Without the sitemap, `dynamic` stays empty and the
+    // audit covers the fourteen fixed routes only: no tour page, no package,
+    // no blog post. It then prints a finding count and exits 0, which reads
+    // exactly like an audit that looked at everything and liked it.
+    console.error(`[audit] sitemap.xml unreachable — auditing ${fixed.length} fixed routes ONLY, no tour/package/blog pages: ${e.message}`);
+  }
   return [...new Set([...fixed, ...dynamic])];
 }
 
@@ -190,7 +197,10 @@ export async function auditRendered() {
     for (const ld of ldBlocks(page.body)) findings.push(...scan(JSON.stringify(ld), `${route} · JSON-LD`));
   }
   for (const f of ["/llms.txt", "/llms-full.txt", "/robots.txt", "/sitemap.xml"]) {
-    try { const r = await get(f); findings.push(...scan(r.body, f)); } catch { /* optional */ }
+    // AAA1.3 — a file that could not be fetched is reported with the vocabulary
+    // this auditor already has for it, rather than skipped in silence.
+    try { const r = await get(f); findings.push(...scan(r.body, f)); }
+    catch (e) { findings.push({ rule: "fetch-failed", where: f, match: e.message, context: "" }); }
   }
   return { routes, findings };
 }

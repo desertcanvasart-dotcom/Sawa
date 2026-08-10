@@ -166,7 +166,13 @@ try {
     console.error("FAIL /api/health exposes resolved modes to an unauthenticated caller");
     modeFailures++;
   }
-} catch { /* the route loop reports an unreachable server */ }
+} catch (e) {
+  // AAA1.3 — the route loop below does report an unreachable server, so this
+  // does not need to fail twice for the same cause. What it does need to say is
+  // that the assertion was NOT MADE, because a check that silently did not run
+  // is reported identically to one that ran and passed.
+  console.error(`SKIPPED /api/health mode-leak assertion — ${e.message}`);
+}
 
 const routes = await publicRoutes();
 // A route that must 404 — proves the 404 path still renders its own head rather
