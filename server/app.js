@@ -579,6 +579,10 @@ app.post("/api/departures", requireAuth, requireRole("agency_owner", "agency_age
   });
 
   emitDepartureSync(departure.id);
+  await logAudit(req, {
+    action: "departure.create", entity: "departure", entityId: String(departure.id),
+    detail: { route, date: body.date, agencyId: req.user.agencyId, source: "agency" },
+  });
   res.status(201).json({ departure: presentDeparture(departure, req.user) });
 }));
 
@@ -782,6 +786,13 @@ app.post("/api/admin/tour-products", requireAuth, requireRole("super_admin", "op
   const body = req.body || {};
   const product = await withTransaction((c) =>
     upsertTourProduct(c, body, { status: "approved", submittedBy: req.user.id, reviewedBy: req.user.id }));
+  // DIR-1 — the agency route audits `listing.submit`; this one writes a listing
+  // straight to `approved` and audited nothing. The path with LESS review had
+  // less record.
+  await logAudit(req, {
+    action: "listing.create", entity: "tour_product", entityId: product.id,
+    detail: { title: product.title, status: "approved", platform: true },
+  });
   res.status(201).json({ product });
 }));
 
@@ -891,7 +902,21 @@ app.post("/api/admin/tour-products/:id/pricing", requireAuth, requireRole("super
     const deps = await c.query(`SELECT id FROM departures WHERE tour_product_id=$1 ORDER BY id`, [product.id]);
     const departures = [];
     for (const row of deps.rows) departures.push(await loadDeparture(c, row.id));
-    return { product: updated, departures };
+    return {
+      product: updated, departures, repriced: repriced.rows.length,
+      was: { publishedRate: product.publishedRate, breakPrice: product.breakPrice },
+    };
+  });
+  // DIR-1 — a price change, across every date of the product at once, with no
+  // record of who made it or what it was before. The highest-value audit row in
+  // this file after the access changes.
+  await logAudit(req, {
+    action: "product.pricing", entity: "tour_product", entityId: req.params.id,
+    detail: {
+      from: result.was,
+      to: { publishedRate: result.product.publishedRate, breakPrice: result.product.breakPrice },
+      departuresRepriced: result.repriced,
+    },
   });
   res.json({ product: result.product, departures: result.departures.map((d) => presentDeparture(d, req.user)) });
 }));
@@ -1059,6 +1084,13 @@ app.delete("/api/public/departures/:id/bookings/:pledgeId", writeLimiter, h(asyn
     return loadDeparture(c, dep.id);
   });
   emitDepartureSync(departure.id);
+  // DIR-1 — a traveller removing their own seat is a status change that moves
+  // a departure toward or away from its minimum. Unauthenticated, so logAudit
+  // records the actor as "public"; the pledge id is the only handle there is.
+  await logAudit(req, {
+    action: "booking.cancel", entity: "pledge", entityId: req.params.pledgeId,
+    detail: { departureId: departure.id, source: "public" },
+  });
   res.json({ departure: presentDeparture(departure, req.user) });
 }));
 
@@ -1705,18 +1737,31 @@ async function provisionUser({ email, fullName, role, agencyId }) {
 // what success prints, on the one path where that is a security question rather
 // than an inconvenience.
 //
-// Returns what actually happened, and the caller reports it.
-async function revokeLogin(userId) {
-  // Not "revoked": in log mode there is no auth provider and so no login to
-  // revoke. That is a third state, and collapsing it into either of the other
-  // two is how "on" came to mean "working".
+// Returns what actually happened, and the caller reports it AND audits it.
+//
+// DIR-1.2 — this takes a direction now, because the door only opened one way.
+//
+// `status` accepts 'active' on both staff PATCH routes, so re-enabling somebody
+// is an offered operation. Nothing lifted the ban, so that write succeeded,
+// returned 200, showed `active` in every admin screen, and the person still
+// could not sign in. A failure printing exactly what success prints — the same
+// shape as the revoke gap, with the polarity reversed.
+async function setLoginAccess(userId, allowed) {
+  // Not "revoked"/"restored": in log mode there is no auth provider and so no
+  // login to change. That is a third state, and collapsing it into either of
+  // the other two is how "on" came to mean "working".
   if (!supabaseAdmin) return "no-auth-provider";
   try {
-    await supabaseAdmin.auth.admin.updateUserById(userId, { ban_duration: "876000h" });
-    return "revoked";
+    await supabaseAdmin.auth.admin.updateUserById(userId, { ban_duration: allowed ? "none" : "876000h" });
+    return allowed ? "restored" : "revoked";
   } catch (e) {
     rethrowIfProgrammerError(e);
-    recordFailure("loginRevoke", `${userId} is disabled in app_users but can still sign in: ${e.message}`);
+    recordFailure(
+      "loginAccess",
+      allowed
+        ? `${userId} is active in app_users but still cannot sign in: ${e.message}`
+        : `${userId} is disabled in app_users but can still sign in: ${e.message}`
+    );
     return "failed";
   }
 }
@@ -1766,8 +1811,29 @@ app.patch("/api/agency/staff/:id", requireAuth, requireRole("agency_owner"), h(a
     `UPDATE app_users SET role = COALESCE($1, role), status = COALESCE($2, status) WHERE id = $3`,
     [role || null, status || null, target.id]
   );
+
+  // DIR-1.1 — this route SET status='disabled' AND NEVER TOUCHED THE LOGIN.
+  //
+  // The sweep found it; nobody was looking here. `DELETE .../staff/:id` revokes,
+  // and the admin PATCH revokes, but an agency owner disabling a team member
+  // through this route left their Supabase session working indefinitely, while
+  // every screen in the product read `disabled`. That is the BBB1 defect in a
+  // path BBB1 never named.
+  const login = status && status !== target.status ? await setLoginAccess(target.id, status === "active") : undefined;
+
   const row = (await pool.query(`SELECT id,email,full_name,role,status,created_at FROM app_users WHERE id=$1`, [target.id])).rows[0];
-  res.json({ staff: mapStaff(row) });
+  // DIR-1 — actor, target, and OUTCOME. `login` is the part the audit trail
+  // could not previously have answered: whether the access change took effect.
+  await logAudit(req, {
+    action: "staff.update", entity: "user", entityId: target.id,
+    detail: {
+      agencyId: req.user.agencyId,
+      from: { role: target.role, status: target.status },
+      to: { role: row.role, status: row.status },
+      login: login ?? "unchanged",
+    },
+  });
+  res.json({ staff: mapStaff(row), ...(login ? { login } : {}) });
 }));
 
 app.delete("/api/agency/staff/:id", requireAuth, requireRole("agency_owner"), h(async (req, res) => {
@@ -1775,7 +1841,12 @@ app.delete("/api/agency/staff/:id", requireAuth, requireRole("agency_owner"), h(
   if (req.params.id === req.user.id) throw new AppError(409, "You cannot remove your own account.");
   // Deactivate (keeps history + bookings intact) and revoke the login.
   await pool.query(`UPDATE app_users SET status='disabled' WHERE id=$1`, [target.id]);
-  res.json({ ok: true, login: await revokeLogin(target.id) });
+  const login = await setLoginAccess(target.id, false);
+  await logAudit(req, {
+    action: "staff.disable", entity: "user", entityId: target.id,
+    detail: { agencyId: req.user.agencyId, email: target.email, role: target.role, login },
+  });
+  res.json({ ok: true, login });
 }));
 
 async function loadAgencyStaff(id, agencyId) {
@@ -1849,8 +1920,19 @@ app.patch("/api/admin/staff/:id", requireAuth, requireAdmin(), h(async (req, res
   if (role && !["ops_staff", "super_admin"].includes(role)) throw new AppError(422, "Invalid role.");
   if (status && !["active", "disabled"].includes(status)) throw new AppError(422, "Invalid status.");
   await pool.query(`UPDATE app_users SET role=COALESCE($1,role), status=COALESCE($2,status) WHERE id=$3`, [role || null, status || null, target.id]);
-  const login = status === "disabled" ? await revokeLogin(target.id) : undefined;
+  // DIR-1.2 — 'active' was a one-way door here too: it wrote the row and left
+  // the ban in place, so re-enabling a platform admin silently did nothing.
+  const login = status && status !== target.status ? await setLoginAccess(target.id, status === "active") : undefined;
   const row = (await pool.query(`SELECT id,email,full_name,role,status,created_at FROM app_users WHERE id=$1`, [target.id])).rows[0];
+  await logAudit(req, {
+    action: "staff.update", entity: "user", entityId: target.id,
+    detail: {
+      platform: true,
+      from: { role: target.role, status: target.status },
+      to: { role: row.role, status: row.status },
+      login: login ?? "unchanged",
+    },
+  });
   res.json({ staff: mapStaff(row), ...(login ? { login } : {}) });
 }));
 
