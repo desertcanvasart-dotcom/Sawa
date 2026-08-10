@@ -31,8 +31,18 @@ export const INTERIM_COPY = {
   // time" and "within two hours". Deliberately NOT populated: the true answer is
   // the client's to give, and guessing it is how the four got there.
   //
-  // Swap when: the client states what is actually staffed this week.
-  "support-availability": null,
+  // ANSWERED 10 Aug 2026 (DIR-17): support is genuinely staffed 24/7, via
+  // WhatsApp.
+  //
+  // DIR-17.2 — the channel is NAMED, deliberately. "24/7 support" is a claim a
+  // reader cannot check; "WhatsApp, answered 24/7" is one they verify with their
+  // first message. The four strings this replaces were all unverifiable in that
+  // sense, which is part of how they drifted apart without anyone noticing.
+  //
+  // Written as a noun phrase so it drops into every sentence as a unit. The
+  // surrounding prose bends to the config value, not the other way round —
+  // otherwise there are four grammars again and the drift restarts.
+  "support-availability": "WhatsApp, answered 24/7",
 };
 
 // Keys whose value is still undecided. Anything referencing one of these must

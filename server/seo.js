@@ -13,6 +13,9 @@ import { BRAND, ORG_ID, SITE_ID, travelAgencySchema, websiteSchema } from "./bra
 // warm a URL the catalogue does not link to.
 import { tourSlug, tourPath } from "./slug.js";
 import { GROUP_MAX_WORD } from "../shared/group-size.js";
+// DIR-17.1 — the support-availability string has ONE owner. Four variants
+// were live saying four different things; this file rendered one of them.
+import { INTERIM_COPY } from "../shared/site-copy.js";
 import { cleanHtml } from "./sanitize.js";
 
 const esc = (s) => String(s == null ? "" : s)
@@ -592,7 +595,7 @@ ${BRAND.description}
 - [How it works](/how-it-works): the GoAhead model — join a forming date or start your own, hold a seat free, and the date is confirmed before you pay.
 - [Blog](/blog): guides, history and travel tips for Egypt.
 - [About](/about): who Sawa is and why shared departures.
-- [Contact](/contact): WhatsApp and email; replies within two hours.
+- [Contact](/contact): ${INTERIM_COPY['support-availability']}, plus email.
 - [Check a booking](/booking): look up a booking code to see GoAhead status.
 - [FAQ](/faq): booking, payment, GoAhead and cancellations.
 

@@ -36,6 +36,11 @@ import { toDate } from "./dates.js";
 // to carry its own `const DEFAULT_GO_AHEAD = 4`, free to drift from the server
 // that enforces it and from the twenty static pages that state it.
 import { DEFAULT_GO_AHEAD, MAX_GROUP_SIZE, GROUP_MAX_WORD, numberWord } from "../shared/group-size.js";
+// DIR-17.1 — one owner for the support-availability string. This file held
+// three of the four variants that were live, including the only one that
+// contradicted the others outright ("9am - 9pm Cairo time" against "24/7").
+import { INTERIM_COPY } from "../shared/site-copy.js";
+const SUPPORT_AVAILABILITY = INTERIM_COPY["support-availability"];
 // NN2.1 — the board rules, from the one module that declares them. This file
 // used to carry hand-written copies of seatsTotal and goAheadFor with a comment
 // asking the next person to keep them in sync with domain.js.
@@ -2680,7 +2685,7 @@ function ContactPage({ navigate }) {
     <div className="page-wrap">
       <PageHead
         eyebrow="Talk to us"
-        title="We reply within two hours."
+        title={SUPPORT_AVAILABILITY}
         lead="Questions about a date, a pickup, or a private group? Message us on WhatsApp for the fastest answer, or send a note below."
       />
       <div className="contact-grid reveal in">
@@ -2695,7 +2700,7 @@ function ContactPage({ navigate }) {
           </a>
           <div className="contact-card static">
             <Clock3 size={20} />
-            <div><strong>Hours</strong><span>9am – 9pm Cairo time, daily</span></div>
+            <div><strong>Support</strong><span>{SUPPORT_AVAILABILITY}</span></div>
           </div>
           <div className="contact-card static">
             <MapPin size={20} />
@@ -2708,7 +2713,7 @@ function ContactPage({ navigate }) {
             <div className="contact-sent">
               <BadgeCheck size={28} />
               <strong>Thanks — your message is on its way.</strong>
-              <p>We'll get back to you within two hours during Cairo hours. For anything urgent, reach us on WhatsApp.</p>
+              <p>{SUPPORT_AVAILABILITY} — for anything urgent that is the fastest route. Email replies follow as soon as we can.</p>
             </div>
           ) : (
             <>
