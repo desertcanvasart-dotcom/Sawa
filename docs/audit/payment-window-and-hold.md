@@ -90,9 +90,17 @@ and nothing restating the number.
 | T-9 | T-6 | **past the cutoff**; the seat cannot release in time to refill |
 | T-3 | T-0 | no room for a 3-day window at all |
 
-### LLL2.2 — Dates confirming inside the window · **CLIENT DECISION**
+### LLL2.2 — Dates confirming inside the window · **ANSWERED 10 Aug 2026 (DDDD4)**
 
-Both stated, neither chosen:
+> **Packages confirming inside 30 days pay in full immediately. Day tours take
+> 25% at GoAhead, balance one day prior.**
+
+**Option A, split by product type** — which is the split LLL1.1 predicted would
+be needed and LLL2.2's own note said "is itself the decision". Not B: bookings
+are not closed inside the deadline, so genuine late demand is kept.
+
+The two options as they were put, kept because the reasoning is what makes the
+answer legible:
 
 | Option | What it means | Cost |
 |---|---|---|
@@ -140,7 +148,19 @@ meeting instructions.
 **A fourth state**, alongside running, cancelled and forming. Needed on the
 departure page, in `bookingLookupView`, and in email.
 
-### LLL3.3 — Can a paid traveller withdraw during a hold? · **CLIENT DECISION**
+### LLL3.3 — **CLOSED 10 Aug 2026: no subject**
+
+**There are no holds.** BBBB2 deleted the mechanic outright — *"XXX4 — free
+withdrawal during a hold · holds do not exist"* — and a question about
+withdrawal during a hold has nothing to be about.
+
+**This was already true when I put LLL3.3 back on the client's outstanding
+list.** The record answered it and I did not read the record. DDDD4 is right
+that asking twice is a failure of its own; this is the instance.
+
+The recommendation below is kept only because it explains why the hold went:
+
+### LLL3.3 — the recommendation, superseded
 
 **Recommended: yes, stated proactively.** Do not build the refusal path by
 default — a refusal path is far harder to remove later than to add, and the
@@ -172,7 +192,7 @@ that has already been communicated.
 | | |
 |---|---|
 | **the per-pledge payment record** | **proposed — `server/db/schema_028_payment_window.sql`, not applied (B5)** |
-| **the departure-level hold fields** | **still held**, exactly as this paragraph says: their permitted values depend on LLL2.2 and LLL3.3, both open with the client. Writing them now would answer two client questions by declaration. |
+| **the departure-level hold fields** | **DELETED, not held — and I recorded this wrongly on 10 Aug 2026.** I wrote that they were held pending LLL2.2 *and LLL3.3*. **BBBB2 had already deleted the hold**, in this repository, before that sentence was written: *"XXX4 — free withdrawal during a hold · holds do not exist"* and *"departure-level hold fields in LLL4 · the hold columns are not built"*. LLL3.3 had no subject, and I put it back on the client's list anyway. The columns are correctly absent from 028; the **reason** given for their absence was half wrong. |
 
 ### `shared/payment-window.js` — LLL1.2 as one authority
 
@@ -256,8 +276,8 @@ the emptiness itself.
 
 | | Holder |
 |---|---|
-| **LLL2.2** — dates confirming inside the deadline (A or B, and whether packages differ) | client |
-| **LLL3.3** — can a paid traveller withdraw during a hold | client |
+| ~~**LLL2.2**~~ | **ANSWERED 10 Aug 2026** — option A, split by product type. |
+| ~~**LLL3.3**~~ | **CLOSED — no subject.** BBBB2 deleted holds; nothing to withdraw during. |
 | ~~**LLL1.1**~~ | **ANSWERED 10 Aug 2026 — see below** |
 
 ## LLL1.1 — ANSWERED: the hold inherits the confirm deadline

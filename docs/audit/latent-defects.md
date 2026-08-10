@@ -147,27 +147,6 @@ absence of reconciliation, not a claim about it.
 ---
 
 
-### L-10 — "Four" is a per-product number stated universally
-
-| | |
-|---|---|
-| **What is divergent** | Copy that says a date confirms at **four** describes `min_seats`, which is per listing. A product with a minimum of six would make every such sentence false at once. |
-| **What masks it** | **All 16 approved products currently use `min_seats = 4`.** Nothing enforces that — the column is `CHECK (min_seats >= 1)` with a default of 4, and `goAheadSeatsFor` reads it per departure. |
-| **What would arm it** | One operator, or one admin, setting a different minimum on one listing. |
-| **Where that is defined** | `server/db/schema.sql` — `min_seats`; `shared/departure-state.js` — `goAheadSeatsFor`; the `universal-threshold` rule in `scripts/audit-claims.js` |
-
-**The hedge is withdrawn (CCCC1).** *"Usually four"* solves a data problem with
-words and spends the clearest sentence on the site doing it — and the site
-already says *"four"* flatly in **eight** places, so hedging would have
-introduced vagueness rather than avoided a claim.
-
-The resolution is to make four true **by rule**. Held on CCCC2 — *does Sawa ever
-want a product requiring more than four to run?* Migration 027 is prepared and
-verified for the NO branch; `docs/audit/group-size-decision.md` sets out both.
-**L-10 closes either way once that is answered** — by constraint, or by the
-number ceasing to be universal and being rendered per departure.
-
----
 
 ## Closed, kept as worked examples
 
@@ -177,6 +156,7 @@ Removing these would lose the reasoning that makes the live entries legible.
 |---|---|---|
 | **`check:status-literals` could not read `CHECK (col IS NULL OR col IN (…))`** — correct for the forms it knew, silently incomplete for one it did not, hiding five permitted values | no migration used that form until 023 | the parser now reads both shapes |
 | **Five static pages carried a pre-fix `tourSlug`** emitting a 301 loop for a title that slugifies to nothing | **every live title happening to contain a non-stop-word ASCII token** — enforced nowhere | DIR-8; one authority, one generated file, `check:slug` |
+| **L-10 — "four" was a per-product number stated universally.** `min_seats` is per listing, `CHECK (min_seats >= 1)`, and the API validated it only as a RANGE (4..12) — while eight places in the copy said "four" flatly. A product at six passed every check in the system and broke every sentence on the site | **all 16 approved products happened to hold 4** — true by coincidence of data, enforced nowhere. The validator's own message already called four "what the booking conditions promise" and then permitted five to twelve | **10 Aug 2026 — CCCC2 answered "no", and migration 027 pinned it.** `tour_products_min_seats_pinned` and `departures_min_seats_pinned`, `CHECK (min_seats = 4)` on **both** tables — `goAheadSeatsFor` reads the departure, so pinning the product alone would have left the deciding number free |
 | **L-9 — two implementations of the referral code rule.** `cleanRefCode` in `server/app.js`, `cleanRef` in `src/main.jsx`: byte-identical bodies, two names. The client reads `?ref=` from the URL and the server stores what it is sent — normalise differently and a referral is captured under one string and recorded under another, with **no error and no failed request** | **both were correct, so nothing could observe the risk** — and `grep cleanRef` found only one of them | `shared/ref-code.js`; `check:duplication` now owns the name |
 | **Instructions that were wrong when written.** `server/slug.js`'s header asked the next person to keep the copies in sync and named **three of nine** | — following it correctly still left six stale | DIR-8 |
 | **A table created after 024 has no RLS.** 024's `REVOKE` carries forward via `ALTER DEFAULT PRIVILEGES`; **RLS does not** | 024 was the most recent migration for three days | 026 enables it on itself; a test asserts every later table does |
