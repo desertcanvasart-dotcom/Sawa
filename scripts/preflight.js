@@ -43,7 +43,10 @@ export const STEPS = [
   { name: "check:audit-coverage", script: "scripts/audit-coverage.js" },
   { name: "check:rules", script: "scripts/sync-departure-rules.js", args: ["--check"] },
   { name: "check:slug", script: "scripts/sync-slug.js", args: ["--check"] },
-  { name: "check:applied-schema", script: "scripts/check-applied-schema.js" },
+  // Needs PRODUCTION credentials, not merely a database: it asks the live
+  // database which migrations are recorded. CI cannot run it and must not
+  // report it as passed — see scripts/ci-gate.js.
+  { name: "check:applied-schema", script: "scripts/check-applied-schema.js", needsProductionDb: true },
   { name: "audit:repo-truth", script: "scripts/audit-repo-truth.js" },
   { name: "test", script: "scripts/run-tests.js" },
   { name: "smoke", script: "scripts/smoke-routes.js", needsTarget: true },

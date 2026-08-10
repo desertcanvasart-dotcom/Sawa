@@ -558,3 +558,55 @@ one missed daily run is a restart, a deploy, or a slow night. Two is a pattern.
 And it is why nothing is sent on green (TTT3.3). A daily mail saying nothing
 changed trains the recipient to filter it, and then the one that matters is
 filtered too.
+
+---
+
+## 200 is not proof the script runs
+
+Beside *"tests pass" is not "routes serve"*, and one step further in.
+
+DIR-8 moved eight static pages onto a generated `/assets/slug.js`. The first
+pass added the `<script>` tag only to the three pages that already loaded
+`/assets/rules.js`. **The five destination pages got the binding and no tag** —
+`window.SawaSlug.slugify` on an undefined global, on every one of them.
+
+Every test passed. Every page returned **200**, because the HTML is served off
+disk and the server neither runs nor validates the inline script.
+
+What caught it was loading two of the pages in a real browser, reading the
+console, and asking the page what it had actually built:
+
+```
+tourLinksRendered: 3, malformed: [], idShaped: []
+```
+
+**A page that serves is not a page that works.** Where a change is observable in
+a browser, open one.
+
+---
+
+## Your own writing is in the corpus you are searching
+
+`grep -c 'assets/slug.js'` returned 1 for all eight pages and looked like
+success. Five of those matches were a **comment written minutes earlier** by the
+same script that was supposed to add the tag. Searching for
+`<script src="/assets/slug.js"></script>` returned 0 for five files, which was
+the truth.
+
+The same shape has now appeared four times:
+
+| | |
+|---|---|
+| `check-catch-handlers` | matched the banned expression quoted in the runbook and in its own header |
+| `goahead-promise.html` | a removal comment **preserved the text of the fabricated operator card it removed**, twice reading as a live claim |
+| `contact.html` | a comment documenting an all-zero placeholder number read as a second live number |
+| DIR-8 | a comment naming a file read as the file being loaded |
+
+**When searching for evidence of a thing, search for the mechanism rather than
+the name** — the `<script src>` rather than the filename, `logAudit(` rather than
+"audit" — and exclude files just edited. A search that matches your own writing
+produces a finding about yourself.
+
+Corollary for removal comments: **describe what was removed, do not quote it.**
+Three of the four cases above are a removal comment preserving the string that
+made the original a defect.
