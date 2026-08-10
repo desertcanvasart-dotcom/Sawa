@@ -148,6 +148,7 @@ async function get(path) {
 
 // Visible text only: script and style content is not copy, and CSS is full of
 // "100%". JSON-LD is pulled out separately and audited on its own.
+export
 const visibleText = (html) => html
   .replace(/<script[^>]*type="application\/ld\+json"[^>]*>[\s\S]*?<\/script>/gi, " ")
   .replace(/<script[\s\S]*?<\/script>/gi, " ")
@@ -161,16 +162,19 @@ const visibleText = (html) => html
 // aria-labels, title tooltips. visibleText() strips tags wholesale, so these
 // were invisible to the audit — which is how a form placeholder carrying an
 // invented operator name survived the company-name hunt.
+export
 const attributeText = (html) =>
   [...html.matchAll(/\b(placeholder|alt|aria-label|title)="([^"]*)"/gi)]
     .map(([, k, v]) => ({ k, v }))
     .filter((a) => a.v.trim().length > 2);
 
+export
 const metaTags = (html) =>
   [...html.matchAll(/<meta[^>]+(?:name|property)="([^"]+)"[^>]+content="([^"]*)"/gi)]
     .map(([, k, v]) => ({ k, v }))
     .concat([...html.matchAll(/<title>([\s\S]*?)<\/title>/gi)].map(([, v]) => ({ k: "title", v })));
 
+export
 const ldBlocks = (html) =>
   [...html.matchAll(/<script[^>]*application\/ld\+json[^>]*>([\s\S]*?)<\/script>/gi)]
     .map(([, raw]) => { try { return JSON.parse(raw); } catch { return null; } })
