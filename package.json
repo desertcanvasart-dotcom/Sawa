@@ -29,7 +29,7 @@
     "check:rules": "node scripts/sync-departure-rules.js --check",
     "rehearse:cancel-job": "bash scripts/rehearse-cancel-job.sh",
     "audit:claims": "node scripts/audit-claims.js",
-    "preflight": "npm run check:node && npm run check:constants && npm run check:status-literals && npm run check:catch-handlers && npm run check:rules && npm run check:applied-schema && npm run audit:repo-truth && npm test && npm run smoke && npm run audit:claims",
+    "preflight": "node scripts/preflight.js",
     "audit:repo-truth": "node scripts/audit-repo-truth.js",
     "test:integration": "node --test server/seo-sitemap.integration.mjs"
   },

@@ -23,7 +23,7 @@ import { createHmac } from "node:crypto";
 import { mapDeparture } from "./db/mappers.js";
 import { enrichDeparture, seatsTotal } from "./domain.js";
 import { recordSuccess, recordFailure } from "./effect-log.js";
-import { rethrowIfProgrammerError, isProgrammerError } from "./errors.js";
+import { rethrowIfProgrammerError, surfaceProgrammerError } from "./errors.js";
 // NOTE: the db pool is imported lazily inside loadInventory() so this module
 // (and its pure payload builder) can be unit-tested without a DATABASE_URL.
 
@@ -253,9 +253,15 @@ export function emitDepartureSync(departureId) {
     await postWithRetry(buildDeparturePayload(dep));
   })().catch((e) => {
     // AAA2 — the exact line that absorbed `loadEnriched is not defined` on every
-    // call, for the life of this feature. A programmer error escapes now.
+    // call, for the life of this feature.
     recordDivergence({ departure: { externalId: departureId } }, `emit failed: ${e.message}`);
-    if (isProgrammerError(e)) throw e;
+    // CCC2.2 — surfaced, not fatal. This runs AFTER commit (see
+    // withDepartureWrites): the departure is already written and the response
+    // already sent, so dying here loses the emit AND the process, and corrects
+    // nothing. What the mirror needed was to be visible, and it now is —
+    // counted under `programmerErrors`, with `codeIsWrong` true in /api/modes
+    // from the first call rather than after years.
+    surfaceProgrammerError("autouraSync", e);
   });
   inFlight.add(task);
   task.finally(() => inFlight.delete(task));

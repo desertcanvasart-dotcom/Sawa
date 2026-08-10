@@ -10,7 +10,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { recordSuccess, recordFailure, effectReport, __resetEffects } from "./effect-log.js";
+import { recordSuccess, recordFailure, recordProgrammerError, effectReport, __resetEffects } from "./effect-log.js";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -37,6 +37,39 @@ test("worked once and is now failing is a DIFFERENT state", () => {
   assert.equal(r.neverWorked, false);
   assert.ok(r.lastSuccess, "the success timestamp is what distinguishes the two");
   assert.ok(r.lastFailure);
+});
+
+test("CCC2.2 — the code is wrong is a different question from the remote is flaky", () => {
+  // They call for different people on different days. A partner timing out may
+  // clear on its own; a ReferenceError never does, and no amount of waiting
+  // helps. One counter cannot say which is happening.
+  __resetEffects();
+  recordFailure("autouraSync", "upstream 503");
+  recordProgrammerError("autouraSync", "ReferenceError: loadEnriched is not defined");
+
+  const r = effectReport().autouraSync;
+  assert.equal(r.failures, 2, "both are failures");
+  assert.equal(r.programmerErrors, 1, "only one of them is this repository's fault");
+  assert.equal(r.codeIsWrong, true);
+  assert.match(r.lastProgrammerError, /loadEnriched/);
+});
+
+test("a programmer error still counts toward neverWorked", () => {
+  // The trap. If these were EXCLUDED from `failures`, a feature whose only
+  // failures are programmer errors would report neverWorked: false — which is
+  // exactly the mirror's state, hidden again one level down.
+  __resetEffects();
+  recordProgrammerError("autouraSync", "ReferenceError: loadEnriched is not defined");
+  const r = effectReport().autouraSync;
+  assert.equal(r.neverWorked, true);
+  assert.equal(r.codeIsWrong, true);
+});
+
+test("an operational-only failure does not claim the code is wrong", () => {
+  __resetEffects();
+  recordFailure("email", "Resend timed out");
+  assert.equal(effectReport().email.codeIsWrong, false);
+  assert.equal(effectReport().email.programmerErrors, 0);
 });
 
 test("lastSuccess is a timestamp, not a boolean", () => {

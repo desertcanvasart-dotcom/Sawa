@@ -157,6 +157,11 @@ const ldBlocks = (html) =>
     .map(([, raw]) => { try { return JSON.parse(raw); } catch { return null; } })
     .filter(Boolean);
 
+// CCC3.1 — what this run was actually able to look at. Module-level because
+// publicRoutes() is shared with smoke-routes.js and both CLIs need to know
+// whether their coverage was complete.
+export const coverage = { degraded: null };
+
 // Every route the public can reach. Product and blog routes come from the
 // sitemap, so a new product is audited without anyone updating this list.
 export async function publicRoutes() {
@@ -174,10 +179,15 @@ export async function publicRoutes() {
   } catch (e) {
     // AAA1.3 — this is the auditor's own blind spot, and it was commented
     // rather than reported. Without the sitemap, `dynamic` stays empty and the
-    // audit covers the fourteen fixed routes only: no tour page, no package,
-    // no blog post. It then prints a finding count and exits 0, which reads
+    // audit covers the hard-coded routes only: no tour page, no package, no
+    // blog post. It then prints a finding count and exits 0, which reads
     // exactly like an audit that looked at everything and liked it.
-    console.error(`[audit] sitemap.xml unreachable — auditing ${fixed.length} fixed routes ONLY, no tour/package/blog pages: ${e.message}`);
+    //
+    // CCC3.1 — and reporting it is not enough. The narrowing is RECORDED so the
+    // CLI can fail on it. An audit that could not see two thirds of the site
+    // has not audited the site, and "could not check" is not a pass.
+    coverage.degraded = `sitemap.xml unreachable — ${fixed.length} hard-coded routes only, no tour/package/blog pages: ${e.message}`;
+    console.error(`[audit] ${coverage.degraded}`);
   }
   return [...new Set([...fixed, ...dynamic])];
 }
@@ -428,5 +438,11 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     console.log(`\n## database columns audited (${db.inventory.length})`);
     console.log("   " + db.inventory.map((i) => `${i.table}.${i.column}`).join(", "));
   }
-  process.exit(all.some((f) => f.rule !== "fetch-failed") ? 1 : 0);
+  // CCC3.1 — `fetch-failed` used to be excluded here, so a file this auditor
+  // could not reach was a finding that did not fail the run. A claim that could
+  // not be read is not a claim that checked out.
+  if (coverage.degraded) console.error(`\nCOVERAGE DEGRADED — ${coverage.degraded}`);
+  const blocking = all.length > 0 || !!coverage.degraded;
+  console.log(`\n${blocking ? "RED" : "GREEN"} — ${BASE} · ${rendered.routes.length} routes · ${all.length} findings${coverage.degraded ? " · coverage degraded" : ""}`);
+  process.exit(blocking ? 1 : 0);
 }
