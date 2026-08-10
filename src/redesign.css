@@ -482,6 +482,8 @@
 .sx .seats-block{padding:22px 24px;border-bottom:1px solid var(--line)}
 .sx .seats-block .pbar{height:9px}
 .sx .seats-block .meta{display:flex;justify-content:space-between;font-size:.84rem;color:var(--muted);margin-top:10px}
+/* BBBB5 — the confirmed promise, under the seat count and only when confirmed. */
+.sx .seats-block .confirmed-note{font-size:.84rem;line-height:1.5;color:var(--muted);margin:12px 0 0;padding-top:12px;border-top:1px solid var(--line)}
 .sx .seats-block .meta b{color:var(--teal);font-weight:600}
 .sx .dates{padding:22px 24px;border-bottom:1px solid var(--line)}
 .sx .dates .lbl{font-size:.7rem;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:600;margin-bottom:13px}

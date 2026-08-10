@@ -21,7 +21,8 @@ defensible.
 > prepared and verified. See `docs/audit/group-size-decision.md`. **Wherever this
 > document says "its minimum travellers — usually four", read "four".**
 >
-> **This proposal is HELD (CCCC3)** and ships with BBBB6 or not at all.
+> **SHIPPED 10 Aug 2026** with BBBB6, as one change. CCCC2 was answered *no*, so
+> the copy says **four**, plainly — the hedge was never applied.
 
 ## ⚠️ One thing the rules did not catch, and I think it matters
 

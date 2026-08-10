@@ -1592,6 +1592,10 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
                   {!reqMode && <div className="seats-block">
                     <div className="pbar"><i data-fill={`${seatPct}%`} /></div>
                     <div className="meta"><span><b className="tnum">{booked}</b> of {goAhead} joined</span><span><b className="tnum">{Math.max(0, remaining)}</b> seats left</span></div>
+                    {/* BBBB5 — only once the date is confirmed. On a forming date
+                        this answers a question nobody has asked yet, and naming
+                        a cancellation risk beside a progress bar invents one. */}
+                    {confirmed && <p className="confirmed-note">We don&rsquo;t cancel a confirmed date for low numbers. If someone drops out, your trip still runs.</p>}
                   </div>}
                   <form onSubmit={reserve}>
                     <div className="dates">
