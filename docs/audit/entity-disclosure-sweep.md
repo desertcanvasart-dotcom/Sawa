@@ -110,6 +110,14 @@ to know who they are contracting with.
 registered address, and its tourism registration **if it holds one**. An empty
 `accreditations` list is the honest state until they arrive.
 
+> **A note on where this explanation lives.** It was first written as an HTML
+> comment in `terms.html`. **HTML comments are served** — so the only place
+> `ETAA 2179` and `Capital Travel Service` still appeared in production was a
+> comment on the Terms page, which is the one page the change existed to clean.
+> Caught by reading the live HTML after deploy rather than by any check:
+> `entity-disclosure.test.js` strips comments before asserting, correctly, and
+> so could not see it.
+
 ### DIR-19.3 — proposed, not applied
 
 Capital Travel Service becomes an operator record with the founding-partner
