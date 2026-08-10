@@ -1306,3 +1306,66 @@ authorities in `shared/`, and a second copy of any of them fails the build.
 
 The `goAheadFor` alias went too, for the reason the `slugify` alias went — a
 second name is a second thing to grep for.
+
+---
+
+# DDDD — final client answers, and what they close
+
+**10 August 2026.**
+
+## DDDD4 — reconciled against the record, not re-asked
+
+| | |
+|---|---|
+| **LLL2.2** | **was genuinely open.** The record said *"both stated, neither chosen"*. Now answered: packages confirming inside 30 days pay in full immediately; day tours 25% at GoAhead, balance one day prior — **option A, split by product type**, which is the split LLL1.1 predicted. |
+| **LLL3.3** | **was already moot, and I asked anyway.** BBBB2 deleted the hold outright — *"XXX4 — free withdrawal during a hold · holds do not exist"* — and I put the question back on the client's list after that was written. **This is the failure DDDD4 names, and it is mine.** It also propagated: `docs/audit/payment-window-and-hold.md` said 028's hold columns were *held pending LLL2.2 and LLL3.3*. The columns are correctly absent; **half the stated reason was wrong**. Corrected. |
+| **DIR-19** | **partially my error too.** The name and number were in the record — my own ask read *"exact registered legal form for Online Era 148500"*, so I had both. Later summaries of mine shortened that to *"the registered name and number"*, which overstated what was missing. What was genuinely missing was the **legal form**, and DDDD2 answers it: **no suffix**. |
+
+**Two of three were answerable from the record.** The register exists so that a
+question asked once stays answered; reading it is the other half of that.
+
+## DDDD1 — CCCC2 answered: no
+
+**L-10 is closed**, moved to the worked-examples list with the date and the
+constraint that closed it, per DDD1. It was open because *"four"* was true by
+data rather than by rule; `tour_products_min_seats_pinned` and
+`departures_min_seats_pinned` end that.
+
+**The naming divergence stands and is not silently resolved:** the directive says
+`min_travellers`; the column is `min_seats`, on both tables. 027 uses the real
+names.
+
+## DDDD5 — still needed from the client
+
+| | |
+|---|---|
+| **`GOAHEAD_ALERT_TO`** | an address, then `GOAHEAD_ALERT_DRY_RUN=0`. **Until then a confirmed group has nobody sending payment links** — the queue fills and drains to a dry log. |
+| **Database password rotation** | separate from running the migrations. The connection string was shared and should be treated as compromised regardless of where it went. |
+| **Supabase dashboard API logs** | still rolling off, still the only record of whether anyone read the database while it was open (EEE3). |
+| **Read-only role · `PRODUCTION_DB_HOST`** | optional hardening. `PRODUCTION_DB_HOST` is what lets `check:applied-schema` refuse to answer about the wrong database. |
+
+## DDDD6 — the outstanding launch blocker is commercial
+
+**Owned by the client. Everything technical that depends on it is built and
+waiting.**
+
+> **One signed operator**, with licence number, ETAA registration and insurance
+> certificate recorded against the schema fields.
+
+No product has an operating company attached — **`agency_id IS NULL` on all 16**
+— and `agencies` holds no signed operator. The consequence is not that a page
+looks unfinished; it is that **the site cannot name the company responsible for a
+traveller's trip**, which is the one fact `/verify`, the operator profiles and
+the trust articles are all built around.
+
+The site can honestly state the **policy** — departures are operated by
+Ministry-licensed Egyptian travel companies — and it cannot name **one**.
+
+What is already built and waiting for that row:
+
+| | |
+|---|---|
+| `agencies` verification columns | migration **025**, applied — licence no., ETAA no., insurance, expiry dates, verification state and evidence |
+| the promise checker | **OOO1.2** — `licence` starts passing on its own the day a record carries one; nothing asserts absence |
+| `/verification-standard` | blocked on the client's list of checks, not on schema (OOO3) |
+| operator name on a departure | renders from `agencyId` → `agencies.name`; **0 of 16 products link to one** |
