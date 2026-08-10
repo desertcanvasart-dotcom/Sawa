@@ -55,11 +55,15 @@ test("every gated step points at a script that exists", () => {
 });
 
 test("the steps whose answer depends on the target say so", () => {
-  // "smoke passed" means nothing without "against what". These two default to
+  // "smoke passed" means nothing without "against what". These default to
   // localhost, so a green run says nothing about sawa.tours unless the base is
   // stated — the WW3 class, one level up from which Node was installed.
+  //
+  // OOO1.2 added a third: audit:promises reads the payload production serves.
+  // The list is hard-coded on purpose — a step that quietly becomes
+  // target-dependent is a step whose green stops meaning what it meant.
   const targeted = STEPS.filter((s) => s.needsTarget).map((s) => s.name);
-  assert.deepEqual(targeted.sort(), ["audit:claims", "smoke"]);
+  assert.deepEqual(targeted.sort(), ["audit:claims", "audit:promises", "smoke"]);
 });
 
 test("the runner prints the target in its verdict", () => {

@@ -1212,3 +1212,57 @@ silently scanned with the real eleven and asserted nothing — a test about
 vacuous checks, that was one. `scan(text, where, { rules })` is now injectable,
 the same shape `collect(files, read)` took in DIR-13. **The fix belonged in the
 scanner, not in the assertion.**
+
+---
+
+## OOO1.2 — the half the rule named and never did
+
+**Done 10 Aug 2026.** `scripts/audit-promises.js`, wired into preflight as
+`audit:promises`.
+
+`INTERFACE_PROMISES` found copy promising the traveller will SEE something. Its
+own `why` string said what came next — *"assert X renders (OOO1.2)"* — and
+**nothing did.** The rule could report that a promise EXISTS, never whether it
+is KEPT. That is how the FAQ promised *"their name, license status and rating on
+every departure"* while name and licence rendered on **0 of 14**.
+
+### It reads data, not rendered HTML
+
+The departures board is client-rendered: a plain fetch shows `— departures open`,
+dashes where the numbers go. Scraping it would report every promise unmet
+whatever the truth — **a check that cannot pass**, baselined within a week
+(NNN1.2). The promise is really a claim about data, so `/api/bootstrap` — the
+payload the site renders from — is the honest instrument.
+
+**Nothing asserts absence.** Every probe is derived from the payload, so when
+migration 025 is applied and licences are recorded, `licence` starts passing
+with no edit here.
+
+### Three states
+
+`kept` · `partial` · `unmet`, plus `no-data`. *Itinerary is on 3 of 16 products.*
+Rounding that down cries wolf; rounding it up is the FAQ promise that passed for
+months. And **one sentence promising three things is three promises** — reported
+together, whichever half was kept would hide the other.
+
+### Both of its first two findings were false positives
+
+Read before filing, per the standing rule, and both were **correct copy**:
+
+| | |
+|---|---|
+| `how-it-works` — *"listed by a Ministry-licensed operator"* | an **adjective**. The operator holds a licence; the copy does not promise you will see one. |
+| `terms` — *"…shown on the Platform"* + *"We take reasonable care… itinerary…"* | the verb came from a **heading** and the noun from the paragraph under it. `visibleText` joins blocks with a space. |
+
+Fixed at the cause, not with a suppression: the licence keyword no longer
+matches the adjective, and promises are scanned **per block** — a promise cannot
+span two blocks, so the whole class goes rather than a heuristic guessing where a
+sentence ended. Both are pinned as tests.
+
+**This is NNN1.2's failure inside a rule written to close NNN1.2's other half**,
+which is the third time this session a rule of mine fired on correct code.
+
+### Current state
+
+**3 interface promises live, 0 not kept.** `SITE DID NOT ANSWER` exits **1**,
+verified — unreachable is not clean.
