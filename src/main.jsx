@@ -283,7 +283,13 @@ function PaymentTimeline() {
   );
 }
 
-function statusFor(departure) {
+// DIR-7 — renamed from `statusFor`, which is the name shared/departure-state.js
+// uses for a different thing: that returns a machine state ("open",
+// "minimum_reached"), this returns a human label ("3 seats needed"). Not a
+// copy — but a reader grepping the name found both, and it nearly went into
+// the invariant register as a duplicated rule. A collision costs a reader
+// exactly what a copy does.
+function departureStatusLabel(departure) {
   const seats = seatsTotal(departure.pledges);
   const goAhead = goAheadFor(departure);
   if (departure.status === "supplier_confirmed") return "Supplier confirmed";
@@ -3409,7 +3415,7 @@ function AgencyDesk(props) {
                         {dIsPackage && <span className="type-badge"><Package size={11} />Package</span>}
                         {departure.route}
                       </strong>
-                      <span className={seats >= ga ? "status ok" : "status"}>{statusFor(departure)}</span>
+                      <span className={seats >= ga ? "status ok" : "status"}>{departureStatusLabel(departure)}</span>
                     </div>
                     <p>
                       <MapPin size={14} />
@@ -3437,7 +3443,7 @@ function AgencyDesk(props) {
               <h2>Join this group</h2>
               <p>{selected.route}</p>
             </div>
-            <span className={isConfirmed ? "status ok" : "status"}>{statusFor(selected)}</span>
+            <span className={isConfirmed ? "status ok" : "status"}>{departureStatusLabel(selected)}</span>
           </div>
 
           <div className="capacity">

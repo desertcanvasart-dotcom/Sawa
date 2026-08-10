@@ -932,3 +932,26 @@ the capture is built."*
 
 **DIR-15 is half-delivered on purpose. The half that is missing needs 026
 applied and DIR-12 published, in that order.**
+
+---
+
+## DIR-7 done · DIR-8 item list updated
+
+`check:duplication` is in `preflight` and CI. It derives the authority list from
+`shared/` rather than restating it, so a new export makes every copy of it
+visible the same day. Full record in [invariant-doors.md](invariant-doors.md).
+
+**Closed by it:** the two `slugify` copies (DIR-8 item 1's remaining half — the
+`tourSlug` half closed earlier), and the `statusFor` name collision.
+
+**Newly listed, found by its own limit:** `cleanRefCode` (server) and `cleanRef`
+(`main.jsx`) are the same referral-code rule under two names, and **neither is in
+`shared/`**, so the derived catalogue cannot see them. Add to DIR-8's list:
+
+| | |
+|---|---|
+| ~~`slugify` / `tourSlug`~~ | **done** |
+| `cleanRefCode` / `cleanRef` | **new** — a partner's attribution code, generated client-side and cleaned server-side by two separate implementations |
+| `livePriceFor` | agency quotes a price the server will not honour |
+| `seatsTotal` | display copies |
+| `capacityError` | fails safe |

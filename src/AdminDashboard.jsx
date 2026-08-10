@@ -21,7 +21,10 @@ const samePoint = (a, b) => a.point === b.point && a.note === b.note;
 // Cancelled pledges have released their seats — excluded here so the dashboard
 // agrees with the server (domain.js) and with the Bookings tab's own totals.
 const seatsOf = (d) => (d.pledges || []).reduce((s, p) => (p?.status === "cancelled" ? s : s + Number(p.seats || 0)), 0);
-const slugify = (s) => String(s || "").toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80);
+// DIR-7 — the blog slug now comes from the one place that owns it. This copy
+// lacked the server's `|| "post"` fallback, so an untitled post previewed an
+// empty slug and was stored at /blog/post.
+import { blogSlug } from "../shared/blog-slug.js";
 const csv = (s) => String(s || "").split(",").map((x) => x.trim()).filter(Boolean);
 
 // Minimal flat navigation. One group, no header. Departures keeps a subtle
@@ -476,8 +479,8 @@ function BlogEditor({ existing, onClose, onSaved }) {
   const [err, setErr] = useState("");
 
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.type === "checkbox" ? e.target.checked : e.target.value }));
-  const onTitle = (e) => setF((s) => ({ ...s, title: e.target.value, slug: slugTouched ? s.slug : slugify(e.target.value) }));
-  const onSlug = (e) => { setSlugTouched(true); setF((s) => ({ ...s, slug: slugify(e.target.value) })); };
+  const onTitle = (e) => setF((s) => ({ ...s, title: e.target.value, slug: slugTouched ? s.slug : blogSlug(e.target.value) }));
+  const onSlug = (e) => { setSlugTouched(true); setF((s) => ({ ...s, slug: blogSlug(e.target.value) })); };
 
   async function pickImage(e, field) {
     const file = e.target.files?.[0]; if (!file) return;
@@ -493,7 +496,7 @@ function BlogEditor({ existing, onClose, onSaved }) {
     try {
       const body = {
         ...(existing?.id ? { id: existing.id } : {}),
-        title: f.title.trim(), slug: (f.slug || slugify(f.title)).trim(), excerpt: f.excerpt.trim(),
+        title: f.title.trim(), slug: (f.slug || blogSlug(f.title)).trim(), excerpt: f.excerpt.trim(),
         coverImage: f.coverImage, bodyHtml, author: f.author.trim(), authorCredentials: f.authorCredentials.trim(),
         tags: csv(f.tags), status,
         metaTitle: f.metaTitle.trim(), metaDescription: f.metaDescription.trim(), keywords: csv(f.keywords),
@@ -1953,7 +1956,7 @@ function ReferralsSection({ flash }) {
           <div className="dash-card-head"><h2>Add partner</h2></div>
           <form className="stack-form" onSubmit={create}>
             <Field label="Partner name" full>
-              <input value={form.name} onChange={(e) => setForm((s) => ({ ...s, name: e.target.value, code: s.code || slugify(e.target.value) }))} placeholder="Cairo Travel Blog" />
+              <input value={form.name} onChange={(e) => setForm((s) => ({ ...s, name: e.target.value, code: s.code || blogSlug(e.target.value) }))} placeholder="Cairo Travel Blog" />
             </Field>
             <Field label="Code (used in ?ref=)" full><input value={form.code} onChange={set("code")} placeholder="cairo-travel-blog" /></Field>
             <Field label="Commission %" full><input type="number" min="0" max="100" value={form.commissionPercent} onChange={set("commissionPercent")} placeholder="8" /></Field>

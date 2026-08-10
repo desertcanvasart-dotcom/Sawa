@@ -42,6 +42,7 @@ export const STEPS = [
   { name: "check:catch-handlers", script: "scripts/check-catch-handlers.js" },
   { name: "check:audit-coverage", script: "scripts/audit-coverage.js" },
   { name: "check:vacuous-tests", script: "scripts/check-vacuous-tests.js" },
+  { name: "check:duplication", script: "scripts/check-duplication.js" },
   { name: "check:rules", script: "scripts/sync-departure-rules.js", args: ["--check"] },
   { name: "check:slug", script: "scripts/sync-slug.js", args: ["--check"] },
   // Needs PRODUCTION credentials, not merely a database: it asks the live

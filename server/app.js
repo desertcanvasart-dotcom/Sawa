@@ -50,6 +50,7 @@ import { watchdogReport, lastWatchRunAt } from "./watchdog.js";
 // to be written differently.
 import { rethrowIfProgrammerError, surfaceProgrammerError } from "./errors.js";
 import { tourSlug, tourPath } from "./slug.js";
+import { blogSlug } from "../shared/blog-slug.js";
 import { cancelDepartureAndPledges, reportNotifications, CANCEL_REASONS } from "./departure-cancel.js";
 
 import { BRAND } from "./brand.js";
@@ -1568,7 +1569,6 @@ const mapPost = (b) => ({
   localKeywords: b.local_keywords || [],
   updatedAt: b.updated_at instanceof Date ? b.updated_at.toISOString() : b.updated_at,
 });
-const slugify = (s) => String(s || "").toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80) || "post";
 
 // Public: published posts (list).
 app.get("/api/blog", h(async (_req, res) => {
@@ -1599,8 +1599,8 @@ app.post("/api/admin/blog", requireAuth, requireRole("super_admin", "ops_staff")
   const b = req.body || {};
   const title = String(b.title || "").trim();
   if (!title) throw new AppError(422, "Title is required.");
-  const id = b.id || `blog_${slugify(title).slice(0, 32)}_${Math.random().toString(36).slice(2, 8)}`;
-  const slug = slugify(b.slug || title);
+  const id = b.id || `blog_${blogSlug(title).slice(0, 32)}_${Math.random().toString(36).slice(2, 8)}`;
+  const slug = blogSlug(b.slug || title);
   const status = b.status === "published" ? "published" : "draft";
   const arr = (v) => JSON.stringify(Array.isArray(v) ? v : []);
   const faq = JSON.stringify(Array.isArray(b.faq) ? b.faq.map((f) => ({ q: String(f.q || "").trim(), a: String(f.a || "").trim() })).filter((f) => f.q) : []);

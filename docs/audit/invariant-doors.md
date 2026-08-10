@@ -62,6 +62,39 @@ Fixed, with every listener still running: one failing must not stop the others.
 
 ---
 
+## DIR-7 — the catalogue is derived now
+
+`check:duplication` reads whatever `shared/` exports and reports any file outside
+it that **declares** one of those names instead of importing it. Add an export to
+`shared/`, and every hand-written copy becomes visible the same day, without
+anyone updating a document. The hand-maintained list said five; six existed.
+
+It found three, all previously identified by hand — which is the point: it agrees
+with a careful reader and does not need one.
+
+| | |
+|---|---|
+| `server/app.js` · `slugify` | a blog-slug copy |
+| `src/AdminDashboard.jsx` · `slugify` | the same copy, **missing the server's `\|\| "post"` fallback** — so an untitled post previewed an empty slug and was stored at `/blog/post`. The preview lied about the URL. |
+| `src/main.jsx` · `statusFor` | **a name collision, not a copy.** Returns `"3 seats needed"` where the authority returns `"minimum_reached"`. Renamed `departureStatusLabel`. It nearly went into this register as a duplicated rule. |
+
+### ⚠️ The limit, and it is not small
+
+**The catalogue can only see what `shared/` already owns.** A rule that *should*
+be shared and is not is invisible to it.
+
+A known instance, verified while writing this: `server/app.js`'s `cleanRefCode`
+and `src/main.jsx`'s `cleanRef` are the same referral-code rule under two names,
+in two files, and **neither is in `shared/`**. The derived catalogue reports
+nothing, correctly and uselessly.
+
+So the check answers *"is an authority being copied"* and not *"is this thing an
+authority"*. The second still needs a person. Recorded rather than implied,
+because a catalogue that cannot be incomplete **in its own terms** is easy to
+mistake for one that cannot be incomplete.
+
+---
+
 ## The pattern
 
 Seven of the fifteen were closed by generating the copy and checking it is
