@@ -2,6 +2,10 @@
 
 **Proposal, 10 August 2026. Nothing applied.** `site/terms.html` is unchanged.
 
+> **HELD (CCCC3)** pending CCCC2 — whether any product may ever require more than
+> four to run. That decides how §8's and §15.1's central number reads, and this
+> ships with BBBB5 or not at all.
+
 Two separate pieces of work land in the same document, and **only one of them
 may proceed.**
 

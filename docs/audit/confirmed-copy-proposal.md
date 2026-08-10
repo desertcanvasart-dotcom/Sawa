@@ -11,6 +11,18 @@ defensible.
 
 ---
 
+> ## ⛔ SUPERSEDED BY CCCC1 — the hedge below is withdrawn
+>
+> The finding stands; **the remedy does not.** *"Usually four"* solves a data
+> problem with words. The site already says *"four"* flatly in eight places, so
+> the hedge would have introduced vagueness, not avoided a claim.
+>
+> Four is to be made true **by rule** — held on CCCC2, with migration 027
+> prepared and verified. See `docs/audit/group-size-decision.md`. **Wherever this
+> document says "its minimum travellers — usually four", read "four".**
+>
+> **This proposal is HELD (CCCC3)** and ships with BBBB6 or not at all.
+
 ## ⚠️ One thing the rules did not catch, and I think it matters
 
 **"Four to confirm" is a universal claim about a per-product number.**
