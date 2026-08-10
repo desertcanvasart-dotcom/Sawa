@@ -42,6 +42,7 @@ export const STEPS = [
   { name: "check:catch-handlers", script: "scripts/check-catch-handlers.js" },
   { name: "check:audit-coverage", script: "scripts/audit-coverage.js" },
   { name: "check:rules", script: "scripts/sync-departure-rules.js", args: ["--check"] },
+  { name: "check:slug", script: "scripts/sync-slug.js", args: ["--check"] },
   { name: "check:applied-schema", script: "scripts/check-applied-schema.js" },
   { name: "audit:repo-truth", script: "scripts/audit-repo-truth.js" },
   { name: "test", script: "scripts/run-tests.js" },

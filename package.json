@@ -27,6 +27,8 @@
     "check:audit-coverage": "node scripts/audit-coverage.js",
     "check:applied-schema": "node scripts/check-applied-schema.js",
     "sync:rules": "node scripts/sync-departure-rules.js",
+    "sync:slug": "node scripts/sync-slug.js",
+    "check:slug": "node scripts/sync-slug.js --check",
     "check:rules": "node scripts/sync-departure-rules.js --check",
     "rehearse:cancel-job": "bash scripts/rehearse-cancel-job.sh",
     "audit:claims": "node scripts/audit-claims.js",

@@ -1,53 +1,60 @@
 {
-  "reviewed": {
-    "57ef14eafc46": {
-      "where": "server/domain.js:160",
-      "text": "pending_review: traveler-requested, not yet approved by ops — never",
-      "verdict": "AGREES",
-      "contradicts": null,
-      "note": "pending_review departures are excluded from the anonymous bootstrap payload and from buildBody. Verified in rendered output: no pending_review row reaches a public surface."
-    },
-    "19313a38cc25": {
-      "where": "docs/PACKAGES_ASSESSMENT.md:37",
-      "text": "The unique value of Sawa is **pooled pricing**: when multiple small agencies (or direct travellers) book seats on the same day tour, the **price per person drops automatically** as the group grows. When the group hits a minimum (currently hard-coded to **4 seats**), the tour is guaranteed to run (\"G",
-      "verdict": "CONTRADICTS",
-      "contradicts": "the corrected GoAhead model (B1) and the removed guarantee language",
-      "note": "Says the minimum is 'hard-coded to 4 seats' and the tour is 'guaranteed to run'. Both are wrong now: min_seats is per product with a floor of 4 (schema_022), and 'guaranteed' was removed sitewide under P1.5. Internal strategy doc, not public — no live claim depends on it, but it is the document a writer would reach for."
-    },
-    "bbd0ebac2d0e": {
-      "where": "docs/production-readiness/10-decisions-needed.md:10",
-      "text": "Right now deposits are shown but not *collected* online. Do you want real payment collection (card/Fawry/etc.) in this build, or do agencies keep settling payment off-platform for now? *(Adds significant scope and compliance if in.)*",
-      "verdict": "CONFIRMED",
-      "contradicts": "the deposit displays inventoried in V1.3",
-      "note": "Duplicate of the PRODUCTION_READINESS_ASSESSMENT statement, in the decisions register."
-    },
-    "af0d41f2a9b1": {
-      "where": "docs/STATUS.md:12",
-      "text": "Phase 5 — Email** | Invite, booking-confirmation, GoAhead, cancellation. Log-mode; real delivery one env var away. |",
-      "verdict": "STALE",
-      "contradicts": null,
-      "note": "Says email is in log-mode. It is NOT: email_log shows 26 'logged' rows all dated on or before 24 Jul 2026, one 'sent' on 6 Aug 2026, and ZERO non-sent rows after that. Delivery is live in production. Had this been trusted as ground truth it would have produced a confident false report that confirmation emails are not delivered. The 14 logged booking_confirmations belong to test bookings since purged — pledges is empty — so no real traveller is affected."
-    },
-    "2ca7745dc873": {
-      "where": "docs/RUNBOOK.md:64",
-      "text": "> is requested, no processor is integrated and no authorisation hold is placed.\"",
-      "verdict": "AGREES",
-      "contradicts": null,
-      "note": "Reviewed under W1.3; no public claim depends on it."
-    },
-    "3cd051dfbc8a": {
-      "where": "docs/RUNBOOK.md:75",
-      "text": "`docs/STATUS.md` says email runs in log-mode. It does not — production has been",
-      "verdict": "AGREES",
-      "contradicts": null,
-      "note": "Reviewed under W1.3; no public claim depends on it."
-    },
-    "ad4f4a448290": {
-      "where": "server/jobs/scheduler.js:47",
-      "text": "on it is emailed — copy that currently describes a refund which cannot occur,",
-      "verdict": "CONTRADICTS",
-      "contradicts": "cancellationEmail, which tells a cancelled traveller \"if you were charged anything for this booking, it is refunded in full\"",
-      "note": "Confirmed against the rendered template in the JJ2 rehearsal, not from source: the auto-cancel email carries a conditional refund line on a cancellation where nothing can ever have been charged, and never states the reason. The comment is accurate about the build. The contradiction is in the copy it describes, and the corrected wording is written and waiting on AA3.1 — see docs/audit/cancellation-copy-proposal.md. Not currently reachable: the scheduled tick is dry by default (BB3), and no cancellation email has ever been delivered (production email_log holds one 'cancellation' row, status 'logged')."
-    }
+ "reviewed": {
+  "57ef14eafc46": {
+   "where": "server/domain.js:160",
+   "text": "pending_review: traveler-requested, not yet approved by ops — never",
+   "verdict": "AGREES",
+   "contradicts": null,
+   "note": "pending_review departures are excluded from the anonymous bootstrap payload and from buildBody. Verified in rendered output: no pending_review row reaches a public surface."
+  },
+  "19313a38cc25": {
+   "where": "docs/PACKAGES_ASSESSMENT.md:37",
+   "text": "The unique value of Sawa is **pooled pricing**: when multiple small agencies (or direct travellers) book seats on the same day tour, the **price per person drops automatically** as the group grows. When the group hits a minimum (currently hard-coded to **4 seats**), the tour is guaranteed to run (\"G",
+   "verdict": "CONTRADICTS",
+   "contradicts": "the corrected GoAhead model (B1) and the removed guarantee language",
+   "note": "Says the minimum is 'hard-coded to 4 seats' and the tour is 'guaranteed to run'. Both are wrong now: min_seats is per product with a floor of 4 (schema_022), and 'guaranteed' was removed sitewide under P1.5. Internal strategy doc, not public — no live claim depends on it, but it is the document a writer would reach for."
+  },
+  "bbd0ebac2d0e": {
+   "where": "docs/production-readiness/10-decisions-needed.md:10",
+   "text": "Right now deposits are shown but not *collected* online. Do you want real payment collection (card/Fawry/etc.) in this build, or do agencies keep settling payment off-platform for now? *(Adds significant scope and compliance if in.)*",
+   "verdict": "CONFIRMED",
+   "contradicts": "the deposit displays inventoried in V1.3",
+   "note": "Duplicate of the PRODUCTION_READINESS_ASSESSMENT statement, in the decisions register."
+  },
+  "af0d41f2a9b1": {
+   "where": "docs/STATUS.md:12",
+   "text": "Phase 5 — Email** | Invite, booking-confirmation, GoAhead, cancellation. Log-mode; real delivery one env var away. |",
+   "verdict": "STALE",
+   "contradicts": null,
+   "note": "Says email is in log-mode. It is NOT: email_log shows 26 'logged' rows all dated on or before 24 Jul 2026, one 'sent' on 6 Aug 2026, and ZERO non-sent rows after that. Delivery is live in production. Had this been trusted as ground truth it would have produced a confident false report that confirmation emails are not delivered. The 14 logged booking_confirmations belong to test bookings since purged — pledges is empty — so no real traveller is affected."
+  },
+  "2ca7745dc873": {
+   "where": "docs/RUNBOOK.md:64",
+   "text": "> is requested, no processor is integrated and no authorisation hold is placed.\"",
+   "verdict": "AGREES",
+   "contradicts": null,
+   "note": "Reviewed under W1.3; no public claim depends on it."
+  },
+  "3cd051dfbc8a": {
+   "where": "docs/RUNBOOK.md:75",
+   "text": "`docs/STATUS.md` says email runs in log-mode. It does not — production has been",
+   "verdict": "AGREES",
+   "contradicts": null,
+   "note": "Reviewed under W1.3; no public claim depends on it."
+  },
+  "ad4f4a448290": {
+   "where": "server/jobs/scheduler.js:47",
+   "text": "on it is emailed — copy that currently describes a refund which cannot occur,",
+   "verdict": "CONTRADICTS",
+   "contradicts": "cancellationEmail, which tells a cancelled traveller \"if you were charged anything for this booking, it is refunded in full\"",
+   "note": "Confirmed against the rendered template in the JJ2 rehearsal, not from source: the auto-cancel email carries a conditional refund line on a cancellation where nothing can ever have been charged, and never states the reason. The comment is accurate about the build. The contradiction is in the copy it describes, and the corrected wording is written and waiting on AA3.1 — see docs/audit/cancellation-copy-proposal.md. Not currently reachable: the scheduled tick is dry by default (BB3), and no cancellation email has ever been delivered (production email_log holds one 'cancellation' row, status 'logged')."
+  },
+  "49500100cc8d": {
+   "where": "server/watchdog.js:18",
+   "text": "The alternative was migration 025 — and 024 is not yet applied to production,",
+   "verdict": "AGREES",
+   "contradicts": null,
+   "note": "Internal, and true as written. 024 exists in the repository and is not applied to production — check:applied-schema is RED on exactly that, and the Data API exposure it closes is still live. The statement explains why the watchdog heartbeat went into audit_log rather than a new table, and it makes no public claim: nothing on any served surface says anything about migrations. Re-verify when 024 is applied — the sentence becomes historical at that point, which is E-shaped and belongs in the evidence register if it is ever quoted outside this file."
   }
+ }
 }
