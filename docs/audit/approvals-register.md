@@ -101,8 +101,14 @@ Answer #1 governs when "verified" may **return**, not whether it may stay.
 **Approved:** *"No check may enter `preflight` without a test proving it fires on
 a case it should catch… **retrofit it to every check already in the gate**."*
 
-**Partially done.** Every check added *after* W3 was proved. The retrofit to
-`check:constants`, `audit:repo-truth` and `smoke`'s pre-W3 assertions was not.
+**Done 10 Aug 2026.** Every check added *after* W3 was proved at the time. The
+retrofit to `check:constants`, `audit:repo-truth` and `smoke`'s pre-W3
+assertions is now complete, plus `audit:claims`, which looked covered because
+five test files read it as text without importing it.
+
+`server/proven-fires-coverage.test.js` derives the list from preflight's `STEPS`
+and fails if a check has no test importing it — so the rule is a mechanism
+rather than a promise. See DIR-13.
 
 ### 7. DD1 / DD2 — this turn's items
 
@@ -127,7 +133,7 @@ verdicts and must render differently.
 | **B4 / P3.4** zero-suppression | *"no bare zero, never a persistent loading state"* — **anywhere** | homepage + `/departures` (JJ3) | ❌ `/goahead` kept serving a bare `0` beside "departures at GoAhead". **Closed in MM2.** |
 | **P1.6** "verified" comes down | every surface | `/about` and 7 fallback sites | re-checked: no other live surface asserts it |
 | **U4.3** US English | *"anything I have supplied, including previously applied copy"* | all 20 static pages, attributes included | re-checked: the assertion runs over every page and every attribute. **Full scope.** |
-| **W3** proven-fires | *"retrofit it to every check already in the gate"* | every check added after W3, plus `check:status-literals` | ❌ `check:constants`, `audit:repo-truth` and `smoke`'s pre-W3 assertions still unretrofitted — **already tracked, now correctly classified as partial rather than pending** |
+| **W3** proven-fires | *"retrofit it to every check already in the gate"* | **every check in the gate**, enforced by `server/proven-fires-coverage.test.js` | ✅ closed 10 Aug 2026 — `check:constants`' detector, `audit:repo-truth`, `smoke` (which had to be made importable first) and `audit:claims`. Two opt-outs, each with a reason. |
 | **Y2** Autoura boundary | payload builder never receives pledge rows | `loadInventory` selects `status, seats` only | full scope, test-pinned |
 
 Two partials found by applying the standard: **B4/P3.4** (fixed) and **W3**

@@ -261,12 +261,29 @@ Proven-fires tests for the three checks predating the W3 rule. Recorded as
 *pending*; it is **half done**, which is the more dangerous label — "not done"
 invites work, "looks done" invites nobody.
 
-> **Partially verified 10 Aug 2026.** `server/status-literals.test.js` carries
-> the proven-fires pattern (deliberately-invalid fixtures, asserted to be
-> caught), as do `server/catch-handlers.test.js` and
-> `server/preflight-contract.test.js` added since. **Which three checks the
-> directive means was not established** — that list needs naming before the
-> retrofit can be called done, and naming it is the first task.
+> **DONE 10 Aug 2026.** The three were named in `approvals-register.md` all
+> along: **`check:constants`, `audit:repo-truth`, and `smoke`'s pre-W3
+> assertions.** All three now have tests that plant a defect and assert it is
+> caught, plus an asserted pass state.
+>
+> | | what was actually missing |
+> |---|---|
+> | `check:constants` | the **rewriter** was proved to fire; the **detector** (`proseDrift`) was not. Only its clean state was asserted — which is what a detector matching nothing also reports. |
+> | `audit:repo-truth` | no test imported it. `collect()` now takes an injectable file list and reader, as `duplications()` and `vacuous()` already did. |
+> | `smoke` | **could not be imported at all.** No CLI guard: importing it fired a `/api/modes` call, a `/api/health` call, a sitemap fetch and 24 page fetches, then called `process.exit(1)`. The one check with no proven-fires test was the one that could not have had one. |
+> | `audit:claims` | not one of the three. Five test files name it; every one reads it as **text**. None imported `scan`. Same defect, closed in the same pass. |
+>
+> **And a mechanism, so this cannot recur quietly:**
+> `server/proven-fires-coverage.test.js` derives the list from preflight's
+> `STEPS` and fails if any check has no test importing it. Two named opt-outs
+> with reasons (`check:node`, `test`). It asserts a test *imports* each check —
+> it cannot judge whether that test plants a defect, and says so rather than
+> pretending to.
+>
+> **Two defects found in `smoke` while retrofitting it**, both fixed: the
+> missing CLI guard, and a failure count that included running-configuration
+> failures while being reported against the route total — which is how a run
+> printed `25 of 24 routes failed`.
 
 ### DIR-14 — Vacuous-test sweep *(was Z2)* — before any seeding
 
