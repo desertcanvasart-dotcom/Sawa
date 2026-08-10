@@ -676,3 +676,55 @@ spelling rule at all.
 | **PPP1.4** | done — six surfaces write claim-bearing text with no check between the write and the reader, including `blog_posts.tldr`, which has already carried a finding. |
 | **The 30 spellings** | a **data** fix, 16 rows in `tour_products`. Proposed as a reviewable script for the client to run, like a migration. **Not applied.** |
 | **New client question** | who is adding products in production, and under what process? |
+
+---
+
+## QQQ1 — the spelling standard, reopened. **Recommendation: British.**
+
+U4.3 chose US English on a consistency argument — the static pages were US, so
+match them. That was never a decision about readers.
+
+**The finding reframes it.** All 16 product descriptions — the prose written for
+the audience — came out as *travellers* and *travelling*. US spelling lives in
+the scaffolding; British spelling lives in the writing. And per the audit log it
+is not inherited drift: it is the **current author's natural register**, applied
+consistently, by the same `super_admin` account adding products today.
+
+### For British
+
+1. the natural register of the person writing the copy
+2. the market skews UK and European rather than American
+3. **the correction runs toward the gated, testable surface rather than away
+   from it** — 20 static files in git, not 16 database rows on the surface that
+   just proved it has no protection at all
+4. it removes friction from all future writing rather than adding it
+
+**A standard that fights the person writing the content is not a standard, it is
+a permanent correction tax** — every description, every article, every page they
+touch, flagged on the way past.
+
+### Against, put fairly
+
+American spelling is the more common default for web content generally, and the
+client's other brands may already be US. **Worth confirming whether Travel2Egypt
+has a standard** — four brands drifting apart on register is a small but real
+cost, and consistency across the group may outweigh consistency with the author.
+
+### Either way — QQQ1.4 stands
+
+Extend the check to database-driven copy. The current rule is enforced on
+exactly the surfaces that go through git and none of the surfaces that do not.
+**Neither direction is applied until the client answers.**
+
+---
+
+## RRR3 — the boundary of what auditing can supply
+
+The log now gives **actor, action, target, sequence and repetition**. It gave
+back client question 7 four hours after shipping, including that both listings
+were re-saved after their images were uploaded — which nobody would have known
+to ask about.
+
+**It cannot give intent or authorisation.** *"Under what process"* is a
+governance question, and no amount of auditing will answer it. Stated here so
+nobody later expects the trail to.

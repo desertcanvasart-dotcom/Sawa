@@ -108,8 +108,25 @@ export const RULES = [
   // timelines describes a mechanism that does not exist. This is the only claim
   // class in the audit that is falsifiable by the reader against their own bank
   // statement.
-  { id: "phantom-payment-process", why: "no payment gateway exists; no card is collected and no authorization is placed",
-    re: /\b(authoris\w+ hold|authoriz\w+ hold|pre-?authoris\w+|pre-?authoriz\w+|hold is released|released by your bank|your bank may show|pending charge|statement descriptor|chargeback|business days of our confirming|original payment method)\b/gi,
+  // DIR-18 — the premise narrowed on 10 Aug 2026, and the narrowing is stated
+  // rather than left for the reader to infer from a shorter regex.
+  //
+  // The payment model is now decided: a secure link after GoAhead, into Sawa's
+  // own merchant account, sent manually. So a refund DESTINATION ("the method
+  // you paid with") and a refund TIMEFRAME are descriptions of something that
+  // now happens, and DIR-18.2 requires the timeframe to be stated. Those two
+  // phrases left the pattern.
+  //
+  // What did NOT leave, and must not: authorisation holds, pending charges,
+  // statement descriptors, chargebacks. Those are AUTOMATED CARD MECHANICS, and
+  // the site still has none — no gateway integration exists, and the system
+  // records no payment state at all until LLL4. A manually sent link is a
+  // business process; it does not put a hold on anyone's card.
+  //
+  // The distinction matters because this is the only claim class in the audit a
+  // reader can falsify against their own bank statement.
+  { id: "phantom-payment-process", why: "no gateway integration exists; the site places no hold and shows no charge of its own",
+    re: /\b(authoris\w+ hold|authoriz\w+ hold|pre-?authoris\w+|pre-?authoriz\w+|hold is released|released by your bank|your bank may show|pending charge|statement descriptor|chargeback)\b/gi,
     // The Terms may describe conditions that apply once payments exist, and the
     // codebase's own auth middleware is not a claim.
     ok: (ctx) => /Content-Type,Authorization|Bearer|middleware|unauthoris|unauthoriz|authorised to book|authorised adult/i.test(ctx) },
