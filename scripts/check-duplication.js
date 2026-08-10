@@ -64,6 +64,17 @@ function walk(dir, out = []) {
 }
 
 export function duplications(files = SEARCH.flatMap((r) => walk(join(ROOT, r))), owned = authorities()) {
+  // EEEE1.1 — a check operating over a collection must assert its subject set is
+  // non-empty BEFORE interpreting the outcome. Zero subjects is the absence of a
+  // question, not an answer to it, and which verdict that produces depends only
+  // on the shape of the check: green from a scan, red from an UPDATE that
+  // matched nothing. Neither is information.
+  //
+  // The CLI already refused. The exported function did not — and the exported
+  // function is what a TEST calls, so a test could hand it an empty list and
+  // read the empty result as clean.
+  if (!files.length) throw new Error("check-duplication: no files to scan — refusing to report clean");
+  if (!owned.size) throw new Error("check-duplication: shared/ exports nothing — refusing to report clean; a catalogue derived from an empty list is not a clean repository");
   const out = [];
   for (const file of files) {
     const rel = relative(ROOT, file).replace(/\\/g, "/");

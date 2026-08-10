@@ -1407,3 +1407,68 @@ agencies, and stops the moment one does.
 2. **not** the whole `agencies` row: it holds `contact_name`, `phone`, and 025's
    licence and insurance numbers. Publishing that to fix a copy promise would be
    the Data API exposure again, by hand.
+
+---
+
+## EEEE1 — vacuity cuts both ways
+
+**10 August 2026.** DIR-14 was framed entirely around vacuous **passes**. The
+other half arrived as a false **failure**, in my own verification of DDDD3.1:
+`UPDATE departures SET min_seats = 6` against an **empty** table matched zero
+rows, fired no constraint, and the harness read *"0 rows changed"* as *"the
+constraint is not enforcing"*. One step from reaching the client as a production
+defect.
+
+**Zero rows is the absence of a subject, not a result.** Which verdict it
+produces depends only on the shape of the check — green from a scan, red from an
+UPDATE. Neither is information.
+
+### EEEE1.2 — the sweep, re-run with false failures in view
+
+| | |
+|---|---|
+| **application code** | ~25 sites read `rows.length` / `rowCount`. **All correct**: they address a specific row by id, where absence genuinely IS the answer — *"booking not found"* is a result, not a missing subject. |
+| **tests and scripts** | **no live instance.** No test uses an `UPDATE`/`DELETE` as a probe. The one instance was my ad-hoc verification script, which is not in the repository. |
+| **the collectors** | **four answered anyway.** Verified by *executing* each with an empty subject rather than grepping for a guard. |
+
+```
+audit-repo-truth.collect([])        THROWS   refusing to report clean   ✓
+check-catch-handlers.scan([])       THROWS   no files to scan           ✓
+check-vacuous-tests.vacuous([])     RETURNS  []  ← reads as CLEAN
+check-duplication.duplications([])  RETURNS  []  ← reads as CLEAN
+check-status-literals.scan([])      RETURNS  []  ← reads as CLEAN
+audit-coverage.scanMutatingRoutes() TypeError: path argument  ← a crash, not a refusal
+```
+
+Their **CLIs** guarded. The exported functions did not — and the exported
+function is what a **test** calls, so a test could hand one an empty list and
+read the empty result as clean. That is DIR-13's proven-fires work meeting
+DIR-14's vacuity work at the seam between them.
+
+`audit-coverage` did fail, but with a `TypeError` about a `"path"` argument. **An
+accidental crash is not a refusal**: it says nothing about why, and the next
+person reads it as a broken harness and fixes the caller.
+
+### What was built
+
+All four now refuse, in **one wording** — *"refusing to report clean"*. Four
+different phrasings had forced the test's matcher to accept four alternatives,
+and a matcher that accepts anything plausible stops distinguishing a refusal
+from a crash.
+
+`server/empty-subject.test.js` enforces it across every collector, **and asserts
+each still answers when there is a subject** — otherwise the rule would be
+satisfiable by throwing unconditionally, which is NNN1.2's
+check-that-cannot-pass. Proved to fire on a planted collector that answers over
+nothing.
+
+### EEEE1.4 — a check's premise must be something someone actually asserted
+
+The second false failure. I asserted a founding-partner record existed in
+production; **nobody had claimed to create it** — the `INSERT` was handed over
+one message earlier and not run. The check was not wrong about the data. It was
+wrong about what had been **claimed**, and it reported a step the client had
+never taken as a defect.
+
+Nothing mechanical catches that. It is recorded in
+`server/empty-subject.test.js`, where the next person writing a probe will be.

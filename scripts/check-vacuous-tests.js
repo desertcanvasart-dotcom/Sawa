@@ -24,6 +24,34 @@
 // says nothing about whether there are any.**
 //
 // ---------------------------------------------------------------------------
+// EEEE1 — VACUITY CUTS BOTH WAYS
+//
+// This file was written entirely around vacuous PASSES. The other half showed
+// up as a false FAILURE: `UPDATE departures SET min_seats = 6` against an EMPTY
+// table matched zero rows, fired no constraint, and the harness read "0 rows
+// changed" as "the constraint is not enforcing". One step from being reported
+// to the client as a production defect.
+//
+// **Zero rows is the absence of a subject, not a result.** Which verdict it
+// produces depends only on the shape of the check — green from a scan, red from
+// an UPDATE — and neither is information.
+//
+//   EEEE1.1  a check operating over a collection must assert its subject set is
+//            non-empty BEFORE interpreting the outcome. No subject is a THIRD
+//            state, neither pass nor fail.
+//
+//   EEEE1.3  prefer a probe that works on an empty table. An INSERT is checked
+//            whether or not the table holds rows; an UPDATE is not. Where a
+//            probe can be written to be independent of existing data, write it
+//            that way rather than guarding it afterwards.
+//
+// `server/empty-subject.test.js` enforces 1.1 across every collector in
+// scripts/: each must refuse an empty subject with the phrase "refusing to
+// report clean", and each must still answer when there IS a subject — or the
+// rule would be satisfiable by throwing unconditionally, which is NNN1.2's
+// check-that-cannot-pass.
+//
+// ---------------------------------------------------------------------------
 // WHAT IT DOES NOT DETECT, STATED
 //
 // `assert.deepEqual(derived, [])` — a test that asserts emptiness is correct
@@ -98,6 +126,16 @@ const ASSERTS = /\bassert[.(]/;
 const GUARDS = /\.length\s*[,)]|\.length\s*[><=!]|\blength\s*>=|\bassert\.ok\(\s*\w+\s*>=|\bfound\b|\bcount\b|\brows\.length|assert\.equal\([^,]*\.length/;
 
 export function vacuous(files = ROOTS.flatMap((r) => walk(join(ROOT, r)))) {
+  // EEEE1.1 — a check operating over a collection must assert its subject set is
+  // non-empty BEFORE interpreting the outcome. Zero subjects is the absence of a
+  // question, not an answer to it, and which verdict that produces depends only
+  // on the shape of the check: green from a scan, red from an UPDATE that
+  // matched nothing. Neither is information.
+  //
+  // The CLI already refused. The exported function did not — and the exported
+  // function is what a TEST calls, so a test could hand it an empty list and
+  // read the empty result as clean.
+  if (!files.length) throw new Error("check-vacuous-tests: no test files to scan — refusing to report clean");
   const problems = [];
   for (const file of files) {
     const src = readFileSync(file, "utf8");
