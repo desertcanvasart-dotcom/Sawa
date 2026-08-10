@@ -167,3 +167,58 @@ comment reads *"script and style content is not copy"*. The first measurement
 stands; the second was wrong, and is recorded rather than quietly dropped
 because two measurements that disagree mean one of them is wrong and the
 interesting question is which.
+
+---
+
+## OOO3.1 — the schema, proposed 10 August 2026
+
+`server/db/schema_025_agency_verification.sql`. **Not applied.**
+
+Eleven columns, mirroring what `/verify` asks an operator to produce, so the page
+and the record cannot describe different things:
+
+| /verify asks for | Columns |
+|---|---|
+| a current Ministry of Tourism licence | `tourism_license_no`, `tourism_license_expires` |
+| ETAA registration | `etaa_registration_no` |
+| valid insurance | `insurance_insurer`, `insurance_policy_no`, `insurance_expires` |
+| a track record we can check | `track_record` |
+| **a payout account** | **deliberately absent — see below** |
+| *(the part /verify implies but never says)* | `verified_at`, `verified_by`, `verification_state`, `verification_evidence` |
+
+**Expiry is a column because "we confirm it's active" is present tense.** A
+confirmation dated eighteen months ago against a licence that has lapsed since is
+not evidence for that claim.
+
+**`verification_state` is nullable with no default.** Four states that must not
+collapse: `NULL` never assessed · `verified` · `rejected` · `lapsed`. A default
+of `'unverified'` would turn every existing row into an assessment nobody made —
+023's `marketing_consent` argument, and PP2's loud zero.
+
+**The payout account is left out on purpose**, and the reason is in the migration
+rather than in anyone's memory: bank details encode a model in which Sawa holds
+and disburses funds, and legal question 1 — whether Sawa may collect payment at
+all — is open. Schema is a statement about what a system is designed to do. Three
+of the four are recorded; the fourth waits for the answer.
+
+### Verified against an ephemeral PostgreSQL 17.10, all 25 migrations applied
+
+| | |
+|---|---|
+| Columns | 16 on `agencies` — the original 5 plus 11 |
+| Constraint accepts | `verified`, `lapsed`, `rejected`, `NULL` |
+| Constraint refuses | `unverified`, `pending` |
+| Idempotent | re-run leaves data intact |
+| Writes | **none** — 0 rows touched, and a test asserts `app.js` and `mappers.js` do not read the columns either |
+
+### The dependency chain — UUU5.4 / VVV3.4
+
+```
+/verification-standard  →  needs this schema (proposed, not applied)
+                        →  needs the client's list of checks actually performed
+```
+
+**Two blockers, not one.** The client's answer alone is not sufficient: a
+verification performed and unrecorded is unrecoverable the moment it is done.
+And this schema alone is not sufficient either — it is somewhere to put an answer
+nobody has yet given.

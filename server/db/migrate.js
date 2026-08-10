@@ -33,6 +33,7 @@ const MIGRATIONS = [
   { name: "022_min_group_size", file: "schema_022_min_group_size.sql" },
   { name: "023_write_time_capture", file: "schema_023_write_time_capture.sql" },
   { name: "024_lock_down_data_api", file: "schema_024_lock_down_data_api.sql" },
+  { name: "025_agency_verification", file: "schema_025_agency_verification.sql" },
 ];
 
 async function main() {
