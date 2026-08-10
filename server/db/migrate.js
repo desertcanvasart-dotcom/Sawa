@@ -35,6 +35,8 @@ const MIGRATIONS = [
   { name: "024_lock_down_data_api", file: "schema_024_lock_down_data_api.sql" },
   { name: "025_agency_verification", file: "schema_025_agency_verification.sql" },
   { name: "026_route_alerts", file: "schema_026_route_alerts.sql" },
+  { name: "027_pin_group_minimum", file: "schema_027_pin_group_minimum.sql" },
+  { name: "028_payment_window", file: "schema_028_payment_window.sql" },
 ];
 
 async function main() {
