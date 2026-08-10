@@ -157,6 +157,22 @@ absence of reconciliation, not a claim about it.
 
 ---
 
+### L-10 — "Four" is a per-product number stated universally
+
+| | |
+|---|---|
+| **What is divergent** | Copy that says a date confirms at **four** describes `min_seats`, which is per listing. A product with a minimum of six would make every such sentence false at once. |
+| **What masks it** | **All 16 approved products currently use `min_seats = 4`.** Nothing enforces that — the column is `CHECK (min_seats >= 1)` with a default of 4, and `goAheadSeatsFor` reads it per departure. |
+| **What would arm it** | One operator, or one admin, setting a different minimum on one listing. |
+| **Where that is defined** | `server/db/schema.sql` — `min_seats`; `shared/departure-state.js` — `goAheadSeatsFor`; the `universal-threshold` rule in `scripts/audit-claims.js` |
+
+The project has already decided this once: the live FAQ says *"usually four"*,
+and the audit rule's `ok` predicate accepts *"its minimum travellers"*. The
+BBBB5 copy proposal names the rule and lets the number follow it, for this
+reason.
+
+---
+
 ## Closed, kept as worked examples
 
 Removing these would lose the reasoning that makes the live entries legible.
