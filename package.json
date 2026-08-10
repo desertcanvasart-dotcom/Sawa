@@ -38,7 +38,8 @@
     "audit:watch": "node scripts/audit-watch.js",
     "preflight": "node scripts/preflight.js",
     "audit:repo-truth": "node scripts/audit-repo-truth.js",
-    "test:integration": "node --test server/seo-sitemap.integration.mjs"
+    "test:integration": "node --test server/seo-sitemap.integration.mjs",
+    "rehearse:goahead": "bash scripts/rehearse-goahead-alert.sh"
   },
   "engines": {
     "node": ">=22"

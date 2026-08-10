@@ -608,12 +608,39 @@ creating.
   loudly on shortfall. A GoAhead with no alert sent is an **error**, not a quiet
   success.
 
-> **VERIFIED — 20.1 has a specific home.** `refreshStatus(c, departureId)` at
-> `server/app.js:1653` is where status is recomputed after a write, and it is
-> already called from inside transactions by multiple paths. That, or the
-> `withDepartureWrites` boundary that TT1 established for the mirror, is the
-> "authoritative" place 20.1 is asking for — and the mirror is the worked
-> precedent for exactly this mistake.
+> **DONE 10 Aug 2026.**
+>
+> **What was actually wrong was worse than a missing alert: the GoAhead moment
+> notified NOBODY.** `refreshStatus` wrote `minimum_reached` and returned. The
+> only `goAheadEmail` in the codebase fires from `POST /api/admin/departures/
+> :id/confirm` — a *different* transition (`supplier_confirmed`), performed by a
+> human who has already noticed. A fourth traveller could book, the date could
+> confirm, and the only way anyone learned of it was by looking.
+>
+> | | |
+> |---|---|
+> | **20.1** | the record is written **inside `refreshStatus`**, in the same transaction as the status change. It had **four callers under three different transaction boundaries** — a route-level trigger would fire for one path and no other, which is the mirror's defect exactly. `refreshStatus` moved to `server/departure-status.js`: it could not be imported without standing up Supabase auth, which is why the moment the whole site is built on had never been rehearsed. |
+> | **20.2** | `alertPayload` — route, dates, operator + contact, seats, and per traveller: name, contact, booking code, total, deposit due, balance and its date. Amounts read from the row (023's write-time capture), never recomputed, so the invoice cannot quote a different number from the confirmation email. Unknowns are **stated**, not rendered as blanks. |
+> | **20.3** | `departure.goahead` is written atomically with the status; `departure.goahead_alert` only when a send succeeded. **The queue is the difference between them** — derived, no new column, and `audit_log` is append-only under 024 so it cannot be quietly emptied. `GET /api/admin/goahead-queue` asks the question directly. A failed send leaves the departure queued; that is the design. |
+> | **20.4** | `reportAlerts` — intended vs sent, and a shortfall is an **error** naming how many departures are waiting for a link nobody has been asked to create. |
+>
+> **Rehearsed end to end** against an ephemeral Postgres 17 — booked to the
+> minimum through the real `refreshStatus`, watched the queue appear, saw the
+> dry path refrain, sent live, saw the queue empty, and re-ran to prove the same
+> departure is not alerted twice. `npm run rehearse:goahead`.
+>
+> **The rehearsal found a defect the unit tests could not.** They used string
+> date fixtures; the database returns `Date` objects. The first live render put
+> `"Sat Sep 19 2026 00:00:00 GMT+0300 (Eastern European Summer Time)"` in the
+> subject line of an operations email — a host-timezone rendering in a project
+> that pinned Cairo at every boundary (YY3) — and, because two `Date` objects
+> are never `!==`-equal, a single-day departure would have rendered as a range.
+> Normalised, and pinned with a `Date`-object regression test.
+>
+> **Scheduled hourly, DRY by default** (`GOAHEAD_ALERT_DRY_RUN=0` to go live).
+> Dry for BB3's reason and one more: the queue is derived from history, so a
+> first live tick would alert about every departure ever confirmed, in one
+> burst. **The recipient still needs agreeing** — `GOAHEAD_ALERT_TO`.
 
 ---
 

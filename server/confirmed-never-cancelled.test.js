@@ -60,13 +60,15 @@ test("and it stays confirmed everywhere a traveller can see it", () => {
 
 test("the ratchet is in the writer too, not only the reader", () => {
   // refreshStatus is what wrote `open` back. A reader-only fix would leave the
+  // DIR-20 moved it to server/departure-status.js; the ratchet moved with it,
+  // and this test following the code is the point of asserting the writer.
   // database saying `open`, and the job queries the database.
-  const app = readFileSync(join(ROOT, "server", "app.js"), "utf8");
+  const app = readFileSync(join(ROOT, "server", "departure-status.js"), "utf8");
   // Bounded by the NEXT declaration rather than a character count. The first
   // version sliced 900 characters and failed on the length of the comment
   // explaining the fix — a test that fails while the code is correct is the
   // NNN1 failure, and it gets "fixed" by deletion.
-  const from = app.indexOf("async function refreshStatus");
+  const from = app.indexOf("export async function refreshStatus");
   const to = app.indexOf("\nasync function ", from + 10);
   const fn = app.slice(from, to === -1 ? from + 4000 : to);
   assert.match(fn, /\["pending_review", "minimum_reached", "supplier_confirmed", "closed", "cancelled"\]/,
