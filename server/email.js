@@ -292,7 +292,7 @@ ${preheaderBlock(preheader || title)}
             </p>
             <p style="margin:0;font-family:${SANS};font-size:12px;line-height:1.65;color:#8a9294">
               Shared departures, confirmed together.<br/>
-              Capital Travel Service, trading as Sawa Tours &middot; Giza, Egypt
+              Online Era, trading as Sawa Tours &middot; Giza, Egypt
             </p>
           </td>
         </tr>

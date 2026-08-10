@@ -25,7 +25,12 @@ import { join, dirname, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
-const ENTITY = "Capital Travel Service";
+// DIR-19 executed 10 Aug 2026. The sweep this file was built from IS the
+// checklist that was worked through, which is what it was for.
+const ENTITY = "Online Era";
+// The former entity. It may still appear — but only where it is deliberate, and
+// never as the operator of the platform.
+const FORMER = "Capital Travel Service";
 
 // Every place the string is WRITTEN, and why. Generated files are excluded
 // below; if a path here disappears or a new one appears, this fails.
@@ -35,15 +40,13 @@ const ENTITY = "Capital Travel Service";
 const AUTHORED = {
   "site/_partials/footer.html": { n: 1, surface: "footer — applyFooter writes it into 21 static pages" },
   "src/main.jsx":               { n: 1, surface: "footer — the SPA's own copy of the same sentence" },
-  "server/brand.js":            { n: 1, surface: "JSON-LD accreditations, a differently-worded sentence" },
+  "server/brand.js":            { n: 2, surface: "BRAND.legalName, and the JSON-LD Organization node built from it" },
   "server/email.js":            { n: 1, surface: "mail footer — hardcoded, NOT read from BRAND" },
   "site/privacy.html":          { n: 2, surface: "controller identity in body prose (a third is the generated footer)" },
   "site/cookies.html":          { n: 1, surface: "controller identity in body prose (a second is the generated footer)" },
-  "site/terms.html":            { n: 1, surface: "party to the contract, in body prose (a second is the generated footer)" },
-  // Not disclosures — the string as data.
-  "scripts/audit-claims.js":    { n: 1, surface: "the company-name rule's `ok` predicate: Sawa's own entity is not a phantom operator" },
-  "server/pass-state.test.js":  { n: 1, surface: "NNN1.2 fixture proving that same `ok` suppresses" },
-  "server/entity-disclosure.test.js": { n: 1, surface: "this file's own declaration of the string" },
+  "site/terms.html":            { n: 2, surface: "§1 contracting party and §2, in body prose (a third is the generated footer)" },
+  "site/about.html":            { n: 1, surface: "\"Who runs Sawa\", beside the founder history" },
+  "server/entity-disclosure.test.js": { n: 3, surface: "this file's own declaration, plus the exact-rendering assertions" },
 };
 
 const ROOTS = ["site", "server", "src", "scripts", "shared"];
@@ -129,6 +132,32 @@ test("it fires — a sixth author is reported, not absorbed", () => {
   assert.deepEqual(unexpected, ["site/newly-invented.html"]);
 });
 
+test("the former entity is never presented as the operator of the platform", () => {
+  // DIR-19.3 makes Capital Travel Service an OPERATOR RECORD — a founding
+  // partner — so the name may legitimately appear again. What must not come
+  // back is the claim it used to make: that CTS operates the platform.
+  //
+  // ETAA 2179 goes with it. It is CTS's travel-agency licence, and presenting
+  // one company's licence as another's is the class this project removes.
+  for (const f of ["site/_partials/footer.html", "src/main.jsx", "server/email.js",
+                   "site/privacy.html", "site/cookies.html", "site/terms.html"]) {
+    const src = readFileSync(join(ROOT, f), "utf8").replace(/<!--[\s\S]*?-->/g, " ").replace(/^\s*\/\/.*$/gm, " ");
+    assert.doesNotMatch(src, new RegExp(`[Oo]perated by ${FORMER}`), `${f} still says the platform is operated by ${FORMER}`);
+    assert.doesNotMatch(src, new RegExp(`${FORMER}, trading as`), `${f} still names ${FORMER} as the trading entity`);
+    assert.doesNotMatch(src, /ETAA 2179/, `${f} presents Capital Travel Service's ETAA licence as the platform's`);
+  }
+});
+
+test("the name is rendered exactly as supplied — no invented legal form", () => {
+  // DDDD2: "Render the name exactly as given. Do not add a legal-form suffix
+  // that was not supplied." A suffix here would be a claim about a company's
+  // registered form that nobody made.
+  const footer = readFileSync(join(ROOT, "site/_partials/footer.html"), "utf8");
+  assert.match(footer, /Online Era/);
+  assert.doesNotMatch(footer, /Online Era\s+(?:LLC|L\.L\.C|Ltd|Limited|S\.A\.E|SAE|Inc)/i);
+  assert.match(footer, /148500/, "the registration number belongs with the name");
+});
+
 test("the mail footer does not read from BRAND, and that is recorded not assumed", () => {
   // server/email.js writes the sentence itself. BRAND holds a DIFFERENT one
   // ("Operated by … — ETAA licence no. 2179"). Two sentences, two authors, one
@@ -137,7 +166,7 @@ test("the mail footer does not read from BRAND, and that is recorded not assumed
   const email = readFileSync(join(ROOT, "server/email.js"), "utf8");
   const brand = readFileSync(join(ROOT, "server/brand.js"), "utf8");
   assert.ok(email.includes(ENTITY), "email.js no longer names the entity");
-  assert.ok(!/BRAND\.\w*[Ll]egal|BRAND\.accreditations/.test(email),
+  assert.ok(!/BRAND\.legalName|BRAND\.accreditations/.test(email),
     "email.js now reads the entity from BRAND — update this test and AUTHORED");
   assert.ok(brand.includes(ENTITY), "brand.js no longer names the entity");
 });

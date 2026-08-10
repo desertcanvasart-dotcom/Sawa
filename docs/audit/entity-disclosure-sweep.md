@@ -76,11 +76,57 @@ where that belongs — once there is a name to write.
 
 ---
 
-## Still blocked
+## DIR-19 EXECUTED — 10 August 2026
 
-**DIR-19.1 and DIR-19.3 cannot start.** The registered name and number have not
-arrived, and the directive is explicit: *"Do not proceed with placeholders."*
+**The entity is `Online Era`, registration `148500`.** Rendered exactly as
+supplied: **no legal-form suffix was given, so none was added**, and a test
+asserts no `LLC`/`Ltd`/`S.A.E.` ever appears after it.
 
-Outstanding: **the exact registered legal form for Online Era 148500.** Until it
-arrives the five authors stay as they are, and this test makes sure they stay
-five.
+All five authors edited, plus two the change itself created:
+
+| | now reads |
+|---|---|
+| `site/_partials/footer.html` → 21 pages | *"© 2026 Sawa Tours · Operated by Online Era · Registration 148500"* |
+| `src/main.jsx` | the same, for the SPA |
+| `server/brand.js` | `legalName: "Online Era"`, `registrationNumber: "148500"` → JSON-LD `legalName` + a typed `identifier` |
+| `server/email.js` | *"Online Era, trading as Sawa Tours · Giza, Egypt"* |
+| `privacy` ×2, `cookies`, `terms` §1/§2 | controller identity and contracting party |
+| **`site/about.html`** — new | *"Who runs Sawa"*, beside the 1993 founder history |
+
+### ⚠️ Two things were REMOVED rather than transferred
+
+**ETAA 2179 and the registered office address belong to Capital Travel Service.**
+Restating either under Online Era would be a false statement about who is
+licensed and where they are registered — in the one paragraph a reader relies on
+to know who they are contracting with.
+
+| removed from | was |
+|---|---|
+| the footer, on 21 pages + the SPA | *"· ETAA 2179"* |
+| `BRAND.accreditations` → JSON-LD `hasCredential` | *"Operated by Capital Travel Service — ETAA licence no. 2179"* — the node is now **absent**, not empty-but-present |
+| `terms.html` §1 | the ETAA licence clause **and** *"registered office at Flat 6, Floor 1, Block 1, Panorama Pyramids Building, El-Ahramat Street, Giza"* |
+
+**Both are outstanding client items**, added to the list: Online Era's own
+registered address, and its tourism registration **if it holds one**. An empty
+`accreditations` list is the honest state until they arrive.
+
+### DIR-19.3 — proposed, not applied
+
+Capital Travel Service becomes an operator record with the founding-partner
+label. **There was nowhere to put that label**: `agencies.status` is an on/off
+switch, and overloading it would make one column answer two unrelated questions.
+
+`server/db/schema_029_agency_relationship.sql` adds `relationship`, nullable with
+no default, `CHECK (… IN ('founding_partner','operator'))`.
+
+**`relationship` is not verification.** 025's `verification_state` stays NULL —
+*never assessed* — and must. A row reading "founding partner" that rendered as
+"verified operator" would be the fabricated-operator-card defect rebuilt from
+real data, which is worse, because the company would actually exist.
+
+### The ratchet is now the other direction
+
+`server/entity-disclosure.test.js` tracks **Online Era** and additionally
+asserts that no surface says *"operated by Capital Travel Service"*, names it as
+the trading entity, or carries **ETAA 2179** — so the old disclosure cannot
+return through a partial revert.
