@@ -284,6 +284,33 @@ suspect.
 **Must complete before the seed**, or new failures and never-testing tests
 become indistinguishable.
 
+> ### DONE — 10 August 2026
+>
+> `scripts/check-vacuous-tests.js`, in `preflight` and in CI. **A loop is a claim
+> about every member and says nothing about whether there are any.**
+>
+> **The one fix worth more than the eight.** Nine tests looped over `pages()`, a
+> filesystem walk. Guarding each caller would have left the tenth test written
+> next month unguarded, so the refusal went into `pages()` itself — it now throws
+> rather than return an empty list, the way `run-tests.js` refuses an empty run.
+> This repository has already paid for that shape: a check used `fs.globSync`,
+> which does not exist on Node 20, found zero files and exited 0.
+>
+> Eight remaining tests got a one-line non-empty guard.
+>
+> **The checker was wrong twice before it was right.** Its first run flagged 38
+> of ~200 tests, almost all looping over a literal array written three lines
+> above — a literal cannot be empty. Narrowed to computed collections, then
+> taught to resolve identifiers bound to literals in the same file. **A checker
+> that reports 38 false positives is baselined inside a week and takes the real
+> class with it.**
+>
+> **What it deliberately does not detect, stated:** `assert.deepEqual(derived, [])`.
+> A test asserting emptiness is correct when emptiness is the point and vacuous
+> when the derivation is broken, and the two are indistinguishable from syntax.
+> Five such tests carry hand-written non-vacuity guards and are listed in
+> `ACCEPTED` with a reason each.
+
 > **LLL5.2 — the sharper statement of why.** This is not only *clean the tests
 > before adding data*. **DIR-14 is the last point at which the empty-table
 > assumption can be audited while it is still true.** After the seed, a test

@@ -46,6 +46,9 @@ test("every check and audit in package.json is in the gate", () => {
 });
 
 test("every gated step points at a script that exists", () => {
+  // DIR-14 — a loop is a claim about every member and says nothing about
+  // whether there are any. This test is worthless on an empty set.
+  assert.ok(STEPS.length >= 10, `only ${STEPS.length} steps — the gate has shrunk or is not being read`);
   for (const s of STEPS) {
     assert.doesNotThrow(() => readFileSync(join(ROOT, s.script), "utf8"), `${s.name} -> ${s.script}`);
   }

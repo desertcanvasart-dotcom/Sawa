@@ -41,6 +41,9 @@ test("every exemption carries a reason", () => {
 });
 
 test("nothing that touches ACCESS is exempt", () => {
+  // DIR-14 — a loop is a claim about every member and says nothing about
+  // whether there are any. This test is worthless on an empty set.
+  assert.ok(Object.keys(EXEMPT).length, "no exemptions at all — this asserts nothing");
   // The bar is different for these. A noisy counter can be exempt; a route that
   // grants or removes the ability to sign in cannot, whatever the volume.
   for (const key of Object.keys(EXEMPT)) {

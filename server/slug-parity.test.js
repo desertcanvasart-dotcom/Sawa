@@ -54,6 +54,9 @@ test("the browser copy agrees with the server on every case", () => {
 });
 
 test("the three that used to diverge produce a usable slug", () => {
+  // DIR-14 — a loop is a claim about every member and says nothing about
+  // whether there are any. This test is worthless on an empty set.
+  assert.equal(CASES.length, 10, "the case list changed — the last three are the divergent ones");
   // Not just "they agree" — they must agree on something that is not a 301 loop.
   // An id-shaped slug is rewritten by the legacy-URL redirect to itself.
   for (const p of CASES.slice(-3)) {
