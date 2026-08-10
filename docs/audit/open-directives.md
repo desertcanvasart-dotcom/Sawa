@@ -958,6 +958,30 @@ visible the same day. Full record in [invariant-doors.md](invariant-doors.md).
 
 ---
 
+## DIR-3 done — the latent-defect register
+
+[`docs/audit/latent-defects.md`](latent-defects.md). **Nine live entries, five
+closed and kept as worked examples.** Each records what is divergent, what
+invariant currently masks it, what would arm it, and where that invariant is
+defined.
+
+The failure it prevents: **an invariant relaxed for a good reason by someone who
+has no idea what was resting on it.**
+
+Two entries are worth reading first:
+
+- **L-2** — a pledge row using `pax`. Its mask is **an absence, not a rule**:
+  nothing in this system produces that field, nothing enforces that, and nothing
+  would report its end. An external feed arms it silently.
+- **L-8** — the US English standard is **already armed and firing**. It is in the
+  register because the mechanism that would catch it does not reach the surface
+  that produces it, and the content programme writes into that surface at volume.
+
+`server/latent-defects.test.js` re-checks the masks that are repository facts —
+`pledges.seats NOT NULL`, `loadDeparture` enriching, `cancelled_reason` still
+unwritten, the 50-divergence bound — so relaxing one fails the gate rather than
+going quiet.
+
 ## BBBB — confirmed means confirmed
 
 **Client settled 10 August 2026:** once a departure reaches GoAhead it runs, even
