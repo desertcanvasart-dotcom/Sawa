@@ -610,3 +610,26 @@ produces a finding about yourself.
 Corollary for removal comments: **describe what was removed, do not quote it.**
 Three of the four cases above are a removal comment preserving the string that
 made the original a defect.
+
+---
+
+## A removal comment describes what was removed. It never reproduces it.
+
+Four instances of a search matching the searcher's own writing, and **three of
+them are removal comments preserving the thing they removed**:
+
+| | |
+|---|---|
+| `goahead-promise.html` | a comment preserving the fabricated operator card's text — a named company, "30 years", "a 4.9 traveler rating" — which twice read as a live claim |
+| `contact.html` | a comment preserving the all-zero placeholder phone number, which read as a second live number |
+| `check-catch-handlers` | its own header quoting the banned expression, which the checker then had to be taught to ignore |
+
+The rule: **say what was removed and why. Do not write the string down.**
+`"a fabricated operator credential card, naming a company that does not exist in
+the agencies table"` carries the whole lesson and matches no search for the
+company's name.
+
+**The worked example, and it is the best this file will get:** `audit:repo-truth`
+flagged the runbook note about self-search pollution *while that note was being
+written*, because the note quoted the placeholder phone number it was describing.
+The rule caught its own violation in its own explanation.

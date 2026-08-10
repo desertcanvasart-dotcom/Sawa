@@ -83,7 +83,12 @@ if (process.env.GITHUB_STEP_SUMMARY) {
     + results.map((r) => `| ${r.code === 0 ? "✅ PASS" : "❌ FAIL"} | \`${r.name}\` | |\n`).join("")
     + skipped.map((s) => `| ⚠️ UNVERIFIED | \`${s.name}\` | ${s.needsProductionDb ? "needs the production database" : "needs a running site"} |\n`).join("")
     + `\n**${skipped.length} of ${STEPS.length} steps did not run here.** UNVERIFIED means not checked — a green result says nothing about them.\n`
-    + `\nRun the whole gate: \`npm run preflight -- --base=https://sawa.tours\`\n`);
+    + `\nRun the whole gate: \`npm run preflight -- --base=https://sawa.tours\`\n`
+    + `\n### What green means here\n\n`
+    + `**The offline checks passed on this branch.** It does not mean production is correct, `
+    + `serving, or running this code. Whether migration 024 is applied is answered by the daily `
+    + `watcher (\`audit:watch\`), which holds read-only production access — not by CI, which has `
+    + `none and should not pretend to.\n`);
 }
 
 if (failed.length) {

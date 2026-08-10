@@ -10,16 +10,21 @@
 # time still load. Verified: 390/390 with no .env present.
 #
 # What cannot run here is reported UNVERIFIED, never absent and never green.
-name: PR gate
+name: Gate
 
 on:
   pull_request:
+    branches: [main]
+  # VVV1.1 — and on main after merge. Without this, a red main is invisible
+  # until the next pull request opens, which is a window measured in days on a
+  # project with one committer.
+  push:
     branches: [main]
 
 # A second push to the same PR cancels the first — an in-flight run against
 # superseded code is a verdict about nothing.
 concurrency:
-  group: pr-gate-${{ github.ref }}
+  group: gate-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:

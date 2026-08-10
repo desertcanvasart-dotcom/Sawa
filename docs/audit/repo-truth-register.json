@@ -62,6 +62,20 @@
    "verdict": "AGREES",
    "contradicts": null,
    "note": "Internal and historical, and verified when written: site/contact.html carries an HTML comment recording that +20 100 000 0000 / wa.me/201000000000 was once a live all-zero placeholder. It is a comment, not a rendered number — the served page shows only +20 109 284 7613. The runbook cites it as one of four cases where a search matched the searcher's own writing. No public surface makes any claim about it."
+  },
+  "8533147585b6": {
+   "where": "docs/RUNBOOK.md:624",
+   "text": "`contact.html` | a comment preserving the all-zero placeholder phone number, which read as a second live number |",
+   "verdict": "AGREES",
+   "contradicts": null,
+   "note": "Internal and verified. Records a defect found and fixed in this repository's own tooling — the fabricated-operator card removal comment, and the placeholder phone number — as worked examples of a removal comment preserving the string it removed. Neither string is on any served surface: the operator card was removed before this session and the phone number renders only as +20 109 284 7613. No public claim depends on either."
+  },
+  "3bea6f3afac0": {
+   "where": "docs/RUNBOOK.md:628",
+   "text": "`\"a fabricated operator credential card, naming a company that does not exist in",
+   "verdict": "AGREES",
+   "contradicts": null,
+   "note": "Internal and verified. Records a defect found and fixed in this repository's own tooling — the fabricated-operator card removal comment, and the placeholder phone number — as worked examples of a removal comment preserving the string it removed. Neither string is on any served surface: the operator card was removed before this session and the phone number renders only as +20 109 284 7613. No public claim depends on either."
   }
  }
 }
