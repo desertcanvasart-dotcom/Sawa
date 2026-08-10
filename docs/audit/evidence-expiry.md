@@ -98,6 +98,39 @@ When the seed happens, all four need revisiting in the same commit. That is why
 EEE4 put migration 024 ahead of the seed: the sentence that protects the
 exposure scope is the sentence the seed ends.
 
+#### EEEE3.1 — this is now a check, not a note
+
+`scripts/check-seed-expiry.js` counts `pledges` and reads all four dependents.
+
+| | |
+|---|---|
+| `not-checked` | no production credentials. **Never a pass for the claims** — it is silence about them. |
+| `still-true` | `pledges` empty; the four stand as written. **This is today.** |
+| `ENDED` | `pledges` holds rows and a dependent still asserts otherwise — **red, naming each file.** |
+| `premature` | a dependent marked historical while `pledges` is still empty. A false record of *when* something changed is harder to notice later than the reverse. |
+
+It runs in `preflight` (`needsProductionDb`) **and on the daily job tick**, which
+is the one that matters: a preflight step only helps someone who runs preflight,
+and the seed will be run by the client, against production, on a day nobody is
+watching.
+
+The restatement marker is **`E-2 ENDED <YYYY-MM-DD>`** — a date, so "restated"
+cannot be claimed by rewording a sentence. All four must carry the **same** date:
+one INSERT ends them at one instant, and four different dates is itself a
+failure.
+
+#### The four restatements, written now rather than invented then
+
+Drafted while the claims are still true, because after the seed nobody can
+reconstruct what the sentence was protecting:
+
+| | becomes |
+|---|---|
+| **`audit-claims.js`** `volume` rule | *"no volume claim is evidenced. Until <date> `pledges` held no rows at all; after it, any figure must be counted from the table and stated as of a date."* The rule keeps firing — what changes is that its premise stops being "nobody has travelled" and becomes "the number is not evidenced here". |
+| **EEE3**, exposure scope | *"No traveller personal data was exposed during the Data API window, because `pledges` held no rows at any point in it. **This is a statement about a closed period ending <date>**, not a control — and 024 is what makes it stay true afterwards."* |
+| **Legal register Q3** | the premise "no reviews table exists" is unaffected; "no travellers" is not. Restate as: *ratings remain unpublishable because no review mechanism exists — **not** because nobody has travelled.* |
+| **`cancel-job-rehearsal.md`** | *"Run against an ephemeral database on 9 and 10 August 2026, while production's `pledges` was empty. **That is why no real booking could be confused with a synthetic one**, and it ceased to be true on <date>."* |
+
 ---
 
 ### E-3 — The Autoura mirror has never transmitted anything
