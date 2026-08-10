@@ -45,9 +45,14 @@ a code argument — the trail could not have answered it.
   access, money or status
 - Assert coverage in a test, since an audit gap is invisible until it is needed
 
-> **VERIFIED 10 Aug 2026 — OPEN, confirmed.** Zero `logAudit` calls in either
-> route body. `audit_log` in production holds 20 distinct actions and no
-> disable, ban or staff-removal event of any kind.
+> **CLOSED 10 Aug 2026 — #88 (`4208d46`).** The sweep found **eight** unaudited
+> mutating routes, not two, and two defects that logging alone would not have
+> fixed: `PATCH /api/agency/staff/:id` set `status='disabled'` and never touched
+> the login (DIR-1.1), and `status='active'` never lifted the ban, so
+> re-enabling silently did nothing (DIR-1.2). `revokeLogin` became
+> `setLoginAccess`. `scripts/audit-coverage.js` + `server/audit-coverage.test.js`
+> hold the line at **32 routes · 31 audited · 1 exempt · 0 unaudited**. Full
+> record in `docs/audit/access-audit-coverage.md`.
 
 ### DIR-2 — The 14 claims findings
 
@@ -297,6 +302,11 @@ accumulating demand is the signal that decides which departures get scheduled.
 
 **Preconditions, all required:**
 
+0. **EEE4 — migration 024 applied and verified against production, with an
+   anonymous request confirmed to return `401` or empty on every table.**
+   Ahead of the others. Seeding travellers into an openly readable database is
+   the one version of this that cannot be undone. Verification procedure in
+   `docs/audit/data-api-exposure.md`.
 1. DIR-14 vacuous-test sweep complete
 2. Scheduler resolved state verified — done, was `on`, now dry by default
 3. Cancellation copy corrected — DIR-9, remainder on the client
@@ -322,6 +332,20 @@ to stay in.
 > run is dry unless explicitly switched live (BB3). Precondition 4's mechanism
 > is present (`reportNotifications` in `server/departure-cancel.js:84`, PP2).
 > Preconditions 1, 3 and 5 not verified.
+
+---
+
+## Recorded, not scheduled
+
+Folded into DIR-3's latent-defect register when it is written; kept here so they
+are not lost in the meantime.
+
+| | |
+|---|---|
+| **DDD3 — the cancel job is audited. CLOSED.** | And better than the routes were: `server/jobs/cancel-unconfirmed.js:69` writes `departure.auto_cancel` **inside the same transaction** as the cancellation, with reason, seats, minimum, pledges cancelled and the deadline. It uses a raw `INSERT` rather than `logAudit` **deliberately** — `logAudit` uses the pool, not the transaction client, so switching it would turn an atomic record into a race. Needs a comment and a test asserting the audit row and the cancellation share a transaction, so a later tidy-up does not "fix" it. |
+| **11 unaudited operator scripts** | every `server/db/*.js` one-off, including `reset-fabricated-inventory.js`, **which deletes**. A destructive unattended script with no record is the DIR-1 shape outside route scope, and the route scanner cannot see it. |
+| **DDD4's honest limit** | no ban was ever applied and both `app_users` rows are `active`, so DIR-1.2 could not have fired and no *persisting* DIR-1.1 instance exists. But a disable-then-reenable through the then-unaudited PATCH would have left **no trace at all** — `audit_log` holds exactly one user-related row ever, a `staff.create` from 2 June. A transient instance cannot be ruled out, only a persisting one. Expiry discipline per DDD1. |
+| **DDD1 — evidence expires** | Every finding of the form *"this never happened, because nothing does X"* records what would have to become true for the argument to stop holding, and where that thing is defined. First entry is already known and dated: the BBB1 proof rested on *nothing in the repository lifts a ban*, and **#88 made that premise false on 10 Aug 2026**. Valid for everything before; the audit log answers it from here. |
 
 ---
 
