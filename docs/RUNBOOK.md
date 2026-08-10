@@ -511,3 +511,24 @@ not 0).
 
 So where a rule carries a stated intent, assert the implementation tests all of
 it. That gap is invisible until the defect is fixed.
+
+---
+
+## Never verify with a shortcut when the tool for that question exists
+
+Beside DD1, and PPP2's worked example.
+
+`scripts/audit-claims.js` has a `visibleText` helper whose comment reads
+*"script and style content is not copy, and CSS is full of 100%"*. Minutes after
+reading that comment, a quick extraction script was written that stripped tags
+but not `<script>` blocks — and reported **16 of 16 product pages name an
+operating company** when the true answer is **0**. It was matching the inlined
+JSON-LD and bootstrap payload. **It was measuring JSON and calling it prose.**
+
+The wrong measurement is recorded in `docs/audit/operator-records.md` rather
+than discarded. A discarded error teaches nobody, and the next quick extraction
+script will reach for the same shortcut.
+
+**The rule:** if a helper exists for the exact question, use it. `scripts/audit-page.js`
+imports `visibleText`, `metaTags`, `attributeText` and `ldBlocks` from the
+auditor rather than re-deriving them, for this reason.

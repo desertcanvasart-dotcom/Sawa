@@ -657,3 +657,22 @@ now blocked on OOO3.1 as well as on the client.
 - **OOO3.3** — Capital Travel Service is not in `agencies`. DIR-19.3 makes it an
   operator record; that work now also closes this gap, and **should carry the
   OOO3.1 verification fields rather than being added bare.**
+
+---
+
+## PPP1 — data changes bypass every gate
+
+Full record: [data-bypasses-gates.md](data-bypasses-gates.md).
+
+**16 of 16 product pages carry British spellings — 30 findings.** U4.3 is
+enforced on static files and on nothing that reaches the reader from the
+database. `server/constants.test.js` iterates `pages()`; `audit:claims` has no
+spelling rule at all.
+
+| | |
+|---|---|
+| **PPP1.1** | scheduled production audit — `audit:claims` + `smoke` against `https://sawa.tours`, reporting findings **and route-count change**. Route count 39 → 41 was the signal production had moved and nothing was watching. |
+| **PPP1.3** | done. The two new products were clean on every rule except spelling; the class covers all 16. Package deadline inheritance, price-from-data and GoAhead-from-constants all verified. |
+| **PPP1.4** | done — six surfaces write claim-bearing text with no check between the write and the reader, including `blog_posts.tldr`, which has already carried a finding. |
+| **The 30 spellings** | a **data** fix, 16 rows in `tour_products`. Proposed as a reviewable script for the client to run, like a migration. **Not applied.** |
+| **New client question** | who is adding products in production, and under what process? |
