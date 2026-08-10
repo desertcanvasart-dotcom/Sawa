@@ -9,6 +9,7 @@ import "dotenv/config";
 import { pool } from "./db/index.js";
 import { BRAND } from "./brand.js";
 import { recordSuccess, recordFailure } from "./effect-log.js";
+import { rethrowIfProgrammerError, fireAndForget } from "./errors.js";
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
 const EMAIL_FROM = process.env.EMAIL_FROM || "Sawa Tours <onboarding@resend.dev>";
@@ -71,10 +72,40 @@ export async function sendEmail({ to, subject, html, text, kind = "generic" }) {
     recordSuccess("email");
     return { ok: true, mode: "live" };
   } catch (e) {
+    // AAA2 / AAA1.2 — this function's contract is "never throws on an
+    // OPERATIONAL failure", which is what its thirteen callers defend against.
+    // It says nothing about a programmer error, and silently returning
+    // { ok: false } for one would make a broken template look like a mail
+    // outage. Asserted in server/email-contract.test.js.
+    rethrowIfProgrammerError(e);
     await recordEmail({ to, subject, kind, status: "failed", error: e.message });
     recordFailure("email", e.message);
     return { ok: false, mode: "live" };
   }
+}
+
+// AAA1.2 — the thirteen call sites, in one place.
+//
+// Every one of them was `sendEmail(...).catch(() => {})`. The intent behind that
+// was right: a booking must not fail because a receipt did not send. The
+// expression was not — it defends against a throw whose existence nobody had
+// established, and it would have discarded one silently if it happened.
+//
+// The contract is stated where it belongs, next to the function it describes:
+//
+//   OPERATIONAL failure   already handled INSIDE sendEmail. It records the
+//                         failure, writes an email_log row, and returns
+//                         { ok: false }. It does not throw, so there was never
+//                         anything for a caller's handler to catch.
+//
+//   PROGRAMMER error      escapes sendEmail deliberately (see its catch), and
+//                         escapes this too. A broken template is not a mail
+//                         outage and must not be reported as one.
+//
+// Callers that want the result — the direct traveller receipt — still await
+// sendEmail. This is for the ones that genuinely must not block the response.
+export function sendEmailInBackground(message) {
+  return fireAndForget("email", sendEmail(message), { record: recordFailure });
 }
 
 // ---- Templates -------------------------------------------------------------

@@ -11,6 +11,7 @@ Runs, cheapest first:
 | Step | Catches |
 |---|---|
 | `check:constants` | group-size copy drifting from `shared/group-size.js` |
+| `check:catch-handlers` | **a handler that discards a failure** — `.catch(() => {})`, empty `catch {}`, and the annotated form `catch { /* reason */ }`. A comment is not an observable effect. See `docs/audit/swallowed-errors.md` (AAA1). |
 | `test` | unit behaviour |
 | `smoke` | **routes not actually serving** |
 | `audit:claims` | unevidenced claims, dead config, over-length descriptions |

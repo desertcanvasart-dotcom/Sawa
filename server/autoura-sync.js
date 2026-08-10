@@ -23,6 +23,7 @@ import { createHmac } from "node:crypto";
 import { mapDeparture } from "./db/mappers.js";
 import { enrichDeparture, seatsTotal } from "./domain.js";
 import { recordSuccess, recordFailure } from "./effect-log.js";
+import { rethrowIfProgrammerError, isProgrammerError } from "./errors.js";
 // NOTE: the db pool is imported lazily inside loadInventory() so this module
 // (and its pure payload builder) can be unit-tested without a DATABASE_URL.
 
@@ -162,6 +163,10 @@ async function postWithRetry(payload) {
       }
       throw new Error(`upstream ${res.status}`);
     } catch (e) {
+      // AAA2 — this handler was written for a network failure. A ReferenceError
+      // reaching it means the code is wrong, and retrying it twice more is two
+      // more identical failures.
+      rethrowIfProgrammerError(e);
       if (attempt === 3) {
         recordDivergence(payload, `gave up after 3 attempts: ${e.message}`);
         return false;
@@ -246,7 +251,12 @@ export function emitDepartureSync(departureId) {
       return;
     }
     await postWithRetry(buildDeparturePayload(dep));
-  })().catch((e) => recordDivergence({ departure: { externalId: departureId } }, `emit failed: ${e.message}`));
+  })().catch((e) => {
+    // AAA2 — the exact line that absorbed `loadEnriched is not defined` on every
+    // call, for the life of this feature. A programmer error escapes now.
+    recordDivergence({ departure: { externalId: departureId } }, `emit failed: ${e.message}`);
+    if (isProgrammerError(e)) throw e;
+  });
   inFlight.add(task);
   task.finally(() => inFlight.delete(task));
   return task;
@@ -276,6 +286,9 @@ export async function unavailableDates() {
       capacityCache = { at: Date.now(), blackouts: new Set(data.blackouts || []) };
     }
   } catch (e) {
+    // AAA2 — fail-open is right for an unreachable feed. It is not right for a
+    // typo, which would fail open forever and look like a partner outage.
+    rethrowIfProgrammerError(e);
     console.warn("[autoura-sync] capacity feed unavailable:", e.message);
     capacityCache.at = Date.now(); // don't hammer a dead endpoint
   }

@@ -29,6 +29,7 @@ import {
 import "./styles.css";
 import "./redesign.css";
 import { supabase, apiFetch, API_BASE } from "./supabaseClient";
+import { warnOnce } from "./warn-once.js";
 import { tourSlug } from "../server/slug.js";
 import { toDate } from "./dates.js";
 // The booking conditions, from the one place they are declared. This file used
@@ -1259,10 +1260,12 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
     let live = true;
     apiFetch(`/public/tour-products/${encodeURIComponent(tourProp.id)}`)
       .then((r) => (r.ok ? r.json() : null))
-      // A failure is not worth surfacing: the background catalogue refresh is
-      // already in flight and fills the same gap a moment later.
+      // A failure is not worth surfacing TO THE VISITOR: the background
+      // catalogue refresh is already in flight and fills the same gap a moment
+      // later. AAA1.3 — that is an argument for not rendering an error, not an
+      // argument for the failure leaving no trace at all.
       .then((j) => { if (live && j?.product) setDetail(j.product); })
-      .catch(() => {});
+      .catch((e) => warnOnce("tour-detail", "[tour] background detail fetch failed —", e.message));
     return () => { live = false; };
   }, [tourProp.id, tourProp.detailPending]);
 
@@ -2301,9 +2304,15 @@ function captureReferral() {
         fetch(`${API_BASE}/track/referral`, {
           method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ code }), keepalive: true,
-        }).catch(() => {});
+        }).catch((e) => warnOnce("referral-beacon", "[referral] click-through not recorded —", e.message));
       }
-    } catch (e) { /* storage blocked — ignore */ }
+    } catch (e) {
+      // Private mode and blocked storage genuinely throw here and there is
+      // nothing to do about it. AAA1.3 — but this is a PARTNER ATTRIBUTION
+      // silently not happening, which is somebody's commission, so it says so
+      // once rather than never.
+      warnOnce("referral-store", "[referral] storage blocked — partner attribution will not persist:", e.message);
+    }
   };
 
   const consent = window.sawaConsent;
@@ -2365,12 +2374,17 @@ function useEmbedAutoResize(dep) {
     applyEmbedTheme(embedThemeFromUrl());
     const post = () => {
       const height = Math.ceil(document.documentElement.getBoundingClientRect().height);
-      try { window.parent?.postMessage({ type: "sawa-embed-height", height }, "*"); } catch (e) { /* cross-origin */ }
+      // AAA1.3 — warn-once, not silence and not a warning per resize: this runs
+      // on every ResizeObserver callback, and if it is failing the embed never
+      // resizes, which the host site sees as a widget stuck at the wrong height.
+      try { window.parent?.postMessage({ type: "sawa-embed-height", height }, "*"); }
+      catch (e) { warnOnce("embed-height", "[embed] height not posted to host —", e.message); }
     };
     // Let the host's optional companion script send its palette to match.
     const onMsg = (e) => { if (e.data && e.data.type === "sawa-embed-theme") applyEmbedTheme(e.data); };
     window.addEventListener("message", onMsg);
-    try { window.parent?.postMessage({ type: "sawa-embed-ready" }, "*"); } catch (e) { /* cross-origin */ }
+    try { window.parent?.postMessage({ type: "sawa-embed-ready" }, "*"); }
+    catch (e) { warnOnce("embed-ready", "[embed] ready signal not posted to host —", e.message); }
     post();
     const ro = new ResizeObserver(post);
     ro.observe(document.body);
