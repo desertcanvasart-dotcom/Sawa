@@ -12,6 +12,19 @@
  * treated as a choice about this one.
  */
 (function () {
+  "use strict";
+
+  // AAA1.3 / warn-once. site/assets/*.js are plain scripts served off disk and
+  // cannot import src/warn-once.js, so the same rule is restated in eight
+  // lines rather than left unenforced. Some of these failures repeat on every
+  // page for a whole session; logging each one buries the console, and a
+  // console nobody can read is the argument for deleting the logging.
+  var said = {};
+  function warnOnce(key, a, b) {
+    if (said[key]) return;
+    said[key] = 1;
+    if (typeof console !== "undefined" && console.warn) console.warn(a, b);
+  }
   var KEY = "sawa_consent";
   var VERSION = 1;
   var LIFETIME_DAYS = 365;
@@ -34,13 +47,40 @@
       // A choice older than its lifetime is not a current choice.
       if (Date.now() - Date.parse(saved.ts) > LIFETIME_DAYS * 864e5) return null;
       return saved;
-    } catch (e) { return null; }
+    } catch (e) {
+      // Reading a blocked or corrupt store is a genuine "no saved choice",
+      // which is what null means here — a substituted value, not a discarded
+      // failure. Said once so a permanently blocked store is visible.
+      warnOnce("consent-read", "[consent] saved choice unreadable — treating as no choice:", e && e.message);
+      return null;
+    }
   }
 
   function write(choice) {
     state = { v: VERSION, ts: new Date().toISOString(), functional: !!choice.functional, analytics: !!choice.analytics };
-    try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { /* storage blocked */ }
-    listeners.forEach(function (fn) { try { fn(state); } catch (e) {} });
+    // AAA1.3 — storage blocked is real and unfixable, and a comment is not an
+    // effect. Said once: this is the record of a consent DECISION failing to
+    // persist, so the banner will ask again on the next page.
+    try {
+      localStorage.setItem(KEY, JSON.stringify(state));
+    } catch (e) {
+      warnOnce("consent-store", "[consent] choice not persisted — the banner will ask again:", e.message);
+    }
+
+    // AAA1 — this swallowed a throwing listener whole. The listeners are the
+    // things that ACT on consent: the referral store that attributes a partner
+    // commission, and analytics loading. A listener that threw was dropped
+    // silently and the next one ran, so consent could be granted and the thing
+    // it grants never happen — with nothing anywhere saying so.
+    //
+    // Every listener still runs: one failing must not stop the others.
+    listeners.forEach(function (fn) {
+      try {
+        fn(state);
+      } catch (e) {
+        warnOnce("consent-listener", "[consent] a listener failed — something granted was not applied:", e && e.message);
+      }
+    });
     clearDeclined();
   }
 
@@ -70,7 +110,12 @@
           var k = sessionStorage.key(i);
           if (k && k.indexOf("sawa_ref_hit_") === 0) sessionStorage.removeItem(k);
         }
-      } catch (e) {}
+      } catch (e) {
+        // AAA1 — withdrawing consent must actually remove what was set, or
+        // "you can change your mind" is a promise the page does not keep. If
+        // the removal fails, the data stays and the user was told otherwise.
+        warnOnce("consent-clear", "[consent] withdrawal did not clear stored data:", e && e.message);
+      }
     }
   }
 

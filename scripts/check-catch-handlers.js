@@ -33,7 +33,20 @@ import { join, dirname, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
-const ROOTS = ["server", "src", "scripts", "shared"];
+// DIR-5 — `site` was missing, and that was a door.
+//
+// The invariant "every empty handler in this repository is caught" held through
+// THE SCAN ROOTS, and three hand-written browser scripts live outside them:
+// analytics.js, consent.js and sawa.js, all loaded on every page. consent.js
+// carried three empty handlers, one of which dropped a throwing consent
+// listener — so consent could be granted and the thing it grants never happen,
+// with nothing anywhere saying so.
+//
+// A checker's roots are an invariant of exactly the kind DIR-5 enumerates: it
+// holds through one door, and a file outside is not "clean", it is unexamined.
+// server/invariant-doors.test.js asserts no .js or .jsx in the repository sits
+// outside every checker's roots.
+const ROOTS = ["server", "src", "scripts", "shared", "site"];
 
 // Empty arrow rejection handlers: .catch(() => {}), .catch(e => {}),
 // .catch(function () {}) — and the empty block form, catch {} / catch (e) {}.
