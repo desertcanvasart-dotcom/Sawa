@@ -124,6 +124,23 @@ export function coverageState(have, total) {
 
 // promises: [{ where, match }] from INTERFACE_PROMISES
 // payload:  the /api/bootstrap body
+// Some promises cannot be answered from the public payload AT ALL — not because
+// the data is missing, but because the API does not serve it.
+//
+// `agencies` is returned only to platform users (`server/app.js`: `agencies:
+// isPlatform(user) ? … : []`), and the public product payload carries
+// `agencyId` with no name. So an operator name has **no public path**, and a
+// probe for it would report `unmet` forever — including on the day a real
+// signed operator is attached.
+//
+// That is a probe that cannot pass, which is the NNN1.2 failure this checker
+// was written to embody. So it is a state of its own: `unservable` says the
+// question was not answered, never that the answer was no.
+const SERVED_BY = {
+  name: (payload) => Array.isArray(payload?.agencies) && payload.agencies.length > 0,
+  licence: (payload) => Array.isArray(payload?.agencies) && payload.agencies.length > 0,
+};
+
 export function unmetPromises(promises, payload) {
   const agencies = new Map((payload?.agencies || []).map((a) => [a.id, a]));
   const products = payload?.tourProducts || [];
@@ -134,6 +151,17 @@ export function unmetPromises(promises, payload) {
     for (const thing of thingsNamedIn(promise.match)) {
       const probe = PROMISED_DATA[thing];
       if (!probe) continue;
+      const served = SERVED_BY[thing];
+      if (served && !served(payload)) {
+        out.push({
+          rule: "promise-not-checkable", thing, label: probe.label, state: "unservable",
+          have: null, total: products.length, where: promise.where, match: promise.match,
+          why: `copy promises ${probe.label}, and the public payload has no way to carry it — `
+            + `\`agencies\` is served to platform users only. This is NOT a finding that the `
+            + `promise is broken; it is that nothing here can tell.`,
+        });
+        continue;
+      }
       const have = products.filter((p) => probe.have(p, ctx)).length;
       const state = coverageState(have, products.length);
       if (state === "kept") continue;

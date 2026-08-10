@@ -55,6 +55,28 @@ test("one sentence promising three things is three promises", () => {
   assert.equal(f.length, 3, "each promised thing must be reported on its own");
 });
 
+test("it fires — an operator-name promise the public API cannot answer", () => {
+  // `agencies` is platform-only, and the public product payload carries
+  // `agencyId` with no name. A `name` probe would read `unmet` forever, even on
+  // the day a real signed operator is attached — a probe that cannot pass.
+  const f = unmetPromises(promise("you'll see their name on every departure"), PAYLOAD);
+  assert.equal(f.length, 1);
+  assert.equal(f[0].state, "unservable");
+  assert.match(f[0].why, /served to platform users only/);
+  assert.match(f[0].why, /NOT a finding that the promise is broken/);
+});
+
+test("it stops — once the payload carries agencies, the probe answers normally", () => {
+  const withAgencies = {
+    agencies: [{ id: "ag", name: "Real Operator" }],
+    tourProducts: [{ id: "a", agencyId: "ag", publishedRate: 100 }],
+  };
+  assert.deepEqual(unmetPromises(promise("you'll see their name on every departure"), withAgencies), []);
+  const orphan = { agencies: [{ id: "other", name: "X" }], tourProducts: [{ id: "a", publishedRate: 100 }] };
+  assert.equal(unmetPromises(promise("you'll see their name"), orphan)[0].state, "unmet",
+    "a product with no operator attached is unmet, not unservable");
+});
+
 test("no products means no-data, which is not a pass", () => {
   const f = unmetPromises(promise("prices are shown on every departure"), { agencies: [], tourProducts: [] });
   assert.equal(f[0].state, "no-data");
