@@ -34,6 +34,7 @@ const MIGRATIONS = [
   { name: "023_write_time_capture", file: "schema_023_write_time_capture.sql" },
   { name: "024_lock_down_data_api", file: "schema_024_lock_down_data_api.sql" },
   { name: "025_agency_verification", file: "schema_025_agency_verification.sql" },
+  { name: "026_route_alerts", file: "schema_026_route_alerts.sql" },
 ];
 
 async function main() {
