@@ -400,6 +400,35 @@ export function departureRequestDeclinedEmail({ to, customerName, route, dateLab
   return { to, subject, html, text, kind: "departure_request_declined" };
 }
 
+// TTT3 — where the watcher's alert goes.
+//
+// "Fails" and "alerts" both need a destination, and stderr inside the production
+// process is not one. Nobody reads it — the same problem as an audit trail
+// nobody can query, in a place whose entire point is that a human learns
+// something.
+//
+// TTT3.3 — this is only ever sent on DRIFT or STALENESS. A daily mail saying
+// nothing changed trains the recipient to filter it, and then the one that
+// matters is filtered too.
+export function auditDriftEmail({ to, base, lines = [], stale }) {
+  const subject = stale
+    ? `Sawa: the claims watcher has not run for ${stale}`
+    : `Sawa: the claims audit changed on ${base}`;
+  const body = stale
+    ? `The scheduled claims audit has not completed successfully for ${stale}. `
+      + `No alert is not the same as no drift — this message exists because the watcher's silence would otherwise look like success.`
+    : `The claims audit against ${base} differs from the committed baseline:`;
+  const text = `${body}\n\n${lines.join("\n")}\n\nBaseline: docs/audit/claims-baseline.json\nRe-run: npm run audit:watch -- --base=${base}`;
+  const html = shell(
+    stale ? "The claims watcher has gone quiet" : "The claims audit changed",
+    `<p style="margin:0 0 18px">${esc(body)}</p>
+     <ul style="margin:0 0 20px;padding-left:20px">${lines.map((l) => `<li style="margin:0 0 6px">${esc(l)}</li>`).join("")}</ul>
+     <p style="margin:0 0 6px;font-size:14px;color:#6b6257">Baseline: <code>docs/audit/claims-baseline.json</code></p>
+     <p style="margin:0;font-size:14px;color:#6b6257">Re-run: <code>npm run audit:watch -- --base=${esc(base)}</code></p>`
+  );
+  return { to, subject, html, text, kind: "audit_drift" };
+}
+
 export function goAheadEmail({ to, route, dateLabel }) {
   const subject = `Confirmed: ${route} is running`;
   const text = `Good news — ${route} on ${dateLabel} has reached its minimum travellers and is confirmed to run (GoAhead).`;

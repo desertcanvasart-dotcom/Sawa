@@ -532,3 +532,29 @@ script will reach for the same shortcut.
 **The rule:** if a helper exists for the exact question, use it. `scripts/audit-page.js`
 imports `visibleText`, `metaTags`, `attributeText` and `ldBlocks` from the
 auditor rather than re-deriving them, for this reason.
+
+---
+
+## A signal that fires when nothing is wrong stops being a signal
+
+NNN1 in a second context. The rule there was about **checks**: a check that
+cannot pass gets baselined, and then it protects nothing. The same failure has a
+second home in **alerting**, and it arrives faster.
+
+`audit:watch` compares production against a committed baseline daily. Two things
+change: findings, and the route count. Only one of them fails.
+
+| | |
+|---|---|
+| **findings drift** | **failure** — a finding that was not there yesterday is a regression whether or not anyone deployed |
+| **route count** | **alert, not failure** — the client adds products; that is legitimate and expected |
+
+Failing on a new product would have made the watcher noisy within a week and
+then ignored, taking the findings signal with it.
+
+The same reasoning sets the staleness threshold at **48 hours rather than 24**:
+one missed daily run is a restart, a deploy, or a slow night. Two is a pattern.
+
+And it is why nothing is sent on green (TTT3.3). A daily mail saying nothing
+changed trains the recipient to filter it, and then the one that matters is
+filtered too.

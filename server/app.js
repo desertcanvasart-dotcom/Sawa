@@ -43,6 +43,7 @@ import {
 } from "./seo.js";
 import { emitDepartureSync, unavailableDates, syncDivergences } from "./autoura-sync.js";
 import { effectReport, recordFailure } from "./effect-log.js";
+import { watchdogReport, lastWatchRunAt } from "./watchdog.js";
 // fireAndForget is not imported here on purpose: the only fire-and-forget in
 // this file is email, and its wrapper lives in email.js next to the contract it
 // depends on. A second place to write that expression is a second place for it
@@ -394,7 +395,20 @@ app.get("/api/health", h(async (_req, res) => {
 // credentials, and every property of that argument survives while the
 // reconnaissance value does not.
 app.get("/api/modes", requireAuth, h(async (_req, res) => {
-  res.json({ modes: resolvedModes() });
+  // TTT2.1 — the watcher's own heartbeat, beside the effects it reports on.
+  // /api/modes already answers "has this ever worked" rather than "is this
+  // switched on"; a monitor that has stopped running belongs in the same place,
+  // because its silence is otherwise indistinguishable from a clean site.
+  let watchdog;
+  try {
+    watchdog = watchdogReport(await lastWatchRunAt(pool));
+  } catch (e) {
+    rethrowIfProgrammerError(e);
+    // Not "stale: false". Unable to say is a third state and must not collapse
+    // into the good one — the same argument as no-auth-provider on revokeLogin.
+    watchdog = { lastRun: null, ageHours: null, stale: null, unavailable: e.message };
+  }
+  res.json({ modes: { ...resolvedModes(), watchdog } });
 }));
 
 // Who am I (frontend uses this after login).

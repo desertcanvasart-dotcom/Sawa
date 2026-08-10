@@ -238,6 +238,24 @@ must not be quoted as though they were the same kind of statement.
 
 ---
 
+### E-12 — "No drift reported" means the site has not drifted
+
+| | |
+|---|---|
+| **Status** | **LIVE**, and conditional in a way the others are not |
+| **The claim** | The scheduled claims audit reported nothing, therefore production has not drifted from the baseline. |
+| **Rests on** | **SNAPSHOT + a running monitor.** The watcher writes an `audit.watch` row on every run; silence means either "nothing changed" or "the watcher did not run", and only one of those is good. |
+| **What would arm it** | The web process being gone. A monitor running inside the process it monitors **cannot report that the process is gone** — nothing fires and nothing says so. Railway's healthcheck covers uptime, which is why the gap is accepted rather than closed. |
+| **Where that is defined** | `server/watchdog.js`; `/api/modes` → `watchdog.stale` |
+
+Mitigated, not eliminated: staleness beyond 48 hours is itself a finding and is
+reported by `/api/modes`, so the silence has a stated shelf life. **48 rather
+than 24 deliberately** — a 24-hour threshold fires on every ordinary deploy that
+lands near the tick, and a signal that fires when nothing is wrong stops being a
+signal (TTT1).
+
+---
+
 ## What this register does not do
 
 It does not make any of these arguments stronger. An argument from absence is

@@ -366,6 +366,8 @@ export async function auditEmailTemplates() {
     title: "A Listing", reason: "A reason", reference: "REF-1",
     company: "An Operator", contact: "A Person", email: "op@example.com", phone: "+20 100 000 0000",
     city: "Aswan", about: "Some tours",
+    // auditDriftEmail
+    base: "https://sawa.tours", lines: ["availability: 0 -> 2"],
   };
   // An explicit ALLOW-list, not a name pattern. The pattern /Email$|Text$/
   // matched sendEmail — so the audit CALLED it, which wrote a row to the
@@ -378,7 +380,10 @@ export async function auditEmailTemplates() {
   const TEMPLATES = ["inviteEmail", "bookingConfirmationEmail", "departureRequestReceivedEmail",
     "departureRequestApprovedEmail", "departureRequestDeclinedEmail", "goAheadEmail",
     "listingApprovedEmail", "listingRejectedEmail", "operatorApplicationEmail",
-    "operatorApplicationReceiptEmail", "operatorApplicationText", "cancellationEmail"];
+    "operatorApplicationReceiptEmail", "operatorApplicationText", "cancellationEmail",
+    // TTT3 — the watcher's drift alert. Listed here the same day it was
+    // written, because the unlisted check reported it within the hour.
+    "auditDriftEmail"];
   const templates = TEMPLATES.filter((k) => typeof t[k] === "function").map((k) => [k, t[k]]);
   const missing = TEMPLATES.filter((k) => typeof t[k] !== "function");
   const unlisted = Object.keys(t).filter((k) => /Email$|Text$/.test(k) && k !== "sendEmail" && !TEMPLATES.includes(k));

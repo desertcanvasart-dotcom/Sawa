@@ -80,6 +80,25 @@ async function runSafely(name, fn) {
 }
 
 // PPP1.1 — where the scheduled audit points. Its own origin in production.
+// TTT3.2 — PP2 discipline on the alert itself. An alert that does not arrive is
+// worse than no alerting, because it is trusted. Intended sends are counted,
+// the outcome is asserted, and a shortfall is loud.
+async function alert(log, { base, lines, stale }) {
+  const { sendEmail, auditDriftEmail } = await import("../email.js");
+  const { reportNotifications } = await import("../departure-cancel.js");
+  const { rethrowIfProgrammerError } = await import("../errors.js");
+  const to = process.env.AUDIT_ALERT_TO || process.env.EMAIL_REPLY_TO || (await import("../brand.js")).BRAND.email;
+
+  const sent = await sendEmail(auditDriftEmail({ to, base, lines, stale }))
+    .then((r) => (r?.ok ? 1 : 0))
+    .catch((e) => { rethrowIfProgrammerError(e); return 0; });
+
+  reportNotifications({
+    intended: 1, sent, context: `claims-audit alert to ${to}`,
+    log: (l) => log(l), error: (l) => console.error(`[job:audit-watch] ${l}`),
+  });
+}
+
 export function auditWatchBase(env = process.env) {
   return (env.AUDIT_WATCH_BASE || env.APP_URL || "https://sawa.tours").replace(/\/$/, "");
 }
@@ -118,11 +137,23 @@ export function startJobScheduler(env = process.env) {
     if (r.routeChange) log(`ROUTE COUNT ${r.routeChange.was} -> ${r.routeChange.now} — production data moved with no deploy behind it`);
     for (const d of r.drift) log(`${d.now > d.was ? "WORSE" : "better"} ${d.rule}: ${d.was} -> ${d.now}`);
 
+    // TTT2.1 — every run is recorded, durably. A daily job that stops running
+    // produces no alert, and no alert reads as no drift.
+    const { pool } = await import("../db/index.js");
+    const { recordWatchRun } = await import("../watchdog.js");
+    await recordWatchRun(pool, {
+      routes: r.current.routes, findings: r.all.length,
+      regressed: r.regressed, degraded: r.degraded, base: auditWatchBase(env),
+    });
+
     if (r.regressed || r.degraded) {
-      recordFailure("claimsAudit", r.degraded
-        || `finding(s) appeared with no deploy: ${r.drift.filter((d) => d.now > d.was).map((d) => `${d.rule} ${d.was}->${d.now}`).join(", ")}`);
+      const lines = r.drift.filter((d) => d.now > d.was).map((d) => `${d.rule}: ${d.was} -> ${d.now}`);
+      if (r.degraded) lines.push(`coverage degraded — ${r.degraded}`);
+      recordFailure("claimsAudit", `finding(s) appeared with no deploy: ${lines.join(", ")}`);
+      await alert(log, { base: auditWatchBase(env), lines });
     } else {
       recordSuccess("claimsAudit");
+      // TTT3.3 — nothing is sent on green.
     }
     return { routes: r.current.routes, findings: r.all.length, regressed: r.regressed };
   });
