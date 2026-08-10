@@ -41,6 +41,20 @@ export const EXEMPT = {
 // The handler body runs to the closing `}));` at column 0 — asserted below by
 // the fact that the known-audited routes are all found.
 export function scanMutatingRoutes(file = join(ROOT, "server", "app.js")) {
+  // EEEE1.1 — a check operating over a collection must assert its subject set is
+  // non-empty BEFORE interpreting the outcome. Zero subjects is the absence of a
+  // question, not an answer to it, and which verdict that produces depends only
+  // on the shape of the check: green from a scan, red from an UPDATE that
+  // matched nothing. Neither is information.
+  //
+  // The CLI already refused. The exported function did not — and the exported
+  // function is what a TEST calls, so a test could hand it an empty list and
+  // read the empty result as clean.
+  // This one already failed on an empty argument — with a TypeError from
+  // readFileSync about the "path" argument. An accidental crash is not a
+  // refusal: it says nothing about why, and the next person reads it as a bug
+  // in the harness rather than as the check declining to answer.
+  if (!file || typeof file !== "string") throw new Error("audit-coverage: no source file to scan — refusing to report clean");
   const lines = readFileSync(file, "utf8").split("\n");
   const opener = /^app\.(post|patch|put|delete)\(\s*"([^"]+)"/;
   const routes = [];

@@ -200,7 +200,7 @@ export function blankNonCode(src) {
 export function scanCatchHandlers(files = ROOTS.flatMap((r) => walk(join(ROOT, r)))) {
   // Same lesson as scripts/run-tests.js: a check that examines nothing must say
   // so rather than exit 0.
-  if (!files.length) throw new Error("check-catch-handlers: no files to scan");
+  if (!files.length) throw new Error("check-catch-handlers: no files to scan — refusing to report clean");
 
   const problems = [];
   for (const file of files) {

@@ -141,6 +141,16 @@ export function walk(dir = ROOT, out = []) {
 }
 
 export function scanStatusLiterals(files, vocabulary) {
+  // EEEE1.1 — a check operating over a collection must assert its subject set is
+  // non-empty BEFORE interpreting the outcome. Zero subjects is the absence of a
+  // question, not an answer to it, and which verdict that produces depends only
+  // on the shape of the check: green from a scan, red from an UPDATE that
+  // matched nothing. Neither is information.
+  //
+  // The CLI already refused. The exported function did not — and the exported
+  // function is what a TEST calls, so a test could hand it an empty list and
+  // read the empty result as clean.
+  if (!files || !files.length) throw new Error("check-status-literals: no files to scan — refusing to report clean");
   const problems = [];
   for (const file of files) {
     const text = readFileSync(file, "utf8");
