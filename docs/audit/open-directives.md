@@ -1266,3 +1266,43 @@ which is the third time this session a rule of mine fired on correct code.
 
 **3 interface promises live, 0 not kept.** `SITE DID NOT ANSWER` exits **1**,
 verified — unreachable is not clean.
+
+---
+
+## The remaining duplications — closed, and the list was wrong twice
+
+**Done 10 Aug 2026.** The parked list named four: `cleanRefCode`/`cleanRef`,
+`livePriceFor`, `seatsTotal`, `capacityError`. **Two of the four were not
+duplications, and a fifth copy nobody had listed was found by the checker.**
+
+| | |
+|---|---|
+| **`livePriceFor`** ✅ | real. Two implementations, **verified identical on 84 cases before either was removed** — nothing was silently reconciled. With `priceFromTiers` and the clamp, which existed as `clampPrice` on the server and `safePrice` on the client: **two names for one idea is how a reader ends up believing there are two ideas.** → `shared/pricing.js` |
+| **`cleanRefCode` / `cleanRef`** ✅ | real, byte-identical, two names. → `shared/ref-code.js`. **L-9 closed** and moved to the worked-examples list. |
+| **`seatsTotal`** — not a duplication | its second declaration is `site/assets/rules.js`, which is **generated** from the authority and exempt by design. |
+| **`capacityError`** — not a duplication | declared **once**, in `server/domain.js`, and imported by `server/app.js`. Nothing shadows it client-side. |
+| **`priceFromTiers` in `src/AgencyDashboard.jsx`** ⚠️ | **a third copy, on nobody's list.** `check:duplication` reported it the moment `shared/pricing.js` made the name an authority. |
+
+### The fifth copy is the argument for the derived catalogue
+
+DIR-7 replaced a hand-written duplication list because *"a hand-written list of
+copies has the same defect as the copies — somebody has to remember, and the one
+nobody remembers is precisely the one that drifts."* The parked list was itself
+hand-written, and it was wrong in both directions: it carried two entries that
+were not defects and missed one that was.
+
+### What the comment could not do
+
+The client copy of `priceFromTiers` carried this:
+
+> *"These two must agree exactly: this one decides the price a traveler is
+> shown, that one decides the price they are charged, and a disagreement is a
+> quote the server won't honour."*
+
+**The danger was documented and then guarded by a promise.** They did still
+agree — but that is the same instrument that failed for `tourSlug` (nine
+copies), `seatsTotal`, and the group-size numbers. It is a mechanism now: 22
+authorities in `shared/`, and a second copy of any of them fails the build.
+
+The `goAheadFor` alias went too, for the reason the `slugify` alias went — a
+second name is a second thing to grep for.

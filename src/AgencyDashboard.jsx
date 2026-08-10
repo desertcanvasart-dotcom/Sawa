@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { priceFromTiers } from "../shared/pricing.js";
 import {
   LayoutDashboard, Ticket, ClipboardList, Users as UsersIcon, ShieldCheck, ArrowUpRight,
   Check, ChevronDown, AlertTriangle, CalendarDays, MapPin, Package, Hotel, ArrowLeft, Search, Clock3,
@@ -23,21 +24,6 @@ const STOCK = {
 };
 const coverOf = (p) => (p.images && p.images[0]?.url) || STOCK[p.city] || STOCK.Cairo;
 const goAheadOf = (x) => Math.max(1, Number(x?.minSeats || 4));
-// Mirrors priceFromTiers / livePriceFor in server/domain.js. An agency quoting
-// one price while the server charges another is the failure to avoid here, so
-// these stay in step with the server implementation.
-function priceFromTiers(tiers, seats) {
-  if (!Array.isArray(tiers) || !tiers.length) return null;
-  const sorted = tiers
-    .map((t) => ({ seats: Number(t?.seats), price: Number(t?.price) }))
-    .filter((t) => Number.isFinite(t.seats) && Number.isFinite(t.price) && t.seats > 0 && t.price > 0)
-    .sort((a, b) => a.seats - b.seats);
-  if (!sorted.length) return null;
-  const n = Number(seats) || 0;
-  let match = sorted[0];
-  for (const t of sorted) if (n >= t.seats) match = t;
-  return Math.round(match.price);
-}
 function livePrice(item, seats) {
   const start = Number(item.publishedRate) || 80;
   const brk = Math.min(start, Number(item.breakPrice) || Math.round(start * 0.8));

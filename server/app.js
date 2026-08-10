@@ -4,6 +4,7 @@ import { z } from "zod";
 import { pool, withTransaction, withDepartureWrites } from "./db/index.js";
 import { pendingGoAheads, alertPayload } from "./goahead-alert.js";
 import { refreshStatus } from "./departure-status.js";
+import { cleanRefCode } from "../shared/ref-code.js";
 import { mapAgency, mapCity, mapProduct, mapDeparture, mapPledge } from "./db/mappers.js";
 import {
   enrichDeparture,
@@ -322,9 +323,6 @@ const REQUEST_MAX_HORIZON_DAYS = 90;
 const NEAR_MATCH_WINDOW_DAYS = 3;
 
 // Referral codes: lowercase, url-safe, capped. Returns "" if nothing usable.
-function cleanRefCode(raw) {
-  return String(raw || "").toLowerCase().replace(/[^a-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 48);
-}
 
 function parse(schema, body) {
   const result = schema.safeParse(body ?? {});

@@ -57,13 +57,21 @@ test("L-5's bound is what the register says it is", () => {
     "the register quotes 50 remembered divergences; the code disagrees");
 });
 
-test("L-9's two implementations are still two", () => {
-  // Recorded as open. If someone unifies them, the entry should be moved to the
-  // closed list rather than left implying a defect that no longer exists.
+test("L-9 is closed, and closed means one implementation", () => {
+  // This test used to assert the two copies STILL EXISTED, with a note saying
+  // that whoever unified them should move the entry to the closed list rather
+  // than leave it implying a live defect. That is what happened, so the
+  // assertion inverts rather than being deleted: a register entry and the code
+  // it describes must not be able to disagree in either direction.
   const app = readFileSync(join(ROOT, "server", "app.js"), "utf8");
   const spa = readFileSync(join(ROOT, "src", "main.jsx"), "utf8");
-  assert.match(app, /function cleanRefCode\(/);
-  assert.match(spa, /function cleanRef\(/);
+  assert.doesNotMatch(app, /function cleanRefCode\(/, "server/app.js declares it again");
+  assert.doesNotMatch(spa, /function cleanRef\w*\(/, "src/main.jsx declares it again");
+  for (const src of [app, spa]) {
+    assert.match(src, /from "\.\.\/shared\/ref-code\.js"/, "both sides must import the one authority");
+  }
+  assert.match(REGISTER, /\*\*L-9 —[\s\S]{0,600}?shared\/ref-code\.js/,
+    "the closed row must name what closed it");
 });
 
 test("the closed entries name what closed them", () => {
