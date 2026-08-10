@@ -811,7 +811,7 @@ than a rule that merely exists.
 | | |
 |---|---|
 | **PPP1.1** | **done.** `audit:watch` compares production against a committed baseline and runs daily on the job scheduler. |
-| **NNN1.2** | pass-state audit — a rule that cannot pass gets baselined, and then protects nothing |
+| **NNN1.2** | **done 10 Aug 2026.** `server/pass-state.test.js` — all eleven `audit:claims` rules proved both ways, derived from `RULES`, plus silence on 91k chars of the site's own published copy. See below. |
 | **QQQ1.4** | extend the spelling check to database copy — the surface that produced 30 findings with nothing watching |
 
 ---
@@ -1124,3 +1124,42 @@ happened rather than in a commit message nobody re-reads.
 
 **Order: BBBB4, then BBBB5, then this.** BBBB5 and BBBB6 say the same thing in
 two registers and should be approved together.
+
+---
+
+## NNN1.2 — the pass-state audit
+
+**Done 10 Aug 2026.** `server/pass-state.test.js`.
+
+`audit:claims` carries **eleven** rules and needs a live site, so it is
+UNVERIFIED in CI. **Nine of the eleven had no test of either kind** — DIR-13's
+retrofit proved `guarantee` and `absolute-claim` and stopped there.
+
+### Both states, for all eleven
+
+| | |
+|---|---|
+| **fires** | each rule catches the claim it exists for, from its own fixture |
+| **passes — fixture** | each of the **six** rules with an `ok` predicate has that predicate demonstrated suppressing a real match |
+| **passes — reality** | **every rule is silent across 14 static pages, 91,103 characters of published copy.** A fixture can be written to pass; live copy cannot. |
+| **derived** | the list comes from `RULES`. A rule added without a fixture fails the build; a fixture that outlives its rule fails too. |
+| **declared** | a rule with no `ok` must carry `null`, so an exception path cannot be added silently later |
+
+### Why the `ok` predicates are the point
+
+NNN1.2's failure is not a missing check — it is a rule that **cannot be
+satisfied**. `availability` was in exactly that state before DIR-17.1: its
+pattern matched all nine renderings of the one agreed string, and its own
+comment records the lesson — *"a check that cannot pass when the defect is fixed
+is not measuring the defect."* An `ok` that never fires means correct copy is
+unwritable, and the rule gets suppressed instead of the copy getting fixed.
+
+So the exception path is now exercised in isolation for every rule that has one.
+
+### One test of mine was vacuous, and the fix belonged in the scanner
+
+The first version passed a `rules` option that `scan()` did not accept. It
+silently scanned with the real eleven and asserted nothing — a test about
+vacuous checks, that was one. `scan(text, where, { rules })` is now injectable,
+the same shape `collect(files, read)` took in DIR-13. **The fix belonged in the
+scanner, not in the assertion.**

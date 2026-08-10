@@ -143,9 +143,14 @@ export const RULES = [
 const context = (text, index, span = 70) =>
   text.slice(Math.max(0, index - span), index + span).replace(/\s+/g, " ").trim();
 
-export function scan(text, where, { skipComments = false } = {}) {
+// NNN1.2 — `rules` is injectable so the SCANNER can be tested independently of
+// the rule list, and so a rule's exception path can be exercised in isolation.
+// Without it, a test that passes a rule list is silently scanning with the real
+// one — which is a test that asserts nothing while looking like it asserts
+// something. That happened once while writing server/pass-state.test.js.
+export function scan(text, where, { skipComments = false, rules = RULES } = {}) {
   const out = [];
-  for (const rule of RULES) {
+  for (const rule of rules) {
     rule.re.lastIndex = 0;
     for (const m of text.matchAll(rule.re)) {
       const ctx = context(text, m.index);
