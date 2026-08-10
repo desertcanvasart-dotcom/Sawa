@@ -44,7 +44,7 @@ const AUTHORED = {
   "server/email.js":            { n: 1, surface: "mail footer — hardcoded, NOT read from BRAND" },
   "site/privacy.html":          { n: 2, surface: "controller identity in body prose (a third is the generated footer)" },
   "site/cookies.html":          { n: 1, surface: "controller identity in body prose (a second is the generated footer)" },
-  "site/terms.html":            { n: 2, surface: "§1 contracting party and §2, in body prose (a third is the generated footer)" },
+  "site/terms.html":            { n: 1, surface: "§1 contracting party, in body prose (a second is the generated footer)" },
   "site/about.html":            { n: 1, surface: "\"Who runs Sawa\", beside the founder history" },
   "server/entity-disclosure.test.js": { n: 3, surface: "this file's own declaration, plus the exact-rendering assertions" },
 };
