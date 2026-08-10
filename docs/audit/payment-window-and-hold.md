@@ -25,7 +25,10 @@ The brief states *"the 7-day figure matches the scheduler's existing confirm
 deadline — the hold period and the auto-cancel logic agree rather than
 conflicting."*
 
-**That is true for 11 of the 14 live products and false for the other 3.**
+**That is true for 12 of the 16 live products and false for the other 4.**
+
+> Restated 10 Aug 2026 — the client added two products (one package) while this
+> was being written. The finding is unchanged and now covers four packages.
 
 ```
 server/domain.js:58   DEFAULT_PACKAGE_CONFIRM_DEADLINE_DAYS   = 30
@@ -36,8 +39,8 @@ Checked against production, not inferred:
 
 | Type | Approved products | Deadline | Override set |
 |---|---|---|---|
-| `day_tour` | **11** | T-7 | none |
-| `package` | **3** | **T-30** | none |
+| `day_tour` | **12** | T-7 | none |
+| `package` | **4** | **T-30** | none |
 
 `tour_products.confirm_deadline_days` may also override per listing, `CHECK
 (… BETWEEN 0 AND 365)` — currently unused, so every product takes its type

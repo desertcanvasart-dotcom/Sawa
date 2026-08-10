@@ -604,3 +604,56 @@ must say so.
   Terms establish.
 - **22.4** — **propose only.** Client and counsel approve before anything is
   applied. Bundle with DIR-19.2 and DIR-9 — one review, not three.
+
+---
+
+## OOO2 / OOO3 — the interface promises, and what blocks the verification standard
+
+### OOO2 — the rating promise is removed, and it is not scheduled
+
+Two live promises, not one. The OOO1.1 sweep found the second and it was the
+stronger:
+
+| Where | Was |
+|---|---|
+| `site/faq.html` | "You'll see their **name, license status and rating** on every departure." |
+| `site/goahead-promise.html` | "References and **traveler reviews are checked**, and **ratings stay visible** on every departure." |
+
+**All three parts of the FAQ sentence were removed, not just the rating.** Name
+and licence status render on **0 of 14** departures today, and OOO5's rule is
+that copy says what is true rather than what is intended. They are recorded here
+as reinstatable once OOO3 lands and an operator record carries those fields —
+**the rating is not.** Reviews do not exist, no reviews table exists, and
+displaying aggregate consumer ratings carries evidencing obligations for UK and
+EU consumers (legal register Q3). Reinstate only with a real review mechanism
+and the source of the rating stated.
+
+> Two further hits in `goahead-promise.html` were **HTML comments** documenting a
+> *previously removed* fabricated "Verified Operator" card — a named company, a
+> licence checkmark, "30 years", "a 4.9 traveler rating", "4,700+ travelers
+> hosted". That comment already recorded *"No such operator exists in the
+> agencies table"*. **This class has been found before, in a narrower form.**
+
+### OOO3 — `/verification-standard` is blocked on the schema, not only the answer
+
+The client has been asked repeatedly what checks he performs before listing an
+operator. **There is nowhere to record the answer.** `agencies` has five
+columns: `id`, `name`, `contact_name`, `phone`, `status`. No licence number, no
+ETAA registration, no insurance, no expiry, no last-verified date, no evidence
+reference.
+
+Even answered tomorrow, **a verification performed and unrecorded is the
+`last_verified_at` problem: unrecoverable the moment it is done.**
+
+So the page cannot publish until the table can hold what it describes. **That is
+the real dependency and it was not previously identified** — client answer 5 is
+now blocked on OOO3.1 as well as on the client.
+
+- **OOO3.1** — propose the schema now, while the table holds one test row. After
+  operators sign it is a migration *plus* going back to companies for documents
+  that should have been collected at onboarding. Fields mirror what `/verify`
+  asks an operator to produce, so the page and the record cannot describe
+  different things.
+- **OOO3.3** — Capital Travel Service is not in `agencies`. DIR-19.3 makes it an
+  operator record; that work now also closes this gap, and **should carry the
+  OOO3.1 verification fields rather than being added bare.**

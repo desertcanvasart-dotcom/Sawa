@@ -19,6 +19,22 @@ to a proof rather than a defect. The two are siblings; see
 
 ---
 
+## Two kinds of statement, and they must not be quoted alike — OOO4
+
+| | |
+|---|---|
+| **NEVER** | true for all time so far. `pledges` has never held a row ([E-2](#e-2--no-traveller-has-ever-been-carried)). |
+| **SNAPSHOT** | true at a stated moment. `departures` held 0 rows on 10 Aug 2026 — but 95 inserts and 65 deletes sit behind that zero ([E-11](#e-11--no-listed-product-has-an-operating-company-attached)). |
+
+A never supports an argument about history. **A snapshot supports an argument
+about today and nothing else.** Quoting them the same way lets the weaker claim
+inherit the stronger one's authority, which is the precise failure this register
+exists to prevent — one level down from an expired proof.
+
+Every entry states which it is in **Rests on**.
+
+---
+
 ## The rule
 
 Each entry records, without exception:
@@ -210,7 +226,7 @@ window between the check and the run in which it can quietly stop being true.
 |---|---|
 | **Status** | **LIVE** |
 | **The claim** | MMM1: `agencies` holds one row ("adham", no phone), no approved product is linked to any agency, and no product page names an operating company. |
-| **Rests on** | a reading of production on **10 August 2026**, plus all 14 rendered product pages. |
+| **Rests on** | **SNAPSHOT** — a reading of production on **10 August 2026**, plus all 16 rendered product pages. It moved from 14 to 16 products within an hour of being taken. |
 | **What would arm it** | **The first signed operator.** One `agencies` row with a real company, or one product with `agency_id` set, ends it — and at that point the site's eleven "Ministry-licensed operators" claims start being backed by a record instead of an arrangement held outside the system. |
 | **Where that is defined** | `docs/audit/operator-records.md`; `agencies`; `tour_products.agency_id` |
 

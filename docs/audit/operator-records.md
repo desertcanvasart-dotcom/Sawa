@@ -2,6 +2,18 @@
 
 **Established 10 August 2026, against production. Rendered output, not schema.**
 
+> ### ⚠️ The snapshot moved while this was being written
+>
+> Approved products went **14 → 16** within the hour — day tours 11 → 12,
+> packages 3 → 4 — as the client added *Full Day Minya Archaeological Tour* and
+> *Fayoum Oasis, Meidum & Hawara Pyramids*. Every count below is restated for 16
+> and re-verified, not scaled.
+>
+> **The conclusions are unchanged: 0 of 16 products have an agency attached, and
+> 0 of 16 name a company.** This is [OOO4](evidence-expiry.md) demonstrating
+> itself — a snapshot is a fact about a moment, and this one aged in sixty
+> minutes.
+
 **Validity window (DDD1):** every number here is a reading taken on 10 Aug 2026.
 `agencies` holds one row and `departures` holds none; both change the moment an
 operator signs or a date is created. Recorded as [E-11](evidence-expiry.md).
@@ -25,7 +37,7 @@ three things per departure that no departure shows.**
 |---|---|
 | `agencies` rows | **1** — `ag_6`, name **"adham"**, contact "Islam", **no phone**, status `active` |
 | `app_users` linked to an agency | 1, `agency_owner`, active |
-| Approved products with an agency attached | **0 of 14** |
+| Approved products with an agency attached | **0 of 16** |
 | `departures` rows | **0**, of any status |
 
 The one agency record is a first name with no phone number. Whatever it is, it
@@ -57,7 +69,7 @@ The claim is served on **11 pages**, in strong and specific terms:
 | `/goahead-promise` | "the tour is always run by a real local operator licensed by the Ministry of Tourism" |
 | `/about` | "Every operator is licensed by the Ministry of Tourism and registered with ETAA" |
 | `/itineraries` | "operated by an Egyptian travel company licensed by the Ministry of Tourism and registered with ETAA" |
-| every product page | the same generic sentence — **14 of 14** |
+| every product page | the same generic sentence — **16 of 16** |
 | footer, sitewide | "Operated by **Capital Travel Service** · ETAA 2179" |
 | `/terms` | names Capital Travel Service, ETAA 2179, registered office, and defines "Operating Partner" |
 
@@ -69,13 +81,13 @@ The claim is served on **11 pages**, in strong and specific terms:
 > with ETAA — never a freelancer or an unregistered guide. **You'll see their
 > name, license status and rating on every departure.**
 
-Checked across **all 14 product pages**:
+Checked across **all 16 product pages**:
 
 | Promised | Rendered |
 |---|---|
-| their **name** | **0 of 14** — every page carries the generic sentence with no company named |
-| **license status** | **0 of 14** — no field exists to hold it |
-| **rating** | **0 of 14** — no reviews table exists (legal register Q3) |
+| their **name** | **0 of 16** — every page carries the generic sentence with no company named |
+| **license status** | **0 of 16** — no field exists to hold it |
+| **rating** | **0 of 16** — no reviews table exists (legal register Q3) |
 
 **Three promises, none of them kept on any departure.** No operator profile route
 exists either: `/operator/adham`, `/operators/adham`, `/agencies` and
@@ -86,11 +98,11 @@ exists either: `/operator/adham`, `/operators/adham`, `/agencies` and
 ## 3. Is the generic claim true?
 
 **"Operated by an Egyptian travel company licensed by the Ministry of Tourism and
-registered with ETAA"** — 14 of 14 product pages.
+registered with ETAA"** — 16 of 16 product pages.
 
 It is **plausibly true and entirely unrecorded.** The footer and Terms name
 Capital Travel Service, ETAA 2179, and DIR-19.3 anticipates CTS becoming an
-operator record. If CTS operates all 14 products, the sentence is true in fact.
+operator record. If CTS operates all 16 products, the sentence is true in fact.
 
 But:
 
@@ -138,3 +150,20 @@ Feeds NNN1.2. A rule of the form *"copy that promises the traveller will see X"*
    the table holds one test row, awkward afterwards.
 4. **CTS should become an operator record** (DIR-19.3) so the generic sentence
    has something behind it.
+
+---
+
+## A measurement that disagreed with itself
+
+Re-checking after the count moved, a second script reported **16 of 16 pages name
+a company** — flatly contradicting the first reading of 0.
+
+The second script did not strip `<script>` blocks, so it was matching the inlined
+JSON-LD and bootstrap payload rather than the copy. **It was measuring JSON and
+calling it prose.**
+
+`audit-claims` already has a `visibleText` helper for exactly this reason — its
+comment reads *"script and style content is not copy"*. The first measurement
+stands; the second was wrong, and is recorded rather than quietly dropped
+because two measurements that disagree mean one of them is wrong and the
+interesting question is which.
