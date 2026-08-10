@@ -881,3 +881,54 @@ is the ground it would stand on.
 | **VVV1.1** | the gate runs on **push to `main`** as well as on pull requests. Without it a red `main` is invisible until the next PR opens — days, on a project with one committer. |
 | **VVV1.2** | `check:applied-schema` moved into the **daily watcher**, which already holds read-only production access. **CI can never answer whether 024 is applied and should not try.** Reported at findings severity: an unapplied migration is a failure, not a change. |
 | **VVV1.3** | the PR summary states what green means — *the offline checks passed on this branch* — and that production correctness is answered by the watcher, not by CI. |
+
+---
+
+## DIR-15 — route alerts: the table, and why the code is not with it
+
+**Migration 026 proposed 10 August 2026. Not applied. No endpoint, no form, no
+admin view — deliberately.**
+
+### What is delivered
+
+`route_alerts`: email, `tour_product_id` + `route_label`, optional
+`preferred_month`, `source_url`, and the consent fields per DIR-12. Plus
+`notified_at` and `unsubscribed_at` as timestamps rather than booleans, so
+"never notified" and "notified in March" stay distinguishable.
+
+`route_label` is stored alongside the product id for 023's reason: a listing can
+be archived or retitled, and the notification should name the trip in the words
+the person recognised. `source_url` is the article that produced the demand — the
+whole measurement the content programme runs on, and it exists for one instant.
+
+### ⚠️ The finding inside it
+
+**024 could not reach a table that did not exist.** It enabled RLS on every table
+present when it ran; its `REVOKE` carries forward through `ALTER DEFAULT
+PRIVILEGES`, but **RLS does not.** So the next migration creating a table
+silently reopens the exposure 024 closed — and the likeliest candidate is the
+newest table, which is usually the one holding the newest kind of personal data.
+
+026 enables RLS on itself, and `server/migration-rls.test.js` asserts that
+**every table created after 024 does the same.** That guard is worth more than
+this table.
+
+### Why the code half is not here
+
+Three migrations are already pending. Shipping an endpoint and a form against an
+unapplied table is what `check:applied-schema` exists to prevent — *"any code
+referencing those columns is an outage rather than a bug."*
+
+And there is a second blocker that is not mine: **these are email addresses
+collected to send marketing later.** That is consent territory, not the
+transparency-only basis covering attribution — recording how someone reached a
+booking is incidental to the transaction; emailing them afterwards is not. **The
+first INSERT is blocked on DIR-12 publishing the processing.**
+
+So `/contact` remains the destination, and a test pins it there. The comment in
+`site/index.html` still governs: *"a form that captured an address and told
+nobody would be the same fabrication in a politer shape. Swap the href the day
+the capture is built."*
+
+**DIR-15 is half-delivered on purpose. The half that is missing needs 026
+applied and DIR-12 published, in that order.**
