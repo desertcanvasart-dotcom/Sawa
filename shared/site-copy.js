@@ -23,8 +23,13 @@ export const INTERIM_COPY = {
   // collected and nothing charges. This wording is accurate whether payment ends
   // up being taken on-site or arranged offline, so it holds under either answer.
   //
-  // Swap when: the post-GoAhead payment model is decided.
-  "payment-arrangement": "the date locks, the tour is confirmed, and we'll be in touch to arrange payment",
+  // ANSWERED 10 Aug 2026 (DIR-18): a secure payment link is sent after GoAhead,
+  // into Sawa's own merchant account. Sent manually for now, which is a fact
+  // about operations rather than about what the traveller is told.
+  //
+  // "we'll be in touch to arrange payment" was written when no payment model
+  // existed and had to hold under either answer. It no longer has to.
+  "payment-arrangement": "the date locks, the tour is confirmed, and we send you a secure payment link",
 
   // U4.1 — the support-availability string. Currently live in six places saying
   // four different things: "24/7", "monitored 24 hours a day", "9am–9pm Cairo
