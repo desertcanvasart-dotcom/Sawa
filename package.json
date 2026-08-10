@@ -26,6 +26,7 @@
     "check:catch-handlers": "node scripts/check-catch-handlers.js",
     "check:audit-coverage": "node scripts/audit-coverage.js",
     "check:vacuous-tests": "node scripts/check-vacuous-tests.js",
+    "check:duplication": "node scripts/check-duplication.js",
     "check:applied-schema": "node scripts/check-applied-schema.js",
     "sync:rules": "node scripts/sync-departure-rules.js",
     "sync:slug": "node scripts/sync-slug.js",
