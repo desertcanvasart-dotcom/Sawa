@@ -278,6 +278,13 @@ suspect.
 **Must complete before the seed**, or new failures and never-testing tests
 become indistinguishable.
 
+> **LLL5.2 — the sharper statement of why.** This is not only *clean the tests
+> before adding data*. **DIR-14 is the last point at which the empty-table
+> assumption can be audited while it is still true.** After the seed, a test
+> that passed vacuously and one that passes genuinely are no longer
+> distinguishable by inspection — the evidence for telling them apart is the
+> emptiness itself. See [E-2](evidence-expiry.md).
+
 > **Note.** `scripts/run-tests.js` already applies the principle one level up —
 > a suite that finds no test files refuses to report a pass. That is the shape
 > to copy, not a reason to think the sweep is done.
@@ -308,6 +315,12 @@ accumulating demand is the signal that decides which departures get scheduled.
    the one version of this that cannot be undone. Verification procedure in
    `docs/audit/data-api-exposure.md`.
 1. DIR-14 vacuous-test sweep complete
+1b. **LLL5.1 — every conclusion resting on E-2 re-derived, in the same commit as
+   the seed.** `pledges has never held a row` is load-bearing in four places and
+   one row ends all four at once: the `volume` rule's calibration in
+   `scripts/audit-claims.js:54`, EEE3's exposure-scope finding (restate as
+   historical, bounded by the seed date), legal register Q3, and
+   `docs/audit/cancel-job-rehearsal.md`.
 2. Scheduler resolved state verified — done, was `on`, now dry by default
 3. Cancellation copy corrected — DIR-9, remainder on the client
 4. Zero-suppression shipped — done
@@ -349,15 +362,58 @@ are not lost in the meantime.
 
 ---
 
+## LLL6 — Current order
+
+Set by the client 10 Aug 2026. Items 1–4 and 7 use labels that are **not in this
+repository** — see the note below.
+
+| # | Item | State |
+|---|---|---|
+| 1 | **GGG3** availability — 11 findings | gated on the WhatsApp number being live; copy may be written, not published |
+| 2 | **FFF2.1** payment copy — 3 findings | gate goes green |
+| 3 | **III2 / JJJ1.3** pricing authority — who can change a price today | |
+| 4 | **GGG1** entity disclosure | once the registered name and number arrive |
+| 5 | **DIR-14** vacuous-test sweep | per LLL5.2. **First item not blocked on a client answer.** |
+| 6 | **LLL4** payment, refund and hold schema | shaped by LLL1.1, LLL2.2, LLL3.3 |
+| 7 | **GGG4** the payment-link alert | |
+| 8 | **LLL3** the hold state across page, lookup and email | |
+| 9 | **DIR-3** latent defects, **DIR-5** invariant enumeration | |
+| 10 | Staged seed | LLL5.1 first |
+
+**Held:** HHH2 and III4 — Terms and the transactional email rewrite, pending the
+pricing answer.
+
+> **Labels not held.** `GGG1`, `GGG3`, `GGG4`, `FFF2.1`, `HHH2`, `III2`, `III4`,
+> `JJJ1`, `JJJ1.3` appear nowhere in this repository — no commit, no branch, no
+> document. They are BBB1's shape again: work that exists only in conversation.
+> Items 1, 2, 3, 4 and 7 of the order cannot be started from what is written
+> down. **They need capturing here before they can be picked up.**
+
+---
+
 ## Client-blocked
+
+**Clocked — these two lose value with time:**
+
+| | Why it cannot wait |
+|---|---|
+| **`DATABASE_URL=<production> npm run db:migrate`** | the Data API exposure is **live** until 024 runs. Then the anonymous verification block in [data-api-exposure.md](data-api-exposure.md). |
+| **Supabase dashboard API logs** | retention is rolling, and [E-4](evidence-expiry.md) records that the `pg_stat_statements` evidence is destroyed by any database restart. Legal register entry 6 turns on which claim can be made. |
+
+**Decisions:**
 
 | # | Answer needed | Unblocks |
 |---|---|---|
-| 1 | Support availability this week | 11 of the 14 findings |
-| 2 | Post-GoAhead payment model — provisionally gated on legal question 1 | 3 findings, all deposit displays |
-| 3 | Failed date: a person follows up, or a link | DIR-9 remainder, Terms alignment |
-| 4 | Entity status | DIR-12 threads 2 and 3, JSON-LD `legalName` |
-| 5 | Legal questions 1 and 2 to counsel | Payment model, organiser status |
-| 6 | Verification checks performed today | `/verification-standard`, and when "verified" may return |
-| 7 | Read-only role, `DATABASE_URL_READONLY` | Closes the runtime-`SET` gap (DIR-3) |
-| 8 | `PRODUCTION_DB_HOST` | Upgrades the schema check to its strong form |
+| 1 | **LLL1.1 — does the hold period follow the confirm deadline per product type (7 for day tours, 30 for packages), or flatten to 7?** | **LLL2 and LLL4 are both shaped by it.** New question; the brief did not know it was one. |
+| 2 | **JJJ1** — who chooses the traveller-facing price | Terms rewrite is held on this |
+| 3 | **LLL2.2** — dates confirming inside the deadline | payment window rule |
+| 4 | **LLL3.3** — can a paid traveller withdraw during a hold | the hold state |
+| 5 | Registered legal name and number | GGG1, DIR-12 threads 2 and 3, JSON-LD `legalName` |
+| 6 | **Is the WhatsApp number live?** | gates GGG3 |
+| 7 | Support availability | 11 of the 14 findings |
+| 8 | Post-GoAhead payment model — provisionally gated on legal question 1 | 3 findings, all deposit displays |
+| 9 | Failed date: a person follows up, or a link | DIR-9 remainder, Terms alignment |
+| 10 | Legal questions 1 and 2 to counsel | payment model, organiser status |
+| 11 | Verification checks performed today | `/verification-standard` |
+| 12 | Read-only role, `DATABASE_URL_READONLY` | closes the runtime-`SET` gap (DIR-3, E-8) |
+| 13 | `PRODUCTION_DB_HOST` | upgrades the schema check to its strong form |
