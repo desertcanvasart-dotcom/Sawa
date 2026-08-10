@@ -108,3 +108,45 @@ record.
 | The audit trail cannot be read | There is no UI or export. `audit_log` is queryable only with database access, which means the record exists for a forensic question and not for an operational one. |
 | `audit_log` has no retention or integrity story | Rows can be deleted by anything holding write credentials. Worth stating before anyone relies on it as evidence rather than as a diagnostic. |
 | Coverage is per-ROUTE, not per-WRITE | A state change made inside a helper, a job, or a migration is not seen by this scanner. `server/jobs/cancel-unconfirmed.js` audits `departure.auto_cancel`; nothing checks that it still does. |
+
+---
+
+## QQQ3 — was admin product creation audited? Yes, and it has already answered a client question
+
+**All 14 routes that create or modify a product or its departures are audited.
+None is exempt.**
+
+```
+POST   /api/departures                        POST   /api/admin/departures
+POST   /api/admin/tour-products               POST   /api/agency/tour-products
+POST   /api/admin/tour-products/:id/approve   POST   /api/admin/tour-products/:id/reject
+POST   /api/admin/tour-products/:id/pricing   POST   /api/admin/departures/:id/confirm
+POST   /api/departures/:id/pledges            POST   /api/public/departures/:id/bookings
+DELETE /api/departures/:id/pledges/:pledgeId  DELETE /api/public/…/bookings/:pledgeId
+PATCH  /api/admin/tour-products/:id           POST   /api/admin/departures/:id/cancel
+```
+
+Three of those were **unaudited until #88** — `POST /api/admin/tour-products`,
+`POST /api/admin/tour-products/:id/pricing` and `POST /api/departures`. Admin
+product creation was among DIR-1's eight.
+
+### It paid off within four hours
+
+Two products appeared in production mid-session and nothing recorded who or
+under what process — that became client question 7. **The audit trail answers
+it**, because #88 had deployed a few hours earlier:
+
+| Time (UTC) | Actor | Action |
+|---|---|---|
+| 12:45:30 / 12:45:36 | `freebusinesstipsonline@gmail.com` · `super_admin` | `product.activate` ×2 |
+| 12:48:19 / 12:50:22 | same | `listing.create` — Minya, Fayoum |
+| 12:53–12:59 | same | `image.upload` ×12 |
+| 12:54:16 / 12:59:06 | same | `listing.create` again — re-saved after uploading images |
+
+Actor, target and sequence, without asking anyone. Before #88 this would have
+been reconstructible only from `submitted_by` on the row — the actor, but not
+the *when*, the *how many times*, or the images.
+
+**Client question 7 is answered by the system rather than by the client.** The
+remaining half — *under what process* — is a policy question the log cannot
+answer, but *who and when* is now a matter of record.
