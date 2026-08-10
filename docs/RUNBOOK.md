@@ -474,3 +474,15 @@ Before editing any title, meta description or JSON-LD, check
 [docs/audit/metadata-ownership.md](audit/metadata-ownership.md). It maps all 38
 routes to their real source. Seven `seo.js` entries were edited for months
 without rendering anywhere.
+
+---
+
+## Open directives
+
+[docs/audit/open-directives.md](audit/open-directives.md) is the list of agreed
+work that is not yet done, and the client answers each item waits on.
+
+**Anything intended to gate a merge, or to be picked up in a later session, goes
+there before the branch is cut.** BBB1 was raised as a merge blocker for #85,
+lived only in conversation, and did not block anything — the session that merged
+had no way to know it existed. Chat is not a record.
