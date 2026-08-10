@@ -72,7 +72,9 @@ export function groupSizeProblems(text) {
   return out;
 }
 
-function checkRoute(route, status, html, expectStatus = 200) {
+// DIR-13 — exported so the assertions can be proved to fire without a live
+// site. `smoke` needs a running target; what it CHECKS does not.
+export function checkRoute(route, status, html, expectStatus = 200) {
   const problems = [];
   if (status !== expectStatus) problems.push(`HTTP ${status}, expected ${expectStatus}`);
 
@@ -101,6 +103,22 @@ function checkRoute(route, status, html, expectStatus = 200) {
   }
   return problems;
 }
+
+// DIR-13 — EVERYTHING BELOW IS THE CLI, AND IT MUST BE GUARDED.
+//
+// It was not. Importing this module fired a /api/modes request, a /api/health
+// request, a sitemap fetch and 24 page fetches, then called process.exit(1) —
+// so the file could not be imported at all. The one check in the gate with no
+// proven-fires test was the one that could not have had one: unprovable by
+// construction, which read as "pending" rather than as "impossible".
+//
+// The guard goes HERE, at the first line that touches the network — not further
+// down. Placed after the mode block it still fired three requests on import,
+// which is the same defect in a smaller size.
+//
+// Every sibling checker in scripts/ already guards its CLI this way.
+const isCli = process.argv[1] && process.argv[1].endsWith("smoke-routes.js");
+if (isCli) {
 
 // X2/Y1 — assert the RUNNING configuration, read with credentials.
 //
@@ -182,28 +200,37 @@ const routes = await publicRoutes();
 // than silently 200ing an empty shell.
 const cases = [...routes.map((r) => [r, 200]), ["/definitely-not-a-page", 404]];
 
-let failed = modeFailures;
+// DIR-13 — routeFailures and modeFailures are counted SEPARATELY.
+//
+// `failed` started at modeFailures and was then reported as "N of <cases>",
+// which is how a run produced `25 of 24 routes failed` — a count larger than
+// its own denominator, in the gate that decides whether anything ships.
+let routeFailures = 0;
 for (const [route, expect] of cases) {
   let status, html;
   try {
     const res = await fetch(BASE + route, { redirect: "follow" });
     status = res.status; html = await res.text();
   } catch (e) {
-    console.error(`FAIL ${route} — ${e.message}`); failed++; continue;
+    console.error(`FAIL ${route} — ${e.message}`); routeFailures++; continue;
   }
   const problems = checkRoute(route, status, html, expect);
   if (problems.length) {
-    failed++;
+    routeFailures++;
     console.error(`FAIL ${route}\n      ${problems.join("\n      ")}`);
   }
 }
 
 const total = cases.length;
-if (failed) {
-  console.error(`\n${failed} of ${total} routes failed. Nothing should ship on this.`);
+if (routeFailures || modeFailures) {
+  console.error(`\n${routeFailures} of ${total} routes failed`
+    + (modeFailures ? `, and ${modeFailures} running-configuration assertion(s) failed` : "")
+    + `. Nothing should ship on this.`);
   process.exit(1);
 }
 console.log(`All ${total} routes serve a title, a description and valid JSON-LD (${BASE}).`);
 if (modeState !== "verified") {
   console.warn(`Configuration: UNVERIFIED — set SMOKE_TOKEN to check the running modes. Routes passed; configuration was not examined.`);
+}
+
 }

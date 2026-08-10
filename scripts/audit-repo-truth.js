@@ -65,13 +65,20 @@ function walk(dir, acc = []) {
   return acc;
 }
 
-export function collect() {
+export function sourceFiles() {
+  return [...SOURCE_DIRS.flatMap((d) => walk(d)), ...SOURCE_FILES.filter((f) => existsSync(join(root, f)))];
+}
+
+// DIR-13 — `files` and `read` are injectable so a test can put a statement this
+// scanner MUST catch in front of it. Without that, the only thing assertable is
+// that the real repository is currently clean, which is also what a scanner that
+// matched nothing at all would report.
+export function collect(files = sourceFiles(), read = (rel) => readFileSync(join(root, rel), "utf8")) {
   const out = [];
-  const files = [...SOURCE_DIRS.flatMap((d) => walk(d)), ...SOURCE_FILES.filter((f) => existsSync(join(root, f)))];
   if (!files.length) throw new Error("no source files found — refusing to report clean");
   for (const rel of files) {
     let lines;
-    try { lines = readFileSync(join(root, rel), "utf8").split("\n"); } catch { continue; }
+    try { lines = read(rel).split("\n"); } catch { continue; }
     lines.forEach((line, i) => {
       const text = line.trim();
       if (text.length < 25 || text.length > 400) return;

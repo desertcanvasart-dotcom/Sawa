@@ -37,6 +37,61 @@ test("no page states a GoAhead threshold or ceiling in prose that domain.js cont
 // The rules are only worth anything if they actually fire. Each of these is a
 // real fragment from a real page, and each was broken at some point during the
 // writing of this script.
+// DIR-13 — the W3 retrofit for `check:constants`.
+//
+// The rewriter (`applyConstants`) was proved to fire. The DETECTOR
+// (`proseDrift`) was not: the only assertion on it was that the real pages
+// produce no findings, which is also exactly what a detector matching nothing
+// would report. That is the half of this check that decides whether the gate
+// goes red, and it was the unproven half.
+test("it fires — a GoAhead threshold in prose that domain.js does not hold", () => {
+  const found = proseDrift("<p>The date confirms once six travelers have joined.</p>");
+  assert.ok(found.length, "a wrong threshold in prose was not detected");
+  assert.equal(found[0].found.toLowerCase(), "six");
+  assert.equal(found[0].expected, "four");
+  assert.equal(found[0].line, 1);
+});
+
+test("it fires — a ceiling in prose that domain.js does not hold", () => {
+  const found = proseDrift("<p>No Sawa group ever goes above 15.</p>");
+  assert.equal(found.length, 1);
+  assert.equal(found[0].expected, "twelve");
+});
+
+test("it fires on digits and words alike, and reports the line the drift is on", () => {
+  const found = proseDrift("<p>ok</p>\n<p>ok</p>\n<p>a date confirms when 9 travelers join the same date</p>");
+  assert.ok(found.length, "a digit threshold was not detected");
+  assert.equal(found[0].line, 3, "the reported line must be where the drift is");
+});
+
+test("it stops — the correct numbers, in either form, are left alone", () => {
+  assert.deepEqual(proseDrift("<p>The date confirms once four travelers have joined.</p>"), []);
+  assert.deepEqual(proseDrift("<p>a date confirms when 4 travelers join the same date</p>"), []);
+  assert.deepEqual(proseDrift("<p>No Sawa group ever goes above twelve.</p>"), []);
+});
+
+// The two halves of this check cover DIFFERENT phrasings on purpose, and the
+// division is worth pinning: a phrasing that moves from one to the other
+// silently would leave a claim guarded by nothing.
+//
+//   the rewriter  normalises what it can safely rewrite — "never more than N",
+//                 "minimum of N" — so drift shows up as `before !== after`
+//   proseDrift    reports what must NOT be rewritten automatically, because
+//                 the sentence around it decides what the number means
+test("between them, the rewriter and the detector leave no phrasing unguarded", () => {
+  const cases = [
+    ["Never more than fifteen", "rewriter"],
+    ["a minimum of 7 travelers", "rewriter"],
+    ["The date confirms once six travelers have joined.", "detector"],
+    ["No Sawa group ever goes above 15.", "detector"],
+  ];
+  for (const [text, expected] of cases) {
+    const caughtBy = applyConstants(text) !== text ? "rewriter"
+      : proseDrift(text).length ? "detector" : "NOTHING";
+    assert.equal(caughtBy, expected, `"${text}" is caught by ${caughtBy}, expected ${expected}`);
+  }
+});
+
 test("the rewrite rules fire on the markup the pages actually use", () => {
   const at = (html) => applyConstants(html, 6, 14);
 
