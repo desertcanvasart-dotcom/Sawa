@@ -815,3 +815,42 @@ that motivated it.**
 
 **Both are blockers, not one.** The client's answer alone is not sufficient: a
 verification performed and unrecorded is unrecoverable the moment it is done.
+
+---
+
+## VVV4 — what remains, in scope order
+
+### Launch-blocking — content cannot publish before these
+
+| # | Item | Blocked on |
+|---|---|---|
+| 1 | **Migration 024** | **client** — one command. The Data API exposure is live until it runs. |
+| 2 | `agencies` schema + the first operator record | **client** — the list of verification checks actually performed |
+| 3 | Route alerts table (DIR-15) | nothing |
+| 4 | Spelling standard (QQQ1) | **client** — recommendation: British, on two writers' observed evidence |
+| 5 | Vacuous-test sweep (DIR-14) | nothing |
+| 6 | Staged seed (DIR-16) | **client** — booking data; and items 1 and 5 |
+
+### Parallel — no reader sees it
+
+DIR-3 · DIR-5 · DIR-6 · DIR-7 · the remaining DIR-8 duplications
+(`livePriceFor`, `seatsTotal`, `capacityError`) · NNN1.2 · DIR-13 · DIR-19 ·
+DIR-20 · LLL3 · LLL4 · OOO1.2.
+
+**Held:** DIR-22, pending MMM2.
+
+### Not started
+
+**The content programme itself.** Eight launch articles, two anchor dates per
+month, the Travel2Egypt distribution pattern. None of it exists. Everything above
+is the ground it would stand on.
+
+---
+
+## VVV1 — the CI gap, closed at both ends
+
+| | |
+|---|---|
+| **VVV1.1** | the gate runs on **push to `main`** as well as on pull requests. Without it a red `main` is invisible until the next PR opens — days, on a project with one committer. |
+| **VVV1.2** | `check:applied-schema` moved into the **daily watcher**, which already holds read-only production access. **CI can never answer whether 024 is applied and should not try.** Reported at findings severity: an unapplied migration is a failure, not a change. |
+| **VVV1.3** | the PR summary states what green means — *the offline checks passed on this branch* — and that production correctness is answered by the watcher, not by CI. |

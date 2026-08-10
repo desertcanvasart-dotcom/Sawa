@@ -131,7 +131,19 @@ export function startJobScheduler(env = process.env) {
   const auditTick = () => runSafely("audit-watch", async ({ log }) => {
     const { runAuditWatch } = await import("../../scripts/audit-watch.js");
     const { recordSuccess, recordFailure } = await import("../effect-log.js");
+    const { rethrowIfProgrammerError } = await import("../errors.js");
     const r = await runAuditWatch({ base: auditWatchBase(env) });
+
+    // The site not answering is an AVAILABILITY problem, not a claims
+    // regression. A throttled or unreachable run returns a mass of
+    // `fetch-failed` and a collapsed route count, and reporting that as
+    // "27 findings appeared" is a false alarm of exactly the kind TTT1 says
+    // kills a signal. Observed on the first live tick: 40 routes -> 23 with 27
+    // fetch-failed, while the site was in fact serving 200s throughout.
+    const unreachable = (r.current.findings["fetch-failed"] || 0);
+    if (unreachable >= 5) {
+      log(`SITE DID NOT ANSWER — ${unreachable} routes failed to fetch. This is availability, not drift; the claims were never read.`);
+    }
 
     // PPP1.2 — reported whether or not it fails. A new route is information.
     if (r.routeChange) log(`ROUTE COUNT ${r.routeChange.was} -> ${r.routeChange.now} — production data moved with no deploy behind it`);
@@ -146,16 +158,62 @@ export function startJobScheduler(env = process.env) {
       regressed: r.regressed, degraded: r.degraded, base: auditWatchBase(env),
     });
 
-    if (r.regressed || r.degraded) {
+    // VVV1.2 — an unapplied migration is drift with no deploy behind it, which
+    // is exactly what this job exists to see. CI can never answer it — it has no
+    // production credentials and should not pretend to — but this already holds
+    // read-only production access and runs daily.
+    //
+    // Reported at FINDINGS severity, not route-count severity: a migration that
+    // has not been applied is a failure, not a change. It does not resolve
+    // itself and every hour it stays open is an hour the schema the code
+    // expects is not the schema that exists.
+    let schema = null;
+    let schemaState = "not-checked";
+    try {
+      const { checkAppliedSchema, verdict } = await import("../../scripts/check-applied-schema.js");
+      const { readOnlyUrl, readOnlyPool } = await import("../db/readonly.js");
+      const url = readOnlyUrl(env);
+      const result = await checkAppliedSchema({
+        url,
+        env,
+        connect: async (u) => {
+          const p = readOnlyPool({ ...env, DATABASE_URL: u });
+          try { return (await p.query("SELECT name FROM schema_migrations")).rows.map((x) => x.name); }
+          finally { await p.end(); }
+        },
+      });
+      // THREE states. `verdict` passes when there are no credentials, by
+      // design — the check must not block local work. But "passed because it
+      // could not run" is not "applied", and the first version of this reported
+      // schema: "applied" for a run that never opened a connection. That is the
+      // exact collapse this project keeps finding in other people's code.
+      if (!url) {
+        schemaState = "not-checked";
+      } else {
+        const v = verdict(result, { hasCredentials: true });
+        schemaState = v.pass ? "applied" : "not-applied";
+        if (!v.pass) schema = v.line;
+      }
+    } catch (e) {
+      rethrowIfProgrammerError(e);
+      // Unable to say is not "applied". Third state, same argument as
+      // no-auth-provider and the watchdog's stale: null.
+      schemaState = "unavailable";
+      schema = `could not check the applied schema — ${e.message}`;
+    }
+    if (schema) log(schema);
+
+    if (r.regressed || r.degraded || schema) {
       const lines = r.drift.filter((d) => d.now > d.was).map((d) => `${d.rule}: ${d.was} -> ${d.now}`);
       if (r.degraded) lines.push(`coverage degraded — ${r.degraded}`);
-      recordFailure("claimsAudit", `finding(s) appeared with no deploy: ${lines.join(", ")}`);
+      if (schema) lines.push(schema);
+      recordFailure("claimsAudit", lines.join(", "));
       await alert(log, { base: auditWatchBase(env), lines });
     } else {
       recordSuccess("claimsAudit");
       // TTT3.3 — nothing is sent on green.
     }
-    return { routes: r.current.routes, findings: r.all.length, regressed: r.regressed };
+    return { routes: r.current.routes, findings: r.all.length, regressed: r.regressed, schema: schemaState };
   });
 
   const first = setTimeout(tick, FIRST_RUN_DELAY_MS);

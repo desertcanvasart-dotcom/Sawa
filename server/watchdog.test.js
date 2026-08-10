@@ -62,16 +62,49 @@ test("every run is recorded durably, in the append-only table", () => {
   assert.match(sched, /recordWatchRun\(/, "the run is not recorded");
 });
 
+test("a site that did not answer is availability, not drift", () => {
+  // Observed on the first live tick against production: 40 routes collapsed to
+  // 23 with 27 fetch-failed, while the site was serving 200s throughout — the
+  // audit had been run repeatedly in quick succession and was being throttled.
+  // Reporting that as "27 findings appeared" is the false alarm TTT1 warns
+  // kills a signal.
+  const sched = readFileSync(join(ROOT, "server", "jobs", "scheduler.js"), "utf8");
+  assert.match(sched, /SITE DID NOT ANSWER/);
+  assert.match(sched, /availability, not drift/);
+});
+
 test("the alert is sent on drift and never on green — TTT3.3", () => {
   const sched = readFileSync(join(ROOT, "server", "jobs", "scheduler.js"), "utf8")
     .replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/[^\n]*/gm, "$1");
-  // The alert call must sit inside the regressed branch, and the green branch
-  // must not send. A daily mail saying nothing changed trains the recipient to
-  // filter it, and then the one that matters is filtered too.
-  const regressedBranch = sched.slice(sched.indexOf("if (r.regressed || r.degraded)"));
-  const elseBranch = regressedBranch.slice(regressedBranch.indexOf("} else {"));
-  assert.match(regressedBranch.slice(0, regressedBranch.indexOf("} else {")), /await alert\(/);
-  assert.ok(!/alert\(/.test(elseBranch), "an alert is sent when nothing changed");
+
+  // Anchored on the condition's SHAPE, not its exact text. The first version
+  // matched the literal `if (r.regressed || r.degraded)` and broke the moment
+  // VVV1.2 added a third term — a test that fails while the code is still
+  // correct is the NNN1 failure, and it gets "fixed" by deletion.
+  const branchAt = sched.search(/if \(r\.regressed[^)]*\) \{/);
+  assert.ok(branchAt > -1, "the drift branch is not recognisable any more");
+  const fromBranch = sched.slice(branchAt);
+  const elseAt = fromBranch.indexOf("} else {");
+  assert.ok(elseAt > -1, "there is no green branch");
+  assert.match(fromBranch.slice(0, elseAt), /await alert\(/, "drift does not alert");
+  assert.ok(!/alert\(/.test(fromBranch.slice(elseAt)), "an alert is sent when nothing changed");
+});
+
+test("VVV1.2 — an unapplied migration alerts at findings severity", () => {
+  // Not route-count severity. A migration that has not been applied is a
+  // failure: it does not resolve itself, and every hour it stays open is an
+  // hour the schema the code expects is not the schema that exists.
+  const sched = readFileSync(join(ROOT, "server", "jobs", "scheduler.js"), "utf8");
+  assert.match(sched, /checkAppliedSchema/, "the watcher does not check the applied schema");
+  assert.match(sched, /if \(r\.regressed \|\| r\.degraded \|\| schema\)/,
+    "an unapplied schema must reach the same branch as findings drift");
+  assert.match(sched, /could not check the applied schema/, "unable to say must not read as applied");
+  // The mislabel this replaced: verdict() passes when there are no credentials,
+  // by design, and the first version reported schema: "applied" for a run that
+  // never opened a connection.
+  assert.match(sched, /schemaState = "not-checked"/, "no credentials must not read as applied");
+  assert.match(sched, /schemaState = v\.pass \? "applied" : "not-applied"/);
+  assert.match(sched, /readOnlyPool\(/, "the watcher must read production without being able to write");
 });
 
 test("the alert applies PP2 discipline", () => {
