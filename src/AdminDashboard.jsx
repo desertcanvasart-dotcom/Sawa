@@ -1998,8 +1998,8 @@ function AgenciesSection({ flash }) {
   }
 
   async function remove(a) {
-    const logins = a.staffCount ? ` Its ${a.staffCount} team login(s) will be revoked and removed with it.` : "";
-    if (!window.confirm(`Delete "${a.name}"?${logins} Not possible while tours, bookings or referrals still reference it.`)) return;
+    const logins = a.staffCount ? ` Its ${a.staffCount} team login(s) will be revoked and removed with it, along with any unused referral code.` : " Any unused referral code goes with it.";
+    if (!window.confirm(`Delete "${a.name}"?${logins} Not possible while tours, bookings, or referral codes with bookings still reference it.`)) return;
     setErr("");
     try {
       const r = await apiFetch(`/admin/agencies/${a.id}`, { method: "DELETE" });
