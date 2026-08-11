@@ -14,7 +14,7 @@ const { robotsTxt, sitemapXml, llmsTxt, inlineScriptJson, sliceBootstrapForRoute
 // removes anything a card, filter or counter reads — only detail-page fields,
 // and only for products the visitor is not looking at.
 
-const HEAVY = ["overviewHtml", "itinerary", "included", "notIncluded", "policiesHtml",
+const HEAVY = ["overviewHtml", "included", "notIncluded", "policiesHtml",
                "meetingPoint", "meetingPoints", "whatToBring", "pickupNote", "faq", "highlights"];
 
 const product = (over = {}) => ({
@@ -22,7 +22,9 @@ const product = (over = {}) => ({
   duration: "4 hours", guide: "Licensed Egyptologist", publishedRate: 75, breakPrice: 58,
   minSeats: 4, maxSeats: 12, description: "A short description.",
   images: [{ url: "/a.jpg", alt: "a" }, { url: "/b.jpg", alt: "b" }, { url: "/c.jpg", alt: "c" }],
-  overviewHtml: "<p>long</p>", itinerary: [{ title: "Stop" }], included: ["Guide"],
+  overviewHtml: "<p>long</p>",
+  itinerary: [{ title: "Giza Plateau", time: "09:00 AM", kind: "stop", description: "A long paragraph." }],
+  included: ["Guide"],
   notIncluded: ["Tips"], policiesHtml: "<p>p</p>", meetingPoint: "Museum",
   meetingPoints: [{ point: "Museum steps" }], pickupNote: "Hotel pickup included",
   highlights: ["Sphinx"], whatToBring: ["Hat"], faq: [{ q: "?", a: "!" }], ...over,
@@ -44,6 +46,13 @@ test("slice keeps the route's product complete and strips the rest", () => {
   assert.equal(kept.detailPending, undefined, "the focused product is complete");
   assert.equal(slim.detailPending, true, "a slimmed product must say so");
   assert.equal(out.partial, true);
+
+  // The itinerary is the one detail field a card reads (route chips), so a
+  // slimmed product keeps its skeleton — title and kind — and sheds the prose.
+  assert.deepEqual(slim.itinerary, [{ title: "Giza Plateau", kind: "stop" }],
+    "a slimmed product keeps stop titles and kinds only");
+  assert.equal(kept.itinerary[0].description, "A long paragraph.",
+    "the route's own product keeps full legs");
 });
 
 test("slice resolves the focus by raw id as well as slug (old /tour/<id> links)", () => {

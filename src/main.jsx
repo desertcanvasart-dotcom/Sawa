@@ -1526,11 +1526,13 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
               )}
 
               {tour.detailPending && <DetailPending heading="Day by day" />}
-              {itin.length > 0 && (
+              {!tour.detailPending && itin.length > 0 && (
                 <section className="sec rv">
                   {/* Packages narrate days; a day tour narrates one day's stops.
                       Same timeline, different unit — "D3" on a one-day tour
-                      would claim days it does not have. */}
+                      would claim days it does not have. A pending record may
+                      carry the card slice's skeleton legs (titles, no prose) —
+                      DetailPending stands in until the full record arrives. */}
                   <h2>{isPackage(tour) ? "Day by day" : "The shape of the day"}</h2>
                   <div className="timeline">
                     {itin.map((d, i) => (
