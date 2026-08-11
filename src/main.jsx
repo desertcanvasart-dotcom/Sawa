@@ -112,7 +112,9 @@ function routeStopsFor(product) {
   // Recorded itinerary first — real data beats every heuristic below the
   // moment a product carries it (today none do; the catalogue's itineraries
   // live in prose and have not been loaded onto the products).
-  const itin = (product.itinerary || []).map((leg) => ((leg && leg.title) || "").trim()).filter(Boolean);
+  const itin = (product.itinerary || [])
+    .filter((leg) => leg && leg.kind !== "transit") // sites, not the drives between them
+    .map((leg) => (leg.title || "").trim()).filter(Boolean);
   if (itin.length >= 2) return itin;
   if (routeStops[product.id]) return routeStops[product.id];
   const m = /—(.+)$/.exec(product.title || "");
@@ -1526,13 +1528,16 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
               {tour.detailPending && <DetailPending heading="Day by day" />}
               {itin.length > 0 && (
                 <section className="sec rv">
-                  <h2>Day by day</h2>
+                  {/* Packages narrate days; a day tour narrates one day's stops.
+                      Same timeline, different unit — "D3" on a one-day tour
+                      would claim days it does not have. */}
+                  <h2>{isPackage(tour) ? "Day by day" : "The shape of the day"}</h2>
                   <div className="timeline">
                     {itin.map((d, i) => (
                       <div className={`day${i === 0 ? " go" : ""}`} key={d.day || i}>
-                        <div className="line"><div className="marker">{`D${d.day || i + 1}`}</div><div className="stem" /></div>
+                        <div className="line"><div className="marker">{isPackage(tour) ? `D${d.day || i + 1}` : i + 1}</div><div className="stem" /></div>
                         <div className="content">
-                          {d.city && <span className="dl">{d.city}</span>}
+                          {(d.city || d.time) && <span className="dl">{d.city || d.time}</span>}
                           <h3>{d.title || `Stop ${i + 1}`}</h3>
                           {d.description && (/<\w/.test(d.description) ? <div className="rich" dangerouslySetInnerHTML={{ __html: d.description }} /> : <p>{d.description}</p>)}
                           {(d.included || []).length > 0 && <div className="tags">{d.included.slice(0, 3).map((t) => <span key={t}>{t}</span>)}</div>}
