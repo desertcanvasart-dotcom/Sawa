@@ -2008,27 +2008,31 @@ app.post("/api/admin/agencies", requireAuth, requireAdmin(), writeLimiter, h(asy
   res.status(201).json({ agency: mapAgency(agencyRow), ownerEmail: input.ownerEmail, tempPassword: owner.tempPassword, emailMode });
 }));
 
-// Admin: delete an agency — only while nothing references it.
+// Admin: delete an agency — its own logins go with it; history blocks it.
 //
-// app_users.agency_id is ON DELETE CASCADE (002), so deleting an agency with
-// staff would silently erase their profiles while their Supabase logins kept
-// working — a ghost login, the exact BBB1 shape. And pledges/tour_products/
-// referrals carry agency_id with no FK at all, so those rows would keep a
-// dangling id nothing can resolve. Refusing while dependents exist keeps the
-// delete an "undo a mistaken creation", not a shredder for history.
+// Two different kinds of dependent, treated differently on purpose:
+//
+// - **Team logins.** app_users.agency_id is ON DELETE CASCADE (002), so a bare
+//   DELETE would erase the profiles while the Supabase logins kept working — a
+//   ghost login, the exact BBB1 shape. And there is no admin route for another
+//   agency's staff, so "remove them first" was a dead end from this dashboard.
+//   The delete therefore revokes each login itself (same ban as staff.disable)
+//   BEFORE the row goes; if any revocation fails, nothing is deleted.
+//
+// - **History** — tour products, bookings, referrals. Those carry agency_id
+//   with no FK; deleting would leave dangling ids nothing can resolve. Still
+//   refused. Delete is "undo a mistaken creation", not a shredder for records.
 app.delete("/api/admin/agencies/:id", requireAuth, requireAdmin(), h(async (req, res) => {
   const id = req.params.id;
   const agency = (await pool.query(`SELECT * FROM agencies WHERE id=$1`, [id])).rows[0];
   if (!agency) throw new AppError(404, "Agency not found.");
 
-  const [staff, products, pledges, referrals] = await Promise.all([
-    pool.query(`SELECT COUNT(*)::int n FROM app_users WHERE agency_id=$1`, [id]),
+  const [products, pledges, referrals] = await Promise.all([
     pool.query(`SELECT COUNT(*)::int n FROM tour_products WHERE agency_id=$1`, [id]),
     pool.query(`SELECT COUNT(*)::int n FROM pledges WHERE agency_id=$1`, [id]),
     pool.query(`SELECT COUNT(*)::int n FROM referrals WHERE agency_id=$1`, [id]),
   ]);
   const blockers = [
-    staff.rows[0].n && `${staff.rows[0].n} team login(s) — remove them first, so no Supabase login outlives its profile`,
     products.rows[0].n && `${products.rows[0].n} tour product(s) linked to it`,
     pledges.rows[0].n && `${pledges.rows[0].n} booking(s) recorded under it`,
     referrals.rows[0].n && `${referrals.rows[0].n} referral(s) recorded under it`,
@@ -2037,12 +2041,26 @@ app.delete("/api/admin/agencies/:id", requireAuth, requireAdmin(), h(async (req,
     throw new AppError(409, `Cannot delete "${agency.name}": ${blockers.join("; ")}.`);
   }
 
+  // Revoke every login before anything is deleted. "failed" aborts the whole
+  // delete: a cascade that outruns a failed ban is exactly the ghost this
+  // route exists to prevent. "no-auth-provider" (log mode) has no login to
+  // outlive anything and proceeds.
+  const staff = (await pool.query(`SELECT id, email, role FROM app_users WHERE agency_id=$1`, [id])).rows;
+  const revoked = [];
+  for (const member of staff) {
+    const login = await setLoginAccess(member.id, false);
+    if (login === "failed") {
+      throw new AppError(502, `Could not revoke the login for ${member.email}; "${agency.name}" was not deleted. Retry once the auth provider responds.`);
+    }
+    revoked.push({ email: member.email, role: member.role, login });
+  }
+
   await pool.query(`DELETE FROM agencies WHERE id=$1`, [id]);
   await logAudit(req, {
     action: "agency.delete", entity: "agency", entityId: id,
-    detail: { name: agency.name, status: agency.status, relationship: agency.relationship ?? null },
+    detail: { name: agency.name, status: agency.status, relationship: agency.relationship ?? null, loginsRevoked: revoked },
   });
-  res.json({ ok: true });
+  res.json({ ok: true, loginsRevoked: revoked.length });
 }));
 
 // Admin: recent audit trail (who did what, when).
