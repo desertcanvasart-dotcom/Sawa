@@ -28,32 +28,35 @@ This is a small-group shared departure, which means the pleasure of travelling a
 
 ## The Shape of the Day
 
-**08:00 AM — Gather in Cairo**
+**07:00 AM — Gather in Cairo**
 The day begins while the air is still cool and the city is just waking. Our representative meets you at your hotel, welcomes you, and introduces you to the travellers you'll share the day with. Once everyone is settled, we head south, out of the city and toward the old necropolis country along the river.
 
-**08:00 AM – 09:00 AM — The Drive to Memphis**
+**07:00 AM – 08:00 AM — The Drive to Memphis**
 The road south takes around an hour, the capital giving way to farmland and palm groves as you near Memphis, where Egypt's story as a unified kingdom first began.
 
-**09:00 AM – 09:45 AM — Memphis**
-You spend the first part of the morning at the open-air museum of the ancient capital, taking in the great reclining statue of Ramses II and the alabaster sphinx among the palms.
+**08:00 AM – 09:00 AM — Memphis**
+You spend around an hour at the open-air museum of the ancient capital, taking in the great reclining statue of Ramses II and the alabaster sphinx among the palms.
 
-**09:45 AM – 10:00 AM — On to Saqqara**
+**09:00 AM – 09:15 AM — On to Saqqara**
 A short drive carries you up onto the desert plateau to Saqqara, only minutes away.
 
-**10:00 AM – 11:30 AM — Saqqara**
-You have around an hour and a half here, in one of the richest archaeological sites in Egypt, exploring the necropolis and standing before the Step Pyramid of Djoser — the building that started it all.
+**09:15 AM – 11:45 AM — Saqqara**
+You have around two and a half hours here, in one of the richest archaeological sites in Egypt, exploring the necropolis, its painted tombs and shaded colonnades, and standing before the Step Pyramid of Djoser — the building that started it all.
 
-**11:30 AM – 11:50 AM — On to Dahshur**
+**11:45 AM – 12:45 PM — A Break to Refuel**
+A relaxed hour for lunch at a local restaurant near the plateau (lunch at your own expense, with the guide's help choosing), before the desert's quietest pyramids.
+
+**12:45 PM – 01:05 PM — On to Dahshur**
 A brief drive further south brings you to the quieter desert of Dahshur and its two remarkable pyramids.
 
-**11:50 AM – 01:00 PM — Dahshur**
-You spend a little over an hour at Snefru's pyramids — the Bent Pyramid and the Red Pyramid — with the time and the open space to really take in how the true pyramid was finally achieved.
+**01:05 PM – 02:45 PM — Dahshur**
+You spend well over an hour and a half at Snefru's pyramids — the Bent Pyramid and the Red Pyramid — with the time and the open space to really take in how the true pyramid was finally achieved, and the option of descending into the Red Pyramid's chambers.
 
-**01:00 PM – 02:00 PM — The Return to Cairo**
+**02:45 PM – 03:45 PM — The Return to Cairo**
 The road carries you back north, around an hour, the desert giving way once more to the life of the city.
 
-**Around 02:00 PM — Back in Cairo**
-You arrive back in the early afternoon, the tour ending at your hotel, with the day's long history still settling and the rest of the day your own.
+**Around 03:45 PM — Back in Cairo**
+You arrive back in the late afternoon, the tour ending at your hotel, with the day's long history still settling and the evening your own.
 
 ---
 
