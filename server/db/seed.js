@@ -87,16 +87,16 @@ async function main() {
           `INSERT INTO pledges
             (id, departure_id, agency_id, agency, seats, customers, price_per_person, booking_total,
              deposit_percent, deposit_due, balance_due, balance_due_date, source, booking_code,
-             rooming_type, accommodation_tier, accommodation_tier_name, created_at)
+             rooming_type, accommodation_tier, accommodation_tier_name, paid, created_at)
            VALUES
-            ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,
-             COALESCE($18, now()))`,
+            ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,
+             COALESCE($19, now()))`,
           [
             pl.id, d.id, pl.agencyId ?? null, pl.agency ?? null, pl.seats, pl.customers ?? null,
             pl.pricePerPerson ?? null, pl.bookingTotal ?? null, pl.depositPercent ?? null,
             pl.depositDue ?? null, pl.balanceDue ?? null, pl.balanceDueDate ?? null,
             pl.source ?? null, pl.bookingCode ?? null, pl.roomingType ?? null,
-            pl.accommodationTier ?? null, pl.accommodationTierName ?? null, pl.createdAt ?? null,
+            pl.accommodationTier ?? null, pl.accommodationTierName ?? null, pl.paid === true, pl.createdAt ?? null,
           ]
         );
       }

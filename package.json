@@ -40,6 +40,7 @@
     "audit:repo-truth": "node scripts/audit-repo-truth.js",
     "test:integration": "node --test server/seo-sitemap.integration.mjs",
     "rehearse:goahead": "bash scripts/rehearse-goahead-alert.sh",
+  "rehearse:staged-seed": "bash scripts/rehearse-staged-seed.sh",
     "audit:promises": "node scripts/audit-promises.js",
     "check:seed-expiry": "node scripts/check-seed-expiry.js"
   },

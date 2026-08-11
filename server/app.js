@@ -1674,15 +1674,15 @@ async function insertPledge(c, departureId, p) {
       (id, departure_id, agency_id, agency, seats, customers, price_per_person, booking_total,
        deposit_percent, deposit_due, balance_due, balance_due_date, source, booking_code,
        rooming_type, accommodation_tier, accommodation_tier_name, created_by_user_id, customer_email,
-       customer_phone, ref_code)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)`,
+       customer_phone, ref_code, paid)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)`,
     [
       p.id, departureId, p.agencyId ?? null, p.agency ?? null, p.seats, p.customers ?? null,
       p.pricePerPerson ?? null, p.bookingTotal ?? null, p.depositPercent ?? null,
       p.depositDue ?? null, p.balanceDue ?? null, p.balanceDueDate ?? null,
       p.source ?? null, p.bookingCode ?? null, p.roomingType ?? null,
       p.accommodationTier ?? null, p.accommodationTierName ?? null, p.createdByUserId ?? null,
-      p.customerEmail ?? null, p.customerPhone ?? null, p.refCode ?? null,
+      p.customerEmail ?? null, p.customerPhone ?? null, p.refCode ?? null, p.paid === true,
     ]
   );
   await refreshStatus(c, departureId);

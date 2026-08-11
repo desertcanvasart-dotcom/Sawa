@@ -99,6 +99,7 @@ export function mapPledge(r) {
     status: r.status || "confirmed",
     createdAt: r.created_at instanceof Date ? r.created_at.toISOString() : r.created_at,
   };
+  if (r.paid !== null && r.paid !== undefined) out.paid = r.paid === true;
   if (r.customer_email) out.customerEmail = r.customer_email;
   if (r.customer_phone) out.customerPhone = r.customer_phone;
   if (r.traveller_names && r.traveller_names.length) out.travellerNames = r.traveller_names;

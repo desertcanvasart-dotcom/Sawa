@@ -1,0 +1,22 @@
+-- 030: whether a booking has been paid, as distinct from what it owes.
+--
+-- ⚠️ PROPOSED. NOT APPLIED. Migrations do not run on deploy (B5).
+--
+-- ============================================================================
+-- WHY A BOOLEAN AND NOT A STATUS
+-- ============================================================================
+--
+-- The client's booking sheet carries `paid (yes/no)` per booking. `pledges`
+-- has nowhere to put it: `deposit_due` / `balance_due` / `balance_due_date`
+-- model what a booking OWES under the payment window (028); none of them
+-- records that payment was received. Overloading `status` would make one
+-- column answer two unrelated questions — LL1's collapse, one field two facts.
+--
+-- `paid` means: the agreed tour price for this booking has been received in
+-- full. It says nothing about deposits, partial payments or refunds; if those
+-- become states the client actually has, that is a new column or a payments
+-- table, not a widening of this one.
+--
+-- Backfill is `false` for any existing row, which today is a statement about
+-- zero rows: `pledges` has never held one (E-2, still live as of this writing).
+ALTER TABLE pledges ADD COLUMN IF NOT EXISTS paid BOOLEAN NOT NULL DEFAULT false;
