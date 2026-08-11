@@ -109,6 +109,11 @@ const routeStops = {
 // yields at least two stops; otherwise return null and let the caller drop the
 // row rather than invent one.
 function routeStopsFor(product) {
+  // Recorded itinerary first — real data beats every heuristic below the
+  // moment a product carries it (today none do; the catalogue's itineraries
+  // live in prose and have not been loaded onto the products).
+  const itin = (product.itinerary || []).map((leg) => ((leg && leg.title) || "").trim()).filter(Boolean);
+  if (itin.length >= 2) return itin;
   if (routeStops[product.id]) return routeStops[product.id];
   const m = /—(.+)$/.exec(product.title || "");
   if (m) {

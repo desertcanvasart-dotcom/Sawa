@@ -2019,23 +2019,34 @@ app.post("/api/admin/agencies", requireAuth, requireAdmin(), writeLimiter, h(asy
 //   The delete therefore revokes each login itself (same ban as staff.disable)
 //   BEFORE the row goes; if any revocation fails, nothing is deleted.
 //
-// - **History** — tour products, bookings, referrals. Those carry agency_id
-//   with no FK; deleting would leave dangling ids nothing can resolve. Still
-//   refused. Delete is "undo a mistaken creation", not a shredder for records.
+// - **History** — tour products, bookings, and any referral code with a
+//   booking attributed to it. Those carry agency_id (or ref_code) with no FK;
+//   deleting would leave dangling ids nothing can resolve. Still refused.
+//   Delete is "undo a mistaken creation", not a shredder for records.
+//
+// - **Scaffolding** — the referral code every agency gets at creation. With
+//   zero bookings attributed it is furniture, not history (blocking on it made
+//   every agency undeletable, discovered on second use), so an unused code is
+//   deleted with its agency and listed in the audit detail. One booking
+//   carrying the code moves it to the history column above.
 app.delete("/api/admin/agencies/:id", requireAuth, requireAdmin(), h(async (req, res) => {
   const id = req.params.id;
   const agency = (await pool.query(`SELECT * FROM agencies WHERE id=$1`, [id])).rows[0];
   if (!agency) throw new AppError(404, "Agency not found.");
 
-  const [products, pledges, referrals] = await Promise.all([
+  const [products, pledges, usedRefs] = await Promise.all([
     pool.query(`SELECT COUNT(*)::int n FROM tour_products WHERE agency_id=$1`, [id]),
     pool.query(`SELECT COUNT(*)::int n FROM pledges WHERE agency_id=$1`, [id]),
-    pool.query(`SELECT COUNT(*)::int n FROM referrals WHERE agency_id=$1`, [id]),
+    pool.query(
+      `SELECT COUNT(*)::int n FROM referrals r
+        WHERE r.agency_id=$1 AND EXISTS (SELECT 1 FROM pledges p WHERE p.ref_code = r.code)`,
+      [id]
+    ),
   ]);
   const blockers = [
     products.rows[0].n && `${products.rows[0].n} tour product(s) linked to it`,
     pledges.rows[0].n && `${pledges.rows[0].n} booking(s) recorded under it`,
-    referrals.rows[0].n && `${referrals.rows[0].n} referral(s) recorded under it`,
+    usedRefs.rows[0].n && `${usedRefs.rows[0].n} referral code(s) with bookings attributed`,
   ].filter(Boolean);
   if (blockers.length) {
     throw new AppError(409, `Cannot delete "${agency.name}": ${blockers.join("; ")}.`);
@@ -2055,12 +2066,27 @@ app.delete("/api/admin/agencies/:id", requireAuth, requireAdmin(), h(async (req,
     revoked.push({ email: member.email, role: member.role, login });
   }
 
-  await pool.query(`DELETE FROM agencies WHERE id=$1`, [id]);
+  // The unused codes and the agency row go in one transaction — a delete that
+  // removed the codes and then failed on the agency would leave scaffolding
+  // gone from under a row that still exists.
+  const codesDeleted = await withTransaction(async (c) => {
+    const codes = (await c.query(
+      `DELETE FROM referrals r
+        WHERE r.agency_id=$1 AND NOT EXISTS (SELECT 1 FROM pledges p WHERE p.ref_code = r.code)
+        RETURNING r.code`,
+      [id]
+    )).rows.map((r) => r.code);
+    await c.query(`DELETE FROM agencies WHERE id=$1`, [id]);
+    return codes;
+  });
   await logAudit(req, {
     action: "agency.delete", entity: "agency", entityId: id,
-    detail: { name: agency.name, status: agency.status, relationship: agency.relationship ?? null, loginsRevoked: revoked },
+    detail: {
+      name: agency.name, status: agency.status, relationship: agency.relationship ?? null,
+      loginsRevoked: revoked, referralCodesDeleted: codesDeleted,
+    },
   });
-  res.json({ ok: true, loginsRevoked: revoked.length });
+  res.json({ ok: true, loginsRevoked: revoked.length, referralCodesDeleted: codesDeleted.length });
 }));
 
 // Admin: recent audit trail (who did what, when).
