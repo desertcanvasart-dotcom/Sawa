@@ -101,6 +101,23 @@ const routeStops = {
   tour_aswan_philae: ["Aswan pickup", "High Dam", "Philae Temple"],
 };
 
+// Stops for a route line. The curated map above only knows the original demo
+// ids; every later product fell through to `[city, title]`, which rendered the
+// full tour title as if it were a stop — directly under a heading that already
+// says it. Production titles carry their stop list after an em-dash ("Aswan
+// Highlights — Unfinished Obelisk, High Dam & Philae"), so use that when it
+// yields at least two stops; otherwise return null and let the caller drop the
+// row rather than invent one.
+function routeStopsFor(product) {
+  if (routeStops[product.id]) return routeStops[product.id];
+  const m = /—(.+)$/.exec(product.title || "");
+  if (m) {
+    const stops = m[1].split(/[,&]/).map((s) => s.trim()).filter(Boolean);
+    if (stops.length >= 2) return stops;
+  }
+  return null;
+}
+
 function isPackage(item) {
   return item && item.type === "package";
 }
@@ -2010,7 +2027,7 @@ function PublicSite({
             </div>
             {routeTour && (
               <div className="hero-route-card">
-                {(routeStops[routeTour.id] || [routeTour.city, routeTour.title]).map((stop) => <span key={stop}>{stop}</span>)}
+                {(routeStopsFor(routeTour) || [routeTour.city]).map((stop) => <span key={stop}>{stop}</span>)}
               </div>
             )}
             {routePackage && (
@@ -3165,7 +3182,7 @@ function TourCard({ navigate, product }) {
   const leadDate = openDates(product)[0] || product.dates[0];
   const seats = leadDate ? seatsTotal(leadDate.pledges) : 0;
   const confidence = confidenceFor(seats, goAhead);
-  const stops = routeStops[product.id] || [product.city, product.title];
+  const stops = routeStopsFor(product);
   const livePrice = leadDate ? livePriceFor({ ...product, ...leadDate }, seats) : livePriceFor(product, goAhead);
   const breakPrice = clampPrice(product.breakPrice, Math.round(product.publishedRate * 0.8));
   const full = productFullyBooked(product);
@@ -3192,9 +3209,11 @@ function TourCard({ navigate, product }) {
           <span className="tour-card-price">${livePrice} USD</span>
         </div>
         <p className="tour-card-sub">{product.duration || product.vehicle} · {product.guide}</p>
-        <div className="route-line">
-          {stops.slice(0, 3).map((stop) => <span key={stop}>{stop}</span>)}
-        </div>
+        {stops && (
+          <div className="route-line">
+            {stops.slice(0, 3).map((stop) => <span key={stop}>{stop}</span>)}
+          </div>
+        )}
         {!full && (
           <div className="confidence-meter">
             <div>
@@ -3205,7 +3224,12 @@ function TourCard({ navigate, product }) {
           </div>
         )}
         <div className="tour-card-foot">
-          <span>{full ? "All dates full — check back soon" : `${pluralize(openDates(product).length, "open date")} · from $${breakPrice} USD at full group`}</span>
+          {/* "0 open dates" on a bookable product is a bare zero (JJ3's class).
+              Zero here means nobody has started a date yet, and the model's
+              answer to that state is Be the Spark — say that instead. */}
+          <span>{full ? "All dates full — check back soon"
+            : openDates(product).length ? `${pluralize(openDates(product).length, "open date")} · from $${breakPrice} USD at full group`
+            : `Start your own date · from $${breakPrice} USD at full group`}</span>
         </div>
         {/* Decorative: the whole card is already the link above, so exposing
             this as a second control would just duplicate it in the tab order. */}
