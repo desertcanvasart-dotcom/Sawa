@@ -38,6 +38,7 @@ const MIGRATIONS = [
   { name: "027_pin_group_minimum", file: "schema_027_pin_group_minimum.sql" },
   { name: "028_payment_window", file: "schema_028_payment_window.sql" },
   { name: "029_agency_relationship", file: "schema_029_agency_relationship.sql" },
+  { name: "030_pledges_paid", file: "schema_030_pledges_paid.sql" },
 ];
 
 async function main() {

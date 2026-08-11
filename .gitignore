@@ -3,3 +3,8 @@ dist/
 .env
 *.log
 .DS_Store
+# Rehearsal fixture built from the client's booking CSV (confirmed TEST data,
+# 2026-08-11). Untracked anyway: the emails could belong to real strangers, and
+# git history is forever. The real booking CSV, when it arrives, gets the same
+# treatment.
+data/bookings-rehearsal.json
