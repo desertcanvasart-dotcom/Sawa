@@ -2008,6 +2008,43 @@ app.post("/api/admin/agencies", requireAuth, requireAdmin(), writeLimiter, h(asy
   res.status(201).json({ agency: mapAgency(agencyRow), ownerEmail: input.ownerEmail, tempPassword: owner.tempPassword, emailMode });
 }));
 
+// Admin: delete an agency — only while nothing references it.
+//
+// app_users.agency_id is ON DELETE CASCADE (002), so deleting an agency with
+// staff would silently erase their profiles while their Supabase logins kept
+// working — a ghost login, the exact BBB1 shape. And pledges/tour_products/
+// referrals carry agency_id with no FK at all, so those rows would keep a
+// dangling id nothing can resolve. Refusing while dependents exist keeps the
+// delete an "undo a mistaken creation", not a shredder for history.
+app.delete("/api/admin/agencies/:id", requireAuth, requireAdmin(), h(async (req, res) => {
+  const id = req.params.id;
+  const agency = (await pool.query(`SELECT * FROM agencies WHERE id=$1`, [id])).rows[0];
+  if (!agency) throw new AppError(404, "Agency not found.");
+
+  const [staff, products, pledges, referrals] = await Promise.all([
+    pool.query(`SELECT COUNT(*)::int n FROM app_users WHERE agency_id=$1`, [id]),
+    pool.query(`SELECT COUNT(*)::int n FROM tour_products WHERE agency_id=$1`, [id]),
+    pool.query(`SELECT COUNT(*)::int n FROM pledges WHERE agency_id=$1`, [id]),
+    pool.query(`SELECT COUNT(*)::int n FROM referrals WHERE agency_id=$1`, [id]),
+  ]);
+  const blockers = [
+    staff.rows[0].n && `${staff.rows[0].n} team login(s) — remove them first, so no Supabase login outlives its profile`,
+    products.rows[0].n && `${products.rows[0].n} tour product(s) linked to it`,
+    pledges.rows[0].n && `${pledges.rows[0].n} booking(s) recorded under it`,
+    referrals.rows[0].n && `${referrals.rows[0].n} referral(s) recorded under it`,
+  ].filter(Boolean);
+  if (blockers.length) {
+    throw new AppError(409, `Cannot delete "${agency.name}": ${blockers.join("; ")}.`);
+  }
+
+  await pool.query(`DELETE FROM agencies WHERE id=$1`, [id]);
+  await logAudit(req, {
+    action: "agency.delete", entity: "agency", entityId: id,
+    detail: { name: agency.name, status: agency.status, relationship: agency.relationship ?? null },
+  });
+  res.json({ ok: true });
+}));
+
 // Admin: recent audit trail (who did what, when).
 app.get("/api/admin/audit", requireAuth, requireRole("super_admin", "ops_staff"), h(async (req, res) => {
   const limit = Math.min(Number(req.query.limit) || 100, 500);
