@@ -1997,6 +1997,17 @@ function AgenciesSection({ flash }) {
     } catch (e2) { setErr(e2.message); } finally { setBusy(false); }
   }
 
+  async function remove(a) {
+    if (!window.confirm(`Delete "${a.name}"? Only possible while no logins, tours, bookings or referrals reference it.`)) return;
+    setErr("");
+    try {
+      const r = await apiFetch(`/admin/agencies/${a.id}`, { method: "DELETE" });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || "Could not delete agency.");
+      load(); flash("Agency deleted.");
+    } catch (e2) { setErr(e2.message); }
+  }
+
   return (
     <>
       <PageHead title="Agencies" sub="Create partner agencies and their owner logins." />
@@ -2005,12 +2016,12 @@ function AgenciesSection({ flash }) {
           <div className="dash-card-head"><h2>All agencies</h2></div>
           <div className="table-wrap">
             <table className="dash-table">
-              <thead><tr><th>Agency</th><th>Contact</th><th>Members</th><th>Status</th></tr></thead>
+              <thead><tr><th>Agency</th><th>Contact</th><th>Members</th><th>Status</th><th></th></tr></thead>
               <tbody>
                 {(list || []).map((a) => (
-                  <tr key={a.id}><td><strong>{a.name}</strong></td><td>{a.contactName}{a.phone ? <div className="sub">{a.phone}</div> : ""}</td><td>{a.staffCount}</td><td><span className="tag tag-on">{a.status}</span></td></tr>
+                  <tr key={a.id}><td><strong>{a.name}</strong></td><td>{a.contactName}{a.phone ? <div className="sub">{a.phone}</div> : ""}</td><td>{a.staffCount}</td><td><span className="tag tag-on">{a.status}</span></td><td><button className="btn-mini" onClick={() => remove(a)} title={a.staffCount ? "Remove its team logins first" : `Delete ${a.name}`}><Trash2 size={14} />Delete</button></td></tr>
                 ))}
-                {list && list.length === 0 && <tr><td colSpan={4}><Empty label="No agencies yet." /></td></tr>}
+                {list && list.length === 0 && <tr><td colSpan={5}><Empty label="No agencies yet." /></td></tr>}
               </tbody>
             </table>
           </div>
