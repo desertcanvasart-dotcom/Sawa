@@ -323,9 +323,22 @@ export async function buildHead(pathname) {
 // constraint that matters: a slice that changed any visible number would just
 // reintroduce the flicker this whole change set exists to remove.
 const DETAIL_ONLY_PRODUCT_FIELDS = [
-  "overviewHtml", "itinerary", "included", "notIncluded", "policiesHtml",
+  "overviewHtml", "included", "notIncluded", "policiesHtml",
   "meetingPoint", "meetingPoints", "whatToBring", "pickupNote", "faq", "highlights",
 ];
+
+// The itinerary is the one detail field a CARD now reads — routeStopsFor()
+// chips the stop titles. So it is not deleted like the fields above; it is
+// reduced to its skeleton, title and kind per leg, shedding the descriptions
+// that are its actual bulk. The detail page renders a timeline only for a
+// complete record (detailPending gates it), so the skeleton never half-renders.
+function slimItinerary(itinerary) {
+  if (!Array.isArray(itinerary) || !itinerary.length) return undefined;
+  return itinerary.map((leg) => ({
+    ...(leg && leg.title ? { title: leg.title } : {}),
+    ...(leg && leg.kind ? { kind: leg.kind } : {}),
+  }));
+}
 
 // Cards use images[0] only (coverImage); the gallery is detail-page furniture.
 const CARD_IMAGE_COUNT = 1;
@@ -343,6 +356,8 @@ export function sliceBootstrapForRoute(payload, pathname) {
     if (focus && (p.id === focus || tourSlug(p) === focus)) return p;
     const slim = { ...p };
     for (const field of DETAIL_ONLY_PRODUCT_FIELDS) delete slim[field];
+    const stops = slimItinerary(p.itinerary);
+    if (stops) slim.itinerary = stops; else delete slim.itinerary;
     if (Array.isArray(slim.images) && slim.images.length > CARD_IMAGE_COUNT) {
       slim.images = slim.images.slice(0, CARD_IMAGE_COUNT);
     }
