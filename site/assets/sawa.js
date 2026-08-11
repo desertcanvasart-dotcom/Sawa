@@ -49,6 +49,13 @@
        fired: the whole policy sat at opacity 0. Watch ratio 0 as well, and
        reveal on whichever comes first, 16% of the element or 16% of the
        window's worth of it. */
+    /* The guard below can reject the .16 crossing itself — the callback for
+       that crossing may arrive with the ratio still marginally under .16 —
+       and with no thresholds above .16 nothing ever fires again: the element
+       stays observed and invisible forever. Slow scrolling hits this; fast
+       jumps skip past it, which is why it strands some elements and not
+       others. Denser thresholds give a rejected element another callback at
+       a larger slice. */
     var io=new IntersectionObserver(function(es){
       es.forEach(function(e){
         if(!e.isIntersecting)return;
@@ -57,7 +64,7 @@
         e.target.querySelectorAll('[data-fill]').forEach(function(b){b.style.width=b.dataset.fill;});
         io.unobserve(e.target);
       });
-    },{threshold:[0,.16],rootMargin:'0px 0px -7% 0px'});
+    },{threshold:[0,.16,.3,.5,.75,1],rootMargin:'0px 0px -7% 0px'});
     /* Anything already on screen when the page opens is shown as it is. The
      entrance animation is for content you scroll to; replaying it on every
      navigation left the whole mobile viewport blank for a beat and then slid
