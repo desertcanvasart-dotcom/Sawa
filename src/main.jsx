@@ -47,6 +47,7 @@ const SUPPORT_AVAILABILITY = INTERIM_COPY["support-availability"];
 import { seatsTotal, goAheadSeatsFor } from "../shared/departure-state.js";
 import { livePriceFor, priceFromTiers, clampPrice } from "../shared/pricing.js";
 import { cleanRefCode } from "../shared/ref-code.js";
+import { CURRENCY, CURRENCY_SYMBOL, CURRENCY_PROSE } from "../shared/currency.js";
 // Lazy-loaded so the heavy authenticated portal (admin desk + TipTap editor)
 // is split out of the public bundle and never downloaded by visitors.
 const LoginGate = lazy(() => import("./LoginGate").then((m) => ({ default: m.LoginGate })));
@@ -1610,7 +1611,7 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
                         from the record, never from copy: this listing may confirm
                         at more than the default. */}
                     <div className="book-price">
-                      <b className="tnum">${pp}</b><span>USD / person</span>
+                      <b className="tnum">{CURRENCY_SYMBOL}{pp}</b><span>{CURRENCY} / person</span>
                       <span className="book-promise">Never more than {GROUP_MAX_WORD}. Ever.</span>
                       <span className="book-threshold">This date confirms at {numberWord(goAhead)} traveler{goAhead === 1 ? "" : "s"}.</span>
                     </div>
@@ -1723,7 +1724,7 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
                             <select value={tierId} onChange={(e) => setTierId(e.target.value)}>
                               {pkgTiers.map((t) => (
                                 <option key={t.id} value={t.id}>
-                                  {t.name}{Number(t.perPersonSupplement) > 0 ? ` (+$${Number(t.perPersonSupplement)} USD/person)` : ""}
+                                  {t.name}{Number(t.perPersonSupplement) > 0 ? ` (+${CURRENCY_SYMBOL}${Number(t.perPersonSupplement)} ${CURRENCY}/person)` : ""}
                                 </option>
                               ))}
                             </select>
@@ -1735,7 +1736,7 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
                               <option value="triple">Triple (shared)</option>
                               <option value="single">
                                 Single{Number(pkgTiers.find((t) => t.id === tierId)?.singleSupplement) > 0
-                                  ? ` (+$${Number(pkgTiers.find((t) => t.id === tierId).singleSupplement)})`
+                                  ? ` (+${CURRENCY_SYMBOL}${Number(pkgTiers.find((t) => t.id === tierId).singleSupplement)})`
                                   : ""}
                               </option>
                             </select>
@@ -1763,14 +1764,17 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
                         <input type="number" min="1" max={Math.max(1, remaining)} value={seats} onChange={(e) => setSeats(e.target.value)} required aria-required="true" />
                       </label>
                     </div>
-                    {/* "$" on its own reads as CAD, AUD or SGD to a good share of
-                        the people this page is for, so the booking summary — the
-                        one place a visitor commits to a number — says USD. */}
+                    {/* The glyph is carried by the code as well as the symbol in
+                        the booking summary — the one place a visitor commits to
+                        a number. "€" is unambiguous in a way "$" never was here
+                        (it read as CAD, AUD or SGD to a good share of the people
+                        this page is for), but a figure someone is about to owe
+                        is the wrong place to economise on words. */}
                     {!reqMode && <div className="bk-sum">
-                      <div className="r"><span>${pp} USD × {nSeats}</span><b>${total} USD</b></div>
-                      <div className="r key"><span>Deposit at GoAhead ({depositPct}%)</span><b>${deposit} USD</b></div>
-                      <div className="r"><span>Balance</span><b>${balance} USD</b></div>
-                      <div className="nt">All amounts in US dollars (USD). Nothing is charged today. Balance due {dep ? balanceDueDate(dep.date) : "before departure"}.</div>
+                      <div className="r"><span>{CURRENCY_SYMBOL}{pp} {CURRENCY} × {nSeats}</span><b>{CURRENCY_SYMBOL}{total} {CURRENCY}</b></div>
+                      <div className="r key"><span>Deposit at GoAhead ({depositPct}%)</span><b>{CURRENCY_SYMBOL}{deposit} {CURRENCY}</b></div>
+                      <div className="r"><span>Balance</span><b>{CURRENCY_SYMBOL}{balance} {CURRENCY}</b></div>
+                      <div className="nt">All amounts in {CURRENCY_PROSE}. Nothing is charged today. Balance due {dep ? balanceDueDate(dep.date) : "before departure"}.</div>
                       {/* The deadline is the other half of the GoAhead promise:
                           the date by which this either confirms or is canceled
                           and everyone refunded. Showing it before someone
@@ -1801,7 +1805,7 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
                             // Canceling a held seat is an action, not navigation, and it was an
                             // <a> with no href: unreachable by keyboard and announced to screen
                             // readers as plain text. A real <button> restores focus and Enter/Space.
-                            <div className="bk-ok" role="status">Seat held — {publicBooking.code}. {publicBooking.depositDue ? `$${publicBooking.depositDue} USD deposit due at GoAhead.` : ""} <button type="button" className="bk-cancel" onClick={onCancelPublicBooking}>Cancel</button></div>
+                            <div className="bk-ok" role="status">Seat held — {publicBooking.code}. {publicBooking.depositDue ? `${CURRENCY_SYMBOL}${publicBooking.depositDue} ${CURRENCY} deposit due at GoAhead.` : ""} <button type="button" className="bk-cancel" onClick={onCancelPublicBooking}>Cancel</button></div>
                           )}
                           <div className="note"><SxCheck />Free hold — you only pay once the date confirms</div>
                         </>
@@ -1847,7 +1851,7 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
                               {p.title}
                             </SpaLink>
                           </h3>
-                          <div className="foot"><span className="pr tnum">${pr} <small>USD / person</small></span><span className="arr" aria-hidden="true"><SxArrow /></span></div></div>
+                          <div className="foot"><span className="pr tnum">{CURRENCY_SYMBOL}{pr} <small>{CURRENCY} / person</small></span><span className="arr" aria-hidden="true"><SxArrow /></span></div></div>
                       </div>
                     </article>
                   );
@@ -1859,7 +1863,7 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
       </main>
 
       <div className="mbar">
-        <div className="p"><b className="tnum">${pp}</b><span>{booked} of {goAhead} joined · {confirmed ? "GoAhead" : "Forming"}</span></div>
+        <div className="p"><b className="tnum">{CURRENCY_SYMBOL}{pp}</b><span>{booked} of {goAhead} joined · {confirmed ? "GoAhead" : "Forming"}</span></div>
         <a className="btn gold sm" href="#book" onClick={(e) => { e.preventDefault(); document.getElementById("book")?.scrollIntoView({ behavior: "smooth" }); }}>Reserve<span className="chip"><SxArrow /></span></a>
       </div>
 
@@ -2459,9 +2463,9 @@ function EmbedWidget({ type, product }) {
         </div>
         <strong className="embed-title">{product.title}</strong>
         <div className="embed-price">
-          <span>from</span><b>${livePrice.toLocaleString()}</b><span>USD / person</span>
+          <span>from</span><b>{CURRENCY_SYMBOL}{livePrice.toLocaleString()}</b><span>{CURRENCY} / person</span>
         </div>
-        <p className="embed-hook">Shared price — it drops as the group grows, down to ${breakPrice.toLocaleString()} USD/person.</p>
+        <p className="embed-hook">Shared price — it drops as the group grows, down to {CURRENCY_SYMBOL}{breakPrice.toLocaleString()} {CURRENCY}/person.</p>
         <span className="embed-cta">View &amp; book<ArrowRight size={16} /></span>
         <span className="embed-brand">Powered by <b>Sawa&nbsp;Tours</b></span>
       </div>
@@ -3218,7 +3222,7 @@ function TourCard({ navigate, product }) {
               {product.title}
             </CardLink>
           </strong>
-          <span className="tour-card-price">${livePrice} USD</span>
+          <span className="tour-card-price">{CURRENCY_SYMBOL}{livePrice} {CURRENCY}</span>
         </div>
         <p className="tour-card-sub">{product.duration || product.vehicle} · {product.guide}</p>
         {stops && (
@@ -3240,8 +3244,8 @@ function TourCard({ navigate, product }) {
               Zero here means nobody has started a date yet, and the model's
               answer to that state is Be the Spark — say that instead. */}
           <span>{full ? "All dates full — check back soon"
-            : openDates(product).length ? `${pluralize(openDates(product).length, "open date")} · from $${breakPrice} USD at full group`
-            : `Start your own date · from $${breakPrice} USD at full group`}</span>
+            : openDates(product).length ? `${pluralize(openDates(product).length, "open date")} · from ${CURRENCY_SYMBOL}${breakPrice} ${CURRENCY} at full group`
+            : `Start your own date · from ${CURRENCY_SYMBOL}${breakPrice} ${CURRENCY} at full group`}</span>
         </div>
         {/* Decorative: the whole card is already the link above, so exposing
             this as a second control would just duplicate it in the tab order. */}
@@ -3282,7 +3286,7 @@ function PackageCard({ navigate, product }) {
               {product.title}
             </CardLink>
           </strong>
-          <span className="tour-card-price">from ${livePrice} USD</span>
+          <span className="tour-card-price">from {CURRENCY_SYMBOL}{livePrice} {CURRENCY}</span>
         </div>
         <p className="tour-card-sub">{cities.join(" → ")}</p>
         {!full && (
@@ -3295,7 +3299,7 @@ function PackageCard({ navigate, product }) {
           </div>
         )}
         <div className="tour-card-foot">
-          <span><Hotel size={13} />{(product.accommodationTiers || []).length || 1} hotel tier{((product.accommodationTiers || []).length || 1) > 1 ? "s" : ""} · from ${breakPrice} USD/pp</span>
+          <span><Hotel size={13} />{(product.accommodationTiers || []).length || 1} hotel tier{((product.accommodationTiers || []).length || 1) > 1 ? "s" : ""} · from {CURRENCY_SYMBOL}{breakPrice} {CURRENCY}/pp</span>
         </div>
         <span className="departure-link" aria-hidden="true">
           {full ? "Fully booked — view dates" : "View package"}
@@ -3439,7 +3443,7 @@ function AgencyDesk(props) {
                     </div>
                   </div>
                   <div className="rate-block">
-                    <strong>${rateFor(departure)}</strong>
+                    <strong>{CURRENCY_SYMBOL}{rateFor(departure)}</strong>
                     <span>{dIsPackage ? "from /pp" : "live rate"}</span>
                   </div>
                 </button>
@@ -3474,7 +3478,7 @@ function AgencyDesk(props) {
                   <select value={tierId} onChange={(event) => setTierId(event.target.value)}>
                     {tiers.map((t) => (
                       <option key={t.id} value={t.id}>
-                        {t.name}{t.perPersonSupplement ? ` (+$${t.perPersonSupplement}/pp)` : ""}
+                        {t.name}{t.perPersonSupplement ? ` (+/pp)` : ""}
                       </option>
                     ))}
                   </select>
@@ -3497,8 +3501,8 @@ function AgencyDesk(props) {
           </form>
 
           <div className="rate-card" id="pricing">
-            <div><span>{selectedIsPackage ? "Price per person" : "Shared live rate"}</span><strong>${selectedRate}</strong></div>
-            <div><span>Break price</span><strong>${selected.breakPrice || Math.round(selected.publishedRate * 0.8)}</strong></div>
+            <div><span>{selectedIsPackage ? "Price per person" : "Shared live rate"}</span><strong>{CURRENCY_SYMBOL}{selectedRate}</strong></div>
+            <div><span>Break price</span><strong>{CURRENCY_SYMBOL}{selected.breakPrice || Math.round(selected.publishedRate * 0.8)}</strong></div>
             <p>
               {selectedIsPackage
                 ? `${selected.depositPercent || 20}% deposit confirms each booking. Hotel tier and single supplement are included above.`
@@ -3528,7 +3532,7 @@ function AgencyDesk(props) {
                   {selectedIsPackage && pledge.accommodationTierName && (
                     <p className="manifest-sub">{pledge.accommodationTierName} · {pledge.roomingType || "double"} room</p>
                   )}
-                  {pledge.depositDue && <p>${pledge.depositDue} deposit · ${pledge.balanceDue} balance</p>}
+                  {pledge.depositDue && <p>{CURRENCY_SYMBOL}{pledge.depositDue} deposit · {CURRENCY_SYMBOL}{pledge.balanceDue} balance</p>}
                 </div>
                 <b>{pledge.seats} seat{pledge.seats > 1 ? "s" : ""}</b>
                 {pledge.agencyId === agencyId && selected.status !== "supplier_confirmed" && (

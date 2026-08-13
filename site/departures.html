@@ -66,7 +66,7 @@
     <div class="hero-meta rv" data-d="1" style="display:flex;gap:34px;margin-top:34px;flex-wrap:wrap">
       <div><b class="serif tnum" data-live-count aria-live="polite" style="font-family:'Fraunces',serif;font-size:1.8rem;color:var(--teal);display:block;line-height:1">—</b><span style="font-size:.84rem;color:var(--muted)">departures open</span></div>
       <div><b class="serif tnum" data-live-count aria-live="polite" style="font-family:'Fraunces',serif;font-size:1.8rem;color:var(--teal);display:block;line-height:1">—</b><span style="font-size:.84rem;color:var(--muted)">already at GoAhead</span></div>
-      <div><b class="serif tnum" style="font-family:'Fraunces',serif;font-size:1.8rem;color:var(--teal);display:block;line-height:1">$0</b><span style="font-size:.84rem;color:var(--muted)">to reserve a seat</span></div>
+      <div><b class="serif tnum" style="font-family:'Fraunces',serif;font-size:1.8rem;color:var(--teal);display:block;line-height:1">€0</b><span style="font-size:.84rem;color:var(--muted)">to reserve a seat</span></div>
     </div>
   </div>
 </section>
@@ -325,7 +325,7 @@
         +'<div class="core"><div class="media">'
         +'<img src="'+esc(img)+'" alt="'+esc(alt)+'" loading="lazy" />'
         +'<span class="badge form">'+(toGo===1?'Forming · 1 to go':'Forming · '+toGo+' to go')+'</span>'
-        +(price!==''?'<span class="price-tag"><b class="tnum">$'+price+'</b><small>USD &middot; per person</small></span>':'')
+        +(price!==''?'<span class="price-tag"><b class="tnum">€'+price+'</b><small>EUR &middot; per person</small></span>':'')
         +'</div><div class="body">'
         +'<span class="rt">'+esc(p.city)+' · '+esc(p.duration||'')+'</span>'
         +'<h3>'+esc(p.title)+'</h3>'
@@ -342,7 +342,7 @@
         +'<div class="pbar teal"><i style="width:'+pct+'"></i></div>'
         +'<p class="gap">'+esc(gapSentence(toGo))+'</p>'
         +'<p class="reassure">Reserving is free — you pay nothing until it confirms.</p></div>'
-        +'<div class="foot"><div class="when">'+(joined>=min-1?'Almost there':'Forming now')+'<b>$'+price+' USD / person</b></div>'
+        +'<div class="foot"><div class="when">'+(joined>=min-1?'Almost there':'Forming now')+'<b>€'+price+' EUR / person</b></div>'
         +'<a href="'+link+'" class="join">Reserve a seat'+ARR+'</a></div>'
         +'</div></div></article>'
       });
@@ -350,7 +350,7 @@
     allItems=items;
     render();
     wireTabs();
-    /* Target the two counters explicitly: '.hero-meta b' also matched the "$0
+    /* Target the two counters explicitly: '.hero-meta b' also matched the "€0
        to reserve a seat" figure, so the mapping depended on DOM order. */
     /* P3.4 — a count is rendered only when it is real AND above zero. A "0"
        here would be true and still wrong: it is a headline statistic, and the

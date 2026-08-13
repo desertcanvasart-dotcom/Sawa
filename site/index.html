@@ -1037,7 +1037,7 @@ section.block{padding:120px 0}
       :'<span class="st">'+(f.toGo===1?'1 seat to GoAhead':f.toGo+' seats to GoAhead')+'</span>';
     var seatsLeft=Math.max(0,f.max-f.joined);
     var fWhenTop=f.confirmed?(seatsLeft>0?'Almost full':'Running'):(starterMode?'Awaiting its first traveler':'Forming now');
-    var fWhenB=(f.confirmed&&seatsLeft>0)?(seatsLeft+' seat'+(seatsLeft===1?'':'s')+' left'):('$'+f.price+' USD / person');
+    var fWhenB=(f.confirmed&&seatsLeft>0)?(seatsLeft+' seat'+(seatsLeft===1?'':'s')+' left'):('€'+f.price+' EUR / person');
     var fCta=starterMode?'Start this date':'Reserve a seat';
     /* P3.3 — the featured card is the one place both states are reachable, so
        both get their sentence. State C states what is left; State B states the
@@ -1052,7 +1052,7 @@ section.block{padding:120px 0}
     featEl.innerHTML='<div class="core"><div class="media">'
       +'<img src="'+esc(f.img)+'" alt="'+esc(f.alt)+'" />'
       +fBadge
-      +(f.price!==''?'<span class="price"><b class="tnum">$'+f.price+'</b><small>USD &middot; per person</small></span>':'')
+      +(f.price!==''?'<span class="price"><b class="tnum">€'+f.price+'</b><small>EUR &middot; per person</small></span>':'')
       +'</div><div class="body">'
       +'<span class="rt">Featured · '+esc(f.p.city)+(f.p.duration?' · '+esc(f.p.duration):'')+' · '+esc(fmt(f.start))+'</span>'
       +'<h3>'+esc(f.p.title)+'</h3>'
@@ -1080,7 +1080,7 @@ section.block{padding:120px 0}
           +'<div class="thumb"><img src="'+esc(m.img)+'" alt="'+esc(m.alt)+'" loading="lazy" />'+(m.confirmed?'<span class="gdot"></span>':'')+'</div>'
           +'<div class="mid"><span class="rt">'+rt+'</span><h4>'+esc(m.p.title)+'</h4>'
           +'<div class="mini"><span class="pbar '+(m.confirmed?'gold':'teal')+'"><i style="width:'+m.pct+'"></i></span>'+lab+'</div></div>'
-          +'<div class="rt-col"><div class="pr tnum">$'+m.price+'<small>USD / person</small></div>'+RARR+'</div>'
+          +'<div class="rt-col"><div class="pr tnum">€'+m.price+'<small>EUR / person</small></div>'+RARR+'</div>'
           +'</a>';
       }).join('');
     }

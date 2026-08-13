@@ -13,6 +13,7 @@ import { BRAND, ORG_ID, SITE_ID, travelAgencySchema, websiteSchema } from "./bra
 // warm a URL the catalogue does not link to.
 import { tourSlug, tourPath } from "./slug.js";
 import { GROUP_MAX_WORD } from "../shared/group-size.js";
+import { CURRENCY, CURRENCY_SYMBOL } from "../shared/currency.js";
 // DIR-17.1 — the support-availability string has ONE owner. Four variants
 // were live saying four different things; this file rendered one of them.
 import { INTERIM_COPY } from "../shared/site-copy.js";
@@ -207,7 +208,7 @@ async function tourSchema(idOrSlug, url) {
     provider: { "@id": ORG_ID },
     offers: {
       "@type": "AggregateOffer",
-      priceCurrency: "USD",
+      priceCurrency: CURRENCY,
       lowPrice: low, highPrice: high,
       availability: "https://schema.org/InStock",
       url,
@@ -477,7 +478,7 @@ export async function sitemapXml() {
 // React's createRoot(...).render() replaces it on mount, so JS users never
 // see it while every crawler gets the real content.
 
-const money = (n) => (Number.isFinite(Number(n)) && Number(n) > 0 ? `$${Math.round(Number(n))}` : null);
+const money = (n) => (Number.isFinite(Number(n)) && Number(n) > 0 ? `${CURRENCY_SYMBOL}${Math.round(Number(n))}` : null);
 const dateLabel = (d) => {
   if (!d) return "";
   const dt = d instanceof Date ? d : new Date(/^\d{4}-\d{2}-\d{2}$/.test(String(d)) ? `${d}T12:00:00Z` : d);

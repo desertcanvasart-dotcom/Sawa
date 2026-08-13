@@ -62,7 +62,10 @@ export const BRAND = {
     "Abu Simbel", "Philae Temple", "Nile temples", "Egyptology",
   ],
   areaServed: ["Cairo", "Giza", "Luxor", "Aswan", "Egypt"],
-  priceRange: "$$", // TODO confirm tier
+  // schema.org's coarse price tier, not an amount — but it is rendered as a
+  // currency glyph and a visitor can see it in a rich result, so it carries the
+  // site's currency like everything else. TODO confirm tier.
+  priceRange: "€€",
 };
 
 export const ORG_ID = `${BRAND.url}/#organization`;

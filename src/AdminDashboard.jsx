@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
   LayoutDashboard, Package, CalendarDays, Users, ClipboardList, ScrollText,
-  Plus, Check, X, Search, Archive, ArchiveRestore, CircleDollarSign, ShieldCheck,
+  Plus, Check, X, Search, Archive, ArchiveRestore, Euro, ShieldCheck,
   TrendingUp, AlertTriangle, MapPin, Hotel, ArrowUpRight, ArrowLeft, Trash2, Pencil,
   Newspaper, Share2, Copy, Inbox, Eye, Clock3,
 } from "lucide-react";
@@ -12,7 +12,7 @@ import { RichText } from "./RichText";
 // early west of UTC — see src/dates.js.
 import { fmtDate } from "./dates.js";
 
-const money = (n) => (n == null ? "—" : "$" + Number(n).toLocaleString());
+const money = (n) => (n == null ? "—" : CURRENCY_SYMBOL + Number(n).toLocaleString());
 const isPkg = (x) => x?.type === "package";
 
 // Meeting points are now managed per-destination (Destinations section) and the
@@ -25,6 +25,7 @@ const seatsOf = (d) => (d.pledges || []).reduce((s, p) => (p?.status === "cancel
 // lacked the server's `|| "post"` fallback, so an untitled post previewed an
 // empty slug and was stored at /blog/post.
 import { blogSlug } from "../shared/blog-slug.js";
+import { CURRENCY, CURRENCY_SYMBOL } from "../shared/currency.js";
 const csv = (s) => String(s || "").split(",").map((x) => x.trim()).filter(Boolean);
 
 // Minimal flat navigation. One group, no header. Departures keeps a subtle
@@ -1054,8 +1055,8 @@ function PriceTierEditor({ on, setOn, rows, setRows, minSeats, maxSeats, publish
       {!on ? (
         <div className="tier-off">
           <p>
-            Prices slide evenly from <b>${publishedRate || 0}</b> at {minSeats} travellers to{" "}
-            <b>${breakPrice || Math.round((publishedRate || 0) * 0.8)}</b> at {maxSeats}.
+            Prices slide evenly from <b>{CURRENCY_SYMBOL}{publishedRate || 0}</b> at {minSeats} travellers to{" "}
+            <b>{CURRENCY_SYMBOL}{breakPrice || Math.round((publishedRate || 0) * 0.8)}</b> at {maxSeats}.
           </p>
           <button type="button" className="btn-ghost sm" onClick={enable}>Set a price for each group size</button>
         </div>
@@ -1066,7 +1067,7 @@ function PriceTierEditor({ on, setOn, rows, setRows, minSeats, maxSeats, publish
               <label className="tier-cell" key={s}>
                 <span>{s} {s === 1 ? "traveller" : "travellers"}{s === minSeats ? " · GoAhead" : ""}</span>
                 <div className="tier-input">
-                  <i>$</i>
+                  <i>{CURRENCY_SYMBOL}</i>
                   <input
                     type="number" min="1" inputMode="numeric"
                     value={priceAt(s)}
@@ -1083,7 +1084,7 @@ function PriceTierEditor({ on, setOn, rows, setRows, minSeats, maxSeats, publish
             </p>
           )}
           <div className="tier-actions">
-            <span className="tier-note">Per person, USD. A traveller pays the price for the group size their booking reaches.</span>
+            <span className="tier-note">Per person, {CURRENCY}. A traveller pays the price for the group size their booking reaches.</span>
             <button type="button" className="btn-ghost sm" onClick={() => { setOn(false); setRows([]); }}>
               Use the sliding price instead
             </button>
@@ -1302,7 +1303,7 @@ function ListingRequestsSection({ data, reload, flash }) {
                 <div className="listing-facts">
                   <span><MapPin size={13} />{p.city || "—"}</span>
                   <span><CalendarDays size={13} />{p.duration || "—"}</span>
-                  <span><CircleDollarSign size={13} />{money(p.publishedRate)}/person</span>
+                  <span><Euro size={13} />{money(p.publishedRate)}/person</span>
                   <span><Users size={13} />min {p.minSeats} · max {p.maxSeats}</span>
                   <span><Package size={13} />{(p.images?.length || 0)} photos</span>
                 </div>
@@ -1544,7 +1545,7 @@ function DeparturesSection({ data, reload, flash }) {
 
       <div className="table-wrap">
         <table className="dash-table">
-          <thead><tr><th>Route</th><th>When</th><th>Seats</th><th>Live $</th><th>Status</th><th></th></tr></thead>
+          <thead><tr><th>Route</th><th>When</th><th>Seats</th><th>Live {CURRENCY_SYMBOL}</th><th>Status</th><th></th></tr></thead>
           <tbody>
             {shown.map((d) => {
               const seats = seatsOf(d), min = d.minSeats || 4, ready = seats >= min;

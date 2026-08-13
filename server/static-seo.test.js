@@ -10,6 +10,7 @@ import {
   decodeEntities, pageTitle, metaContent, faqFromHtml,
   staticPageGraph, injectStaticSchema, cleanPath,
 } from "./static-seo.js";
+import { BRAND } from "./brand.js";
 
 const siteDir = join(dirname(fileURLToPath(import.meta.url)), "..", "site");
 const page = (name) => readFileSync(join(siteDir, name), "utf8");
@@ -185,13 +186,19 @@ test("dollar sequences survive injection intact", () => {
   // becomes "$", and "$&" / "$`" / "$1" splice pieces of the match in. This
   // shipped: the brand's priceRange of "$$" was reaching the page as "$".
   // Anything carrying a price or a currency symbol is exposed to it.
+  //
+  // The site now quotes in euros and priceRange reads "€€", which is not a
+  // special sequence — so the proof moved into the description below, which
+  // carries "$$", "$&", "$`" and "$1" deliberately. The priceRange assertion
+  // stays, against BRAND rather than a literal, so it keeps checking that the
+  // brand's value reaches the page unmangled whatever glyph it holds.
   const html = injectStaticSchema(
     doc(`<title>T</title><meta name="description" content="From $$100 — $& $\` $1 per person">`),
     "/about"
   );
   const graph = JSON.parse(/ld\+json">([\s\S]*?)<\/script>/.exec(html)[1])["@graph"];
   assert.equal(pageNode(graph).description, "From $$100 — $& $` $1 per person");
-  assert.equal(nodeOfType(graph, "TravelAgency").priceRange, "$$");
+  assert.equal(nodeOfType(graph, "TravelAgency").priceRange, BRAND.priceRange);
 });
 
 test("injection is inert when there is nothing to inject into", () => {

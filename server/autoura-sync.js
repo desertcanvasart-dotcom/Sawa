@@ -21,6 +21,7 @@
 
 import { createHmac } from "node:crypto";
 import { mapDeparture } from "./db/mappers.js";
+import { CURRENCY } from "../shared/currency.js";
 import { enrichDeparture, seatsTotal } from "./domain.js";
 import { recordSuccess, recordFailure } from "./effect-log.js";
 import { rethrowIfProgrammerError, surfaceProgrammerError } from "./errors.js";
@@ -100,7 +101,7 @@ export function buildDeparturePayload(inventory) {
       seatsTaken: Number(dep.seatsTaken) || 0,
       status: dep.status,
       priceFrom: Number(dep.livePrice) || Number(dep.publishedRate) || null,
-      currency: "USD",
+      currency: CURRENCY,
     },
   };
 }

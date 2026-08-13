@@ -8,6 +8,7 @@
 import "dotenv/config";
 import { pool } from "./db/index.js";
 import { BRAND } from "./brand.js";
+import { CURRENCY, CURRENCY_SYMBOL } from "../shared/currency.js";
 import { recordSuccess, recordFailure } from "./effect-log.js";
 import { rethrowIfProgrammerError, fireAndForget } from "./errors.js";
 
@@ -330,7 +331,7 @@ export function bookingConfirmationEmail({ to, customerName, route, dateLabel, s
   const text =
     `Hi ${customerName || ""},\n\nWe've recorded your booking for ${route} on ${dateLabel}.\n` +
     `Seats: ${seats}\n${bookingCode ? `Booking code: ${bookingCode}\n` : ""}` +
-    `Deposit at GoAhead: $${depositDue} USD\nBalance: $${balanceDue} USD (due ${balanceDueDate})\n\n` +
+    `Deposit at GoAhead: ${CURRENCY_SYMBOL}${depositDue} ${CURRENCY}\nBalance: ${CURRENCY_SYMBOL}${balanceDue} ${CURRENCY} (due ${balanceDueDate})\n\n` +
     `Nothing has been charged. Your seat is held free — the deposit only falls due once this ` +
     `date reaches its minimum travellers (GoAhead), and we'll email you when that happens.`;
   const html = shell(
@@ -339,8 +340,8 @@ export function bookingConfirmationEmail({ to, customerName, route, dateLabel, s
      ${panel(
        `${row("Seats:", esc(seats))}<br/>
         ${bookingCode ? `${row("Booking code:", esc(bookingCode))}<br/>` : ""}
-        ${row("Deposit at GoAhead:", `$${esc(depositDue)} USD`)}<br/>
-        ${row("Balance:", `$${esc(balanceDue)} USD`)} <span style="color:${C.muted}">(due ${esc(balanceDueDate)})</span>`
+        ${row("Deposit at GoAhead:", `${CURRENCY_SYMBOL}${esc(depositDue)} ${CURRENCY}`)}<br/>
+        ${row("Balance:", `${CURRENCY_SYMBOL}${esc(balanceDue)} ${CURRENCY}`)} <span style="color:${C.muted}">(due ${esc(balanceDueDate)})</span>`
      )}
      ${note(`<strong style="color:${C.ink}">Nothing has been charged.</strong> Your seat is held free — the deposit only falls due once this date reaches its minimum travellers, and we'll email you when it's GoAhead.`)}`,
     { eyebrow: "Seat held", preheader: `Your seat on ${route} is held — nothing charged yet` }
@@ -414,7 +415,7 @@ export function departureRequestDeclinedEmail({ to, customerName, route, dateLab
 // anything else. Internal: this goes to ops, never to a traveller.
 export function goAheadPaymentLinkEmail({ to, payload }) {
   const p = payload;
-  const money = (n) => (n == null ? "—" : `$${Number(n).toLocaleString()}`);
+  const money = (n) => (n == null ? "—" : `${CURRENCY_SYMBOL}${Number(n).toLocaleString()}`);
   const rows = p.travellers.map((t) =>
     `  ${t.name || "(no name recorded)"} — ${t.seats} seat(s) — ${t.contact || "(no contact)"}\n`
     + `      booking ${t.bookingCode || "—"} · total ${money(t.total)} · deposit due ${money(t.depositDue)}`
