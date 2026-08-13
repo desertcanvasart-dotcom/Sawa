@@ -527,6 +527,24 @@
 .sx .bk-sum .r b{font-family:'Fraunces',serif;color:var(--teal);font-weight:600;font-size:1.05rem}
 .sx .bk-sum .r.key b{font-size:1.3rem}
 .sx .bk-sum .nt{font-size:.78rem;color:var(--muted)}
+/* The cancellation schedule. Terms §13.2 binds it only where it was displayed
+   before reserving, so it sits inside the summary rather than under a link — a
+   disclosure a reader has to leave the page for is one they never saw.
+   `bk-policy`, NOT `bk-cancel`: that name is already the cancel BUTTON in the
+   "seat held" notice thirty lines below, whose rule strips borders. Named
+   `bk-cancel` first, this block lost its top rule to that button and leaked its
+   own font-size and padding onto it — two elements sharing a class and neither
+   looking as written. */
+.sx .bk-policy{font-size:.78rem;color:var(--muted);border-top:1px solid var(--line);padding-top:12px;margin-top:3px}
+.sx .bk-policy summary{cursor:pointer;font-weight:600;color:var(--teal);list-style:none}
+.sx .bk-policy summary::-webkit-details-marker{display:none}
+.sx .bk-policy summary::after{content:" +";font-weight:700}
+.sx .bk-policy[open] summary::after{content:" –"}
+.sx .bk-policy p{margin:10px 0 0;line-height:1.55}
+.sx .bk-policy table{width:100%;border-collapse:collapse;margin:10px 0 0}
+.sx .bk-policy th{text-align:left;font-weight:700;padding:0 8px 5px 0;color:var(--muted)}
+.sx .bk-policy td{padding:6px 8px 6px 0;border-top:1px solid var(--line);vertical-align:top;color:var(--ink)}
+.sx .bk-policy a{color:var(--teal);text-decoration:underline}
 .sx .book-cta{padding:22px 24px}
 .sx .book-cta .note{display:flex;align-items:center;gap:9px;font-size:.82rem;color:var(--muted);margin-top:14px;justify-content:center;text-align:center}
 .sx .book-cta .note svg{width:15px;height:15px;color:#2c7a57;flex:none}
