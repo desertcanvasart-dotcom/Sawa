@@ -360,15 +360,23 @@ export function bookingLookupView(input) {
     // which moved here after the page chose them from `confirmed` alone and told
     // a traveller on a cancelled date that the guide was booked.
     //
-    // `forming` only, and that is the published promise rather than a guess:
+    // `forming` only, and the authority is the TERMS rather than the marketing
+    // copy this was first written from:
     //
-    //   /goahead-promise  "You can cancel anytime while the group is still forming"
-    //   the tour FAQ      "Free holds can be released any time before confirmation.
-    //                      After GoAhead, each tour's cancellation policy applies"
+    //   §6   "Before GoAhead … you may cancel your reservation at any time
+    //         without a Sawa cancellation charge"
+    //   §13.1 "Before GoAhead — You may cancel at any time without a Sawa
+    //         cancellation charge. No Tour Price is captured."
+    //   §13.2 "After GoAhead — The cancellation schedule … applies"
     //
-    // So GoAhead is the boundary. After it the operator's policy governs and a
-    // one-click release would be Sawa waiving a term that is not Sawa's to
-    // waive. Before it there is nothing to weigh: no money has moved.
+    // So GoAhead is the boundary, and §13.2's schedule is SAWA'S: deposit at 46+
+    // days, the greater of the deposit or 50% at 30–45, 100% under 30. An
+    // Operating Partner's own schedule applies "only if it was clearly disclosed
+    // before reservation". The first version of this comment called it "the
+    // operator's policy", which is the common misreading and was live in four
+    // places — it hands off a term Sawa sets.
+    //
+    // Before GoAhead there is nothing to weigh: no money has moved.
     //
     // Deliberately NOT the rule the older DELETE-by-pledge-id route uses, which
     // stops only at `supplier_confirmed` and would let a traveller walk out of a

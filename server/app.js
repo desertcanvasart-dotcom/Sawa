@@ -1266,9 +1266,14 @@ app.post("/api/public/bookings/:code/cancel", writeLimiter, h(async (req, res) =
       return { alreadyDone: true, departureId: dep.id };
     }
     if (!view.canCancel) {
+      // Terms §13.2, and the wording matters: the default schedule is SAWA'S,
+      // not the operator's. An Operating Partner's own schedule applies "only
+      // if it was clearly disclosed before reservation". Saying "the operator's
+      // policy" hands off a term Sawa sets, to a traveller who is already
+      // unhappy and is about to go looking for it.
       throw new AppError(409,
-        "This date has reached GoAhead, so it follows the operator's cancellation policy. "
-        + "Contact us with your booking code and we'll take it from there.");
+        "This date has reached GoAhead, so our cancellation schedule applies — see section 13 of the Terms. "
+        + "Email hello@sawa.tours with your booking code and we'll take it from there.");
     }
 
     await c.query(`UPDATE pledges SET status='cancelled' WHERE id=$1`, [pledge.id]);
