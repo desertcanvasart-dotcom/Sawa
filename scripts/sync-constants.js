@@ -104,6 +104,36 @@ export function proseRules(min = DEFAULT_GO_AHEAD, max = MAX_GROUP_SIZE) {
     { label: "GoAhead threshold", n: min, re: new RegExp(`\\b(${NUM}) travell?ers?,? (?:and|confirms?|commit|join the same)\\b`, "gi") },
     { label: "GoAhead threshold", n: min, re: new RegExp(`\\b(?:when|once|reaches) (${NUM}) travell?ers?\\b`, "gi") },
     { label: "group ceiling", n: max, re: new RegExp(`\\bno (?:Sawa )?group (?:ever )?goes above (${NUM})\\b`, "gi") },
+    // A group range written with the WORD "to" rather than a dash.
+    //
+    // The rewrite rules above all require `[–—-]` between the numbers, and they
+    // anchor on "group of" before or "travellers/people/guests/seats" after. So
+    // `/how-it-works` carried "Departures are capped at a small size — usually 4
+    // to 8" and "A small mix of travelers — typically 4 to 8" for months while
+    // `check:constants` stayed green, on the same page that states a maximum of
+    // twelve twice. The ceiling was understated by four travellers in the copy
+    // and nothing could see it.
+    //
+    // REPORTED, not rewritten, and deliberately so. This is the same lesson the
+    // header records: a rewrite rule loose enough to catch an unanchored range
+    // is loose enough to eat "8 to 10 hours on the road". The group noun is
+    // required within 40 characters before the range — close enough to be about
+    // people, loose enough to survive the em-dash asides this site's copy likes.
+    // A false positive costs a human one look; a false rewrite corrupts a
+    // sentence nobody re-reads.
+    //
+    // Numerals and words are both accepted, so the corrected "four to twelve"
+    // is CHECKED rather than merely unmatched.
+    //
+    // The trailing lookahead is not decoration. /goahead reads "Dates on the
+    // departures board are one to three travelers AWAY from their own gold
+    // dot" — a range describing the GAP to the threshold, not the size of the
+    // group, and the first draft of this rule reported it as a ceiling of
+    // three. A permanently red check is worse than no check: it trains the next
+    // person to ignore the one that matters. So the gap phrasings are excluded
+    // by name rather than by loosening the anchor.
+    { label: "group ceiling", n: max,
+      re: new RegExp(`\\b(?:groups?|party|departures?|travell?ers?|people|guests|seats)\\b[^.<>]{0,40}?\\b${NUM}\\s+to\\s+(${NUM})\\b(?!\\s+(?:travell?ers?\\s+)?(?:away|short|shy|more|fewer|less)\\b)`, "gi") },
   ];
 }
 
