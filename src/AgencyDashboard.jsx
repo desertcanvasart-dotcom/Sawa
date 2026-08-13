@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { priceFromTiers } from "../shared/pricing.js";
+import { CURRENCY_SYMBOL } from "../shared/currency.js";
 import {
   LayoutDashboard, Ticket, ClipboardList, Users as UsersIcon, ShieldCheck, ArrowUpRight,
   Check, ChevronDown, AlertTriangle, CalendarDays, MapPin, Package, Hotel, ArrowLeft, Search, Clock3,
@@ -12,7 +13,7 @@ import { ProductEditor } from "./AdminDashboard";
 // early west of UTC — see src/dates.js.
 import { fmtDate } from "./dates.js";
 
-const money = (n) => (n == null ? "—" : "$" + Number(n).toLocaleString());
+const money = (n) => (n == null ? "—" : CURRENCY_SYMBOL + Number(n).toLocaleString());
 // Cancelled pledges have released their seats — excluded so seats-left and
 // live pricing here match what the server (domain.js) will actually charge.
 const seatsOf = (d) => (d.pledges || []).reduce((s, p) => (p?.status === "cancelled" ? s : s + Number(p.seats || 0)), 0);
@@ -367,7 +368,7 @@ function BookTours({ tourProducts, departures, agencyId, agencyName, agencyPax =
                 <strong>{p.title}</strong>
                 <span className="cat-meta"><MapPin size={13} />{isPkg(p) ? (p.cities || [p.city]).join(" → ") : p.city}{p.duration ? ` · ${p.duration}` : ""}</span>
                 <div className="cat-foot">
-                  <span className="cat-price">from ${from}{isPkg(p) ? "/pp" : ""}</span>
+                  <span className="cat-price">from {CURRENCY_SYMBOL}{from}{isPkg(p) ? "/pp" : ""}</span>
                   <span className="cat-dates">{p.dates.length ? `${p.dates.length} date${p.dates.length > 1 ? "s" : ""}` : "No dates yet"}</span>
                 </div>
               </div>
@@ -509,7 +510,7 @@ function TourBooking({ product, agencyId, agencyName, agencyPax = 0, onBack, onR
         <aside className="tb-book">
           <div className="tb-price">
             <span className="tb-price-cap">Live shared price</span>
-            <div className="tb-price-now"><strong>${pp}</strong><em>per person</em></div>
+            <div className="tb-price-now"><strong>{CURRENCY_SYMBOL}{pp}</strong><em>per person</em></div>
           </div>
           {!product.dates.length ? (
             <div className="dash-empty">No dates published yet. Ask the admin to publish a departure.</div>
@@ -539,7 +540,7 @@ function TourBooking({ product, agencyId, agencyName, agencyPax = 0, onBack, onR
                   <div className="tb-field">
                     <label htmlFor="bk-tier">Hotel &amp; cruise tier</label>
                     <select id="bk-tier" value={tierId} onChange={(e) => setTierId(e.target.value)}>
-                      {tiers.map((t) => <option key={t.id} value={t.id}>{t.name}{t.perPersonSupplement ? ` (+$${t.perPersonSupplement}/pp)` : ""}</option>)}
+                      {tiers.map((t) => <option key={t.id} value={t.id}>{t.name}{t.perPersonSupplement ? ` (+/pp)` : ""}</option>)}
                     </select>
                   </div>
                   <div className="tb-row">
@@ -581,9 +582,9 @@ function TourBooking({ product, agencyId, agencyName, agencyPax = 0, onBack, onR
               </div>
 
               <div className="tb-summary">
-                <div className="tb-sum-row"><span>${pp} × {nSeats} traveller{nSeats > 1 ? "s" : ""}</span><b>${total}</b></div>
-                <div className="tb-sum-row tb-sum-key"><span>Deposit at GoAhead ({depositPct}%)</span><b>${deposit}</b></div>
-                <div className="tb-sum-row"><span>Balance</span><b>${balance}</b></div>
+                <div className="tb-sum-row"><span>{CURRENCY_SYMBOL}{pp} × {nSeats} traveller{nSeats > 1 ? "s" : ""}</span><b>{CURRENCY_SYMBOL}{total}</b></div>
+                <div className="tb-sum-row tb-sum-key"><span>Deposit at GoAhead ({depositPct}%)</span><b>{CURRENCY_SYMBOL}{deposit}</b></div>
+                <div className="tb-sum-row"><span>Balance</span><b>{CURRENCY_SYMBOL}{balance}</b></div>
                 <p className="tb-sum-note">Deposit falls due once the date reaches GoAhead. Balance due {balanceDue}.</p>
               </div>
 

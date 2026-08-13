@@ -68,7 +68,7 @@ const itinerary = [
     description: "After breakfast, cross to Luxor's legendary West Bank. Enter the painted royal tombs of the Valley of the Kings, stand before the terraced Temple of Queen Hatshepsut set against the cliffs, and pause at the towering Colossi of Memnon. Return to the cruise and begin sailing south.",
     accommodation: "Nile Cruise", meals: "Breakfast, Lunch, Dinner",
     included: ["Valley of the Kings", "Temple of Queen Hatshepsut", "Colossi of Memnon"],
-    optional: ["Hot air balloon over the Valley of the Kings — USD120"],
+    optional: ["Hot air balloon over the Valley of the Kings — €120"],
     special: "The hot air balloon is weather-dependent; pickup is around 4:30–5am.",
   },
   {

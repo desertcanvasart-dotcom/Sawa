@@ -287,7 +287,7 @@
         +'<div class="core"><div class="media">'
         +'<img src="'+esc(img)+'" alt="'+esc(alt)+'" loading="lazy" />'
         +'<span class="badge go"><span class="d"></span>GoAhead · confirmed</span>'
-        +(price!==''?'<span class="price-tag"><b class="tnum">$'+price+'</b><small>USD &middot; per person</small></span>':'')
+        +(price!==''?'<span class="price-tag"><b class="tnum">€'+price+'</b><small>EUR &middot; per person</small></span>':'')
         +'</div><div class="body">'
         +'<span class="rt">'+esc(p.city)+' · '+esc(p.duration||'')+'</span>'
         +'<h3>'+esc(p.title)+'</h3>'
@@ -297,7 +297,7 @@
         +'<div class="prog"><div class="pt"><b>'+joined+' traveler'+(joined===1?'':'s')+' confirmed</b>'
         +'<span class="st ok">'+(left>0?(left+' seat'+(left===1?'':'s')+' left'):'Fully booked')+'</span></div>'
         +'<div class="pbar gold"><i style="width:'+pct+'"></i></div></div>'
-        +'<div class="foot"><div class="when">Confirmed to run<b>$'+price+' USD / person</b></div>'
+        +'<div class="foot"><div class="when">Confirmed to run<b>€'+price+' EUR / person</b></div>'
         +(left>0?('<a href="'+link+'" class="join">Join this trip'+ARR+'</a>'):'<span class="st ok">Full</span>')+'</div>'
         +'</div></div></article>'
       });

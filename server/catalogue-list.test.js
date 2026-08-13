@@ -7,6 +7,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { catalogueListHtml } from "./seo.js";
 import { tourPath } from "./slug.js";
+// The glyph comes from the authority, not from a literal here. A test that
+// hard-codes it is a fortieth copy of the currency, and it fails the day the
+// site's currency changes for a reason that has nothing to do with this seam —
+// which is exactly what happened when the site moved from dollars to euros.
+import { CURRENCY_SYMBOL as C } from "../shared/currency.js";
 
 const tour = {
   id: "tour_giza", type: "day_tour", title: "Giza Pyramids & Sphinx",
@@ -37,12 +42,12 @@ test("the seven selected columns are enough to render a row", () => {
   const html = catalogueListHtml([tour]);
   assert.match(html, /Cairo/);
   assert.match(html, /8 hours/);
-  assert.match(html, /from \$55\/person/);
+  assert.match(html, new RegExp(`from ${C}55/person`));
 });
 
 test("break_price wins over published_rate, and a missing one falls back", () => {
-  assert.match(catalogueListHtml([tour]), /from \$55\/person/);
-  assert.match(catalogueListHtml([pkg]), /from \$900\/person/);
+  assert.match(catalogueListHtml([tour]), new RegExp(`from ${C}55/person`));
+  assert.match(catalogueListHtml([pkg]), new RegExp(`from ${C}900/person`));
 });
 
 test("forming dates are counted per product and pluralised", () => {
