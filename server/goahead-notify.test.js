@@ -184,9 +184,9 @@ test("a forming booking may be released by its holder", () => {
 });
 
 test("a confirmed date is not a free self-service cancel", () => {
-  // The published rule: "Free holds can be released any time before
-  // confirmation. After GoAhead, each tour's cancellation policy applies."
-  // A one-click release after GoAhead would be Sawa waiving an operator's term.
+  // Terms §13.1/§13.2: free before GoAhead, and after it "the cancellation
+  // schedule … applies" — Sawa's own by default. A one-click release past
+  // GoAhead would waive a charge the Terms say is due.
   assert.equal(view({ departureStatus: "open", pledgeStatus: "confirmed", seatsBooked: 4 }).canCancel, false);
   assert.equal(view({ departureStatus: "supplier_confirmed", pledgeStatus: "confirmed" }).canCancel, false);
 });

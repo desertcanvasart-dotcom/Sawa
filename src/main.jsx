@@ -2770,7 +2770,7 @@ const FAQ_GROUPS = [
   {
     title: "Cancellations",
     items: [
-      { q: "Can I cancel my booking?", a: "Yes. Free holds can be released any time before confirmation. After GoAhead, each tour's cancellation policy applies and is shown on the tour page." },
+      { q: "Can I cancel my booking?", a: "Yes. Before GoAhead you can cancel free, any time, from your booking page or by email — nothing has been charged. After GoAhead our cancellation schedule applies; it's in section 13 of the Terms, and an operator's own schedule applies only where it was disclosed before you reserved." },
     ],
   },
 ];
@@ -2829,7 +2829,7 @@ const PRIVACY_SECTIONS = [
 const TERMS_SECTIONS = [
   { h: "The Sawa model", p: ["Sawa pools bookings from multiple travelers and agencies into shared group departures. Holding a seat is free and does not guarantee the tour will run. A departure becomes confirmed (GoAhead) only when it reaches the minimum number of travelers."] },
   { h: "Bookings & payment", p: ["You pay nothing to hold a seat. Once a date reaches GoAhead, the deposit shown at booking becomes due to confirm your place. The remaining balance is payable per the individual tour's terms.", "Prices are shown per person and may vary with group size, accommodation tier, and room type for packages."] },
-  { h: "Cancellations", p: ["You may release a free hold at any time before confirmation at no cost. After a date is confirmed, the cancellation policy shown on that tour applies. Sawa and its operators may cancel for reasons of safety, weather, or force majeure, in which case we will rebook or refund you."] },
+  { h: "Cancellations", p: ["You may release a free hold at any time before confirmation at no cost, from your booking page or by email. After a date is confirmed, the cancellation schedule in section 13 of our Terms applies — an operator's own schedule applies only where it was disclosed before you reserved. Sawa and its operators may cancel for reasons of safety, weather, or force majeure, in which case we will rebook or refund you."] },
   { h: "On the day", p: ["You are responsible for arriving at the listed meeting point at the stated time. Tours depart on schedule; missed departures due to late arrival are not refundable."] },
   { h: "Operators", p: ["Tours are delivered by licensed Egyptian operators. Sawa coordinates the shared booking; the operating agency is responsible for the conduct of the tour itself."] },
   { h: "Liability", p: ["To the extent permitted by law, Sawa's liability is limited to the amount you paid for the affected booking. Please ensure you have appropriate travel insurance."] },
@@ -2854,9 +2854,9 @@ function BookingLookupPage({ navigate, path }) {
     try {
       const r = await fetch(`${API_BASE}/public/bookings/${encodeURIComponent(c)}/cancel`, { method: "POST" });
       if (!r.ok) {
-        // The server's message is the useful one — it explains that a date past
-        // GoAhead follows the operator's policy, which a generic failure would
-        // hide behind "something went wrong".
+        // The server's message is the useful one — it names the schedule that
+        // applies past GoAhead and where to find it, which a generic failure
+        // would hide behind "something went wrong".
         const body = await r.json().catch(() => ({}));
         throw new Error(body.error || "We couldn't cancel that booking. Please contact us.");
       }
