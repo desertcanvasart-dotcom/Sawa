@@ -58,6 +58,47 @@ test("it fires — a ceiling in prose that domain.js does not hold", () => {
   assert.equal(found[0].expected, "twelve");
 });
 
+test("it fires — a group range written with the word 'to' rather than a dash", () => {
+  // The bug this rule exists for. /how-it-works carried BOTH of these while
+  // this check stayed green, on the same page that states a maximum of twelve
+  // twice: every rewrite rule requires a dash between the numbers, so a range
+  // spelled "4 to 8" was invisible. The ceiling was understated by four
+  // travellers in the copy and nothing could see it.
+  for (const live of [
+    "<p>Departures are capped at a small size — usually 4 to 8 — and your price never changes.</p>",
+    "<p>A small mix of travelers — typically 4 to 8 — with one licensed guide.</p>",
+  ]) {
+    const found = proseDrift(live);
+    assert.equal(found.length, 1, `went undetected: ${live}`);
+    assert.equal(found[0].found, "8");
+    assert.equal(found[0].expected, "twelve");
+  }
+
+  // The corrected copy is CHECKED, not merely unmatched — the rule accepts
+  // words as well as numerals, so "four to twelve" is read and found correct.
+  assert.deepEqual(proseDrift("<p>A small mix of travelers — four to twelve — with one guide.</p>"), []);
+});
+
+test("the 'to' range rule does not report a gap as a ceiling", () => {
+  // /goahead reads "Dates on the departures board are one to three travelers
+  // away from their own gold dot" — a range describing the distance TO the
+  // threshold, not the size of the group. The first draft reported it as a
+  // ceiling of three, which would have made this check permanently red, and a
+  // check that is always red is a check nobody reads.
+  assert.deepEqual(proseDrift(
+    "<p>Dates on the departures board are one to three travelers away from their gold dot.</p>"), []);
+  assert.deepEqual(proseDrift("<p>The group is two to three travelers short of GoAhead.</p>"), []);
+});
+
+test("the 'to' range rule does not touch ranges that are not group sizes", () => {
+  // Same guard the dash rules carry: a rule loose enough to catch every
+  // phrasing is loose enough to eat a duration or a price range.
+  for (const s of ["<p>8 to 10 hours on the road</p>", "<p>7 to 14 days before departure</p>",
+                   "<p>open 9 to 5</p>", "<p>from €45 to €68 per person</p>"]) {
+    assert.deepEqual(proseDrift(s), [], s);
+  }
+});
+
 test("it fires on digits and words alike, and reports the line the drift is on", () => {
   const found = proseDrift("<p>ok</p>\n<p>ok</p>\n<p>a date confirms when 9 travelers join the same date</p>");
   assert.ok(found.length, "a digit threshold was not detected");
