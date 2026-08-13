@@ -26,6 +26,7 @@ const seatsOf = (d) => (d.pledges || []).reduce((s, p) => (p?.status === "cancel
 // empty slug and was stored at /blog/post.
 import { blogSlug } from "../shared/blog-slug.js";
 import { CURRENCY, CURRENCY_SYMBOL } from "../shared/currency.js";
+import { depositPctFor } from "../shared/booking-policy.js";
 const csv = (s) => String(s || "").split(",").map((x) => x.trim()).filter(Boolean);
 
 // Minimal flat navigation. One group, no header. Departures keeps a subtle
@@ -618,7 +619,11 @@ export function ProductEditor({ type: typeProp, existing, destinations = [], dep
     maxSeats: existing?.maxSeats || 12,
     publishedRate: existing?.publishedRate || "",
     breakPrice: existing?.breakPrice || "",
-    depositPercent: existing?.depositPercent || (pkg ? 20 : 10),
+    // From the authority, not a literal. This read `pkg ? 20 : 10` and was
+    // missed when the package rate moved to 25% (#147), so every package
+    // created here would have been born on the superseded rate — quietly
+    // recreating the exact drift that migration 031 had just cleaned up.
+    depositPercent: existing?.depositPercent || depositPctFor({ type }),
     description: existing?.description || "",
     meetingPoint: existing?.meetingPoint || "",
     pickupNote: existing?.pickupNote || "",
