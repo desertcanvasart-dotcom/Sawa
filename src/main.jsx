@@ -2840,6 +2840,33 @@ function BookingLookupPage({ navigate, path }) {
   const initial = decodeURIComponent((path.match(/^\/booking\/([^/]+)/) || [])[1] || "");
   const [code, setCode] = useState(initial);
   const [state, setState] = useState({ status: "idle", data: null, error: "" });
+  // Two steps on purpose. This is the one destructive control a traveller can
+  // reach from a link in an email, and a mail client that prefetches links must
+  // not be able to release someone's seat — the confirm step is a POST that only
+  // a person can trigger.
+  const [confirming, setConfirming] = useState(false);
+  const [cancelState, setCancelState] = useState({ busy: false, error: "" });
+
+  async function cancelBooking() {
+    const c = (state.data?.code || code).trim();
+    if (!c) return;
+    setCancelState({ busy: true, error: "" });
+    try {
+      const r = await fetch(`${API_BASE}/public/bookings/${encodeURIComponent(c)}/cancel`, { method: "POST" });
+      if (!r.ok) {
+        // The server's message is the useful one — it explains that a date past
+        // GoAhead follows the operator's policy, which a generic failure would
+        // hide behind "something went wrong".
+        const body = await r.json().catch(() => ({}));
+        throw new Error(body.error || "We couldn't cancel that booking. Please contact us.");
+      }
+      setConfirming(false);
+      setCancelState({ busy: false, error: "" });
+      await lookup();               // re-read rather than guess the new state
+    } catch (err) {
+      setCancelState({ busy: false, error: err.message });
+    }
+  }
 
   async function lookup(e) {
     if (e) e.preventDefault();
@@ -2904,6 +2931,35 @@ function BookingLookupPage({ navigate, path }) {
                 alone, which is how a cancelled date came to read "the guide and
                 transport are booked". */}
             <p className="booking-note">{b.note}</p>
+            {/* Whether this is offered at all comes from the server (canCancel),
+                for the same reason the note does: only it knows the state, and
+                a page that decided for itself is how a cancelled date came to
+                read "the guide and transport are booked". */}
+            {b.canCancel && (
+              <div className="booking-cancel">
+                {!confirming ? (
+                  <button type="button" className="btn-pill" onClick={() => setConfirming(true)}>
+                    Cancel this booking
+                  </button>
+                ) : (
+                  <>
+                    <p className="booking-cancel-ask">
+                      Release {b.seats === 1 ? "your seat" : `all ${b.seats} seats`} on this date? Nothing was
+                      charged, so there is nothing to refund — and you can book again while places remain.
+                    </p>
+                    <div className="booking-cancel-actions">
+                      <button type="button" className="btn-pill primary" disabled={cancelState.busy} onClick={cancelBooking}>
+                        {cancelState.busy ? "Cancelling…" : "Yes, cancel my booking"}
+                      </button>
+                      <button type="button" className="btn-pill" disabled={cancelState.busy} onClick={() => setConfirming(false)}>
+                        Keep my seat
+                      </button>
+                    </div>
+                  </>
+                )}
+                {cancelState.error && <div className="form-error" role="alert">{cancelState.error}</div>}
+              </div>
+            )}
             {b.state === "date_cancelled" && b.routePath && (
               <SpaLink navigate={navigate} to={b.routePath} className="btn-pill primary">
                 See other dates on this route <ArrowRight size={16} />

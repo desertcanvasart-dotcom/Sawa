@@ -46,6 +46,21 @@ import { pool } from "./db/index.js";
 
 export const GOAHEAD = "departure.goahead";
 export const GOAHEAD_ALERT = "departure.goahead_alert";
+// The traveller-facing half of the same moment.
+//
+// DIR-20 solved "ops must be told to send a payment link" and left the other
+// promise unkept: the booking confirmation tells every traveller "we'll email
+// you when that happens", and reaching GoAhead automatically emailed them
+// nothing. `goAheadEmail` existed but fired only from the admin confirm route —
+// a DIFFERENT transition (`supplier_confirmed`), performed by a human who has
+// already noticed. So the promise was kept only when ops remembered.
+//
+// Deliberately a SECOND marker rather than a flag on the first: the two sends
+// have different recipients, different failure modes and different consequences
+// when they do not happen. Ops missing a prompt costs a payment link; a
+// traveller missing this is a written promise broken. Sharing one marker would
+// mean either send suppressing the other.
+export const GOAHEAD_NOTIFIED = "departure.goahead_notified";
 export const SYSTEM_ACTOR = "system@sawa.tours";
 
 // Called from refreshStatus, inside the transaction that writes the status.
@@ -57,12 +72,19 @@ export async function recordGoAhead(c, departureId, detail = {}) {
   );
 }
 
-// The queue: confirmed, and nobody has been told to make a payment link.
+// Departures that reached GoAhead and are still missing `marker`.
 //
 // Ordered oldest first — a date that has been waiting two days is more urgent
 // than one that confirmed a minute ago, and a queue that hides its backlog is
 // the shape this whole item exists to avoid.
-export async function pendingGoAheads(client = pool) {
+//
+// Parameterised by the marker rather than copied per queue. There are two sends
+// off this one transition — the ops payment-link prompt and the traveller's
+// "your trip is confirmed" — and the difference between them is a single action
+// string. A second hand-written copy of this query is how the two would drift
+// into disagreeing about what "confirmed" means, which is the defect class this
+// file was written to close.
+async function pendingFor(marker, client = pool) {
   const { rows } = await client.query(
     `SELECT d.*, a.confirmed_at
        FROM departures d
@@ -76,18 +98,38 @@ export async function pendingGoAheads(client = pool) {
            WHERE s.action = $2 AND s.entity = 'departure' AND s.entity_id = d.id::text
         )
       ORDER BY a.confirmed_at ASC`,
-    [GOAHEAD, GOAHEAD_ALERT]
+    [GOAHEAD, marker]
   );
   return rows;
 }
 
-export async function markAlerted(client, departureId, detail) {
+// The queue: confirmed, and nobody has been told to make a payment link.
+export const pendingGoAheads = (client = pool) => pendingFor(GOAHEAD_ALERT, client);
+
+// The queue: confirmed, and the travellers on it have not been told.
+//
+// A cancelled DEPARTURE drops out of both queues by the status filter above. A
+// cancelled PLEDGE is filtered at send time, not here, because the departure
+// still needs the rest of its travellers told — the MM1 defect, where a
+// traveller who had cancelled was emailed about a date they were no longer on.
+export const pendingGoAheadNotices = (client = pool) => pendingFor(GOAHEAD_NOTIFIED, client);
+
+async function mark(client, action, departureId, detail) {
   await client.query(
     `INSERT INTO audit_log (actor_email, actor_role, action, entity, entity_id, detail)
      VALUES ($1, 'system', $2, 'departure', $3, $4)`,
-    [SYSTEM_ACTOR, GOAHEAD_ALERT, String(departureId), JSON.stringify(detail)]
+    [SYSTEM_ACTOR, action, String(departureId), JSON.stringify(detail)]
   );
 }
+
+export const markAlerted = (client, departureId, detail) =>
+  mark(client, GOAHEAD_ALERT, departureId, detail);
+
+// Written only after the traveller emails actually went out, for the reason in
+// 20.3: the record is the queue, and a notice nobody received must not look
+// like one that was delivered.
+export const markNotified = (client, departureId, detail) =>
+  mark(client, GOAHEAD_NOTIFIED, departureId, detail);
 
 // 20.2 — everything needed to act, without opening anything else.
 //
@@ -159,6 +201,20 @@ export function reportAlerts({ intended, sent, log = console.log, error = consol
     `goahead-alert: ALERT SHORTFALL — ${sent} of ${intended} departure(s) alerted. `
     + `${intended - sent} confirmed departure(s) are waiting for a payment link that nobody has been asked to create. `
     + `They stay in the queue; re-run the job.`
+  );
+  return false;
+}
+
+// The same shape for the traveller notices, and a shortfall here is louder on
+// purpose: the confirmation email PROMISED this message. A departure counted
+// here is a set of named people who were told they would hear and did not.
+export function reportNotices({ intended, sent, log = console.log, error = console.error }) {
+  if (intended === 0) { log("goahead-notify: no departures awaiting a traveller notice"); return true; }
+  if (sent === intended) { log(`goahead-notify: ${sent} of ${intended} departure(s) notified`); return true; }
+  error(
+    `goahead-notify: NOTICE SHORTFALL — ${sent} of ${intended} departure(s) notified. `
+    + `Travellers on ${intended - sent} confirmed departure(s) were promised "we'll email you when that happens" `
+    + `and have not been. They stay in the queue; re-run the job.`
   );
   return false;
 }

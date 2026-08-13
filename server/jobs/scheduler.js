@@ -114,6 +114,18 @@ export function goAheadAlertDryRun(env = process.env) {
   return env.GOAHEAD_ALERT_DRY_RUN !== "0";
 }
 
+// Its own switch. The alert emails ops; this emails CUSTOMERS, and its first
+// live tick would reach every traveller who ever booked a departure that
+// confirmed — including people whose trip has already been and gone, because
+// the queue is derived from history rather than from a cursor.
+//
+// Go live by setting GOAHEAD_NOTIFY_DRY_RUN=0, after reading the dry-run
+// backlog. notify-goahead.js carries the SQL to backfill the marker if the
+// history should be treated as already told.
+export function goAheadNotifyDryRun(env = process.env) {
+  return env.GOAHEAD_NOTIFY_DRY_RUN !== "0";
+}
+
 export function auditWatchBase(env = process.env) {
   return (env.AUDIT_WATCH_BASE || env.APP_URL || "https://sawa.tours").replace(/\/$/, "");
 }
@@ -264,12 +276,26 @@ export function startJobScheduler(env = process.env) {
     return runGoAheadAlerts({ ...opts, dryRun: goAheadDry });
   });
 
+  // The fourth tick — the traveller half of the same moment. Hourly for the
+  // same reason and offset again, so all four never contend for the pooler.
+  //
+  // Its own dry-run switch, not the alert's: one emails ops and the other emails
+  // customers, and a single flag would mean going live with the internal prompt
+  // silently goes live with the customer mail too.
+  const noticeDry = goAheadNotifyDryRun(env);
+  const noticeTick = () => runSafely("goahead-notify", async (opts) => {
+    const { runGoAheadNotices } = await import("./notify-goahead.js");
+    return runGoAheadNotices({ ...opts, dryRun: noticeDry });
+  });
+
   const first = setTimeout(tick, FIRST_RUN_DELAY_MS);
   const repeat = setInterval(tick, DAY_MS);
   const auditFirst = setTimeout(auditTick, FIRST_RUN_DELAY_MS * 5);
   const auditRepeat = setInterval(auditTick, DAY_MS);
   const alertFirst = setTimeout(alertTick, FIRST_RUN_DELAY_MS * 9);
   const alertRepeat = setInterval(alertTick, HOUR_MS);
+  const noticeFirst = setTimeout(noticeTick, FIRST_RUN_DELAY_MS * 13);
+  const noticeRepeat = setInterval(noticeTick, HOUR_MS);
   // unref so neither timer holds the process open during a shutdown. Drift is
   // irrelevant for a rule measured in whole days.
   first.unref();
@@ -278,6 +304,8 @@ export function startJobScheduler(env = process.env) {
   auditRepeat.unref();
   alertFirst.unref();
   alertRepeat.unref();
+  noticeFirst.unref();
+  noticeRepeat.unref();
 
   console.log(`[jobs] scheduler on — cancel-unconfirmed in ${FIRST_RUN_DELAY_MS / 1000}s, then every 24h`);
   console.log(dryRun
@@ -287,9 +315,14 @@ export function startJobScheduler(env = process.env) {
   console.log(goAheadDry
     ? "[jobs] goahead-alert is DRY-RUN — it will log which confirmed departures need a payment link and email nobody. Set GOAHEAD_ALERT_DRY_RUN=0 to go live."
     : `[jobs] goahead-alert is LIVE — hourly, to ${env.GOAHEAD_ALERT_TO || "hello@sawa.tours"}.`);
+  console.log(noticeDry
+    ? "[jobs] goahead-notify is DRY-RUN — it will log which travellers would be told their date is confirmed and email nobody. "
+      + "The booking confirmation promises this email. Set GOAHEAD_NOTIFY_DRY_RUN=0 to go live, after checking the dry-run backlog."
+    : "[jobs] goahead-notify is LIVE — hourly, to the travellers on each confirmed departure.");
   return () => {
     clearTimeout(first); clearInterval(repeat);
     clearTimeout(auditFirst); clearInterval(auditRepeat);
     clearTimeout(alertFirst); clearInterval(alertRepeat);
+    clearTimeout(noticeFirst); clearInterval(noticeRepeat);
   };
 }

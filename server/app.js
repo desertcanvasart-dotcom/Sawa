@@ -57,7 +57,7 @@ import { blogSlug } from "../shared/blog-slug.js";
 import { cancelDepartureAndPledges, reportNotifications, CANCEL_REASONS } from "./departure-cancel.js";
 
 import { BRAND } from "./brand.js";
-import { startJobScheduler, jobSchedulerEnabled, cancelJobDryRun } from "./jobs/scheduler.js";
+import { startJobScheduler, jobSchedulerEnabled, cancelJobDryRun, goAheadNotifyDryRun } from "./jobs/scheduler.js";
 import { TOUR_TIMEZONE } from "./tz.js";
 import { cleanHtml, cleanItinerary } from "./sanitize.js";
 import { canonicalRedirect } from "./canonical.js";
@@ -362,6 +362,9 @@ function resolvedModes() {
     // log what it would do. The distinction matters more than "scheduler: on":
     // that says the job runs, this says whether it can reach a traveller.
     cancelJob: jobSchedulerEnabled() ? (cancelJobDryRun() ? "dry-run" : "live") : "off",
+    // The booking confirmation promises this email in writing, so "is it
+    // actually sending" is a question about a kept promise, not a switch.
+    goAheadNotify: jobSchedulerEnabled() ? (goAheadNotifyDryRun() ? "dry-run" : "live") : "off",
     autoura: process.env.AUTOURA_SYNC_URL && process.env.AUTOURA_SYNC_SECRET ? "on" : "off",
     // TT2 — how many departure syncs exhausted their retries since boot. A
     // non-zero count means the external system disagrees with Sawa about that
@@ -1198,6 +1201,93 @@ app.get("/api/public/bookings/:code", h(async (req, res) => {
     routePath,
     ...view,
   } });
+}));
+
+// Public: a traveller releases their own seat, using the code from their email.
+//
+// WHY A SECOND CANCEL ROUTE, AND WHY THIS ONE IS THE ADVERTISED ONE
+//
+// `DELETE /api/public/departures/:id/bookings/:pledgeId` already existed, and
+// nothing durable ever pointed at it. Its handle lived in a React `useState`,
+// so the cancel button vanished on the first page refresh: in practice a
+// traveller could cancel in the tab they booked in, for as long as they left it
+// open, and never again. The confirmation email carried no link at all.
+//
+// That route cannot become the link, for two reasons:
+//
+//   1. The pledge id is `pl_<departureId>_<time36><6 hex>` — 24 bits of
+//      randomness behind a guessable timestamp. Acceptable for a handle nobody
+//      is given; thin for an unauthenticated destructive action about to be
+//      mailed to every customer. The booking code is 8 characters from a
+//      31-character alphabet, ~8.5e11 combinations, and is ALREADY the key for
+//      the lookup route above and already in the traveller's inbox.
+//   2. It DELETEs the row, so the code stops resolving and the lookup page
+//      answers "no booking found" to someone who just cancelled. Marking the
+//      pledge `cancelled` lands in `booking_cancelled`, a state domain.js
+//      already computes and already has copy for: "This booking was cancelled.
+//      Nothing was charged for it."
+//
+// Cancelled rather than deleted also keeps the seat release honest: every seat
+// count in the system reads `status <> 'cancelled'`, so the seat is genuinely
+// returned to the departure while the record survives for ops and audit.
+//
+// Idempotent by design. A traveller who clicks the link twice, or whose mail
+// client prefetches it, gets the same 200 and the same state rather than a 404
+// telling them something went wrong.
+app.post("/api/public/bookings/:code/cancel", writeLimiter, h(async (req, res) => {
+  const code = String(req.params.code || "").trim();
+  if (!code) throw new AppError(422, "Booking code required.");
+
+  const result = await withTransaction(async (c) => {
+    // The pledge and its departure are read under the departure's lock, because
+    // whether this cancel is allowed depends on a seat count that another
+    // booking may be changing in the same instant.
+    const found = await c.query(
+      `SELECT p.id, p.status AS pledge_status, p.departure_id
+         FROM pledges p WHERE UPPER(p.booking_code) = UPPER($1) LIMIT 1`,
+      [code]
+    );
+    if (!found.rows.length) throw new AppError(404, "Booking not found.");
+    const pledge = found.rows[0];
+
+    const dep = await loadDeparture(c, pledge.departure_id, { forUpdate: true });
+    if (!dep) throw new AppError(404, "Booking not found.");
+
+    const view = bookingLookupView({
+      departureStatus: dep.status,
+      pledgeStatus: pledge.pledge_status,
+      seatsBooked: seatsTotal(dep.pledges),
+      goAhead: goAheadSeatsFor(dep),
+    });
+
+    // Already cancelled, either by the traveller or with the whole date. Report
+    // it as done rather than as an error — see the idempotency note above.
+    if (view.state === "booking_cancelled" || view.state === "date_cancelled") {
+      return { alreadyDone: true, departureId: dep.id };
+    }
+    if (!view.canCancel) {
+      throw new AppError(409,
+        "This date has reached GoAhead, so it follows the operator's cancellation policy. "
+        + "Contact us with your booking code and we'll take it from there.");
+    }
+
+    await c.query(`UPDATE pledges SET status='cancelled' WHERE id=$1`, [pledge.id]);
+    // The seat is released, so the departure may fall back below its minimum —
+    // the same recomputation the pledge-id route does.
+    await refreshStatus(c, dep.id);
+    return { alreadyDone: false, pledgeId: pledge.id, departureId: dep.id };
+  });
+
+  if (!result.alreadyDone) {
+    emitDepartureSync(result.departureId);
+    // Unauthenticated, so the actor is "public" — the booking code is the only
+    // thing that proved anything, and it is deliberately NOT logged in full.
+    await logAudit(req, {
+      action: "booking.cancel", entity: "pledge", entityId: result.pledgeId,
+      detail: { departureId: result.departureId, source: "public", via: "booking_code" },
+    });
+  }
+  res.json({ cancelled: true });
 }));
 
 // ---- Referrals / affiliate tracking -----------------------------------------
