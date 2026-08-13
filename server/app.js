@@ -57,7 +57,7 @@ import { blogSlug } from "../shared/blog-slug.js";
 import { cancelDepartureAndPledges, reportNotifications, CANCEL_REASONS } from "./departure-cancel.js";
 
 import { BRAND } from "./brand.js";
-import { startJobScheduler, jobSchedulerEnabled, cancelJobDryRun, goAheadNotifyDryRun } from "./jobs/scheduler.js";
+import { startJobScheduler, jobSchedulerEnabled, cancelJobDryRun, goAheadNotifyDryRun, goAheadAlertDryRun } from "./jobs/scheduler.js";
 import { TOUR_TIMEZONE } from "./tz.js";
 import { cleanHtml, cleanItinerary } from "./sanitize.js";
 import { canonicalRedirect } from "./canonical.js";
@@ -362,6 +362,12 @@ function resolvedModes() {
     // log what it would do. The distinction matters more than "scheduler: on":
     // that says the job runs, this says whether it can reach a traveller.
     cancelJob: jobSchedulerEnabled() ? (cancelJobDryRun() ? "dry-run" : "live") : "off",
+    // The ops payment-link prompt. Reported for the same reason `cancelJob` is:
+    // the queue is DERIVED, so a job that has never sent looks identical to one
+    // with nothing to send — from the outside, and from the logs. This line was
+    // missing while its sibling below was not, and the gap cost a day of "was
+    // that ever switched on?" with no way to answer it.
+    goAheadAlert: jobSchedulerEnabled() ? (goAheadAlertDryRun() ? "dry-run" : "live") : "off",
     // The booking confirmation promises this email in writing, so "is it
     // actually sending" is a question about a kept promise, not a switch.
     goAheadNotify: jobSchedulerEnabled() ? (goAheadNotifyDryRun() ? "dry-run" : "live") : "off",

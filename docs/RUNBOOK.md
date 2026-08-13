@@ -197,6 +197,108 @@ and `DRY_RUN=1` still makes it dry. This governs the unattended tick only.
 
 ---
 
+## Three switches that are merged and inert (13 August 2026)
+
+Everything below is on `main`, tested and deployed. None of it is doing anything
+yet, and none of it starts on its own. Each needs one human action.
+
+They are grouped because they share a failure mode: **merged is not applied, and
+a job that has never run looks exactly like a job with nothing to do.**
+
+### 1 — The package deposit is still 20% in the database
+
+`shared/booking-policy.js` returns 25 for a package, but `deposit_percent` is a
+STORED column on `tour_products` and `departures`. Stored beats default, so every
+package created before 13 August still quotes 20%. Migration `031` moves them.
+
+**Migrations do not run on deploy (B5).** Merging shipped a file.
+
+```bash
+DATABASE_URL=<production> npm run db:migrate
+```
+
+It re-runs every migration in order; the earlier ones are no-ops. `031` matches
+on `deposit_percent = 20`, so it moves only the superseded rate, is idempotent,
+and will not stomp a rate someone later sets deliberately.
+
+Check it landed:
+
+```bash
+PRODUCTION_DB_HOST=<host> DATABASE_URL=<production> npm run check:applied-schema
+```
+
+Then read a package's booking rail on the site. The deposit line should say
+**25%**, and the cancellation table beneath it should quote **12.5% / 25%** — the
+table derives from the departure's actual rate, so if those two disagree the
+migration reached one table and not the other.
+
+**It does not touch `pledges`, and must not.** Those hold the figure each
+traveller was quoted, shown and emailed (023, write-time capture). Anyone already
+booked keeps 20%.
+
+### 2 — Travellers are not being told their date reached GoAhead
+
+The booking confirmation says, in writing: *"we'll email you when that happens."*
+`goahead-notify` keeps that promise and is running **dry**.
+
+```
+GOAHEAD_NOTIFY_DRY_RUN=0
+```
+
+**Read the dry-run backlog first.** The queue is derived from history — every
+departure that ever confirmed and carries no `departure.goahead_notified` marker
+— so the first live tick reaches every traveller on every past departure,
+including trips that already happened. The hourly dry run prints exactly who it
+would email; that list is the thing to look at before flipping this.
+
+If the history should count as already told, `server/jobs/notify-goahead.js`
+carries the SQL to backfill the marker. Run it, then flip.
+
+### 3 — Has ops ever been prompted for a payment link?
+
+`goahead-alert` has been merged since DIR-20 and nobody has been able to answer
+this, because `/api/modes` reported `cancelJob` and `goAheadNotify` but not this
+one. It does now.
+
+```
+GOAHEAD_ALERT_DRY_RUN=0
+```
+
+Same backlog caveat, lower stakes: this mail goes to ops, not to travellers.
+
+### Checking any of the three
+
+`/api/modes` is the readout, and requires an admin session:
+
+```
+cancelJob     live | dry-run | off
+goAheadAlert  live | dry-run | off
+goAheadNotify live | dry-run | off
+```
+
+Without a session, the Railway deploy log prints the same state at boot — one
+line per job, naming the variable that changes it:
+
+```
+[jobs] goahead-notify is DRY-RUN — … Set GOAHEAD_NOTIFY_DRY_RUN=0 to go live.
+[jobs] goahead-alert  is LIVE — hourly, to hello@sawa.tours.
+```
+
+`scheduler: off` overrides all three — outside production the scheduler needs
+`ENABLE_JOB_SCHEDULER=1`, and none of these ticks at all without it.
+
+### Why all three default to inert
+
+The same asymmetry the cancel job records above. A switch left off leaves work
+undone, which is visible and fixable. A switch flipped early sends mail to real
+people or rewrites a rate someone was quoted, and neither can be recalled.
+
+The cost of that default is that it is easy to forget one is off — which is
+exactly what happened to `goahead-alert`, and why it is now reported in
+`/api/modes` rather than only in a log nobody reads.
+
+---
+
 ## A gate that cannot be passed will be routed around
 
 XX2. The pre-commit hook blocked every commit under Node 22, not only red ones.
