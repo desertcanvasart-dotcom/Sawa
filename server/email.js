@@ -10,9 +10,9 @@ import { pool } from "./db/index.js";
 import { BRAND } from "./brand.js";
 import { CURRENCY, CURRENCY_SYMBOL } from "../shared/currency.js";
 import {
-  CANCELLATION_BANDS, CANCELLATION_COLUMNS,
-  CANCELLATION_BEFORE_GOAHEAD, CANCELLATION_QUALIFIER,
-} from "../shared/cancellation-schedule.js";
+  cancellationBandsFor, chargeText, depositPctFor, CANCELLATION_COLUMNS,
+  CANCELLATION_BEFORE_GOAHEAD, CANCELLATION_QUALIFIER, CANCELLATION_CAP,
+} from "../shared/booking-policy.js";
 import { recordSuccess, recordFailure } from "./effect-log.js";
 import { rethrowIfProgrammerError, fireAndForget } from "./errors.js";
 
@@ -214,21 +214,21 @@ const button = (href, label) => `
 // Terms §13.2 binds the default schedule only where it was "repeated in the
 // booking confirmation", so this is disclosure and not decoration — it is
 // rendered as a <table> rather than prose so it survives a client that strips
-// styling, and every value comes from shared/cancellation-schedule.js.
+// styling, and every value comes from shared/booking-policy.js.
 //
 // Borders are on the cells rather than the table: Outlook ignores
 // border-collapse and doubles them otherwise.
-const cancellationTable = () => `
+const cancellationTable = (item) => `
   <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
          style="margin:0 0 8px;font-family:${SANS};font-size:13px;line-height:1.55">
     <tr>
       <td style="padding:0 10px 6px 0;color:${C.muted};font-weight:700">${esc(CANCELLATION_COLUMNS.when)}</td>
       <td style="padding:0 0 6px;color:${C.muted};font-weight:700">${esc(CANCELLATION_COLUMNS.charge)}</td>
     </tr>
-    ${CANCELLATION_BANDS.map((b) => `
+    ${cancellationBandsFor(item).map((b) => `
     <tr>
       <td style="padding:6px 10px 6px 0;border-top:1px solid ${C.line};color:${C.ink}">${esc(b.when)}</td>
-      <td style="padding:6px 0;border-top:1px solid ${C.line};color:${C.ink}">${esc(b.charge)}</td>
+      <td style="padding:6px 0;border-top:1px solid ${C.line};color:${C.ink}">${esc(chargeText(b, depositPctFor(item)))}</td>
     </tr>`).join("")}
   </table>`;
 
@@ -353,7 +353,10 @@ export function inviteEmail({ to, fullName, agencyName, tempPassword, role }) {
   return { to, subject, html, text, kind: "invite" };
 }
 
-export function bookingConfirmationEmail({ to, customerName, route, dateLabel, seats, depositDue, balanceDue, balanceDueDate, bookingCode }) {
+// `product` carries the type, and nothing else is read off it. Without it this
+// mail could only print one schedule, and would have printed the day-tour one
+// to everyone who booked a package.
+export function bookingConfirmationEmail({ to, customerName, route, dateLabel, seats, depositDue, balanceDue, balanceDueDate, bookingCode, product = null }) {
   const subject = `Booking received — ${route}`;
   // The one durable handle on this booking. Before this link existed, the only
   // way to release a seat was a button held in React state on the page the
@@ -375,8 +378,8 @@ export function bookingConfirmationEmail({ to, customerName, route, dateLabel, s
     // the booking confirmation". This is that repetition, so it goes in the
     // plain-text part too rather than only the HTML: a client showing text-only
     // must not be a client that was never told.
-    `\n\nCancellation\n${CANCELLATION_BEFORE_GOAHEAD}\n\nAfter GoAhead (${CANCELLATION_COLUMNS.when} — ${CANCELLATION_COLUMNS.charge}):\n` +
-    CANCELLATION_BANDS.map((b) => `  ${b.when} — ${b.charge}`).join("\n") +
+    `\n\nCancellation\n${CANCELLATION_BEFORE_GOAHEAD}\n${CANCELLATION_CAP}\n\nAfter GoAhead (${CANCELLATION_COLUMNS.when} — ${CANCELLATION_COLUMNS.charge}):\n` +
+    cancellationBandsFor(product).map((b) => `  ${b.when} — ${chargeText(b, depositPctFor(product))}`).join("\n") +
     `\n${CANCELLATION_QUALIFIER} Full terms: ${APP_URL}/terms`;
   const html = shell(
     "Booking received",
@@ -391,8 +394,9 @@ export function bookingConfirmationEmail({ to, customerName, route, dateLabel, s
      ${manageUrl ? `${button(manageUrl, "Check or cancel your booking")}` : ""}
      <p style="margin:0 0 8px;font-family:${SANS};font-size:13px;font-weight:700;color:${C.ink}">Cancellation</p>
      ${note(esc(CANCELLATION_BEFORE_GOAHEAD))}
-     ${note("If you cancel <strong>after</strong> GoAhead, when a charge may fall due:")}
-     ${cancellationTable()}
+     ${note(`<strong style="color:${C.ink}">${esc(CANCELLATION_CAP)}</strong>`)}
+     ${note("If you cancel <strong>after</strong> GoAhead:")}
+     ${cancellationTable(product)}
      ${note(`${esc(CANCELLATION_QUALIFIER)} <a href="${APP_URL}/terms" style="color:${C.muted}">Full terms</a>.`)}`,
     { eyebrow: "Seat held", preheader: `Your seat on ${route} is held — nothing charged yet` }
   );

@@ -1,8 +1,24 @@
 // Pure business rules: pricing, status, deposits. No DB, no HTTP — easy to test.
 import { zonedDateTimeToUtc } from "./tz.js";
+// The deposit rates, the balance timing, the type predicate and the
+// cancellation bands are ONE policy and live in shared/, where the browser
+// bundle and check:duplication can both see them. `isPackage` and
+// `balanceDueDate` were declared here AND in src/main.jsx — the second of
+// those two returning a different type under the same name.
+import {
+  isPackage, balanceDueDate, depositPctFor,
+  DAY_TOUR_DEPOSIT_PCT, PACKAGE_DEPOSIT_PCT,
+} from "../shared/booking-policy.js";
 
-export const DEFAULT_DAY_TOUR_DEPOSIT = 10;
-export const DEFAULT_PACKAGE_DEPOSIT = 20;
+// Re-exported so `import { isPackage } from "./domain.js"` keeps working
+// everywhere it is already written — the same courtesy domain.js already does
+// for the group-size constants.
+export { isPackage, balanceDueDate, depositPctFor } from "../shared/booking-policy.js";
+
+// Kept under their old names: these were the published rates and several
+// tests and modules name them. The PACKAGE rate moved 20 -> 25 on 13 Aug 2026.
+export const DEFAULT_DAY_TOUR_DEPOSIT = DAY_TOUR_DEPOSIT_PCT;
+export const DEFAULT_PACKAGE_DEPOSIT = PACKAGE_DEPOSIT_PCT;
 
 // The booking conditions say "every Sawa departure runs with a minimum of 4 and
 // a maximum of 12 travelers", and the how-it-works page says the same. That is
@@ -63,12 +79,8 @@ export function capacityError(minSeats, maxSeats) {
 export const DEFAULT_PACKAGE_CONFIRM_DEADLINE_DAYS = 30;
 export const DEFAULT_DAY_TOUR_CONFIRM_DEADLINE_DAYS = 7;
 
-export function isPackage(item) {
-  return item && item.type === "package";
-}
-
 export function defaultDepositFor(item) {
-  return isPackage(item) ? DEFAULT_PACKAGE_DEPOSIT : DEFAULT_DAY_TOUR_DEPOSIT;
+  return depositPctFor(item);
 }
 
 
@@ -133,17 +145,6 @@ export function packagePriceFor(product, departure, seats, { roomingType = "doub
   return Math.round(base + tierSupplement + singleSupplement);
 }
 
-// The day before departure. This is pure calendar arithmetic — no instant, no
-// zone — so it is done wholly in UTC. The previous version built a LOCAL noon
-// Date, stepped back a local day, then read it back with toISOString(), which
-// is UTC: at offsets beyond +12 local noon is already the previous day in UTC,
-// so the balance fell due a day early.
-export function balanceDueDate(date) {
-  const d = new Date(`${date}T00:00:00Z`);
-  if (Number.isNaN(d.getTime())) return date;
-  d.setUTCDate(d.getUTCDate() - 1);
-  return d.toISOString().slice(0, 10);
-}
 
 // Adds the computed livePrice + normalised fields to a departure for responses.
 export function enrichDeparture(departure, product = null) {
@@ -291,7 +292,11 @@ export function computePledgePricing(departure, product, { seats, roomingType, a
     depositPercent,
     depositDue,
     balanceDue: bookingTotal - depositDue,
-    balanceDueDate: balanceDueDate(departure.startDate || departure.date),
+    // Type-aware since 13 Aug 2026: 48 hours before a day tour, 14 days before a
+    // package. It was one universal "day before departure" for both. Captured on
+    // the pledge at write time, so an existing booking keeps the date it was
+    // quoted rather than silently moving.
+    balanceDueDate: balanceDueDate(departure.startDate || departure.date, departure),
     ...extra,
   };
 }

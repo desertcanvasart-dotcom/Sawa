@@ -49,9 +49,10 @@ import { livePriceFor, priceFromTiers, clampPrice } from "../shared/pricing.js";
 import { cleanRefCode } from "../shared/ref-code.js";
 import { CURRENCY, CURRENCY_SYMBOL, CURRENCY_PROSE } from "../shared/currency.js";
 import {
-  CANCELLATION_BANDS, CANCELLATION_COLUMNS,
-  CANCELLATION_BEFORE_GOAHEAD, CANCELLATION_QUALIFIER,
-} from "../shared/cancellation-schedule.js";
+  isPackage, balanceDueDate, depositPctFor, cancellationBandsFor, chargeText,
+  CANCELLATION_COLUMNS, CANCELLATION_BEFORE_GOAHEAD,
+  CANCELLATION_QUALIFIER, CANCELLATION_CAP,
+} from "../shared/booking-policy.js";
 // Lazy-loaded so the heavy authenticated portal (admin desk + TipTap editor)
 // is split out of the public bundle and never downloaded by visitors.
 const LoginGate = lazy(() => import("./LoginGate").then((m) => ({ default: m.LoginGate })));
@@ -128,10 +129,6 @@ function routeStopsFor(product) {
     if (stops.length >= 2) return stops;
   }
   return null;
-}
-
-function isPackage(item) {
-  return item && item.type === "package";
 }
 
 // NN2.1 kept `goAheadSeatsFor` under a local alias `goAheadFor`, because this
@@ -258,16 +255,12 @@ function depositFor(total, percent = 10) {
   return Math.ceil(Number(total || 0) * (Number(percent || 10) / 100));
 }
 
-// Mirrors server/domain.js. Pure calendar arithmetic, done wholly in UTC: the
-// previous version stepped back a LOCAL day and then read the result back with
-// toISOString() (UTC), so a viewer at an offset beyond +12 — New Zealand, Fiji,
-// Samoa — was shown the balance falling due a day early.
-function balanceDueDate(date) {
-  const departureDate = new Date(`${date}T00:00:00Z`);
-  if (Number.isNaN(departureDate.getTime())) return formatDate(date, { alwaysYear: true });
-  departureDate.setUTCDate(departureDate.getUTCDate() - 1);
-  // A payment deadline always carries its year, even for this calendar year.
-  return formatDate(departureDate.toISOString().slice(0, 10), { alwaysYear: true });
+// The arithmetic is shared/booking-policy.js; this only formats it. The two
+// used to be one function declared twice under the same name, returning an ISO
+// date on the server and a formatted string here — a collision, not a copy.
+function balanceDueLabel(date, item) {
+  const due = balanceDueDate(date, item);
+  return due ? formatDate(due, { alwaysYear: true }) : formatDate(date, { alwaysYear: true });
 }
 
 // The sidebar used to show a deposit figure directly above an enabled "Reserve
@@ -286,21 +279,39 @@ function balanceDueDate(date) {
 // The bands only ever bite after a date confirms, and burying the free case
 // under three fee rows would misdescribe the offer at the exact moment someone
 // is deciding. Closed by default, one click, and no numbers invented here: every
-// value comes from shared/cancellation-schedule.js, which terms.html is checked
+// value comes from shared/booking-policy.js, which terms.html is checked
 // against.
-function CancellationSchedule() {
+function CancellationSchedule({ tour, depositPct }) {
+  // Per type, because the two schedules genuinely differ: a day tour is free
+  // until 48 hours out and a package until 30 days, and the deposits they are
+  // charged against are 10% and 25%. Both come from the same authority as the
+  // deposit the traveller sees two lines above, so the table cannot quote a
+  // percentage the booking summary contradicts.
+  // The bands come from the type; the PERCENTAGE comes from the booking summary
+  // three lines above, not from the type default.
+  //
+  // They are not always the same number. `deposit_percent` is captured on the
+  // departure, so a package published before the rate moved to 25% still quotes
+  // 20% — correctly, because that is what its travellers were told. Deriving the
+  // table from the type instead put "Deposit retained (25% of the Tour Price)"
+  // directly beneath "Deposit at GoAhead (20%)", on one panel, in one glance.
+  const bands = cancellationBandsFor(tour);
   return (
     <details className="bk-policy">
       <summary>Cancelling: free before GoAhead</summary>
       <p>{CANCELLATION_BEFORE_GOAHEAD}</p>
-      <p>If you cancel <b>after</b> GoAhead, when a charge may fall due:</p>
+      {/* The cap first. It is the good news, and it is what a reader needs
+          before a table of dates: the exposure is the deposit, never the
+          Tour Price. */}
+      <p><b>{CANCELLATION_CAP}</b></p>
+      <p>If you cancel <b>after</b> GoAhead:</p>
       <table>
         <thead>
           <tr><th>{CANCELLATION_COLUMNS.when}</th><th>{CANCELLATION_COLUMNS.charge}</th></tr>
         </thead>
         <tbody>
-          {CANCELLATION_BANDS.map((b) => (
-            <tr key={b.when}><td>{b.when}</td><td>{b.charge}</td></tr>
+          {bands.map((b) => (
+            <tr key={b.when}><td>{b.when}</td><td>{chargeText(b, depositPct)}</td></tr>
           ))}
         </tbody>
       </table>
@@ -1632,7 +1643,7 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
               <section className="sec rv" style={{ borderBottom: 0, marginBottom: 0 }}>
                 <h2>Good to know</h2>
                 <div className="faq">
-                  {[["When is the trip confirmed?", "The moment this date reaches its own GoAhead number — the count is shown on the date itself."], ["Can I pick my own date?", "Yes — use 'start your own' in the dates list. Our team gives it a quick review, it opens for other travelers to join, and nothing is charged unless it reaches GoAhead."], ["What if a date doesn't fill?", "You're never charged for a trip that doesn't run. Nothing is taken before GoAhead, so there is nothing to refund — move to another date or walk away."], ["Who will I travel with?", "A small mix of travelers pooled from operators registered with the Egyptian Ministry of Tourism & Antiquities — a shared group with one licensed guide, never a freelancer."], ["How do payments work?", "You hold a seat now — nothing is charged. Once the date is confirmed we send a secure payment link for the deposit: 10% on a day tour, 20% on a package. The balance is due before you travel."]].map(([q, a]) => (
+                  {[["When is the trip confirmed?", "The moment this date reaches its own GoAhead number — the count is shown on the date itself."], ["Can I pick my own date?", "Yes — use 'start your own' in the dates list. Our team gives it a quick review, it opens for other travelers to join, and nothing is charged unless it reaches GoAhead."], ["What if a date doesn't fill?", "You're never charged for a trip that doesn't run. Nothing is taken before GoAhead, so there is nothing to refund — move to another date or walk away."], ["Who will I travel with?", "A small mix of travelers pooled from operators registered with the Egyptian Ministry of Tourism & Antiquities — a shared group with one licensed guide, never a freelancer."], ["How do payments work?", "You hold a seat now — nothing is charged. Once the date is confirmed we send a secure payment link for the deposit: 10% on a day tour, 25% on a package. The balance is due before you travel."]].map(([q, a]) => (
                     <div className="q" key={q}><h4>{q}</h4><p>{a}</p></div>
                   ))}
                 </div>
@@ -1812,7 +1823,7 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
                       <div className="r"><span>{CURRENCY_SYMBOL}{pp} {CURRENCY} × {nSeats}</span><b>{CURRENCY_SYMBOL}{total} {CURRENCY}</b></div>
                       <div className="r key"><span>Deposit at GoAhead ({depositPct}%)</span><b>{CURRENCY_SYMBOL}{deposit} {CURRENCY}</b></div>
                       <div className="r"><span>Balance</span><b>{CURRENCY_SYMBOL}{balance} {CURRENCY}</b></div>
-                      <div className="nt">All amounts in {CURRENCY_PROSE}. Nothing is charged today. Balance due {dep ? balanceDueDate(dep.date) : "before departure"}.</div>
+                      <div className="nt">All amounts in {CURRENCY_PROSE}. Nothing is charged today. Balance due {dep ? balanceDueLabel(dep.startDate || dep.date, tour) : "before departure"}.</div>
                       {/* The deadline is the other half of the GoAhead promise:
                           the date by which this either confirms or is canceled
                           and everyone refunded. Showing it before someone
@@ -1824,7 +1835,7 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
                         </div>
                       )}
                       <PaymentTimeline />
-                      <CancellationSchedule />
+                      <CancellationSchedule tour={tour} depositPct={depositPct} />
                     </div>}
                     <div className="book-cta">
                       {reqMode ? (
