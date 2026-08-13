@@ -705,6 +705,7 @@ app.post("/api/admin/departures", requireAuth, requireRole("super_admin", "ops_s
       dateLabel: departure.startDate ? `${departure.startDate} – ${departure.endDate}` : departure.date,
       seats: travelerSeats, depositDue: result.pricing.depositDue, balanceDue: result.pricing.balanceDue,
       balanceDueDate: result.pricing.balanceDueDate, bookingCode: result.bookingCode,
+      product: departure,
     }));
   }
   res.status(201).json({ departure: presentDeparture(departure, req.user), bookingCode: result.bookingCode });
@@ -1057,6 +1058,7 @@ app.post("/api/public/departures/:id/bookings", writeLimiter, h(async (req, res)
       dateLabel: d.startDate ? `${d.startDate} – ${d.endDate}` : d.date, seats: input.seats,
       depositDue: result.booking.depositDue, balanceDue: result.booking.balanceDue,
       balanceDueDate: result.booking.balanceDueDate, bookingCode: result.booking.bookingCode,
+      product: d,
     }));
   }
   // The direct traveller gets their own booking receipt back in full.

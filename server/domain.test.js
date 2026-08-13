@@ -36,9 +36,12 @@ test("goAheadSeatsFor uses minSeats", () => {
   assert.equal(goAheadSeatsFor({ minSeats: 8 }), 8);
   assert.equal(goAheadSeatsFor({}), 4);
 });
-test("defaultDepositFor: 10% day tour, 20% package", () => {
+test("defaultDepositFor: 10% day tour, 25% package", () => {
+  // The package rate moved 20 -> 25 on 13 Aug 2026, with the cancellation
+  // schedule. `deposit_percent` is captured on the pledge at write time, so
+  // bookings taken before that keep the 20% they were quoted.
   assert.equal(defaultDepositFor(dayTour), 10);
-  assert.equal(defaultDepositFor(pkg), 20);
+  assert.equal(defaultDepositFor(pkg), 25);
 });
 test("seatsTotal sums pledge seats", () => {
   assert.equal(seatsTotal([{ seats: 2 }, { seats: 3 }]), 5);
@@ -109,11 +112,16 @@ test("packagePriceFor: base + tier + single supplement", () => {
   assert.equal(packagePriceFor(pkg, pkg, 4, { roomingType: "single", tierId: "superior" }), 820);
   assert.equal(packagePriceFor(pkg, pkg, 4, { roomingType: "double", tierId: "standard" }), 540);
 });
-test("balanceDueDate is the day before", () => {
-  assert.equal(balanceDueDate("2026-07-10"), "2026-07-09");
-  assert.equal(balanceDueDate("2026-01-01"), "2025-12-31");
-  assert.equal(balanceDueDate("2026-03-01"), "2026-02-28"); // non-leap year
-  assert.equal(balanceDueDate("2028-03-01"), "2028-02-29"); // leap year
+test("balanceDueDate: 48 hours before a day tour, 14 days before a package", () => {
+  // It was one universal "day before departure" for both until 13 Aug 2026.
+  assert.equal(balanceDueDate("2026-07-10", dayTour), "2026-07-08");
+  assert.equal(balanceDueDate("2026-07-10", pkg), "2026-06-26");
+  // Month, year and leap-day boundaries, on both windows.
+  assert.equal(balanceDueDate("2026-01-01", dayTour), "2025-12-30");
+  assert.equal(balanceDueDate("2026-03-01", dayTour), "2026-02-27"); // non-leap
+  assert.equal(balanceDueDate("2028-03-01", dayTour), "2028-02-28"); // leap
+  assert.equal(balanceDueDate("2026-03-01", pkg), "2026-02-15");
+  assert.equal(balanceDueDate("2028-03-05", pkg), "2028-02-20");    // spans 29 Feb
 });
 test("balanceDueDate does not shift with the host timezone", () => {
   // Regression: local-noon arithmetic read back through toISOString() (UTC) put
@@ -123,8 +131,8 @@ test("balanceDueDate does not shift with the host timezone", () => {
   try {
     for (const tz of ["Africa/Cairo", "UTC", "America/Los_Angeles", "Pacific/Auckland", "Pacific/Kiritimati"]) {
       process.env.TZ = tz;
-      assert.equal(balanceDueDate("2026-01-01"), "2025-12-31", `shifted under TZ=${tz}`);
-      assert.equal(balanceDueDate("2026-07-10"), "2026-07-09", `shifted under TZ=${tz}`);
+      assert.equal(balanceDueDate("2026-01-01", dayTour), "2025-12-30", `shifted under TZ=${tz}`);
+      assert.equal(balanceDueDate("2026-07-10", pkg), "2026-06-26", `shifted under TZ=${tz}`);
     }
   } finally {
     if (previous === undefined) delete process.env.TZ; else process.env.TZ = previous;

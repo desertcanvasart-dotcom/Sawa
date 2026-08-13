@@ -623,7 +623,7 @@ The distinguishing model is "GoAhead": travellers from different bookings are po
 
 ## Pricing and booking model
 
-Prices are shown per person and fall as a group fills (a shared cost). Holding a seat is free; a deposit (typically 10% for day tours, 20% for packages) is due once a date reaches GoAhead. Booking and questions are handled on the site or via WhatsApp.
+Prices are shown per person and fall as a group fills (a shared cost). Holding a seat is free; a deposit (10% for day tours, 25% for packages) is due once a date reaches GoAhead. Booking and questions are handled on the site or via WhatsApp.
 
 ## Contact
 
