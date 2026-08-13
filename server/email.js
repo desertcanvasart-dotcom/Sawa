@@ -328,12 +328,22 @@ export function inviteEmail({ to, fullName, agencyName, tempPassword, role }) {
 
 export function bookingConfirmationEmail({ to, customerName, route, dateLabel, seats, depositDue, balanceDue, balanceDueDate, bookingCode }) {
   const subject = `Booking received — ${route}`;
+  // The one durable handle on this booking. Before this link existed, the only
+  // way to release a seat was a button held in React state on the page the
+  // traveller booked from — gone on the first refresh, so in practice there was
+  // no way to cancel at all after closing the tab. The code is what /booking
+  // already looks bookings up by, so one link answers "where is my date?" and
+  // "let me out" both.
+  const manageUrl = bookingCode ? `${APP_URL}/booking/${encodeURIComponent(bookingCode)}` : null;
   const text =
     `Hi ${customerName || ""},\n\nWe've recorded your booking for ${route} on ${dateLabel}.\n` +
     `Seats: ${seats}\n${bookingCode ? `Booking code: ${bookingCode}\n` : ""}` +
     `Deposit at GoAhead: ${CURRENCY_SYMBOL}${depositDue} ${CURRENCY}\nBalance: ${CURRENCY_SYMBOL}${balanceDue} ${CURRENCY} (due ${balanceDueDate})\n\n` +
     `Nothing has been charged. Your seat is held free — the deposit only falls due once this ` +
-    `date reaches its minimum travellers (GoAhead), and we'll email you when that happens.`;
+    `date reaches its minimum travellers (GoAhead), and we'll email you when that happens.` +
+    (manageUrl
+      ? `\n\nCheck your date or cancel your seat, free, any time before GoAhead:\n${manageUrl}`
+      : "");
   const html = shell(
     "Booking received",
     `<p style="margin:0 0 20px">We've recorded your booking for <strong>${esc(route)}</strong> on ${esc(dateLabel)}.</p>
@@ -343,7 +353,9 @@ export function bookingConfirmationEmail({ to, customerName, route, dateLabel, s
         ${row("Deposit at GoAhead:", `${CURRENCY_SYMBOL}${esc(depositDue)} ${CURRENCY}`)}<br/>
         ${row("Balance:", `${CURRENCY_SYMBOL}${esc(balanceDue)} ${CURRENCY}`)} <span style="color:${C.muted}">(due ${esc(balanceDueDate)})</span>`
      )}
-     ${note(`<strong style="color:${C.ink}">Nothing has been charged.</strong> Your seat is held free — the deposit only falls due once this date reaches its minimum travellers, and we'll email you when it's GoAhead.`)}`,
+     ${note(`<strong style="color:${C.ink}">Nothing has been charged.</strong> Your seat is held free — the deposit only falls due once this date reaches its minimum travellers, and we'll email you when it's GoAhead.`)}
+     ${manageUrl ? `${button(manageUrl, "Check or cancel your booking")}
+     <p style="margin:0;font-family:${SANS};font-size:13px;color:${C.muted}">Cancelling is free any time before GoAhead.</p>` : ""}`,
     { eyebrow: "Seat held", preheader: `Your seat on ${route} is held — nothing charged yet` }
   );
   return { to, subject, html, text, kind: "booking_confirmation" };

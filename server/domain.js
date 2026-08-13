@@ -355,6 +355,26 @@ export function bookingLookupView(input) {
     statusLabel: BOOKING_STATE_LABEL[state],
     statusTone: state === "confirmed" ? "go" : state === "forming" ? "pending" : "cancelled",
     note: bookingStateNote(state, goAhead),
+    // Whether the traveller may release this seat themselves, decided HERE and
+    // not in the page — the same argument as `showProgress` and `note`, both of
+    // which moved here after the page chose them from `confirmed` alone and told
+    // a traveller on a cancelled date that the guide was booked.
+    //
+    // `forming` only, and that is the published promise rather than a guess:
+    //
+    //   /goahead-promise  "You can cancel anytime while the group is still forming"
+    //   the tour FAQ      "Free holds can be released any time before confirmation.
+    //                      After GoAhead, each tour's cancellation policy applies"
+    //
+    // So GoAhead is the boundary. After it the operator's policy governs and a
+    // one-click release would be Sawa waiving a term that is not Sawa's to
+    // waive. Before it there is nothing to weigh: no money has moved.
+    //
+    // Deliberately NOT the rule the older DELETE-by-pledge-id route uses, which
+    // stops only at `supplier_confirmed` and would let a traveller walk out of a
+    // confirmed date for free. That route is unadvertised and stays as it is;
+    // this is the one a link in an email will reach.
+    canCancel: state === "forming",
   };
 }
 
