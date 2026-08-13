@@ -226,19 +226,21 @@
       <p>You may cancel at any time without a Sawa cancellation charge. No Tour Price is captured.</p>
       <p>You may cancel a Forming reservation yourself from your booking page &mdash; the link is in your booking confirmation &mdash; or by email to <a href="mailto:hello@sawa.tours">hello@sawa.tours</a>. A cancellation made from your booking page takes effect immediately and releases your seat to other travelers; we confirm it on screen and the booking remains visible under its code.</p>
       <h3>13.2 After GoAhead</h3>
-      <!-- OPEN, 13 Aug 2026. This sentence asserts two disclosures that the
-           build does not yet make: no schedule is displayed on a departure
-           before reserving, and the booking confirmation email contains no
-           schedule at all. Verified against the rendered email and the booking
-           rail on that date.
+      <!-- CLOSED, 13 Aug 2026. This sentence asserted two disclosures the build
+           did not make: no schedule was displayed before reserving, and the
+           confirmation email contained none. Both now exist, and the clause is
+           unchanged — the fix was to make it true rather than to weaken it.
 
-           Deliberately NOT reworded here. Dropping "displayed before you
-           reserve" would make the default schedule bind regardless of whether
-           it was ever shown, which strengthens Sawa's position against the
-           traveler — a commercial and legal decision, not a copy fix. The
-           honest resolutions are to display the schedule, or to change this
-           clause knowingly. Raised with the client and held pending their
-           answer on the bands. -->
+           The table below is NOT the authority. shared/cancellation-schedule.js
+           is, because the same bands are now on the booking rail and in the
+           email, and neither can import from this file.
+           server/cancellation-schedule.test.js parses this table and fails the
+           build if it disagrees.
+
+           Reported and never rewritten, deliberately: this is legal text, and a
+           regex that changed the wrong cell would change what Sawa may charge,
+           silently, in the document that governs the transaction. Edit it here
+           by hand and the check will confirm the rest agrees. -->
       <p>The cancellation schedule displayed before you reserve, and repeated in the booking confirmation, applies. An Operating Partner&rsquo;s special cancellation schedule applies only if it was clearly disclosed before reservation. If no special schedule is disclosed, the following default schedule applies:</p>
       <div class="tscroll">
         <table>

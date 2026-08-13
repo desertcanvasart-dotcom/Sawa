@@ -48,6 +48,10 @@ import { seatsTotal, goAheadSeatsFor } from "../shared/departure-state.js";
 import { livePriceFor, priceFromTiers, clampPrice } from "../shared/pricing.js";
 import { cleanRefCode } from "../shared/ref-code.js";
 import { CURRENCY, CURRENCY_SYMBOL, CURRENCY_PROSE } from "../shared/currency.js";
+import {
+  CANCELLATION_BANDS, CANCELLATION_COLUMNS,
+  CANCELLATION_BEFORE_GOAHEAD, CANCELLATION_QUALIFIER,
+} from "../shared/cancellation-schedule.js";
 // Lazy-loaded so the heavy authenticated portal (admin desk + TipTap editor)
 // is split out of the public bundle and never downloaded by visitors.
 const LoginGate = lazy(() => import("./LoginGate").then((m) => ({ default: m.LoginGate })));
@@ -271,6 +275,40 @@ function balanceDueDate(date) {
 // explicit that the deposit only falls due once the departure reaches GoAhead
 // and the booking is confirmed, so every surface that quotes a deposit shows
 // this alongside it: the four steps, in order, with the charge point named.
+// The cancellation schedule, beside the price a traveller is about to commit to.
+//
+// Terms §13.2 binds the default schedule only where it was "displayed before you
+// reserve". It was displayed nowhere, so the clause was asserting a disclosure
+// the build did not make; this is that disclosure.
+//
+// A <details> rather than an always-open table, and the summary carries the part
+// that applies to almost everyone who ever cancels — before GoAhead it is free.
+// The bands only ever bite after a date confirms, and burying the free case
+// under three fee rows would misdescribe the offer at the exact moment someone
+// is deciding. Closed by default, one click, and no numbers invented here: every
+// value comes from shared/cancellation-schedule.js, which terms.html is checked
+// against.
+function CancellationSchedule() {
+  return (
+    <details className="bk-policy">
+      <summary>Cancelling: free before GoAhead</summary>
+      <p>{CANCELLATION_BEFORE_GOAHEAD}</p>
+      <p>If you cancel <b>after</b> GoAhead, when a charge may fall due:</p>
+      <table>
+        <thead>
+          <tr><th>{CANCELLATION_COLUMNS.when}</th><th>{CANCELLATION_COLUMNS.charge}</th></tr>
+        </thead>
+        <tbody>
+          {CANCELLATION_BANDS.map((b) => (
+            <tr key={b.when}><td>{b.when}</td><td>{b.charge}</td></tr>
+          ))}
+        </tbody>
+      </table>
+      <p>{CANCELLATION_QUALIFIER} <a href="/terms">Full terms</a>.</p>
+    </details>
+  );
+}
+
 function PaymentTimeline() {
   return (
     <ol className="pay-timeline" aria-label="When you pay">
@@ -1786,6 +1824,7 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
                         </div>
                       )}
                       <PaymentTimeline />
+                      <CancellationSchedule />
                     </div>}
                     <div className="book-cta">
                       {reqMode ? (
