@@ -39,6 +39,7 @@ const MIGRATIONS = [
   { name: "028_payment_window", file: "schema_028_payment_window.sql" },
   { name: "029_agency_relationship", file: "schema_029_agency_relationship.sql" },
   { name: "030_pledges_paid", file: "schema_030_pledges_paid.sql" },
+  { name: "031_package_deposit_25", file: "schema_031_package_deposit_25.sql" },
 ];
 
 async function main() {
