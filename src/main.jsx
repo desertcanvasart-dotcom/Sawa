@@ -2732,6 +2732,9 @@ function PartnersPage({ navigate, operatorsByProduct = {}, customerCalendars = [
               {p.licensedSince
                 ? `Licensed by the Egyptian Ministry of Tourism and Antiquities since ${p.licensedSince}. `
                 : "Licensed by the Egyptian Ministry of Tourism and Antiquities. "}
+              {p.etaaUrl && (
+                <>A member of the <a href={p.etaaUrl} target="_blank" rel="noopener noreferrer">Egyptian Travel Agents Association</a>. </>
+              )}
               This is a company responsible for delivering Sawa departures.
             </p>
             {p.itineraries.length > 0 && (

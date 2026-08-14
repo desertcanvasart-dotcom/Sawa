@@ -606,9 +606,13 @@ export function partnersListHtml(partners) {
   // before the window cuts the token off (~34 characters with this phrasing).
   // A longer name would trip the audit — which is the audit asking a human to
   // look at a new company name, not a defect here.
+  // The ETAA sentence links the partner's own entry in the public register —
+  // the membership claim made checkable at its source (anchor text and link
+  // per the client, 15 Aug 2026). Rendered only when the record carries the
+  // registration; a partner without one gets no unlinked membership claim.
   return `<ul>${partners.map((p) => `<li>
   <h2>${esc(p.name)}</h2>
-  <p>Licensed by the Ministry of Tourism and Antiquities${p.licensedSince ? ` since ${esc(p.licensedSince)}` : ""}.${p.verified ? ` Verified by Sawa${p.verifiedAt ? ` · ${esc(dateLabel(p.verifiedAt))}` : ""}.` : ""}${p.itineraries ? ` Operates ${p.itineraries === 1 ? "one itinerary" : `${p.itineraries} itineraries`} on Sawa.` : ""}</p>
+  <p>Licensed by the Ministry of Tourism and Antiquities${p.licensedSince ? ` since ${esc(p.licensedSince)}` : ""}.${p.etaaUrl ? ` A member of the <a href="${esc(p.etaaUrl)}" target="_blank" rel="noopener noreferrer">Egyptian Travel Agents Association</a>.` : ""}${p.verified ? ` Verified by Sawa${p.verifiedAt ? ` · ${esc(dateLabel(p.verifiedAt))}` : ""}.` : ""}${p.itineraries ? ` Operates ${p.itineraries === 1 ? "one itinerary" : `${p.itineraries} itineraries`} on Sawa.` : ""}</p>
 </li>`).join("")}</ul>`;
 }
 
