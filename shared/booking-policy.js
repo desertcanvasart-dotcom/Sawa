@@ -209,3 +209,37 @@ export function durationShapeError(type, duration) {
   }
   return null;
 }
+
+// ---------------------------------------------------------------------------
+// Does this package include a Nile cruise?
+//
+// The cruiser is always five-star — Sawa uses no four-star boat at any price —
+// and the hotel-tier supplement buys hotel nights only. That sentence belongs
+// beside the tier selector, where the money decision is made, but ONLY on a
+// package that actually has a cruise: on one that does not it would be a claim
+// about something the traveller is not buying.
+//
+// It reads the inclusions as well as the itinerary, and that is not belt-and-
+// braces. "Egypt End to End" has twelve itinerary days and NO `accommodation` or
+// `overnight` value on any of them — the fields are empty — while its inclusions
+// say "3 nights Nile cruise (full board)". An itinerary-only test returns false
+// for it, which is the one package most in need of the line: it is the longest,
+// the most expensive, and the one whose cruise is easiest to miss among Cairo,
+// Aswan and Hurghada nights.
+//
+// Free text is a weak signal, and it is the right weight here: this decides
+// whether a clarifying sentence appears, never what anyone is charged. A false
+// negative hides a helpful line; nothing breaks.
+export function hasNileCruise(product) {
+  if (!isPackage(product)) return false;
+  const haystack = [
+    ...(product.itinerary || []).flatMap((d) => [d?.accommodation, d?.overnight]),
+    ...(product.included || []),
+  ].filter(Boolean).join(" · ");
+  return /\bcruises?\b|\bcruiser\b/i.test(haystack);
+}
+
+// Said once, next to the hotel tiers. Both halves are the client's: the boat
+// never changes, and the supplement is for the hotel.
+export const CRUISE_STANDARD_NOTE =
+  "Hotel tier only — your Nile cruiser is five-star on every option.";

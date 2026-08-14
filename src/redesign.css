@@ -535,6 +535,7 @@
    `bk-cancel` first, this block lost its top rule to that button and leaked its
    own font-size and padding onto it — two elements sharing a class and neither
    looking as written. */
+.sx .bk-tier-note{display:block;margin-top:6px;font-size:.74rem;line-height:1.5;color:var(--muted)}
 .sx .bk-policy{font-size:.78rem;color:var(--muted);border-top:1px solid var(--line);padding-top:12px;margin-top:3px}
 .sx .bk-policy summary{cursor:pointer;font-weight:600;color:var(--teal);list-style:none}
 .sx .bk-policy summary::-webkit-details-marker{display:none}

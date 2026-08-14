@@ -116,7 +116,7 @@ const product = {
   included: [
     "Arrival and departure airport transfers",
     "Domestic flights Cairo → Luxor and Aswan → Cairo",
-    "4 nights Cairo hotel and 4 nights Nile cruise (full board)",
+    "4 nights Cairo hotel and 4 nights aboard a five-star Nile cruiser (full board)",
     "8 breakfasts, 5 lunches, 7 dinners — including 3 dinners at local restaurants",
     "Licensed Egyptologist guide throughout",
     "Guided sightseeing and entrance fees to every site in the itinerary",
