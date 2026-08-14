@@ -190,6 +190,20 @@ async function findTourProduct(idOrSlug) {
   return row;
 }
 
+// The path a product SHOULD live at.
+//
+// `type` decides the prefix, so correcting a product's type MOVES its URL.
+// Minya went from /package/<slug> to /tour/<slug> when it was reclassified, and
+// the old address kept serving the page with its own self-referential canonical
+// — the same product live at two URLs, each claiming to be the original.
+//
+// Uses findTourProduct, so it rides the existing memo and its negative cache: an
+// unknown slug is exactly what a crawler hammers.
+export async function canonicalTourPath(slug) {
+  const row = await findTourProduct(slug);
+  return row ? tourPath(row) : null;
+}
+
 async function tourSchema(idOrSlug, url) {
   const p = await findTourProduct(idOrSlug);
   if (!p) return null;

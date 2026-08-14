@@ -4,6 +4,7 @@ import { z } from "zod";
 import { pool, withTransaction, withDepartureWrites } from "./db/index.js";
 import { pendingGoAheads, alertPayload } from "./goahead-alert.js";
 import { refreshStatus } from "./departure-status.js";
+import { durationShapeError } from "../shared/booking-policy.js";
 import { cleanRefCode } from "../shared/ref-code.js";
 import { mapAgency, mapCity, mapProduct, mapDeparture, mapPledge } from "./db/mappers.js";
 import {
@@ -43,6 +44,7 @@ import { fileURLToPath } from "node:url";
 import {
   buildHead, buildBody, robotsTxt, sitemapXml, llmsTxt, llmsFullTxt,
   inlineScriptJson, sliceBootstrapForRoute, clearSeoCaches, catalogueRoutes,
+  canonicalTourPath,
 } from "./seo.js";
 import { emitDepartureSync, unavailableDates, syncDivergences } from "./autoura-sync.js";
 import { effectReport, recordFailure } from "./effect-log.js";
@@ -643,6 +645,15 @@ app.post("/api/admin/departures", requireAuth, requireRole("super_admin", "ops_s
     const depMaxSeats = Number(body.maxSeats || product.maxSeats);
     const capacityProblem = capacityError(depMinSeats, depMaxSeats);
     if (capacityProblem) throw new AppError(422, capacityProblem);
+
+  // The type and the duration must describe the same trip. Minya shipped as a
+  // `package` reading "1 day · 15 hours" and nothing objected — so it carried a
+  // package's deposit, balance date, cancellation schedule and 30-day
+  // confirmation deadline for months, and the only visible symptom was an odd
+  // duration string. Same shape as the capacity check above: refused in words an
+  // operator can act on, before anything is written.
+  const durationProblem = durationShapeError(type, body.duration);
+  if (durationProblem) throw new AppError(422, durationProblem);
     if (travelerSeats > depMaxSeats) {
       throw new AppError(422, `This date holds at most ${depMaxSeats} travellers.`);
     }
@@ -2524,7 +2535,19 @@ app.use(h(async (req, res, next) => {
   const m = req.path.match(/^\/(tour|package)\/([^/]+)\/?$/);
   if (!m) return next();
   const seg = decodeURIComponent(m[2]);
-  if (!/^(tour|pkg)_/.test(seg)) return next(); // already a clean slug
+  if (!/^(tour|pkg)_/.test(seg)) {
+    // A clean slug, but possibly under the WRONG PREFIX. `type` decides whether
+    // a product lives at /tour or /package, so correcting a mistyped product
+    // moves its URL — and the old one kept answering 200 with a canonical
+    // pointing at itself. Two live URLs for one product, each claiming to be the
+    // original, which is the duplicate a search engine has to pick between.
+    //
+    // Not specific to the one product that caused it: any future retype gets
+    // this, which is the difference between a fix and a patch.
+    const canonical = await canonicalTourPath(seg);
+    if (!canonical || canonical === req.path) return next();
+    return res.redirect(301, canonical);
+  }
   const r = await pool.query("SELECT id, title, city, type FROM tour_products WHERE id=$1 AND active IS NOT FALSE LIMIT 1", [seg]);
   if (!r.rows.length) return next();
   const kind = r.rows[0].type === "package" ? "package" : "tour";
