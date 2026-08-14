@@ -672,21 +672,6 @@ app.post("/api/admin/departures", requireAuth, requireRole("super_admin", "ops_s
     const capacityProblem = capacityError(depMinSeats, depMaxSeats);
     if (capacityProblem) throw new AppError(422, capacityProblem);
 
-  // The type and the duration must describe the same trip. Minya shipped as a
-  // `package` reading "1 day · 15 hours" and nothing objected — so it carried a
-  // package's deposit, balance date, cancellation schedule and 30-day
-  // confirmation deadline for months, and the only visible symptom was an odd
-  // duration string. Same shape as the capacity check above: refused in words an
-  // operator can act on, before anything is written.
-  const durationProblem = durationShapeError(type, body.duration);
-  if (durationProblem) throw new AppError(422, durationProblem);
-
-  // The request window, if this listing sets one. Mirrors the CHECK in 037 so
-  // the operator is told what is wrong in words rather than meeting a
-  // constraint violation.
-  const windowProblem = requestWindowError(body.requestMinLeadDays, body.requestMaxHorizonDays);
-  if (windowProblem) throw new AppError(422, windowProblem);
-  const blankNum = (v) => (v === "" || v == null ? null : Number(v));
     if (travelerSeats > depMaxSeats) {
       throw new AppError(422, `This date holds at most ${depMaxSeats} travellers.`);
     }
@@ -763,7 +748,12 @@ app.post("/api/admin/departures", requireAuth, requireRole("super_admin", "ops_s
 
 // Shared upsert used by both the admin editor and the agency listing editor.
 // `review` carries the approval state to write: { status, agencyId, submittedBy, reviewedBy }.
-async function upsertTourProduct(c, body, review) {
+// Exported for upsert-execution.test.js, which EXECUTES it against a stub
+// client — the only kind of test that catches an out-of-scope identifier.
+// Two consecutive production breaks in this one function shipped under a
+// green suite (#163's arity, then the #162 scope error): reading the SQL as
+// text catches the first class, only execution catches the second.
+export async function upsertTourProduct(c, body, review) {
   const title = String(body.title || "").trim();
   if (!title) throw new AppError(422, "Title is required.");
   const type = body.type === "package" ? "package" : "day_tour";
@@ -787,6 +777,29 @@ async function upsertTourProduct(c, body, review) {
     Number(body.maxSeats || MAX_GROUP_SIZE)
   );
   if (capacityProblem) throw new AppError(422, capacityProblem);
+
+  // The type and the duration must describe the same trip. Minya shipped as a
+  // `package` reading "1 day · 15 hours" and nothing objected — so it carried a
+  // package's deposit, balance date, cancellation schedule and 30-day
+  // confirmation deadline for months, and the only visible symptom was an odd
+  // duration string. Same shape as the capacity check above: refused in words an
+  // operator can act on, before anything is written.
+  //
+  // This block (and the window check below) lived here from #151 until #162
+  // moved it into the admin-departures route by accident — where `type` does
+  // not exist, and where `blankNum` was declared while the INSERT below kept
+  // using it. Every listing save threw ReferenceError from then on, and the
+  // green suite never noticed because nothing executes this function.
+  // upsert-execution.test.js now does.
+  const durationProblem = durationShapeError(type, body.duration);
+  if (durationProblem) throw new AppError(422, durationProblem);
+
+  // The request window, if this listing sets one. Mirrors the CHECK in 037 so
+  // the operator is told what is wrong in words rather than meeting a
+  // constraint violation.
+  const windowProblem = requestWindowError(body.requestMinLeadDays, body.requestMaxHorizonDays);
+  if (windowProblem) throw new AppError(422, windowProblem);
+  const blankNum = (v) => (v === "" || v == null ? null : Number(v));
 
   // Optional per-headcount pricing. Rejected loudly rather than silently
   // dropped: a table the operator believes is saved but isn't would quietly
@@ -2970,7 +2983,10 @@ app.use((err, _req, res, _next) => {
 
 // Railway provides PORT; fall back to API_PORT for local dev.
 const port = Number(process.env.PORT || process.env.API_PORT || 8787);
-app.listen(port, "0.0.0.0", () => {
+// Importable without binding the port: the execution tests need this module's
+// functions, not a server. Everything boot does beyond serving (page warmer,
+// catalogue warm-up) starts inside this callback, so skipping listen skips it.
+if (!process.env.APP_NO_LISTEN) app.listen(port, "0.0.0.0", () => {
   console.log(`Sawa listening on :${port}`);
   // Started after the listener so a failure here can never stop the site from
   // coming up, and so the healthcheck passes before any job touches the DB.
