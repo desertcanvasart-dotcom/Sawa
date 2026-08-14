@@ -184,3 +184,54 @@ test("the form only offers states the database will accept", () => {
     assert.ok(states.includes(o), `the form offers "${o}", which the database rejects`);
   }
 });
+
+// ---- the crawler's copy of the page ----------------------------------------
+
+test("the operator reaches the SERVED body, not only the bootstrap", () => {
+  // Crawlers do not execute JavaScript. The React card renders from the inlined
+  // bootstrap, so before this the operator was in the payload and absent from
+  // the page a search engine reads — the Terms' "named on the departure page"
+  // was true for a person and false for a crawler.
+  const seo = read("server/seo.js");
+  assert.match(seo, /const operator = await operatorForProduct\(p\);[\s\S]{0,200}return wrapBody/,
+    "the body builder does not resolve the operator");
+  assert.match(seo, /Operated by \$\{esc\(operator\.name\)\}/,
+    "the served body does not name the operator");
+});
+
+test("the crawler body keeps the generic sentence when no operator is recorded", () => {
+  // 15 of 16 products have none. They must not render "Operated by ," or lose
+  // the licensing sentence altogether.
+  const seo = read("server/seo.js");
+  const block = /<p>\$\{operator[\s\S]*?<\/p>/.exec(seo);
+  assert.ok(block, "the operated-by line is gone");
+  assert.match(block[0], /: "Operated by an Egyptian travel company licensed/,
+    "there is no fallback for a product with no operator");
+});
+
+test("the operator is the schema provider; Sawa is the seller", () => {
+  // schema.org: provider is "the service provider, service operator, or service
+  // performer". The operator performs the tour. Sawa takes the booking, which
+  // is `seller` on the offer — so both entities are in the graph, described
+  // correctly, rather than Sawa being named as the runner of every tour.
+  const seo = read("server/seo.js");
+  assert.match(seo, /provider: operator\s*\n\s*\? \{ "@type": "Organization", name: operator\.name \}\s*\n\s*: \{ "@id": ORG_ID \}/);
+  assert.match(seo, /seller: \{ "@id": ORG_ID \}/, "the offer must name its seller");
+});
+
+test("the operator lookup is cleared with the other SEO caches", () => {
+  // A corrected or revoked verification must not keep serving from a page cache.
+  const seo = read("server/seo.js");
+  // Anchored on a line-start "}" — `[\s\S]*?\}` stops at the first object
+  // literal inside the function, which is three lines short of the end.
+  const fn = /export function clearSeoCaches\(\) \{[\s\S]*?\n\}/.exec(seo);
+  assert.ok(fn);
+  assert.match(fn[0], /agencyCache = \{ at: 0, byId: null \}/);
+});
+
+test("the served body goes through the same whitelist as the card", () => {
+  // Two renderers, one rule. If the crawler body read the agency row directly it
+  // could print the licence number while the card did not.
+  const seo = read("server/seo.js");
+  assert.match(seo, /return row \? publicOperator\(mapAgency\(row\)\) : null;/);
+});
