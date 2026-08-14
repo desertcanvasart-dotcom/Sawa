@@ -4,6 +4,7 @@ import { z } from "zod";
 import { pool, withTransaction, withDepartureWrites } from "./db/index.js";
 import { pendingGoAheads, alertPayload } from "./goahead-alert.js";
 import { refreshStatus } from "./departure-status.js";
+import { publicOperator } from "./domain.js";
 import { durationShapeError } from "../shared/booking-policy.js";
 import { cleanRefCode } from "../shared/ref-code.js";
 import { mapAgency, mapCity, mapProduct, mapDeparture, mapPledge } from "./db/mappers.js";
@@ -539,6 +540,15 @@ async function buildBootstrap(user) {
   return {
     // Only platform staff get the agency directory; agencies/public don't need it.
     agencies: isPlatform(user) ? agencies.rows.map(mapAgency) : [],
+    // The operator behind each listing, whitelisted by publicOperator(). The
+    // full agency rows above stay staff-only; this is the three fields a
+    // traveller may see, and the licence number is not among them — /verify
+    // promises operators it is never shared outside Sawa.
+    operatorsByProduct: Object.fromEntries(
+      agencies.rows.map(mapAgency)
+        .map((a) => [a.id, publicOperator(a)])
+        .filter(([, op]) => op)
+    ),
     cities: cities.rows.map(mapCity),
     tourProducts: mappedProducts,
     // pending_review = traveler-requested, awaiting ops approval. Only
@@ -789,7 +799,15 @@ async function upsertTourProduct(c, body, review) {
        status=EXCLUDED.status, submitted_at=EXCLUDED.submitted_at,
        submitted_by=EXCLUDED.submitted_by, reviewed_by=EXCLUDED.reviewed_by,
        reviewed_at=EXCLUDED.reviewed_at, rejection_reason=EXCLUDED.rejection_reason,
-       agency_id=COALESCE(tour_products.agency_id, EXCLUDED.agency_id)`,
+       -- The operator. Argument order matters and used to be the other way
+       -- round: existing-wins meant a product could never be REASSIGNED, and an
+       -- admin had no way to attach one at all — only an agency self-submitting
+       -- ever set it, from its own session.
+       -- New-value-wins with a NULL fallback gives both: an edit that supplies
+       -- an operator sets it, and an edit that says nothing leaves it alone.
+       -- The no-wipe property the old order existed for is preserved, because
+       -- EXCLUDED.agency_id is NULL on every path that does not mean to change it.
+       agency_id=COALESCE(EXCLUDED.agency_id, tour_products.agency_id)`,
     [
       id, type, title, body.city || "Cairo",
       type === "package" ? JSON.stringify(body.cities || [body.city || "Cairo"]) : null,
@@ -821,7 +839,13 @@ async function upsertTourProduct(c, body, review) {
 app.post("/api/admin/tour-products", requireAuth, requireRole("super_admin", "ops_staff"), h(async (req, res) => {
   const body = req.body || {};
   const product = await withTransaction((c) =>
-    upsertTourProduct(c, body, { status: "approved", submittedBy: req.user.id, reviewedBy: req.user.id }));
+    upsertTourProduct(c, body, {
+      status: "approved", submittedBy: req.user.id, reviewedBy: req.user.id,
+      // Platform staff assigning the operating company. An agency submitting
+      // its own listing still gets its own id from the session below — this
+      // is the only path where the operator is a CHOICE.
+      agencyId: body.agencyId || null,
+    }));
   // DIR-1 — the agency route audits `listing.submit`; this one writes a listing
   // straight to `approved` and audited nothing. The path with LESS review had
   // less record.
@@ -2143,6 +2167,87 @@ app.post("/api/admin/agencies", requireAuth, requireAdmin(), writeLimiter, h(asy
 //   every agency undeletable, discovered on second use), so an unused code is
 //   deleted with its agency and listed in the audit detail. One booking
 //   carrying the code moves it to the history column above.
+// The operator record: licence, ETAA registration, insurance, verification.
+//
+// A separate route from agency creation on purpose. Creating an agency is an
+// account action (it provisions an owner login); this records what Sawa has
+// CHECKED about a company, and the two are done by different people at
+// different times — verification usually days after the account exists.
+//
+// `verificationState` and `verifiedAt` move together and only here. A card that
+// reads "Verified operator" above a row nobody assessed is exactly what the
+// product page's old operator card was deleted for, so the state is never
+// inferred from the presence of a licence number.
+const operatorRecordSchema = z.object({
+  relationship: z.enum(["operator"]).nullish(),
+  tourismLicenseNo: z.string().trim().max(64).nullish(),
+  // A YEAR, not a date: an Egyptian tourism licence does not expire (035).
+  tourismLicenseYear: z.coerce.number().int().min(1900).max(2200).nullish(),
+  etaaRegistrationNo: z.string().trim().max(64).nullish(),
+  insuranceInsurer: z.string().trim().max(120).nullish(),
+  insurancePolicyNo: z.string().trim().max(64).nullish(),
+  insuranceExpires: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/).nullish(),
+  trackRecord: z.string().trim().max(2000).nullish(),
+  verificationState: z.enum(["verified", "rejected", "in_review"]).nullish(),
+  verificationEvidence: z.string().trim().max(2000).nullish(),
+});
+
+app.patch("/api/admin/agencies/:id", requireAuth, requireAdmin(), writeLimiter, h(async (req, res) => {
+  const input = parse(operatorRecordSchema, req.body || {});
+  const blank = (v) => (v === "" || v === undefined ? null : v);
+
+  const row = await withTransaction(async (c) => {
+    const found = await c.query("SELECT * FROM agencies WHERE id=$1 FOR UPDATE", [req.params.id]);
+    if (!found.rowCount) throw new AppError(404, "Agency not found.");
+
+    // verified_at is set by the SERVER at the moment the state becomes
+    // "verified", never accepted from the client: a verification date is
+    // evidence about when someone looked, and a caller that could choose it
+    // could date a check that never happened.
+    const wasVerified = found.rows[0].verification_state === "verified";
+    const nowVerified = blank(input.verificationState) === "verified";
+    const verifiedAt = nowVerified
+      ? (wasVerified ? found.rows[0].verified_at : new Date().toISOString())
+      : null;
+
+    const r = await c.query(
+      `UPDATE agencies SET
+         relationship            = COALESCE($2, relationship),
+         tourism_license_no      = $3,
+         tourism_license_year    = $4,
+         etaa_registration_no    = $5,
+         insurance_insurer       = $6,
+         insurance_policy_no     = $7,
+         insurance_expires       = $8,
+         track_record            = $9,
+         verification_state      = $10,
+         verification_evidence   = $11,
+         verified_at             = $12,
+         verified_by             = CASE WHEN $10 = 'verified' THEN $13::uuid ELSE NULL END
+       WHERE id=$1 RETURNING *`,
+      [req.params.id, blank(input.relationship), blank(input.tourismLicenseNo),
+       input.tourismLicenseYear ?? null, blank(input.etaaRegistrationNo),
+       blank(input.insuranceInsurer), blank(input.insurancePolicyNo), blank(input.insuranceExpires),
+       blank(input.trackRecord), blank(input.verificationState), blank(input.verificationEvidence),
+       verifiedAt, req.user.id]
+    );
+    return r.rows[0];
+  });
+
+  // The catalogue caches an operator's name and verified state into every
+  // product page, so a change here must invalidate them or the site keeps
+  // serving the old record.
+  clearSeoCaches();
+  await logAudit(req, {
+    action: "agency.verification", entity: "agency", entityId: req.params.id,
+    // The licence number is NOT logged. It is the one field /verify promises is
+    // never shared outside Sawa, and an audit row is read by more people than
+    // the form that set it.
+    detail: { verificationState: row.verification_state, relationship: row.relationship },
+  });
+  res.json({ agency: mapAgency(row) });
+}));
+
 app.delete("/api/admin/agencies/:id", requireAuth, requireAdmin(), h(async (req, res) => {
   const id = req.params.id;
   const agency = (await pool.query(`SELECT * FROM agencies WHERE id=$1`, [id])).rows[0];

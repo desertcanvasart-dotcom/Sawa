@@ -1,5 +1,12 @@
 -- 029: what an agency IS to Sawa, as distinct from whether it is switched on.
 --
+-- ⚠️ THE PREMISE WAS CORRECTED BY 036. The client confirmed on 14 Aug 2026 that
+-- Capital Travel Service is a verified OPERATOR — the first to join — and not a
+-- founding partner. 036 drops 'founding_partner' from the CHECK below. What
+-- survives, and is the part worth keeping, is the separation this file argued
+-- for: `relationship` is not verification, and only 025's `verification_state`
+-- may be rendered as one.
+--
 -- ⚠️ PROPOSED. NOT APPLIED. Migrations do not run on deploy (B5).
 --
 -- ============================================================================

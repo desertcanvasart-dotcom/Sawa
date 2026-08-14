@@ -34,6 +34,21 @@ export function mapAgency(r) {
     contactName: r.contact_name,
     phone: r.phone,
     status: r.status,
+    // The operator record (025/029/035/036). ADMIN-FACING: this mapper feeds
+    // /api/admin/agencies, which is behind requireAdmin, and the public payload
+    // never uses it — see publicOperator() in domain.js, which is the whitelist
+    // that decides what a traveller may see.
+    relationship: r.relationship || null,
+    tourismLicenseNo: r.tourism_license_no || null,
+    tourismLicenseYear: r.tourism_license_year ?? null,
+    etaaRegistrationNo: r.etaa_registration_no || null,
+    insuranceInsurer: r.insurance_insurer || null,
+    insurancePolicyNo: r.insurance_policy_no || null,
+    insuranceExpires: r.insurance_expires || null,
+    trackRecord: r.track_record || null,
+    verificationState: r.verification_state || null,
+    verificationEvidence: r.verification_evidence || null,
+    verifiedAt: r.verified_at || null,
   };
 }
 

@@ -429,3 +429,46 @@ export function departureActionBuckets(rows = [], seatsFor = () => 0, nowMs = Da
   }
   return buckets;
 }
+
+// ---------------------------------------------------------------------------
+// What a TRAVELLER may see about an operator.
+//
+// A whitelist, never a redaction list. `agencies` carries a tourism licence
+// number, an ETAA registration, an insurer, a policy number and free-text
+// verification evidence, and the difference between "remove these six" and
+// "emit these three" is that the first silently leaks the seventh column
+// somebody adds next year.
+//
+// THE LICENCE NUMBER IS NOT PUBLISHABLE, and that is a promise rather than a
+// preference. /verify tells every operator, in these words:
+//
+//   "We use your license number only to confirm your registration with the
+//    Ministry of Tourism & Antiquities, and we don't share it outside Sawa."
+//
+// Publishing it on a product page or an operator directory would break that
+// sentence for every operator who signed up on the strength of it. The ETAA
+// registration and the insurer are held back on the same reasoning — they were
+// given to Sawa to be checked, not to be displayed — and can be released later
+// if the client decides to say so on /verify first.
+//
+// `verified` is deliberately NOT `Boolean(row)`. An operator record and a
+// verified operator are two different claims (029's point, which survives that
+// migration's premise being wrong): a row exists the moment somebody is added,
+// and `verification_state` says whether anyone has actually checked. A card
+// reading "Verified operator" above a row nobody assessed is the defect the
+// product page's old operator card was deleted for.
+export function publicOperator(agency) {
+  if (!agency || !agency.name) return null;
+  const verified = agency.verificationState === "verified";
+  return {
+    name: agency.name,
+    // Registration YEAR, not an expiry — an Egyptian tourism licence does not
+    // expire (035). Emitted because it is a fact about the company's standing
+    // that carries no identifying number.
+    licensedSince: agency.tourismLicenseYear ?? null,
+    verified,
+    // Only ever alongside verified: a date without the state reads as a
+    // verification, and a state without the date is unfalsifiable.
+    verifiedAt: verified ? (agency.verifiedAt || null) : null,
+  };
+}

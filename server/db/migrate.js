@@ -43,6 +43,8 @@ const MIGRATIONS = [
   { name: "032_minya_is_a_day_tour", file: "schema_032_minya_is_a_day_tour.sql" },
   { name: "033_hotel_tier_names", file: "schema_033_hotel_tier_names.sql" },
   { name: "034_five_star_cruiser", file: "schema_034_five_star_cruiser.sql" },
+  { name: "035_licence_year_not_expiry", file: "schema_035_licence_year_not_expiry.sql" },
+  { name: "036_no_founding_partner", file: "schema_036_no_founding_partner.sql" },
 ];
 
 async function main() {

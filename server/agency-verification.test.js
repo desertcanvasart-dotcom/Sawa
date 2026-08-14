@@ -73,16 +73,47 @@ test("the payout account is deliberately absent, with the reason stated", () => 
   assert.match(prose, /payout account[\s\S]{0,400}legal question 1/, "the omission must carry its reason");
 });
 
-test("nothing writes to the new columns", () => {
+test("the migration itself still writes no data", () => {
   // VVV3.3. Adding a column and adding the code that fills it are separate
   // changes; shipping them together is a schema change and a behaviour change
-  // reviewed as one piece.
+  // reviewed as one piece. THE MIGRATION half of that rule is permanent.
   const code = SQL.replace(/--[^\n]*/g, "");
   assert.ok(!/\bINSERT\s+INTO\b|\bUPDATE\s+agencies\s+SET\b/i.test(code), "the migration writes data");
+});
 
-  for (const f of ["server/app.js", "server/db/mappers.js"]) {
-    const src = readFileSync(join(ROOT, f), "utf8");
-    assert.ok(!/verification_state|verified_at|tourism_license_no/.test(src),
-      `${f} already reads or writes the new columns — that is a separate change`);
-  }
+test("the write path arrived as its own change, and is admin-only", () => {
+  // This test used to assert that server/app.js did NOT touch these columns —
+  // the "separate change" half of VVV3.3, holding the line until the client
+  // decided. That decision came on 14 August 2026: operator records are being
+  // filled in, starting with the first operator to join.
+  //
+  // So the assertion inverts rather than being deleted. What it guards now is
+  // the thing that actually matters once a write path exists: WHO may write.
+  const app = readFileSync(join(ROOT, "server/app.js"), "utf8");
+  const route = /app\.patch\("\/api\/admin\/agencies\/:id"[^\n]*/.exec(app);
+  assert.ok(route, "the operator record has no write path");
+  assert.match(route[0], /requireAuth/, "the operator record is writable without a session");
+  assert.match(route[0], /requireAdmin\(\)/, "an agency could edit its own verification");
+  assert.match(route[0], /writeLimiter/);
+});
+
+test("a verification date is set by the server, never accepted from the caller", () => {
+  // A verification date is evidence about when somebody looked. A caller that
+  // could choose it could date a check that never happened.
+  const app = readFileSync(join(ROOT, "server/app.js"), "utf8");
+  const schema = /const operatorRecordSchema = z\.object\(\{[\s\S]*?\}\);/.exec(app);
+  assert.ok(schema, "the operator record schema is gone");
+  assert.ok(!/verifiedAt|verified_at/.test(schema[0]),
+    "verifiedAt is accepted from the request body");
+  assert.match(app, /verifiedAt = nowVerified/, "the server must stamp it");
+});
+
+test("the licence number never reaches the audit log", () => {
+  // /verify promises it is not shared outside Sawa, and an audit row is read by
+  // more people than the form that set it.
+  const app = readFileSync(join(ROOT, "server/app.js"), "utf8");
+  const audit = /action: "agency\.verification"[\s\S]{0,400}?\}\);/.exec(app);
+  assert.ok(audit, "the verification write is not audited at all");
+  assert.ok(!/tourismLicenseNo|tourism_license_no/.test(audit[0]),
+    "the licence number is written into the audit detail");
 });
