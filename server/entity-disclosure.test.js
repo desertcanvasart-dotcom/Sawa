@@ -40,7 +40,13 @@ const FORMER = "Capital Travel Service";
 const AUTHORED = {
   "site/_partials/footer.html": { n: 1, surface: "footer — applyFooter writes it into 21 static pages" },
   "src/main.jsx":               { n: 1, surface: "footer — the SPA's own copy of the same sentence" },
-  "server/brand.js":            { n: 2, surface: "BRAND.legalName, and the JSON-LD Organization node built from it" },
+  // Was 2. The second was a COMMENT beside an empty `accreditations`, saying the
+  // entity's own tourism registration was a fact the client had not supplied.
+  // The client confirmed both credentials on 14 Aug 2026, so that sentence
+  // described a state that no longer exists and went with the fix. What remains
+  // is the declaration itself — the only occurrence DIR-19.1 has to edit here.
+  // (Phrased without the name on purpose: this file counts itself.)
+  "server/brand.js":            { n: 1, surface: "BRAND.legalName — the JSON-LD Organization node is built from it" },
   "server/email.js":            { n: 1, surface: "mail footer — hardcoded, NOT read from BRAND" },
   "site/privacy.html":          { n: 2, surface: "controller identity in body prose (a third is the generated footer)" },
   "site/cookies.html":          { n: 1, surface: "controller identity in body prose (a second is the generated footer)" },
