@@ -97,7 +97,9 @@ export const STATIC = {
   // The operator directory. Data-driven — a partner appears the day its record
   // is created, so this is an SPA route rather than a hand-written /site file
   // that would need editing every time one joins.
-  "/partners": { title: `Operating Partners — Licensed Egyptian Travel Companies | ${BRAND.name}`, description: "The travel companies that operate Sawa departures. Each partner is an Egyptian company licensed by the Ministry of Tourism and Antiquities; where Sawa has completed verification, the date is shown.", crumb: "Partners" },
+  // 152 chars — the audit truncates descriptions at 160, and this page's
+  // first version shipped at 197 with the closing clause cut mid-word.
+  "/partners": { title: `Operating Partners — Licensed Egyptian Travel Companies | ${BRAND.name}`, description: "The travel companies that operate Sawa departures — each an Egyptian company licensed by the Ministry of Tourism, with verification dates shown by Sawa.", crumb: "Partners" },
 };
 
 // Resolve by raw DB id first (back-compat), then by the derived SEO slug.
