@@ -49,13 +49,46 @@ export const BRAND = {
   // ⚠️ ETAA 2179 IS NOT ONLINE ERA'S. It is Capital Travel Service's travel-agency
   // registration, and it used to sit in the footer because CTS was presented as
   // the operator of the platform. Under DIR-19.3 CTS becomes an OPERATOR RECORD
-  // — a founding partner — and the number goes with it.
+  // — a founding partner — and the number goes with it. Presenting one company's
+  // licence as another's is the class this project removes, and
+  // server/entity-disclosure.test.js fails the build if "ETAA 2179" reappears.
   //
-  // Leaving it here would present one company's licence as another's, which is
-  // the exact class this project removes. If Online Era holds its own tourism
-  // registration, that is a fact the client has not supplied, and an empty list
-  // is the honest state until they do.
-  accreditations: [],
+  // The list was empty because the operating entity's OWN credentials had never
+  // been supplied. The client confirmed on 14 August 2026 that it holds both,
+  // which is also what the two marks now in the homepage hero assert — so this
+  // exists to make the machine-readable claim match the visible one. A logo a
+  // human can see and a graph that says nothing is a claim with no evidence
+  // behind it in the only place a search engine looks.
+  //
+  // NO NUMBERS, DELIBERATELY. A licence or membership number is exactly the kind
+  // of specific, checkable fact that must come from the holder; none was given,
+  // and the last time a number sat here it belonged to a different company.
+  // Naming the recognising bodies is true and complete on its own. Add
+  // `identifier` to either entry the day the real numbers arrive.
+  accreditations: [
+    {
+      "@type": "EducationalOccupationalCredential",
+      name: "Egyptian tourism operating licence",
+      credentialCategory: "license",
+      recognizedBy: {
+        "@type": "GovernmentOrganization",
+        name: "Ministry of Tourism and Antiquities",
+        alternateName: "MOTA",
+        address: { "@type": "PostalAddress", addressCountry: "EG" },
+      },
+    },
+    {
+      "@type": "EducationalOccupationalCredential",
+      name: "Egyptian Travel Agents Association membership",
+      credentialCategory: "membership",
+      recognizedBy: {
+        "@type": "Organization",
+        name: "Egyptian Travel Agents Association",
+        alternateName: "ETAA",
+        address: { "@type": "PostalAddress", addressCountry: "EG" },
+      },
+    },
+  ],
   knowsAbout: [
     "Egypt day tours", "Shared group tours", "Cairo tours", "Giza Pyramids",
     "Grand Egyptian Museum", "Luxor tours", "Valley of the Kings", "Aswan tours",
