@@ -68,16 +68,16 @@ async function main() {
         `INSERT INTO departures
           (id, type, tour_product_id, route, date, start_date, end_date, nights, cities, time,
            city, guide, vehicle, min_seats, max_seats, base_cost, published_rate, break_price,
-           quality, cutoff, status, notes, deposit_percent)
+           quality, status, notes, deposit_percent)
          VALUES
           ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,
            $11,$12,$13,$14,$15,$16,$17,$18,
-           $19,$20,$21,$22,$23)`,
+           $19,$20,$21,$22)`,
         [
           d.id, d.type || "day_tour", d.tourProductId ?? null, d.route, d.date,
           d.startDate ?? null, d.endDate ?? null, d.nights ?? null, J(d.cities), d.time,
           d.city, d.guide, d.vehicle, d.minSeats, d.maxSeats, d.baseCost ?? null,
-          d.publishedRate, d.breakPrice ?? null, d.quality ?? null, d.cutoff,
+          d.publishedRate, d.breakPrice ?? null, d.quality ?? null,
           d.status || "open", d.notes, d.depositPercent ?? (d.type === "package" ? 20 : 10),
         ]
       );

@@ -47,6 +47,7 @@ const MIGRATIONS = [
   { name: "036_no_founding_partner", file: "schema_036_no_founding_partner.sql" },
   { name: "037_request_window", file: "schema_037_request_window.sql" },
   { name: "038_cutoff_unit", file: "schema_038_cutoff_unit.sql" },
+  { name: "039_drop_decorative_cutoff", file: "schema_039_drop_decorative_cutoff.sql" },
 ];
 
 async function main() {

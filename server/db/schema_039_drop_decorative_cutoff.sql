@@ -1,0 +1,16 @@
+-- 039: departures.cutoff goes — a label that nothing enforced.
+--
+-- Every departure carried a free-text `cutoff`, defaulting to "Open until
+-- 18:00", and the agency desk displayed it as the cutoff. The cutoff the
+-- system actually applies is bookingClosed() reading
+-- tour_products.booking_cutoff_hours (038 added its unit) — so an agency
+-- could be told "Open until 18:00" on a date whose bookings had closed the
+-- previous evening. Two stories about when booking ends, one screen; the
+-- column was the second storyteller.
+--
+-- 036's rule again: a column is documentation the database enforces, and a
+-- stored sentence nobody enforces is a sentence that is not true. The desk
+-- now renders the enforced rule (cutoffLabel), the writes stopped in the same
+-- change, and the column goes rather than lingering as a place for the next
+-- reader to trust.
+ALTER TABLE departures DROP COLUMN IF EXISTS cutoff;
