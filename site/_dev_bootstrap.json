@@ -1031,7 +1031,7 @@
       ],
       "active": true,
       "status": "approved",
-      "agencyId": null,
+      "agencyId": "ag_cts_demo",
       "submittedAt": "2026-07-29T08:33:39.821Z",
       "reviewedAt": "2026-07-29T08:33:39.821Z",
       "rejectionReason": "",
@@ -2620,5 +2620,13 @@
       "confirmDeadline": "2026-09-26",
       "confirmDeadlineDays": 30
     }
-  ]
+  ],
+  "operatorsByProduct": {
+    "ag_cts_demo": {
+      "name": "Capital Travel Service",
+      "licensedSince": 2011,
+      "verified": true,
+      "verifiedAt": "2026-08-14"
+    }
+  }
 }

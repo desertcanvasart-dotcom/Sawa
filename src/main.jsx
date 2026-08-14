@@ -398,6 +398,9 @@ const INLINE_BOOTSTRAP = (() => {
 function App() {
   const [path, setPath] = useState(window.location.pathname);
   const [agencies, setAgencies] = useState(INLINE_BOOTSTRAP?.agencies || []);
+  // agencyId -> { name, licensedSince, verified, verifiedAt }. Whitelisted on
+  // the server by publicOperator(); the full agency rows stay staff-only.
+  const [operatorsByProduct, setOperatorsByProduct] = useState(INLINE_BOOTSTRAP?.operatorsByProduct || {});
   const [cities, setCities] = useState(INLINE_BOOTSTRAP?.cities || []);
   const [tourProducts, setTourProducts] = useState(INLINE_BOOTSTRAP?.tourProducts || []);
   const [departures, setDepartures] = useState(INLINE_BOOTSTRAP?.departures || []);
@@ -475,6 +478,7 @@ function App() {
       setAgencies((prev) => same(prev, data.agencies) ? prev : (data.agencies || []));
       setCities((prev) => same(prev, data.cities) ? prev : (data.cities || []));
       setTourProducts((prev) => same(prev, data.tourProducts) ? prev : (data.tourProducts || []));
+      setOperatorsByProduct((prev) => same(prev, data.operatorsByProduct) ? prev : (data.operatorsByProduct || {}));
       setDepartures((prev) => same(prev, data.departures) ? prev : (data.departures || []));
       setSelectedId((prev) => prev || data.departures?.[0]?.id || null);
       const firstDayTour = (data.tourProducts || []).find((p) => !isPackage(p));
@@ -923,6 +927,7 @@ function App() {
         publicBooking={publicBooking}
         routeTour={routeTour}
         routePackage={routePackage}
+        operatorsByProduct={operatorsByProduct}
         selectedCity={selectedCity}
         setSelectedCity={setSelectedCity}
         tourId={routeTourId}
@@ -1297,7 +1302,7 @@ const SxStar = () => <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2
 const SxCheck = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>;
 const SxX = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M6 6l12 12M18 6 6 18" /></svg>;
 
-function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPublicBooking, publicBooking, tour: tourProp, allProducts = [] }) {
+function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPublicBooking, publicBooking, tour: tourProp, allProducts = [], operatorsByProduct = {} }) {
   const rootRef = useRef(null);
 
   // A page reached by clicking through from the catalogue holds the sliced copy
@@ -1362,6 +1367,9 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
 
   const dep = tour.dates.find((d) => Number(d.id) === Number(depId)) || lead;
   const goAhead = goAheadSeatsFor(tour);
+  // Whitelisted server-side by publicOperator(): name, licensed-since year,
+  // verified flag and date. Never the licence number.
+  const operator = operatorsByProduct[tour.agencyId] || null;
   const booked = dep ? seatsTotal(dep.pledges) : 0;
   const remaining = dep ? Math.max(0, dep.maxSeats - booked) : 0;
   const nSeats = Math.max(1, Number(seats || 1));
@@ -1628,6 +1636,35 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
                   support: who is leading the tour. No badge, no company name, and
                   nothing at all if the field is empty — never a fallback string
                   standing in for missing data. */}
+              {/* The operator, from the record — the card P2.3-R held open.
+                  It renders only when a company is actually attached, names it
+                  only then, and says "verified" only when someone recorded a
+                  verification. No badge on an unverified row: that is what the
+                  old card did with tour.guide, and it named a verified operator
+                  that did not exist.
+                  No licence number, ever — /verify promises operators it is not
+                  shared outside Sawa, and publicOperator() on the server does
+                  not send it. */}
+              {operator ? (
+                <section className="sec rv">
+                  <h2>Your operator</h2>
+                  <div className="op-card"><div className="op-inner">
+                    <div className="op-meta">
+                      <h3>{operator.name}</h3>
+                      {operator.verified && (
+                        <p className="op-verified"><SxCheck />Verified by Sawa{operator.verifiedAt ? ` · ${formatDate(operator.verifiedAt, { alwaysYear: true })}` : ""}</p>
+                      )}
+                      <p>
+                        {operator.licensedSince
+                          ? `Licensed by the Egyptian Ministry of Tourism and Antiquities since ${operator.licensedSince}. `
+                          : "Licensed by the Egyptian Ministry of Tourism and Antiquities. "}
+                        This is the company responsible for delivering your departure.
+                      </p>
+                    </div>
+                  </div></div>
+                </section>
+              ) : null}
+
               {tour.guide ? (
                 <section className="sec rv">
                   <h2>Your guide</h2>
@@ -1947,6 +1984,7 @@ function PublicSite({
   publicBooking,
   routeTour,
   routePackage,
+  operatorsByProduct,
   selectedCity,
   setSelectedCity,
   tourId,
@@ -2008,6 +2046,7 @@ function PublicSite({
         publicBooking={publicBooking}
         tour={routeTour || routePackage}
         allProducts={customerCalendars}
+        operatorsByProduct={operatorsByProduct}
       />
     );
   }

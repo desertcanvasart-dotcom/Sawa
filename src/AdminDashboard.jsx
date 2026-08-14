@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { Fragment, useEffect, useMemo, useState } from "react";
 import {
   LayoutDashboard, Package, CalendarDays, Users, ClipboardList, ScrollText,
   Plus, Check, X, Search, Archive, ArchiveRestore, Euro, ShieldCheck,
@@ -1980,12 +1980,110 @@ function ReferralsSection({ flash }) {
   );
 }
 
+/* ---------------- Operator record ----------------
+   What Sawa has CHECKED about a company: licence, ETAA registration, insurance,
+   and a verification decision. Separate from creating the agency, which is an
+   account action — verification usually happens days later, by someone else.
+
+   The licence number is collected here and never leaves: /verify promises the
+   operator it is not shared outside Sawa, so publicOperator() on the server
+   omits it from everything a traveller sees, and it is kept out of the audit
+   log too.
+
+   `verified` is a decision made HERE and nowhere else. It is not inferred from
+   a licence number being present — a record existing and a record having been
+   checked are two different claims, and conflating them is what put a "Verified
+   operator" badge on a product page with nothing behind it. */
+function OperatorRecord({ agency, onSaved }) {
+  const [f, setF] = useState({
+    tourismLicenseNo: agency.tourismLicenseNo || "",
+    tourismLicenseYear: agency.tourismLicenseYear || "",
+    etaaRegistrationNo: agency.etaaRegistrationNo || "",
+    insuranceInsurer: agency.insuranceInsurer || "",
+    insurancePolicyNo: agency.insurancePolicyNo || "",
+    insuranceExpires: agency.insuranceExpires ? String(agency.insuranceExpires).slice(0, 10) : "",
+    trackRecord: agency.trackRecord || "",
+    verificationState: agency.verificationState || "",
+    verificationEvidence: agency.verificationEvidence || "",
+  });
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }));
+
+  async function save(e) {
+    e.preventDefault(); setBusy(true); setErr("");
+    try {
+      const body = { ...f, relationship: "operator" };
+      // Empty strings mean "not recorded", not "recorded as blank".
+      for (const k of Object.keys(body)) if (body[k] === "") body[k] = null;
+      const r = await apiFetch(`/admin/agencies/${agency.id}`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.error || "Could not save the operator record.");
+      onSaved();
+    } catch (e2) { setErr(e2.message); } finally { setBusy(false); }
+  }
+
+  return (
+    <form className="op-record" onSubmit={save}>
+      <div className="op-grid">
+        <label><span>Tourism licence no.</span>
+          <input value={f.tourismLicenseNo} onChange={set("tourismLicenseNo")} placeholder="Ministry licence" />
+          <small>Never published. Used only to confirm registration.</small>
+        </label>
+        <label><span>Registered (year)</span>
+          <input value={f.tourismLicenseYear} onChange={set("tourismLicenseYear")} inputMode="numeric" placeholder="e.g. 2011" />
+          <small>An Egyptian tourism licence has no expiry.</small>
+        </label>
+        <label><span>ETAA registration no.</span>
+          <input value={f.etaaRegistrationNo} onChange={set("etaaRegistrationNo")} />
+        </label>
+        <label><span>Insurer</span>
+          <input value={f.insuranceInsurer} onChange={set("insuranceInsurer")} />
+        </label>
+        <label><span>Policy no.</span>
+          <input value={f.insurancePolicyNo} onChange={set("insurancePolicyNo")} />
+        </label>
+        <label><span>Insurance expires</span>
+          <input type="date" value={f.insuranceExpires} onChange={set("insuranceExpires")} />
+          <small>Insurance does expire — this one is a real date.</small>
+        </label>
+      </div>
+      <label className="op-wide"><span>Track record</span>
+        <textarea rows={2} value={f.trackRecord} onChange={set("trackRecord")} />
+      </label>
+      <div className="op-grid">
+        <label><span>Verification</span>
+          <select value={f.verificationState} onChange={set("verificationState")}>
+            <option value="">Not assessed</option>
+            <option value="in_review">In review</option>
+            <option value="verified">Verified</option>
+            <option value="rejected">Rejected</option>
+          </select>
+          <small>Only &ldquo;Verified&rdquo; names this operator publicly. The date is stamped on save.</small>
+        </label>
+        <label className="op-wide"><span>Evidence</span>
+          <input value={f.verificationEvidence} onChange={set("verificationEvidence")} placeholder="What was checked, and against what" />
+        </label>
+      </div>
+      {err && <div className="form-error" role="alert">{err}</div>}
+      <div className="op-actions">
+        <button className="btn-primary" disabled={busy}>{busy ? "Saving…" : "Save operator record"}</button>
+      </div>
+    </form>
+  );
+}
+
 function AgenciesSection({ flash }) {
   const [list, setList] = useState(null);
   const [form, setForm] = useState({ name: "", phone: "", ownerName: "", ownerEmail: "" });
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [created, setCreated] = useState(null);
+  // Which agency's operator record is open. One at a time: these are ten fields
+  // and a verification decision, not a cell edit.
+  const [editing, setEditing] = useState(null);
   const set = (k) => (e) => setForm((s) => ({ ...s, [k]: e.target.value }));
 
   async function load() {
@@ -2030,7 +2128,14 @@ function AgenciesSection({ flash }) {
               <thead><tr><th>Agency</th><th>Contact</th><th>Members</th><th>Status</th><th></th></tr></thead>
               <tbody>
                 {(list || []).map((a) => (
-                  <tr key={a.id}><td><strong>{a.name}</strong></td><td>{a.contactName}{a.phone ? <div className="sub">{a.phone}</div> : ""}</td><td>{a.staffCount}</td><td><span className="tag tag-on">{a.status}</span></td><td><button className="btn-mini" onClick={() => remove(a)} title={a.staffCount ? "Remove its team logins first" : `Delete ${a.name}`}><Trash2 size={14} />Delete</button></td></tr>
+                  <Fragment key={a.id}>
+                  <tr><td><strong>{a.name}</strong>{a.verificationState === "verified"
+                    ? <div className="sub"><ShieldCheck size={12} /> Verified{a.verifiedAt ? ` ${fmtDate(a.verifiedAt)}` : ""}</div>
+                    : a.verificationState ? <div className="sub">{a.verificationState.replace("_", " ")}</div> : null}</td><td>{a.contactName}{a.phone ? <div className="sub">{a.phone}</div> : ""}</td><td>{a.staffCount}</td><td><span className="tag tag-on">{a.status}</span></td><td><button className="btn-mini" onClick={() => setEditing(editing === a.id ? null : a.id)}>{editing === a.id ? "Close" : "Operator record"}</button>{" "}<button className="btn-mini" onClick={() => remove(a)} title={a.staffCount ? "Remove its team logins first" : `Delete ${a.name}`}><Trash2 size={14} />Delete</button></td></tr>
+                  {editing === a.id && (
+                    <tr><td colSpan={5}><OperatorRecord agency={a} onSaved={() => { load(); flash("Operator record saved."); }} /></td></tr>
+                  )}
+                  </Fragment>
                 ))}
                 {list && list.length === 0 && <tr><td colSpan={5}><Empty label="No agencies yet." /></td></tr>}
               </tbody>

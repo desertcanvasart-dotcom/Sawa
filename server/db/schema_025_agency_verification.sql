@@ -72,6 +72,12 @@
 -- claim, and a confirmation dated eighteen months ago against a licence that
 -- lapsed since is not evidence for it. This is what lets a lapse be detected
 -- rather than assumed away.
+--
+-- ⚠️ SUPERSEDED FOR THE LICENCE BY 035. The reasoning above is sound and the fact
+-- was wrong: an Egyptian tourism licence does not expire, it has a registration
+-- YEAR. `tourism_license_expires` is dropped and `tourism_license_year` replaces
+-- it. The argument still holds for INSURANCE, which does expire annually, and
+-- `insurance_expires` below is untouched.
 ALTER TABLE agencies ADD COLUMN IF NOT EXISTS tourism_license_no      TEXT;
 ALTER TABLE agencies ADD COLUMN IF NOT EXISTS tourism_license_expires DATE;
 ALTER TABLE agencies ADD COLUMN IF NOT EXISTS etaa_registration_no    TEXT;
