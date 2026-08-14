@@ -6,6 +6,7 @@ import { pendingGoAheads, alertPayload } from "./goahead-alert.js";
 import { refreshStatus } from "./departure-status.js";
 import { publicOperator } from "./domain.js";
 import { durationShapeError } from "../shared/booking-policy.js";
+import { operatingDayError } from "../shared/operating-days.js";
 import { cleanRefCode } from "../shared/ref-code.js";
 import { mapAgency, mapCity, mapProduct, mapDeparture, mapPledge } from "./db/mappers.js";
 import {
@@ -648,6 +649,19 @@ app.post("/api/admin/departures", requireAuth, requireRole("super_admin", "ops_s
   const result = await withTransaction(async (c) => {
     const product = await loadProduct(c, body.tourProductId);
     if (!product) throw new AppError(404, "Tour product not found.");
+
+    // Operating days. The traveller-request route has refused an ineligible day
+    // since it was written; THIS path never checked, so a Tuesday sailing could
+    // be published on a Mon/Sat cruise — and the site would advertise a date it
+    // refuses to let a traveller request. Two paths, one rule, and only one of
+    // them enforced it.
+    //
+    // It has not bitten: no restricted product has a departure today. That is
+    // precisely when it is cheapest to close — all three Nile cruises run on
+    // fixed weekdays, so the first cruise date published is the first chance to
+    // get it wrong.
+    const dayProblem = operatingDayError(product, body.date || body.startDate);
+    if (dayProblem) throw new AppError(422, dayProblem);
 
     // This endpoint lets a departure override the listing's capacity, so the
     // contract limit has to be checked here too — not only on the listing.
@@ -1404,17 +1418,10 @@ app.post("/api/public/departure-requests", writeLimiter, h(async (req, res) => {
     }
 
     // Operating days: a Nile cruise that sails Mondays must not accept a
-    // Tuesday request, whatever the client sent.
-    const opDays = Array.isArray(product.operatingDays) ? product.operatingDays : [];
-    if (opDays.length > 0) {
-      const dow = new Date(`${input.date}T12:00:00Z`).getUTCDay();
-      if (!opDays.includes(dow)) {
-        const DAY = ["Sundays", "Mondays", "Tuesdays", "Wednesdays", "Thursdays", "Fridays", "Saturdays"];
-        const list = opDays.map((d) => DAY[d]);
-        const label = list.length > 1 ? `${list.slice(0, -1).join(", ")} and ${list[list.length - 1]}` : list[0];
-        throw new AppError(422, `${product.title} departs only on ${label} — pick one of those days.`);
-      }
-    }
+    // Tuesday request, whatever the client sent. One rule, in shared/, so the
+    // admin route below and the date picker cannot drift from this one.
+    const dayProblem = operatingDayError(product, input.date);
+    if (dayProblem) throw new AppError(422, dayProblem);
 
     // Join-first rule: surface open departures for the same tour within the
     // match window. The client must explicitly reject them (ignoreMatches)

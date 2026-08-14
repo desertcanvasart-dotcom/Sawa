@@ -47,6 +47,7 @@ const SUPPORT_AVAILABILITY = INTERIM_COPY["support-availability"];
 import { seatsTotal, goAheadSeatsFor } from "../shared/departure-state.js";
 import { livePriceFor, priceFromTiers, clampPrice } from "../shared/pricing.js";
 import { cleanRefCode } from "../shared/ref-code.js";
+import { operatingDaysLabel } from "../shared/operating-days.js";
 import { CURRENCY, CURRENCY_SYMBOL, CURRENCY_PROSE } from "../shared/currency.js";
 import {
   isPackage, balanceDueDate, depositPctFor, cancellationBandsFor, chargeText,
@@ -1427,12 +1428,10 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
   // fixed weekdays. Constrained tours offer the actual eligible dates as
   // chips instead of a free calendar; the server enforces the same rule.
   const opDays = Array.isArray(tour.operatingDays) ? tour.operatingDays : [];
-  const DAY_FULL = ["Sundays", "Mondays", "Tuesdays", "Wednesdays", "Thursdays", "Fridays", "Saturdays"];
-  const opDaysLabel = opDays.length
-    ? (opDays.length > 1
-        ? `${opDays.slice(0, -1).map((d) => DAY_FULL[d]).join(", ")} and ${DAY_FULL[opDays[opDays.length - 1]]}`
-        : DAY_FULL[opDays[0]])
-    : "";
+  // Was a second copy of the server's day table and its comma-and-"and" joiner.
+  // Same rule, one implementation — so the chips and the refusal message cannot
+  // phrase the same restriction differently.
+  const opDaysLabel = operatingDaysLabel(opDays);
   const eligibleDates = useMemo(() => {
     if (!opDays.length) return [];
     const out = [];
