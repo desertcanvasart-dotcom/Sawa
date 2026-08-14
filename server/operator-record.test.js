@@ -121,3 +121,44 @@ test("saving an operator record clears the page cache", () => {
   const route = app.slice(app.indexOf('app.patch("/api/admin/agencies/:id"'));
   assert.match(route.slice(0, 3000), /clearSeoCaches\(\)/);
 });
+
+// ---- assigning the operator to a listing ------------------------------------
+
+test("an admin can assign the operating company; an agency cannot choose one", () => {
+  // Only the agency self-submission path used to set agency_id, from the
+  // session. There was no way for staff to attach an operator to an existing
+  // listing at all — which is why 0 of 16 products had one.
+  const app = read("server/app.js");
+  assert.match(app, /agencyId: body\.agencyId \|\| null,/,
+    "the admin route must accept an operator");
+  // The agency route still takes it from the session, never the body.
+  assert.match(app, /agencyId: req\.user\.agencyId/,
+    "an agency must not be able to submit a listing as another company");
+
+  const ui = read("src/AdminDashboard.jsx");
+  assert.match(ui, /\{!agencyMode && \(\s*<Field label="Operating company" full>/,
+    "the picker must be hidden from an agency editing its own listing");
+  assert.match(ui, /\.\.\.\(agencyMode \? \{\} : \{ agencyId: f\.agencyId \|\| null \}\)/,
+    "an agency's save must not carry an agencyId field at all");
+});
+
+test("an edit that says nothing about the operator does not wipe it", () => {
+  // The upsert's COALESCE order is the whole rule. New-value-wins so a product
+  // can be reassigned; NULL falls back so an unrelated edit leaves it alone.
+  const app = read("server/app.js");
+  assert.match(app, /agency_id=COALESCE\(EXCLUDED\.agency_id, tour_products\.agency_id\)/);
+  assert.ok(!/agency_id=COALESCE\(tour_products\.agency_id, EXCLUDED\.agency_id\)/.test(app),
+    "existing-wins means a listing can never be reassigned");
+});
+
+test("a failed operator-list fetch is shown, not swallowed", () => {
+  // AAA1. An empty <select> after a failed fetch reads as "no operators exist",
+  // and the admin concludes there is nobody to assign.
+  const ui = read("src/AdminDashboard.jsx");
+  const block = /const \[agenciesError, setAgenciesError\][\s\S]{0,900}?\}, \[agencyMode\]\);/.exec(ui);
+  assert.ok(block, "the operator-list fetch is gone");
+  assert.ok(!/\.catch\(\(\) => \{\}\)/.test(block[0]), "the failure is discarded");
+  assert.match(block[0], /setAgenciesError/);
+  assert.match(ui, /\{agenciesError\s*\n?\s*\? <small className="form-error">/,
+    "the failure must reach the admin's screen");
+});

@@ -799,7 +799,15 @@ async function upsertTourProduct(c, body, review) {
        status=EXCLUDED.status, submitted_at=EXCLUDED.submitted_at,
        submitted_by=EXCLUDED.submitted_by, reviewed_by=EXCLUDED.reviewed_by,
        reviewed_at=EXCLUDED.reviewed_at, rejection_reason=EXCLUDED.rejection_reason,
-       agency_id=COALESCE(tour_products.agency_id, EXCLUDED.agency_id)`,
+       -- The operator. Argument order matters and used to be the other way
+       -- round: existing-wins meant a product could never be REASSIGNED, and an
+       -- admin had no way to attach one at all — only an agency self-submitting
+       -- ever set it, from its own session.
+       -- New-value-wins with a NULL fallback gives both: an edit that supplies
+       -- an operator sets it, and an edit that says nothing leaves it alone.
+       -- The no-wipe property the old order existed for is preserved, because
+       -- EXCLUDED.agency_id is NULL on every path that does not mean to change it.
+       agency_id=COALESCE(EXCLUDED.agency_id, tour_products.agency_id)`,
     [
       id, type, title, body.city || "Cairo",
       type === "package" ? JSON.stringify(body.cities || [body.city || "Cairo"]) : null,
@@ -831,7 +839,13 @@ async function upsertTourProduct(c, body, review) {
 app.post("/api/admin/tour-products", requireAuth, requireRole("super_admin", "ops_staff"), h(async (req, res) => {
   const body = req.body || {};
   const product = await withTransaction((c) =>
-    upsertTourProduct(c, body, { status: "approved", submittedBy: req.user.id, reviewedBy: req.user.id }));
+    upsertTourProduct(c, body, {
+      status: "approved", submittedBy: req.user.id, reviewedBy: req.user.id,
+      // Platform staff assigning the operating company. An agency submitting
+      // its own listing still gets its own id from the session below — this
+      // is the only path where the operator is a CHOICE.
+      agencyId: body.agencyId || null,
+    }));
   // DIR-1 — the agency route audits `listing.submit`; this one writes a listing
   // straight to `approved` and audited nothing. The path with LESS review had
   // less record.

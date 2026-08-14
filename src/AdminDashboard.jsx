@@ -629,7 +629,32 @@ export function ProductEditor({ type: typeProp, existing, destinations = [], dep
     pickupNote: existing?.pickupNote || "",
     bookingCutoffHours: existing?.bookingCutoffHours ?? 24,
     operatingDays: Array.isArray(existing?.operatingDays) ? existing.operatingDays : [],
+    // The operating company. Platform staff choose it; an agency submitting its
+    // own listing never sees this field and gets its id from the session.
+    agencyId: existing?.agencyId || "",
   });
+  // Loaded here rather than passed down: the picker is the only thing in this
+  // editor that needs them, and an agency editing its own listing never sees it.
+  const [agencies, setAgencies] = useState([]);
+  // A FAILURE HERE IS NOT AN EMPTY LIST. If the fetch dies, an empty <select>
+  // reads as "no operators exist" and the admin concludes there is nobody to
+  // assign — so the failure is shown in the field instead of swallowed. This is
+  // the AAA1 rule: an empty catch is a bug if the call can throw, and this one
+  // can (network, session expiry, a 500).
+  const [agenciesError, setAgenciesError] = useState("");
+  useEffect(() => {
+    if (agencyMode) return undefined;
+    let alive = true;
+    apiFetch("/admin/agencies")
+      .then(async (r) => {
+        if (!r.ok) throw new Error(`the operator list did not load (${r.status})`);
+        return r.json();
+      })
+      .then((j) => { if (alive) { setAgencies(j.agencies || []); setAgenciesError(""); } })
+      .catch((e) => { if (alive) setAgenciesError(e.message || "the operator list did not load"); });
+    return () => { alive = false; };
+  }, [agencyMode]);
+
   const [meetingPoints, setMeetingPoints] = useState(() => {
     if (existing?.meetingPoints?.length) return existing.meetingPoints;
     if (existing?.meetingPoint) return [{ point: existing.meetingPoint, note: existing.pickupNote || "" }];
@@ -737,6 +762,7 @@ export function ProductEditor({ type: typeProp, existing, destinations = [], dep
         meetingPoints: meetingPoints.map((m) => ({ point: (m.point || "").trim(), note: (m.note || "").trim() })).filter((m) => m.point),
         meetingPoint: (meetingPoints[0]?.point || f.meetingPoint || "").trim(),
         operatingDays: f.operatingDays,
+        ...(agencyMode ? {} : { agencyId: f.agencyId || null }),
         pickupNote: (meetingPoints[0]?.note || f.pickupNote || "").trim(),
         bookingCutoffHours: Number(f.bookingCutoffHours) || 0,
         images,
@@ -828,6 +854,24 @@ export function ProductEditor({ type: typeProp, existing, destinations = [], dep
               />
               <Field label="Deposit %"><input type="number" min="0" max="100" value={f.depositPercent} onChange={set("depositPercent")} /></Field>
               <Field label="Booking cutoff (hours before)"><input type="number" min="0" value={f.bookingCutoffHours} onChange={set("bookingCutoffHours")} /></Field>
+              {!agencyMode && (
+                <Field label="Operating company" full>
+                  <select value={f.agencyId} onChange={set("agencyId")}>
+                    <option value="">Not assigned</option>
+                    {(agencies || []).map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.name}{a.verificationState === "verified" ? " — verified" : ""}
+                      </option>
+                    ))}
+                  </select>
+                  {/* The Terms and /about both say the company responsible is named
+                      on the departure page. Until this is set, that sentence has
+                      nothing behind it — which was true of all 16 products. */}
+                  {agenciesError
+                    ? <small className="form-error">{agenciesError} — reopen the editor to try again.</small>
+                    : <small>Named on the departure page. Only a verified operator is shown to travellers.</small>}
+                </Field>
+              )}
               <Field label="Departs on (empty = any day)" full>
                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                   {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d, i) => {
