@@ -160,6 +160,21 @@ button{font-family:inherit}
 .hero h1 .ital{font-style:italic;font-weight:400}
 .hero h1 .gld{color:var(--gold-deep)}
 .hero .lede{font-size:1.18rem;color:var(--muted);max-width:31rem;margin:26px 0 0;text-wrap:pretty}
+/* Accreditation marks, sitting under the lede. Height-constrained with width
+   auto so the two very different aspect ratios (a 1:1 seal and a 200x118
+   wordmark) settle to the same optical weight; `align-items:center` aligns them
+   optically rather than by box.
+   Full colour, deliberately. A first pass greyscaled them at 72% opacity, which
+   looked tidier and was wrong: at 44px the ETAA wordmark became an unreadable
+   grey smudge and the ministry seal a blob. These are credentials — the reason
+   to show them at all is that a traveller can recognise them. */
+.hero .hero-accred{display:flex;align-items:center;gap:22px;margin:24px 0 0;flex-wrap:wrap}
+/* Two very different shapes once trimmed: a near-square seal (0.93:1) and a wide
+   wordmark (1.78:1). Matching their heights would make the wordmark dominate, so
+   the seal is set taller and they balance by area rather than by box. */
+.hero .hero-accred img{height:54px;width:auto}
+.hero .hero-accred img:first-child{height:62px}
+@media (max-width:560px){.hero .hero-accred img{height:46px}.hero .hero-accred img:first-child{height:53px}}
 .hero-cta{display:flex;gap:14px;margin-top:36px;flex-wrap:wrap}
 .hero-meta{display:flex;gap:34px;margin-top:46px;flex-wrap:wrap}
 .hero-meta .m b{font-family:'Fraunces',serif;font-size:1.9rem;font-weight:600;color:var(--teal);letter-spacing:-.02em;display:block;line-height:1}
@@ -529,6 +544,24 @@ section.block{padding:120px 0}
       <span class="eyebrow"><span class="live"></span>Shared departures across Egypt</span>
       <h1>See Egypt the way<br>it's meant to be — <span class="ital gld">together</span>.</h1>
       <p class="lede">Sawa pools travelers from Ministry-licensed Egyptian operators into one shared departure. Four travelers on the same route, and the trip is locked in — we call that moment the <strong>GoAhead</strong>. Join a date that's forming, <span style="text-decoration:underline;text-decoration-color:var(--gold-deep);text-decoration-thickness:2px;text-underline-offset:5px">or pick any tour and start your own</span>.</p>
+      <!-- Accreditation marks. These are third-party trademarks and their
+           presence is a CLAIM: that the entity behind this site holds these
+           credentials. `alt` says whose they are rather than describing the
+           picture, so a screen reader gets the claim and not "logo, logo".
+           The supplied files are 1.2MB and 900KB, white-backgrounded and heavily
+           padded. Each is trimmed to its artwork, the white knocked out to alpha
+           (RGB untouched, so the gold does not wash), resized to 3x the rendered
+           height, and encoded as WebP: 29KB and 38KB. PNG at the same size was
+           55KB and 91KB — WebP halves it, and these are flat-colour marks where
+           it costs nothing visible.
+           NOT loading="lazy": these sit above the fold, so deferring them just
+           delays a visible hero element and invites a pop-in. server/
+           zero-suppression.test.js catches the attribute for its own reason —
+           it forbids /Loading/i in this markup — and was right by accident. -->
+      <div class="hero-accred">
+        <img src="/images/accreditation-ministry-of-tourism.webp" alt="Egyptian Ministry of Tourism &amp; Antiquities" width="168" height="180" decoding="async">
+        <img src="/images/accreditation-etaa.webp" alt="Egyptian Travel Agents Association (ETAA)" width="321" height="180" decoding="async">
+      </div>
       <div class="hero-cta">
         <a href="/itineraries" class="btn teal">Browse the tours
           <span class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
