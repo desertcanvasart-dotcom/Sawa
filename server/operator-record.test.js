@@ -36,17 +36,33 @@ test("the licence number never reaches a traveller", () => {
 
 test("nor does anything else given to Sawa to be checked", () => {
   const out = JSON.stringify(publicOperator(FULL));
-  for (const secret of ["2179", "An Insurer", "POL-9", "internal notes",
+  // "2179" left this list on 15 August 2026: the client directed that each
+  // partner's ETAA registry entry be linked from the directory, and ETAA
+  // addresses entries by that number. The next test pins the ONLY form the
+  // number may take. Everything else stays exactly as secret as it was.
+  for (const secret of ["An Insurer", "POL-9", "internal notes",
                         "checked against the register", "+20 100 000 0000", "A Person"]) {
     assert.ok(!out.includes(secret), `"${secret}" reached the public payload`);
   }
 });
 
-test("it emits exactly four fields, and no more", () => {
+test("the ETAA number appears ONLY as the registry link", () => {
+  const op = publicOperator(FULL);
+  assert.equal(op.etaaUrl, "https://www.etaa-egypt.org/SitePages/CompanyDetails.aspx?licc=2179");
+  const rest = JSON.stringify({ ...op, etaaUrl: null });
+  assert.ok(!rest.includes("2179"), "the number escaped the URL into another field");
+  // And no registration recorded means no link — a membership claim with
+  // nothing to check it against is not rendered at all.
+  assert.equal(publicOperator({ ...FULL, etaaRegistrationNo: null }).etaaUrl, null);
+});
+
+test("it emits exactly five fields, and no more", () => {
   // A whitelist is only a whitelist if it is closed. If a field is added here
   // deliberately, this number changes with it — and somebody has to think.
+  // Four became five on 15 August 2026: etaaUrl, the client-directed link to
+  // the partner's own public registry entry.
   assert.deepEqual(Object.keys(publicOperator(FULL)).sort(),
-    ["licensedSince", "name", "verified", "verifiedAt"]);
+    ["etaaUrl", "licensedSince", "name", "verified", "verifiedAt"]);
 });
 
 test("an operator record is not a verification", () => {

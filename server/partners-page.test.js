@@ -38,6 +38,17 @@ test("a verified partner renders name, licence year, and the dated verified line
   assert.match(html, /Operates one itinerary on Sawa/);
 });
 
+test("the ETAA membership is an anchor into the register, or absent", () => {
+  // The claim made checkable at its source (client, 15 Aug 2026): the anchor
+  // text is the association's name and the href is the partner's own entry.
+  const html = partnersListHtml([partner(ROW)]);
+  assert.match(html, /A member of the <a href="https:\/\/www\.etaa-egypt\.org\/SitePages\/CompanyDetails\.aspx\?licc=9999" target="_blank" rel="noopener noreferrer">Egyptian Travel Agents Association<\/a>\./);
+  // No registration recorded → no membership sentence at all. An unlinked
+  // membership claim would be exactly the unverifiable badge 029 forbids.
+  const bare = partnersListHtml([partner({ ...ROW, etaa_registration_no: null })]);
+  assert.doesNotMatch(bare, /Travel Agents Association/);
+});
+
 test("an unverified partner is listed by name, without the verified line", () => {
   // 029's rule: a record is a partner; verification is a separate claim. The
   // fabricated-operator-card defect was exactly a "Verified operator" heading
@@ -50,10 +61,14 @@ test("an unverified partner is listed by name, without the verified line", () =>
 
 test("nothing given to Sawa to be checked reaches the page", () => {
   const html = partnersListHtml([partner(ROW)]);
-  for (const secret of ["SECRET-LICENCE-12345", "9999", "An Insurer", "POL-9",
+  // "9999" (the ETAA registration) left this list on 15 Aug 2026 — it is now
+  // published deliberately, as the registry link's address and nowhere else.
+  for (const secret of ["SECRET-LICENCE-12345", "An Insurer", "POL-9",
     "internal notes", "checked against the register", "+20 100 000 0000", "A Person"]) {
     assert.ok(!html.includes(secret), `"${secret}" reached the directory`);
   }
+  const outsideUrl = html.replace(/https:\/\/www\.etaa-egypt\.org[^"]*/g, "");
+  assert.ok(!outsideUrl.includes("9999"), "the ETAA number escaped the registry URL");
 });
 
 test("the empty directory says so instead of looking broken", () => {

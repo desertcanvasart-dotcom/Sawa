@@ -2602,7 +2602,8 @@
       "name": "Capital Travel Service",
       "licensedSince": 2011,
       "verified": true,
-      "verifiedAt": "2026-08-14"
+      "verifiedAt": "2026-08-14",
+      "etaaUrl": "https://www.etaa-egypt.org/SitePages/CompanyDetails.aspx?licc=2179"
     }
   }
 }

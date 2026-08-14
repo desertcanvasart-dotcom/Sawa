@@ -470,5 +470,16 @@ export function publicOperator(agency) {
     // Only ever alongside verified: a date without the state reads as a
     // verification, and a state without the date is unfalsifiable.
     verifiedAt: verified ? (agency.verifiedAt || null) : null,
+    // The partner's public entry in the ETAA registry. This is the FIFTH field
+    // and the first that carries an identifying number: ETAA keys its registry
+    // by tourism licence, so the URL discloses it. The client directed this
+    // disclosure on 15 August 2026 ("use 'a member of the Egyptian Travel
+    // Agents Association' as the anchor text, then add the link") — it turns
+    // the membership claim into one a traveller can check on the register
+    // itself, the DIR-17.2 move. /verify's handling promise was amended the
+    // same day to carry the exception.
+    etaaUrl: agency.etaaRegistrationNo
+      ? `https://www.etaa-egypt.org/SitePages/CompanyDetails.aspx?licc=${encodeURIComponent(agency.etaaRegistrationNo)}`
+      : null,
   };
 }
