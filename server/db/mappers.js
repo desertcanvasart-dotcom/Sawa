@@ -158,7 +158,6 @@ export function mapDeparture(r, pledges = []) {
     publishedRate: num(r.published_rate),
     breakPrice: num(r.break_price),
     quality: num(r.quality),
-    cutoff: r.cutoff,
     status: r.status,
     notes: r.notes,
     depositPercent: num(r.deposit_percent),

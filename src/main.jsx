@@ -3806,7 +3806,10 @@ function AgencyDesk(props) {
         <div className="panel" id="manifest">
           <div className="panel-header">
             <div><h2>Shared manifest</h2><p>One vehicle, one guide, separate agency ownership.</p></div>
-            <span className="pill"><Clock3 size={15} />Cutoff {selected.cutoff}</span>
+            {/* The rule the server actually enforces (bookingClosed), not the
+                free-text label departures used to carry — which said "Open
+                until 18:00" while the system closed 24h before start. */}
+            <span className="pill"><Clock3 size={15} />Cutoff {cutoffLabel(info.bookingCutoffHours ?? 24, info.bookingCutoffUnit)}</span>
           </div>
           <div className="manifest-list">
             {selected.pledges.map((pledge, index) => (

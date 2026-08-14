@@ -82,7 +82,6 @@ CREATE TABLE IF NOT EXISTS departures (
   published_rate   INTEGER NOT NULL CHECK (published_rate > 0),
   break_price      INTEGER CHECK (break_price > 0),
   quality          NUMERIC(2,1),
-  cutoff           TEXT,
   status           TEXT NOT NULL DEFAULT 'open'
                      CHECK (status IN ('open','minimum_reached','supplier_confirmed','closed','cancelled')),
   notes            TEXT,

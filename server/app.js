@@ -291,7 +291,6 @@ const createDepartureSchema = z.object({
   time: z.string().trim().optional(),
   city: z.string().trim().optional(),
   customers: z.string().trim().optional(),
-  cutoff: z.string().trim().optional(),
   minSeats: z.coerce.number().int().min(MIN_GROUP_SIZE, {
     message: `Minimum group size is ${MIN_GROUP_SIZE} travellers — what the booking conditions promise a departure confirms at.`,
   }).max(MAX_GROUP_SIZE).optional(),
@@ -596,16 +595,15 @@ app.post("/api/departures", requireAuth, requireRole("agency_owner", "agency_age
       `INSERT INTO departures
         (id, type, tour_product_id, route, date, time, city, guide, vehicle,
          min_seats, max_seats, base_cost, published_rate, break_price, quality,
-         cutoff, status, notes, deposit_percent)
+         status, notes, deposit_percent)
        VALUES ($1,'day_tour',$2,$3,$4,$5,$6,'Verified guide','Shared vehicle',
-         $7,$8,$9,$10,$11,4.6,$12,'open',$13,10)`,
+         $7,$8,$9,$10,$11,4.6,'open',$12,10)`,
       [
         id, body.tourProductId || null, route, body.date || "2026-05-25",
         body.time || "09:00", body.city || "Cairo",
         Number(body.minSeats || 4), Number(body.maxSeats || 12),
         Number(body.baseCost || 280), publishedRate,
         Number(body.breakPrice || Math.round(publishedRate * 0.8)),
-        body.cutoff || "Open until 18:00",
         "New pooling request. Agencies can add seats before supplier confirmation.",
       ]
     );
@@ -690,9 +688,9 @@ app.post("/api/admin/departures", requireAuth, requireRole("super_admin", "ops_s
       `INSERT INTO departures
         (id, type, tour_product_id, route, date, start_date, end_date, nights, cities, time,
          city, guide, vehicle, min_seats, max_seats, base_cost, published_rate, break_price,
-         quality, cutoff, status, notes, deposit_percent)
+         quality, status, notes, deposit_percent)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,
-         $11,$12,$13,$14,$15,$16,$17,$18,$19,$20,'open',$21,$22)`,
+         $11,$12,$13,$14,$15,$16,$17,$18,$19,'open',$20,$21)`,
       [
         id, product.type, product.id, product.title, startDate,
         isPkg ? startDate : null, isPkg ? endDate : null, isPkg ? product.nights : null,
@@ -701,7 +699,7 @@ app.post("/api/admin/departures", requireAuth, requireRole("super_admin", "ops_s
         depMinSeats, depMaxSeats,
         Number(body.baseCost || product.baseCost || 0), Number(body.publishedRate || product.publishedRate),
         Number(body.breakPrice || product.breakPrice || Math.round(product.publishedRate * 0.8)),
-        product.quality, body.cutoff || "Open until 18:00", product.description,
+        product.quality, product.description,
         Number(product.depositPercent || defaultDepositFor(product)),
       ]
     );
@@ -1501,9 +1499,9 @@ app.post("/api/public/departure-requests", writeLimiter, h(async (req, res) => {
       `INSERT INTO departures
         (id, type, tour_product_id, route, date, start_date, end_date, nights, cities, time,
          city, guide, vehicle, min_seats, max_seats, base_cost, published_rate, break_price,
-         quality, cutoff, status, notes, deposit_percent, created_by)
+         quality, status, notes, deposit_percent, created_by)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,
-         $11,$12,$13,$14,$15,$16,$17,$18,$19,$20,'pending_review',$21,$22,'traveler')`,
+         $11,$12,$13,$14,$15,$16,$17,$18,$19,'pending_review',$20,$21,'traveler')`,
       [
         id, product.type, product.id, product.title, input.date,
         isPkg ? input.date : null, isPkg ? endDate : null, isPkg ? product.nights : null,
@@ -1512,7 +1510,7 @@ app.post("/api/public/departure-requests", writeLimiter, h(async (req, res) => {
         Number(product.minSeats), Number(product.maxSeats),
         Number(product.baseCost || 0), Number(product.publishedRate),
         Number(product.breakPrice || Math.round(product.publishedRate * 0.8)),
-        product.quality, "Open until 18:00",
+        product.quality,
         input.note ? `Traveller request: ${input.note}` : "Traveller-requested date awaiting review.",
         Number(product.depositPercent || defaultDepositFor(product)),
       ]
