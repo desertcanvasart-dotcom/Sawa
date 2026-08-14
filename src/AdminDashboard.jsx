@@ -27,6 +27,11 @@ const seatsOf = (d) => (d.pledges || []).reduce((s, p) => (p?.status === "cancel
 import { blogSlug } from "../shared/blog-slug.js";
 import { CURRENCY, CURRENCY_SYMBOL } from "../shared/currency.js";
 import { depositPctFor } from "../shared/booking-policy.js";
+import {
+  requestWindowError, minLeadDaysFor, maxHorizonDaysFor,
+  DEFAULT_MIN_LEAD_DAYS, DEFAULT_MAX_HORIZON_DAYS,
+  MAX_LEAD_DAYS_ALLOWED, MAX_HORIZON_DAYS_ALLOWED,
+} from "../shared/request-window.js";
 const csv = (s) => String(s || "").split(",").map((x) => x.trim()).filter(Boolean);
 
 // Minimal flat navigation. One group, no header. Departures keeps a subtle
@@ -632,6 +637,10 @@ export function ProductEditor({ type: typeProp, existing, destinations = [], dep
     // The operating company. Platform staff choose it; an agency submitting its
     // own listing never sees this field and gets its id from the session.
     agencyId: existing?.agencyId || "",
+    // Blank means "use the default" — not zero, and not 90. The placeholder
+    // in the field shows what a blank will fall back to.
+    requestMinLeadDays: existing?.requestMinLeadDays ?? "",
+    requestMaxHorizonDays: existing?.requestMaxHorizonDays ?? "",
   });
   // Loaded here rather than passed down: the picker is the only thing in this
   // editor that needs them, and an agency editing its own listing never sees it.
@@ -654,6 +663,13 @@ export function ProductEditor({ type: typeProp, existing, destinations = [], dep
       .catch((e) => { if (alive) setAgenciesError(e.message || "the operator list did not load"); });
     return () => { alive = false; };
   }, [agencyMode]);
+
+  // Shown under the window fields: the error if the pair is unsavable, else what
+  // the traveller will actually get, resolved through the same functions the
+  // server and the calendar use.
+  const windowNote = requestWindowError(f.requestMinLeadDays, f.requestMaxHorizonDays)
+    || `Travellers can request from ${minLeadDaysFor({ requestMinLeadDays: f.requestMinLeadDays === "" ? null : Number(f.requestMinLeadDays) })} `
+      + `to ${maxHorizonDaysFor({ requestMaxHorizonDays: f.requestMaxHorizonDays === "" ? null : Number(f.requestMaxHorizonDays) })} days ahead.`;
 
   const [meetingPoints, setMeetingPoints] = useState(() => {
     if (existing?.meetingPoints?.length) return existing.meetingPoints;
@@ -763,6 +779,8 @@ export function ProductEditor({ type: typeProp, existing, destinations = [], dep
         meetingPoint: (meetingPoints[0]?.point || f.meetingPoint || "").trim(),
         operatingDays: f.operatingDays,
         ...(agencyMode ? {} : { agencyId: f.agencyId || null }),
+        requestMinLeadDays: f.requestMinLeadDays === "" ? null : Number(f.requestMinLeadDays),
+        requestMaxHorizonDays: f.requestMaxHorizonDays === "" ? null : Number(f.requestMaxHorizonDays),
         pickupNote: (meetingPoints[0]?.note || f.pickupNote || "").trim(),
         bookingCutoffHours: Number(f.bookingCutoffHours) || 0,
         images,
@@ -872,6 +890,17 @@ export function ProductEditor({ type: typeProp, existing, destinations = [], dep
                     : <small>Named on the departure page. Only a verified operator is shown to travellers.</small>}
                 </Field>
               )}
+              <Field label={`Minimum notice (empty = ${DEFAULT_MIN_LEAD_DAYS} days)`}>
+                <input type="number" min="0" max={MAX_LEAD_DAYS_ALLOWED} value={f.requestMinLeadDays}
+                  onChange={set("requestMinLeadDays")} placeholder={String(DEFAULT_MIN_LEAD_DAYS)} />
+              </Field>
+              <Field label={`Bookable up to (empty = ${DEFAULT_MAX_HORIZON_DAYS} days ahead)`}>
+                <input type="number" min="1" max={MAX_HORIZON_DAYS_ALLOWED} value={f.requestMaxHorizonDays}
+                  onChange={set("requestMaxHorizonDays")} placeholder={String(DEFAULT_MAX_HORIZON_DAYS)} />
+                {/* A cruise sold six months out and a day tour sold three weeks
+                    out want different answers; both got 90 until now. */}
+                <small>{windowNote}</small>
+              </Field>
               <Field label="Departs on (empty = any day)" full>
                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                   {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d, i) => {

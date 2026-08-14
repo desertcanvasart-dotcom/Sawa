@@ -71,6 +71,11 @@ export function mapProduct(r) {
     depositPercent: num(r.deposit_percent),
     description: r.description,
     operatingDays: Array.isArray(r.operating_days) ? r.operating_days : [],
+    // NULL is preserved rather than defaulted here: "nobody set one" and
+    // "someone chose 90" are different facts, and shared/request-window.js
+    // is the only place that turns the first into a number.
+    requestMinLeadDays: r.request_min_lead_days ?? null,
+    requestMaxHorizonDays: r.request_max_horizon_days ?? null,
     included: r.included ?? [],
     notIncluded: r.not_included ?? [],
     active: r.active !== false,

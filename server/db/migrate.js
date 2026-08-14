@@ -45,6 +45,7 @@ const MIGRATIONS = [
   { name: "034_five_star_cruiser", file: "schema_034_five_star_cruiser.sql" },
   { name: "035_licence_year_not_expiry", file: "schema_035_licence_year_not_expiry.sql" },
   { name: "036_no_founding_partner", file: "schema_036_no_founding_partner.sql" },
+  { name: "037_request_window", file: "schema_037_request_window.sql" },
 ];
 
 async function main() {

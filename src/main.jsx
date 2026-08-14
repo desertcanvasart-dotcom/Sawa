@@ -48,6 +48,7 @@ import { seatsTotal, goAheadSeatsFor } from "../shared/departure-state.js";
 import { livePriceFor, priceFromTiers, clampPrice } from "../shared/pricing.js";
 import { cleanRefCode } from "../shared/ref-code.js";
 import { operatingDaysLabel } from "../shared/operating-days.js";
+import { minLeadDaysFor, maxHorizonDaysFor } from "../shared/request-window.js";
 import { CURRENCY, CURRENCY_SYMBOL, CURRENCY_PROSE } from "../shared/currency.js";
 import {
   isPackage, balanceDueDate, depositPctFor, cancellationBandsFor, chargeText,
@@ -1500,11 +1501,11 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
   }
 
   const reqIso = (days) => { const d = new Date(); d.setDate(d.getDate() + days); return d.toISOString().slice(0, 10); };
-  // The same fences the server applies (REQUEST_MIN_LEAD_DAYS /
-  // REQUEST_MAX_HORIZON_DAYS in app.js). Named rather than the bare 3 and 90
-  // that were inlined, so whoever raises the horizon can find both ends of it.
-  const REQUEST_MIN_LEAD_DAYS = 3;
-  const REQUEST_MAX_HORIZON_DAYS = 90;
+  // The window this product sets, falling back to the defaults. The same pair
+  // the server applies — one authority in shared/, so the calendar cannot offer
+  // a day the request route will refuse.
+  const REQUEST_MIN_LEAD_DAYS = minLeadDaysFor(tour);
+  const REQUEST_MAX_HORIZON_DAYS = maxHorizonDaysFor(tour);
   // Which month the grid shows. Starts on the month containing the first
   // bookable day, not today — on the 29th, today's month is nearly all past and
   // the visitor opens on a grid with almost nothing left in it.

@@ -50,20 +50,26 @@ test("a closed day is disabled and says why", () => {
 test("every reason the calendar closes a day, the server also enforces", () => {
   // The calendar is a convenience, never the authority.
   const app = read("server/app.js");
-  assert.match(app, /REQUEST_MIN_LEAD_DAYS/, "lead time");
-  assert.match(app, /REQUEST_MAX_HORIZON_DAYS/, "horizon");
+  assert.match(app, /minLeadDaysFor\(product\)/, "lead time");
+  assert.match(app, /maxHorizonDaysFor\(product\)/, "horizon");
   assert.match(app, /operatingDayError\(product, input\.date\)/, "operating day");
   assert.match(app, /blocked\.has\(input\.date\)/, "operator blackout");
 });
 
-test("the client's fences are named, not inlined", () => {
-  // They were the bare 3 and 90, in two places, with the server's copy in a
-  // third. Named so whoever raises the horizon can find both ends of it.
-  assert.match(ui, /const REQUEST_MIN_LEAD_DAYS = 3;/);
-  assert.match(ui, /const REQUEST_MAX_HORIZON_DAYS = 90;/);
+test("the fences come from one authority, not a constant on each side", () => {
+  // They were the bare 3 and 90 inlined on the client, with the server's own
+  // copy in a third place. Both now resolve the PRODUCT's window through
+  // shared/request-window.js, so the calendar cannot offer a day the request
+  // route will refuse.
+  assert.match(ui, /const REQUEST_MIN_LEAD_DAYS = minLeadDaysFor\(tour\);/);
+  assert.match(ui, /const REQUEST_MAX_HORIZON_DAYS = maxHorizonDaysFor\(tour\);/);
+  assert.match(ui, /from "\.\.\/shared\/request-window\.js"/);
+
   const app = read("server/app.js");
-  assert.match(app, /const REQUEST_MIN_LEAD_DAYS = 3;/);
-  assert.match(app, /const REQUEST_MAX_HORIZON_DAYS = 90;/);
+  assert.ok(!/const REQUEST_MIN_LEAD_DAYS = 3;/.test(app),
+    "the server still carries its own copy of the fence");
+  assert.ok(!/const REQUEST_MAX_HORIZON_DAYS = 90;/.test(app));
+  assert.match(app, /from "\.\.\/shared\/request-window\.js"/);
 });
 
 test("month navigation stops at the fences rather than running forever", () => {

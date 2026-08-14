@@ -7,6 +7,7 @@ import { refreshStatus } from "./departure-status.js";
 import { publicOperator } from "./domain.js";
 import { durationShapeError } from "../shared/booking-policy.js";
 import { operatingDayError } from "../shared/operating-days.js";
+import { minLeadDaysFor, maxHorizonDaysFor, requestWindowError } from "../shared/request-window.js";
 import { cleanRefCode } from "../shared/ref-code.js";
 import { mapAgency, mapCity, mapProduct, mapDeparture, mapPledge } from "./db/mappers.js";
 import {
@@ -321,9 +322,10 @@ const publicDepartureRequestSchema = z.object({
   ignoreMatches: z.coerce.boolean().optional(),
 });
 
-// Eligibility fences for traveler-picked dates (addendum defaults).
-const REQUEST_MIN_LEAD_DAYS = 3;
-const REQUEST_MAX_HORIZON_DAYS = 90;
+// Eligibility fences for traveler-picked dates. The addendum specified these
+// "per tour product" with these as DEFAULTS; only the defaults were built. They
+// live in shared/request-window.js now, because the calendar and the admin form
+// need the same pair and both are in the browser bundle.
 const NEAR_MATCH_WINDOW_DAYS = 3;
 
 // Referral codes: lowercase, url-safe, capped. Returns "" if nothing usable.
@@ -678,6 +680,13 @@ app.post("/api/admin/departures", requireAuth, requireRole("super_admin", "ops_s
   // operator can act on, before anything is written.
   const durationProblem = durationShapeError(type, body.duration);
   if (durationProblem) throw new AppError(422, durationProblem);
+
+  // The request window, if this listing sets one. Mirrors the CHECK in 037 so
+  // the operator is told what is wrong in words rather than meeting a
+  // constraint violation.
+  const windowProblem = requestWindowError(body.requestMinLeadDays, body.requestMaxHorizonDays);
+  if (windowProblem) throw new AppError(422, windowProblem);
+  const blankNum = (v) => (v === "" || v == null ? null : Number(v));
     if (travelerSeats > depMaxSeats) {
       throw new AppError(422, `This date holds at most ${depMaxSeats} travellers.`);
     }
@@ -794,11 +803,14 @@ async function upsertTourProduct(c, body, review) {
        min_seats, max_seats, base_cost, published_rate, break_price, quality, deposit_percent,
        description, included, not_included, itinerary, accommodation_tiers,
        overview_html, policies_html, what_to_bring, meeting_point, pickup_note, booking_cutoff_hours, images,
-       meeting_points, status, agency_id, submitted_by, submitted_at, reviewed_by, reviewed_at, rejection_reason, operating_days, price_tiers)
+       meeting_points, status, agency_id, submitted_by, submitted_at, reviewed_by, reviewed_at, rejection_reason, operating_days, price_tiers,
+       request_min_lead_days, request_max_horizon_days)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,
        $23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39)
      ON CONFLICT (id) DO UPDATE SET
        operating_days=EXCLUDED.operating_days, price_tiers=EXCLUDED.price_tiers,
+       request_min_lead_days=EXCLUDED.request_min_lead_days,
+       request_max_horizon_days=EXCLUDED.request_max_horizon_days,
        type=EXCLUDED.type, title=EXCLUDED.title, city=EXCLUDED.city, cities=EXCLUDED.cities,
        nights=EXCLUDED.nights, duration=EXCLUDED.duration,
        guide=EXCLUDED.guide, vehicle=EXCLUDED.vehicle, min_seats=EXCLUDED.min_seats,
@@ -843,6 +855,7 @@ async function upsertTourProduct(c, body, review) {
       JSON.stringify(Array.isArray(body.meetingPoints) ? body.meetingPoints : []),
       review.status, review.agencyId || null, review.submittedBy || null, now,
       review.reviewedBy || null, reviewedAt, null, operatingDays, priceTiers,
+      blankNum(body.requestMinLeadDays), blankNum(body.requestMaxHorizonDays),
     ]
   );
   return loadProduct(c, id);
@@ -1396,12 +1409,9 @@ app.post("/api/public/departure-requests", writeLimiter, h(async (req, res) => {
   const picked = new Date(`${input.date}T12:00:00`);
   if (isNaN(picked)) throw new AppError(422, "A valid date is required.");
   const daysOut = Math.round((picked - today) / 86400000);
-  if (daysOut < REQUEST_MIN_LEAD_DAYS) {
-    throw new AppError(422, `Requested dates need at least ${REQUEST_MIN_LEAD_DAYS} days of lead time.`);
-  }
-  if (daysOut > REQUEST_MAX_HORIZON_DAYS) {
-    throw new AppError(422, `Requested dates can be at most ${REQUEST_MAX_HORIZON_DAYS} days out.`);
-  }
+  // The window is checked INSIDE the transaction below, once the product is
+  // loaded — it is per product now, and this ran before anything knew which
+  // tour was being requested.
 
   // Operator blackouts (Autoura capacity feed): the weekly pattern may allow
   // this weekday, but not THIS date if the operation is dark. Checked before
@@ -1415,6 +1425,18 @@ app.post("/api/public/departure-requests", writeLimiter, h(async (req, res) => {
     const product = await loadProduct(c, input.tourProductId);
     if (!product || product.active === false || product.status !== "approved") {
       throw new AppError(404, "Tour not found.");
+    }
+
+    // The request window, per product. A Nile cruise sold six months ahead and a
+    // Cairo day tour sold three weeks ahead want different answers, and until
+    // now both got 3/90 from a constant.
+    const minLead = minLeadDaysFor(product);
+    const maxHorizon = maxHorizonDaysFor(product);
+    if (daysOut < minLead) {
+      throw new AppError(422, `${product.title} needs at least ${minLead} day${minLead === 1 ? "" : "s"} of notice.`);
+    }
+    if (daysOut > maxHorizon) {
+      throw new AppError(422, `${product.title} can be requested up to ${maxHorizon} days ahead.`);
     }
 
     // Operating days: a Nile cruise that sails Mondays must not accept a
