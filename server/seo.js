@@ -12,6 +12,8 @@ import { BRAND, ORG_ID, SITE_ID, travelAgencySchema, websiteSchema } from "./bra
 // hand. Three hand-written copies of a URL is three chances for the warmer to
 // warm a URL the catalogue does not link to.
 import { tourSlug, tourPath } from "./slug.js";
+import { publicOperator } from "./domain.js";
+import { mapAgency } from "./db/mappers.js";
 import { GROUP_MAX_WORD } from "../shared/group-size.js";
 import { CURRENCY, CURRENCY_SYMBOL } from "../shared/currency.js";
 // DIR-17.1 — the support-availability string has ONE owner. Four variants
@@ -126,6 +128,7 @@ export function clearSeoCaches() {
   slugIndex = { at: 0, byslug: null };
   productCache.clear();
   catalogueCache = { at: 0, rows: null };
+  agencyCache = { at: 0, byId: null };
 }
 
 // Takes the ROWS, not a query result. Separated so the markup can be tested
@@ -173,6 +176,26 @@ async function slugToId(slug) {
   return slugIndex.byslug.get(slug) || null;
 }
 
+// The operator behind a listing, whitelisted for a traveller.
+//
+// Memoised on the same terms as the product and slug caches above: a crawler
+// hits every tour route in a burst, and each render would otherwise re-read the
+// agencies table to print one name.
+//
+// Goes through publicOperator() rather than reading the row directly, so the
+// crawler body and the React card cannot disagree about what may be shown —
+// there is one whitelist and both sides use it. The licence number is not in it.
+let agencyCache = { at: 0, byId: null };
+async function operatorForProduct(product) {
+  if (!product?.agency_id) return null;
+  if (!agencyCache.byId || Date.now() - agencyCache.at > LOOKUP_TTL_MS) {
+    const r = await pool.query("SELECT * FROM agencies");
+    agencyCache = { at: Date.now(), byId: new Map(r.rows.map((row) => [row.id, row])) };
+  }
+  const row = agencyCache.byId.get(product.agency_id);
+  return row ? publicOperator(mapAgency(row)) : null;
+}
+
 async function findTourProduct(idOrSlug) {
   const hit = productCache.get(idOrSlug);
   if (hit && Date.now() - hit.at < LOOKUP_TTL_MS) return hit.row;
@@ -212,6 +235,7 @@ async function tourSchema(idOrSlug, url) {
   const low = Number(p.break_price) || Number(p.published_rate) || undefined;
   const high = Number(p.published_rate) || undefined;
   const itin = Array.isArray(p.itinerary) ? p.itinerary : [];
+  const operator = await operatorForProduct(p);
   const trip = {
     "@type": "TouristTrip",
     name: p.title,
@@ -219,13 +243,28 @@ async function tourSchema(idOrSlug, url) {
     url,
     image: img,
     touristType: "Small-group shared tour",
-    provider: { "@id": ORG_ID },
+    // PROVIDER IS THE COMPANY THAT PERFORMS THE TRIP, WHICH IS NOT SAWA.
+    //
+    // schema.org: provider is "the service provider, service operator, or
+    // service performer". The operator delivers the tour; Sawa pools the
+    // travellers and takes the booking. Naming Sawa as provider on every
+    // product said Sawa runs them, which is the same conflation the site's copy
+    // spent this week removing.
+    //
+    // Sawa moves to `seller` on the offer, which is exactly what it is, so both
+    // entities are still in the graph and each is described correctly. With no
+    // operator recorded, provider falls back to Sawa rather than being dropped —
+    // an offer with no provider at all is worse than an imprecise one.
+    provider: operator
+      ? { "@type": "Organization", name: operator.name }
+      : { "@id": ORG_ID },
     offers: {
       "@type": "AggregateOffer",
       priceCurrency: CURRENCY,
       lowPrice: low, highPrice: high,
       availability: "https://schema.org/InStock",
       url,
+      seller: { "@id": ORG_ID },
       description: "Hold a seat free; pay only once the date is confirmed (GoAhead).",
     },
   };
@@ -549,6 +588,11 @@ export async function buildBody(pathname) {
     const itin = Array.isArray(p.itinerary) ? p.itinerary.filter((d) => d && (d.title || d.description)) : [];
     const included = Array.isArray(p.included) ? p.included.filter(Boolean) : [];
     const notIncluded = Array.isArray(p.not_included) ? p.not_included.filter(Boolean) : [];
+    // Crawlers do not execute JavaScript, so the operator has to be in the
+    // SERVED body — not only in the bootstrap the React card renders from. The
+    // Terms say the company responsible is named on the departure page; without
+    // this, that is true for a person and false for a search engine.
+    const operator = await operatorForProduct(p);
     return wrapBody(`
 <article>
   <h1>${esc(p.title)}</h1>
@@ -561,7 +605,9 @@ export async function buildBody(pathname) {
   ${included.length ? `<h2>Included</h2><ul>${included.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}
   ${notIncluded.length ? `<h2>Not included</h2><ul>${notIncluded.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}
   ${p.meeting_point ? `<h2>Meeting point</h2><p>${esc(p.meeting_point)}</p>` : ""}
-  <p>Operated by an Egyptian travel company licensed by the Ministry of Tourism and registered with ETAA.</p>
+  <p>${operator
+      ? `Operated by ${esc(operator.name)}, an Egyptian travel company licensed by the Ministry of Tourism and registered with ETAA.${operator.licensedSince ? ` Licensed since ${esc(operator.licensedSince)}.` : ""}${operator.verified ? " Verified by Sawa." : ""}`
+      : "Operated by an Egyptian travel company licensed by the Ministry of Tourism and registered with ETAA."}</p>
 </article>`);
   }
 
