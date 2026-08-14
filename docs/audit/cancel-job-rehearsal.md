@@ -50,6 +50,13 @@ own `UPDATE` triggers it, so nothing synthetic would have crossed that boundary.
 
 ### 3. It would have destroyed the cleanest evidence this project has
 
+> **E-2 ENDED 2026-08-12.** The rehearsals were run against an ephemeral
+> database on 9 and 10 August 2026, while production's `pledges` was empty.
+> **That is why no real booking could be confused with a synthetic one**, and
+> it ceased to be true on 2026-08-12, when the first five rows landed in
+> production. The reasoning below is preserved as written; read its present
+> tense as the present of 10 August 2026.
+
 *"`pledges` has never held a row"* is load-bearing. The legal register cites it
 under the ratings question; the seed-precondition document opens with it. Writing
 a synthetic pledge to production ends that sentence permanently — sequences

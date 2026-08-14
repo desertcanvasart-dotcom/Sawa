@@ -147,12 +147,20 @@ test("the register is reachable from the directives", () => {
   assert.match(directives, /evidence-expiry\.md/, "nothing points at the evidence-expiry register");
 });
 
-test("the load-bearing sentence is still load-bearing in the same places", () => {
-  // E-2. If one of these stops citing it, either the citation moved or somebody
-  // quietly stopped depending on it — both worth noticing at the moment it
-  // happens rather than at the seed.
-  assert.match(readFileSync(join(ROOT, "scripts", "audit-claims.js"), "utf8"),
-    /pledges has never held a row/, "the volume rule no longer states its premise");
-  assert.match(readFileSync(join(ROOT, "docs", "audit", "legal-register.md"), "utf8"),
-    /pledges` has never held a row/, "the legal register no longer cites it");
+test("E-2 is recorded as expired, and the four dependents carry the same date", () => {
+  // Until 2026-08-12 this test asserted the load-bearing sentence was still
+  // cited verbatim in its dependents — the watch that would notice a citation
+  // quietly disappearing before the seed. Five pledge rows landed that day, so
+  // it now pins the other side, the way E-1's test does: the register says
+  // EXPIRED, and every dependent is bounded by the one date. A present-tense
+  // "never held a row" reappearing anywhere would be the old claim un-restated.
+  const e2 = ENTRIES.find((e) => e.id === "E-2");
+  assert.match(e2.body.split("**Status**")[1].split("\n")[0], /EXPIRED 2026-08-12/);
+  for (const file of ["scripts/audit-claims.js", "docs/audit/legal-register.md",
+    "docs/audit/cancel-job-rehearsal.md", "docs/audit/evidence-expiry.md"]) {
+    assert.match(readFileSync(join(ROOT, ...file.split("/")), "utf8"),
+      /E-2 ENDED 2026-08-12/, `${file} does not carry the restatement marker`);
+  }
+  assert.doesNotMatch(readFileSync(join(ROOT, "scripts", "audit-claims.js"), "utf8"),
+    /pledges has never held a row/, "the volume rule still states the expired premise");
 });

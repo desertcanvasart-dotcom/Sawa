@@ -131,9 +131,12 @@ written history rather than contradicting it.
 **Period of exposure:** from project creation until 024 is applied. The earliest
 firm date available here is the table-statistics reset, 2026-05-22.
 
-**The one piece of luck:** `pledges` is still empty. There is no traveller
-personal data exposed today, and the window closes at DIR-16 — which is why
-EEE4 puts 024 ahead of the seed.
+**The one piece of luck:** `pledges` was empty for the whole window. No
+traveller personal data was exposed during the Data API window, because
+`pledges` held no rows at any point in it. **This is a statement about a closed
+period — the window closed when 024 was applied, and `pledges` stayed empty
+until 2026-08-12 (`E-2 ENDED 2026-08-12`)** — not a control; 024 is what makes
+it stay true afterwards.
 
 ---
 

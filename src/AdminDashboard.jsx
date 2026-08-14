@@ -885,9 +885,14 @@ export function ProductEditor({ type: typeProp, existing, destinations = [], dep
                   {/* The Terms and /about both say the company responsible is named
                       on the departure page. Until this is set, that sentence has
                       nothing behind it — which was true of all 16 products. */}
+                  {/* Wording matches what publicOperator() actually does: the
+                      name renders as soon as a company is attached, whatever
+                      its verification state — only the "Verified by Sawa" line
+                      is gated. The previous sentence here claimed the whole
+                      card was gated, which was false. */}
                   {agenciesError
                     ? <small className="form-error">{agenciesError} — reopen the editor to try again.</small>
-                    : <small>Named on the departure page. Only a verified operator is shown to travellers.</small>}
+                    : <small>Named on the departure page as soon as it is attached. "Verified by Sawa" appears there only once a verification is recorded here.</small>}
                 </Field>
               )}
               <Field label={`Minimum notice (empty = ${DEFAULT_MIN_LEAD_DAYS} days)`}>
