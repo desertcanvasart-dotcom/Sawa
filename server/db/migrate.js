@@ -41,6 +41,7 @@ const MIGRATIONS = [
   { name: "030_pledges_paid", file: "schema_030_pledges_paid.sql" },
   { name: "031_package_deposit_25", file: "schema_031_package_deposit_25.sql" },
   { name: "032_minya_is_a_day_tour", file: "schema_032_minya_is_a_day_tour.sql" },
+  { name: "033_hotel_tier_names", file: "schema_033_hotel_tier_names.sql" },
 ];
 
 async function main() {
