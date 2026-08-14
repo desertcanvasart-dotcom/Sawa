@@ -38,7 +38,10 @@
       "quality": 4.7,
       "depositPercent": 20,
       "description": "Pyramids, Abu Simbel, a 3-night Nile cruise and three days on the Red Sea — fully guided, flights included.",
-      "operatingDays": [],
+      "operatingDays": [
+        1,
+        6
+      ],
       "included": [
         "Arrival and departure airport transfers",
         "Domestic flights Cairo → Aswan and Hurghada → Cairo",
@@ -197,7 +200,10 @@
       "quality": 4.9,
       "depositPercent": 20,
       "description": "Cairo's pyramids, the Egyptian Museum, a 4-night Nile cruise from Luxor to Aswan, and the temples in between — domestic flights and full sightseeing included.",
-      "operatingDays": [],
+      "operatingDays": [
+        3,
+        5
+      ],
       "included": [
         "Arrival and departure airport transfers",
         "Domestic flights Cairo → Luxor and Aswan → Cairo",
@@ -467,7 +473,10 @@
       "quality": 4.9,
       "depositPercent": 20,
       "description": "A five-star Nile cruise from Luxor to Aswan — Karnak and Luxor Temple by night, the Valley of the Kings, Edfu, Kom Ombo, Philae and the High Dam, with full board and a licensed Egyptologist.",
-      "operatingDays": [],
+      "operatingDays": [
+        1,
+        6
+      ],
       "included": [
         "Meet & assist at Luxor and Aswan airports with all transfers",
         "4 nights aboard a five-star Nile cruiser (full board)",
