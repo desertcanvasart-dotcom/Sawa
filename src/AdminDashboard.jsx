@@ -666,7 +666,11 @@ export function ProductEditor({ type: typeProp, existing, destinations = [], dep
   );
   const [tiers, setTiers] = useState(
     existing?.accommodationTiers?.length ? existing.accommodationTiers
-      : pkg ? [{ id: "standard", name: "Standard (3★)", perPersonSupplement: 0, singleSupplement: 0 }] : []
+      // Four-star is the FLOOR: Sawa sells no three-star package. This seeded
+      // every new package with "Standard (3★)", which is how a package came to
+      // carry one — the same shape as the 20% deposit default, where a stale
+      // literal here quietly re-created what a migration had just cleaned up.
+      : pkg ? [{ id: "standard", name: "Four-star", perPersonSupplement: 0, singleSupplement: 0 }] : []
   );
   // New departures to publish on save (not for edit pre-fill). A date is
   // created together with its first booking — the traveller it belongs to —

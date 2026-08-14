@@ -134,9 +134,12 @@ const product = {
     "Tipping and gratuities",
   ],
   accommodationTiers: [
-    { id: "standard", name: "Standard (3★ / 5★ cruise)", perPersonSupplement: 0, singleSupplement: 150 },
-    { id: "superior", name: "Superior (4★ / deluxe cruise)", perPersonSupplement: 180, singleSupplement: 240 },
-    { id: "luxury", name: "Luxury (5★ / luxury cruise)", perPersonSupplement: 390, singleSupplement: 420 },
+    // Hotel ratings only, four-star floor. The ids are stable references —
+    // pledges.accommodation_tier stores them — so they stay as they are while
+    // the labels move. See migration 033.
+    { id: "standard", name: "Four-star", perPersonSupplement: 0, singleSupplement: 150 },
+    { id: "superior", name: "Five-star Standard", perPersonSupplement: 180, singleSupplement: 240 },
+    { id: "luxury", name: "Five-star Deluxe", perPersonSupplement: 390, singleSupplement: 420 },
   ],
   overviewHtml:
     "<p>Egypt's greatest hits in one shared, fully guided trip — and you only pay once the group is confirmed. Begin in Cairo with Memphis, Saqqara and Old Cairo, the Egyptian Museum and the Pyramids of Giza, then fly south to Luxor to board a four-night Nile cruise calling at Karnak, the Valley of the Kings, Edfu, Kom Ombo and Aswan. Domestic flights and all sightseeing are included, so the logistics are handled end to end.</p>" +
