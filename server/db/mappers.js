@@ -93,6 +93,9 @@ export function mapProduct(r) {
     pickupNote: r.pickup_note ?? "",
     meetingPoints: r.meeting_points ?? [],
     bookingCutoffHours: r.booking_cutoff_hours == null ? 24 : num(r.booking_cutoff_hours),
+    // How the operator expressed the cutoff (038): null reads as hours. The
+    // hours above stay the enforced value either way.
+    bookingCutoffUnit: r.booking_cutoff_unit || null,
     // NULL stays null: domain.js resolves it to the type default, so the policy
     // has exactly one home rather than being frozen into every row.
     confirmDeadlineDays: r.confirm_deadline_days == null ? null : num(r.confirm_deadline_days),

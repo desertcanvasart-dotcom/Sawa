@@ -211,6 +211,41 @@ export function durationShapeError(type, duration) {
 }
 
 // ---------------------------------------------------------------------------
+// The booking cutoff's unit (038). The stored number is ALWAYS hours —
+// bookingClosed() reads it and nothing else may reinterpret it. The unit
+// records how the operator expressed the cutoff, so a package set to "3 days"
+// reopens saying 3 days, not 72. Hours suit a day tour; a multi-day package
+// commits flights and cabins days out, and its cutoff is a number of days
+// (client, 15 August 2026).
+
+export const CUTOFF_UNITS = ["hours", "days"];
+
+// Mirrors tour_products_cutoff_unit_chk in words an operator can act on,
+// checked before anything is written (same shape as requestWindowError).
+export function cutoffUnitError(hours, unit) {
+  if (unit == null || unit === "" || unit === "hours") return null;
+  if (unit !== "days") return `A booking cutoff is counted in "hours" or "days". Got "${unit}".`;
+  const h = Number(hours);
+  if (!Number.isFinite(h) || h % 24 !== 0) {
+    return `A cutoff in days must store a whole number of days — ${hours} hours is not. `
+      + `Pick the number of days and the editor stores it as days × 24.`;
+  }
+  return null;
+}
+
+// One label for every surface that shows the cutoff, so the admin review row
+// and the agency preview cannot phrase the same rule two ways.
+export function cutoffLabel(hours, unit) {
+  const h = Number(hours);
+  if (!Number.isFinite(h)) return "";
+  if (unit === "days" && h % 24 === 0) {
+    const d = h / 24;
+    return `${d} day${d === 1 ? "" : "s"} before`;
+  }
+  return `${h}h before`;
+}
+
+// ---------------------------------------------------------------------------
 // Does this package include a Nile cruise?
 //
 // The cruiser is always five-star — Sawa uses no four-star boat at any price —

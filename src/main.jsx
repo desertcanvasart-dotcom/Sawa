@@ -54,7 +54,7 @@ import {
   isPackage, balanceDueDate, depositPctFor, cancellationBandsFor, chargeText,
   CANCELLATION_COLUMNS, CANCELLATION_BEFORE_GOAHEAD,
   CANCELLATION_QUALIFIER, CANCELLATION_CAP,
-  hasNileCruise, CRUISE_STANDARD_NOTE,
+  hasNileCruise, CRUISE_STANDARD_NOTE, cutoffLabel,
 } from "../shared/booking-policy.js";
 // Lazy-loaded so the heavy authenticated portal (admin desk + TipTap editor)
 // is split out of the public bundle and never downloaded by visitors.
@@ -3622,7 +3622,7 @@ function AgencyTourPreview({ info, departure, isPackage: pkg }) {
               ? formatRange(departure.startDate || departure.date, departure.endDate)
               : `${formatDate(departure.date)}${departure.time ? ` · ${departure.time}` : ""}`}</span>
             <span><Car size={14} />{info.vehicle || "Shared vehicle"}</span>
-            {info.bookingCutoffHours != null && <span><Clock3 size={14} />Cutoff {info.bookingCutoffHours}h before</span>}
+            {info.bookingCutoffHours != null && <span><Clock3 size={14} />Cutoff {cutoffLabel(info.bookingCutoffHours, info.bookingCutoffUnit)}</span>}
           </div>
         </div>
       </div>

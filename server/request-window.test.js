@@ -111,7 +111,9 @@ test("the editor saves blank as NULL, never as the default", () => {
 
 test("the upsert persists both ends", () => {
   const app = read("server/app.js");
-  assert.match(app, /request_min_lead_days, request_max_horizon_days\)/);
+  // [,)] not \): 038 appended booking_cutoff_unit after these two, and the pin
+  // is that both columns are in the INSERT — not that they end it.
+  assert.match(app, /request_min_lead_days, request_max_horizon_days[,)]/);
   assert.match(app, /request_max_horizon_days=EXCLUDED\.request_max_horizon_days/);
 });
 

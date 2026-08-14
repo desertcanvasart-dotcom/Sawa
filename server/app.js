@@ -5,7 +5,7 @@ import { pool, withTransaction, withDepartureWrites } from "./db/index.js";
 import { pendingGoAheads, alertPayload } from "./goahead-alert.js";
 import { refreshStatus } from "./departure-status.js";
 import { publicOperator } from "./domain.js";
-import { durationShapeError } from "../shared/booking-policy.js";
+import { durationShapeError, cutoffUnitError } from "../shared/booking-policy.js";
 import { operatingDayError } from "../shared/operating-days.js";
 import { minLeadDaysFor, maxHorizonDaysFor, requestWindowError } from "../shared/request-window.js";
 import { cleanRefCode } from "../shared/ref-code.js";
@@ -801,6 +801,15 @@ export async function upsertTourProduct(c, body, review) {
   if (windowProblem) throw new AppError(422, windowProblem);
   const blankNum = (v) => (v === "" || v == null ? null : Number(v));
 
+  // The cutoff's unit (038). The hours stay canonical; the unit is how the
+  // operator said it, and "days" over a number that is not whole days is
+  // refused here in words rather than by the CHECK constraint.
+  const cutoffHours = Number.isFinite(Number(body.bookingCutoffHours)) ? Number(body.bookingCutoffHours) : 24;
+  const cutoffUnit = body.bookingCutoffUnit === "days" ? "days"
+    : body.bookingCutoffUnit === "hours" ? "hours" : null;
+  const cutoffProblem = cutoffUnitError(cutoffHours, cutoffUnit);
+  if (cutoffProblem) throw new AppError(422, cutoffProblem);
+
   // Optional per-headcount pricing. Rejected loudly rather than silently
   // dropped: a table the operator believes is saved but isn't would quietly
   // sell every seat at the interpolated price instead.
@@ -817,13 +826,14 @@ export async function upsertTourProduct(c, body, review) {
        description, included, not_included, itinerary, accommodation_tiers,
        overview_html, policies_html, what_to_bring, meeting_point, pickup_note, booking_cutoff_hours, images,
        meeting_points, status, agency_id, submitted_by, submitted_at, reviewed_by, reviewed_at, rejection_reason, operating_days, price_tiers,
-       request_min_lead_days, request_max_horizon_days)
+       request_min_lead_days, request_max_horizon_days, booking_cutoff_unit)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,
-       $23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41)
+       $23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41,$42)
      ON CONFLICT (id) DO UPDATE SET
        operating_days=EXCLUDED.operating_days, price_tiers=EXCLUDED.price_tiers,
        request_min_lead_days=EXCLUDED.request_min_lead_days,
        request_max_horizon_days=EXCLUDED.request_max_horizon_days,
+       booking_cutoff_unit=EXCLUDED.booking_cutoff_unit,
        type=EXCLUDED.type, title=EXCLUDED.title, city=EXCLUDED.city, cities=EXCLUDED.cities,
        nights=EXCLUDED.nights, duration=EXCLUDED.duration,
        guide=EXCLUDED.guide, vehicle=EXCLUDED.vehicle, min_seats=EXCLUDED.min_seats,
@@ -863,12 +873,12 @@ export async function upsertTourProduct(c, body, review) {
       type === "package" ? JSON.stringify(body.accommodationTiers || []) : null,
       cleanHtml(body.overviewHtml) || null, cleanHtml(body.policiesHtml) || null,
       JSON.stringify(body.whatToBring || []), body.meetingPoint || null,
-      body.pickupNote || null, Number.isFinite(Number(body.bookingCutoffHours)) ? Number(body.bookingCutoffHours) : 24,
+      body.pickupNote || null, cutoffHours,
       JSON.stringify(body.images || []),
       JSON.stringify(Array.isArray(body.meetingPoints) ? body.meetingPoints : []),
       review.status, review.agencyId || null, review.submittedBy || null, now,
       review.reviewedBy || null, reviewedAt, null, operatingDays, priceTiers,
-      blankNum(body.requestMinLeadDays), blankNum(body.requestMaxHorizonDays),
+      blankNum(body.requestMinLeadDays), blankNum(body.requestMaxHorizonDays), cutoffUnit,
     ]
   );
   return loadProduct(c, id);
