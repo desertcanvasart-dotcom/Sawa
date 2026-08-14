@@ -52,6 +52,7 @@ import {
   isPackage, balanceDueDate, depositPctFor, cancellationBandsFor, chargeText,
   CANCELLATION_COLUMNS, CANCELLATION_BEFORE_GOAHEAD,
   CANCELLATION_QUALIFIER, CANCELLATION_CAP,
+  hasNileCruise, CRUISE_STANDARD_NOTE,
 } from "../shared/booking-policy.js";
 // Lazy-loaded so the heavy authenticated portal (admin desk + TipTap editor)
 // is split out of the public bundle and never downloaded by visitors.
@@ -1783,6 +1784,10 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
                                 </option>
                               ))}
                             </select>
+                            {/* The cruiser never changes with the tier — the supplement is for
+                                hotel nights. Said here because this is where the money decision
+                                is made, and only on a package that actually has a cruise. */}
+                            {hasNileCruise(tour) && <small className="bk-tier-note">{CRUISE_STANDARD_NOTE}</small>}
                           </label>
                           <label className="bk-field">
                             <span>Room</span>
