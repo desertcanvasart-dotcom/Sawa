@@ -103,7 +103,11 @@ star ratings drawn from a seeded `quality` column, with **no reviews table in th
 database and zero bookings ever taken**. All of it has been removed.
 
 **Facts as they stand.**
-- No reviews table exists. `pledges` has never held a row.
+- No reviews table exists. Ratings remain unpublishable because no review
+  mechanism exists — **not** because nobody has travelled: `pledges` held its
+  first rows on 2026-08-12 (`E-2 ENDED 2026-08-12`), so the "no travellers"
+  half of the old premise is historical and may only be cited for the period
+  before that date.
 - Ratings were removed under U1 and are not live.
 - The client has said ratings may return "later at the operator profile level,
   tied to records, with the source stated".

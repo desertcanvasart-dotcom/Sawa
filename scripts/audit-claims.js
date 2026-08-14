@@ -58,7 +58,11 @@ export const RULES = [
     re: /100%\s*(guaranteed|safe|refund)|risk[- ]free|hassle[- ]free/gi },
   { id: "rating", why: "no reviews table exists; a rating cannot be evidenced or sourced",
     re: /\b[0-9]\.[0-9]\s*(?:\/\s*5|out of 5|average|stars?)|\baverage (?:traveller?|customer) rating|★{3,}/gi },
-  { id: "volume", why: "pledges has never held a row; no traveller has been carried",
+  // E-2 ENDED 2026-08-12 — until that date `pledges` held no rows at all; after
+  // it, any figure must be counted from the table and stated as of a date. The
+  // rule keeps firing: its premise stops being "nobody has travelled" and
+  // becomes "the number is not evidenced here".
+  { id: "volume", why: "no volume claim is evidenced; any figure must be counted from `pledges` and dated",
     re: /\b[\d,]{3,}\+?\s*(?:travell?ers|travelers|customers|guests|bookings)\s*(?:hosted|served|carried)?/gi },
   { id: "tenure", why: "BRAND.foundingDate is empty; a tenure claim needs a subject and a record",
     re: /\b\d{1,3}\s*(?:yrs|years)\s*(?:operating|in business|of experience)/gi },
@@ -373,6 +377,17 @@ export async function auditEmailTemplates() {
     city: "Aswan", about: "Some tours",
     // auditDriftEmail
     base: "https://sawa.tours", lines: ["availability: 0 -> 2"],
+    // goAheadPaymentLinkEmail — the queue payload goahead-alert builds. One
+    // traveller and one unknown, so both the row rendering and the ⚠️ path
+    // produce copy for the rules to read.
+    payload: {
+      route: "Aswan Highlights", date: "Tue 1 Sep 2026", seatsConfirmed: 4, minSeats: 4,
+      operator: "An Operator", operatorContact: "op@example.com",
+      travellers: [{ name: "A Traveller", seats: 2, contact: "traveller@example.com",
+        bookingCode: "SAWA-ABCDE", total: 450, depositDue: 45, balanceDue: 405, balanceDueDate: "2026-08-31" }],
+      depositTotal: 45, portalLink: "https://sawa.tours/admin/departures/7",
+      unknowns: ["operator not recorded"],
+    },
   };
   // An explicit ALLOW-list, not a name pattern. The pattern /Email$|Text$/
   // matched sendEmail — so the audit CALLED it, which wrote a row to the
@@ -388,7 +403,11 @@ export async function auditEmailTemplates() {
     "operatorApplicationReceiptEmail", "operatorApplicationText", "cancellationEmail",
     // TTT3 — the watcher's drift alert. Listed here the same day it was
     // written, because the unlisted check reported it within the hour.
-    "auditDriftEmail"];
+    "auditDriftEmail",
+    // #144's GoAhead payment-link mail to ops. The unlisted check caught it —
+    // two days after it shipped rather than within the hour, which is the
+    // check doing exactly what "add it, do not skip it" is for.
+    "goAheadPaymentLinkEmail"];
   const templates = TEMPLATES.filter((k) => typeof t[k] === "function").map((k) => [k, t[k]]);
   const missing = TEMPLATES.filter((k) => typeof t[k] !== "function");
   const unlisted = Object.keys(t).filter((k) => /Email$|Text$/.test(k) && k !== "sendEmail" && !TEMPLATES.includes(k));

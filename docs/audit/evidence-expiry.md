@@ -23,7 +23,7 @@ to a proof rather than a defect. The two are siblings; see
 
 | | |
 |---|---|
-| **NEVER** | true for all time so far. `pledges` has never held a row ([E-2](#e-2--no-traveller-has-ever-been-carried)). |
+| **NEVER** | true for all time up to a stated end. `pledges` held no row until 2026-08-12 ([E-2](#e-2--no-traveller-has-ever-been-carried), now ended). |
 | **SNAPSHOT** | true at a stated moment. `departures` held 0 rows on 10 Aug 2026 — but 95 inserts and 65 deletes sit behind that zero ([E-11](#e-11--no-listed-product-has-an-operating-company-attached)). |
 
 A never supports an argument about history. **A snapshot supports an argument
@@ -73,11 +73,11 @@ must date the citation.
 
 | | |
 |---|---|
-| **Status** | **LIVE** — and the most load-bearing sentence in the project |
-| **The claim** | `pledges` has never held a row. |
-| **Rests on** | the table being empty since creation. |
-| **What would arm it** | **One row.** DIR-16, the staged seed. |
-| **Where that is defined** | `docs/audit/open-directives.md` → DIR-16 |
+| **Status** | **EXPIRED 2026-08-12** — five pledge rows landed in production between 14:35 and 15:47 UTC. **E-2 ENDED 2026-08-12.** |
+| **The claim** | `pledges` held no row at any time before 2026-08-12. Historical and bounded; it can no longer be quoted as a present-tense never. |
+| **Rests on** | the table having been empty from creation to that date. |
+| **What would arm it** | armed. Not by DIR-16's staged seed — that loads a whole CSV in one run; these are five rows spaced over 72 minutes, which reads as reserves made through the live site. Their provenance (client testing or real travellers) is the client's to state, and nothing here asserts it. |
+| **Where that is defined** | `scripts/check-seed-expiry.js`, which went red the way EEEE3.1 designed |
 
 More depends on this one sentence than on any other in the repository:
 
@@ -97,6 +97,12 @@ More depends on this one sentence than on any other in the repository:
 When the seed happens, all four need revisiting in the same commit. That is why
 EEE4 put migration 024 ahead of the seed: the sentence that protects the
 exposure scope is the sentence the seed ends.
+
+**That commit is this one.** All four restatements below were applied on
+2026-08-15, bounded **E-2 ENDED 2026-08-12** — the date the rows landed, not the
+date anyone noticed. The two are three days apart, and the gap is itself the
+lesson EEEE3.1 predicted: the check went red unattended, and preflight surfaced
+it on the next run.
 
 #### EEEE3.1 — this is now a check, not a note
 
@@ -119,10 +125,11 @@ cannot be claimed by rewording a sentence. All four must carry the **same** date
 one INSERT ends them at one instant, and four different dates is itself a
 failure.
 
-#### The four restatements, written now rather than invented then
+#### The four restatements, written before they were needed — and applied 2026-08-15
 
-Drafted while the claims are still true, because after the seed nobody can
-reconstruct what the sentence was protecting:
+Drafted while the claims were still true, because after the seed nobody can
+reconstruct what the sentence was protecting. Each `<date>` resolved to
+2026-08-12 when applied:
 
 | | becomes |
 |---|---|

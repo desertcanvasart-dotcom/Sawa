@@ -55,17 +55,23 @@ test("no credentials is NOT a pass for the claims, and says so", () => {
   assert.match(v.line, /NOT a pass/);
 });
 
-test("the four dependents are the four E-2 names, and each is findable today", () => {
+test("the four dependents are the four E-2 names, and each is restated with one date", () => {
   assert.equal(RESTS_ON_E2.length, 4);
   const found = auditRestatements();
   const unreadable = found.filter((f) => f.state === "unreadable").map((f) => f.file);
   assert.deepEqual(unreadable, [], "a dependent names a file that is not there");
-  // Every `stale` pattern must currently MATCH — otherwise the check is
-  // watching for a sentence that has already been reworded, and would report
-  // "restated" the day the seed lands without anyone having restated anything.
-  const notMatching = found.filter((f) => f.state !== "stale").map((f) => f.file);
-  assert.deepEqual(notMatching, [],
-    "a dependent's stale-pattern no longer matches its file — the watch is pointed at nothing");
+  // Until 2026-08-12 this asserted every `stale` pattern still MATCHED — the
+  // watch had to be pointed at a live sentence, or the day the seed landed it
+  // would report "restated" without anyone having restated anything. Rows
+  // landed on 2026-08-12 (five of them, spaced like live-site reserves — not
+  // DIR-16's single-run seed), the four were restated on 2026-08-15, and the
+  // test now pins that: all four carry the
+  // marker, and all four carry the SAME date, because one event ended them
+  // at one instant.
+  const notRestated = found.filter((f) => f.state !== "restated").map((f) => f.file);
+  assert.deepEqual(notRestated, [], "a dependent has lost its E-2 ENDED marker");
+  assert.deepEqual([...new Set(found.map((f) => f.on))], ["2026-08-12"],
+    "the four restatements must all be bounded by the date the rows landed");
 });
 
 test("the restatement marker requires a date, not a word", () => {
