@@ -1303,6 +1303,83 @@ const SxStar = () => <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2
 const SxCheck = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>;
 const SxX = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M6 6l12 12M18 6 6 18" /></svg>;
 
+/* A month calendar for requesting a date.
+   ------------------------------------------------------------------------
+   Replaces two different pickers that disagreed about what was reachable:
+
+     restricted tours   twelve chips, generated inside a 90-day loop that also
+                        stopped at twelve — so a Mon/Sat cruise showed six weeks
+                        and nothing beyond, and October was simply not offered
+     unrestricted tours a native <input type="date">, which does show a calendar
+                        but cannot grey out the days a tour does not run
+
+   One grid now serves both. A tour with no operating days has every weekday
+   open; a cruise on Mondays and Saturdays has the rest of the week visibly
+   disabled rather than absent — the difference between "not offered" and "not
+   possible", which is the thing a chip list cannot express.
+
+   Every disabled reason is one the SERVER also enforces: lead time, horizon,
+   operating day, operator blackout. The calendar is a convenience, never the
+   authority — a date that slips through still gets refused with a sentence. */
+function RequestCalendar({ value, onPick, operatingDays = [], blockedDates, minIso, maxIso, monthCursor, onCursorChange }) {
+  const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const first = new Date(monthCursor.getFullYear(), monthCursor.getMonth(), 1);
+  const startPad = first.getDay();
+  const daysInMonth = new Date(monthCursor.getFullYear(), monthCursor.getMonth() + 1, 0).getDate();
+
+  // Bounds compared as YYYY-MM-DD strings. Date arithmetic across a DST change
+  // is how an off-by-one day gets into a picker, and these are already dates.
+  const withinMonth = (delta) => {
+    const c = new Date(monthCursor.getFullYear(), monthCursor.getMonth() + delta, 1);
+    const lastOfMonth = iso(new Date(c.getFullYear(), c.getMonth() + 1, 0));
+    const firstOfMonth = iso(c);
+    return lastOfMonth >= minIso && firstOfMonth <= maxIso;
+  };
+
+  const cells = [];
+  for (let i = 0; i < startPad; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) {
+    const date = new Date(monthCursor.getFullYear(), monthCursor.getMonth(), d);
+    const key = iso(date);
+    const reason =
+      key < minIso ? "too soon"
+      : key > maxIso ? "too far ahead"
+      : operatingDays.length && !operatingDays.includes(date.getDay()) ? "doesn't run this day"
+      : blockedDates && blockedDates.has(key) ? "unavailable"
+      : null;
+    cells.push({ key, d, disabled: !!reason, reason });
+  }
+
+  return (
+    <div className="req-cal">
+      <div className="req-cal-head">
+        <button type="button" onClick={() => onCursorChange(-1)} disabled={!withinMonth(-1)} aria-label="Previous month">‹</button>
+        <strong>{monthCursor.toLocaleDateString("en", { month: "long", year: "numeric" })}</strong>
+        <button type="button" onClick={() => onCursorChange(1)} disabled={!withinMonth(1)} aria-label="Next month">›</button>
+      </div>
+      <div className="req-cal-grid" role="grid">
+        {["S", "M", "T", "W", "T", "F", "S"].map((d, i) => (
+          <span key={i} className="req-cal-dow" aria-hidden="true">{d}</span>
+        ))}
+        {cells.map((c, i) => c === null
+          ? <span key={`pad${i}`} />
+          : (
+            <button
+              key={c.key} type="button"
+              className={`req-cal-day${value === c.key ? " on" : ""}`}
+              disabled={c.disabled}
+              aria-pressed={value === c.key}
+              /* The reason is on the element, not only in a colour: a greyed
+                 square tells a visitor nothing about WHY the day is closed. */
+              title={c.disabled ? c.reason : undefined}
+              onClick={() => onPick(c.key)}
+            >{c.d}</button>
+          ))}
+      </div>
+    </div>
+  );
+}
+
 function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPublicBooking, publicBooking, tour: tourProp, allProducts = [], operatorsByProduct = {} }) {
   const rootRef = useRef(null);
 
@@ -1423,25 +1500,28 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
   }
 
   const reqIso = (days) => { const d = new Date(); d.setDate(d.getDate() + days); return d.toISOString().slice(0, 10); };
+  // The same fences the server applies (REQUEST_MIN_LEAD_DAYS /
+  // REQUEST_MAX_HORIZON_DAYS in app.js). Named rather than the bare 3 and 90
+  // that were inlined, so whoever raises the horizon can find both ends of it.
+  const REQUEST_MIN_LEAD_DAYS = 3;
+  const REQUEST_MAX_HORIZON_DAYS = 90;
+  // Which month the grid shows. Starts on the month containing the first
+  // bookable day, not today — on the 29th, today's month is nearly all past and
+  // the visitor opens on a grid with almost nothing left in it.
+  const [reqMonth, setReqMonth] = useState(() => {
+    const d = new Date(); d.setDate(d.getDate() + 3);
+    return new Date(d.getFullYear(), d.getMonth(), 1);
+  });
 
   // Operating days (0=Sun … 6=Sat): tours like Nile cruises depart only on
-  // fixed weekdays. Constrained tours offer the actual eligible dates as
-  // chips instead of a free calendar; the server enforces the same rule.
+  // fixed weekdays. The calendar greys the closed days rather than listing the
+  // open ones, so a month the tour does not run in is still reachable and
+  // visibly closed; the server enforces the same rule.
   const opDays = Array.isArray(tour.operatingDays) ? tour.operatingDays : [];
   // Was a second copy of the server's day table and its comma-and-"and" joiner.
   // Same rule, one implementation — so the chips and the refusal message cannot
   // phrase the same restriction differently.
   const opDaysLabel = operatingDaysLabel(opDays);
-  const eligibleDates = useMemo(() => {
-    if (!opDays.length) return [];
-    const out = [];
-    for (let i = 3; i <= 90 && out.length < 12; i++) {
-      const d = new Date(); d.setDate(d.getDate() + i);
-      const iso = d.toISOString().slice(0, 10);
-      if (opDays.includes(d.getDay()) && !(blockedDates && blockedDates.has(iso))) out.push(iso);
-    }
-    return out;
-  }, [tour.id, blockedDates]);
 
   // Operator blackout dates load lazily the first time the request panel
   // opens; eligible-date chips and the free calendar both respect them.
@@ -1756,33 +1836,22 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
                         </button>
                       ) : (
                         <div style={{ marginTop: 4 }}>
-                          {opDays.length ? (
-                            <>
-                              <div className="note" style={{ marginBottom: 8 }}>This {isPackage(tour) ? "cruise" : "tour"} departs on <b>{opDaysLabel}</b> — pick a departure day:</div>
-                              <div className="req-days">
-                                {eligibleDates.map((d) => (
-                                  <button type="button" key={d} className={`req-day${reqDate === d ? " on" : ""}`} aria-pressed={reqDate === d}
-                                    onClick={() => { setReqDate(d); setReqMatches(null); }}>
-                                    {formatDate(d, { alwaysYear: true })}
-                                  </button>
-                                ))}
-                              </div>
-                              <div className="note" style={{ marginTop: 8 }}>Our team reviews each new date before it opens.</div>
-                            </>
-                          ) : (
-                            <>
-                              <input
-                                type="date" className="req-date" value={reqDate} min={reqIso(3)} max={reqIso(90)}
-                                onChange={(e) => {
-                                  const v = e.target.value;
-                                  setReqDate(v); setReqMatches(null);
-                                  setReqErr(blockedDates && blockedDates.has(v) ? "That day isn't available operationally — please pick another date." : "");
-                                }}
-                                aria-label="Requested departure date"
-                              />
-                              <div className="note" style={{ marginTop: 8 }}>Any day from {formatDate(reqIso(3), { alwaysYear: true })} to {formatDate(reqIso(90), { alwaysYear: true })}. Our team reviews each new date before it opens.</div>
-                            </>
+                          {opDaysLabel && (
+                            <div className="note" style={{ marginBottom: 8 }}>This {isPackage(tour) ? "cruise" : "tour"} departs on <b>{opDaysLabel}</b> — the other days are closed below.</div>
                           )}
+                          <RequestCalendar
+                            value={reqDate}
+                            operatingDays={opDays}
+                            blockedDates={blockedDates}
+                            minIso={reqIso(REQUEST_MIN_LEAD_DAYS)}
+                            maxIso={reqIso(REQUEST_MAX_HORIZON_DAYS)}
+                            monthCursor={reqMonth}
+                            onCursorChange={(delta) => setReqMonth((m) => new Date(m.getFullYear(), m.getMonth() + delta, 1))}
+                            onPick={(d) => { setReqDate(d); setReqMatches(null); setReqErr(""); }}
+                          />
+                          <div className="note" style={{ marginTop: 8 }}>
+                            Any open day up to {formatDate(reqIso(REQUEST_MAX_HORIZON_DAYS), { alwaysYear: true })}. Our team reviews each new date before it opens.
+                          </div>
                           {reqMatches && reqMatches.length > 0 && (
                             <div style={{ marginTop: 10 }}>
                               <div className="lbl">Groups already forming near that date — joining confirms a trip faster:</div>
