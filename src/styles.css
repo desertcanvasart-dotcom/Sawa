@@ -5875,6 +5875,18 @@ button:disabled {
 .about-pillars h3 { margin: 0 0 7px; font-size: 18px; color: var(--ink); }
 .about-pillars p { margin: 0; color: var(--ink-soft); line-height: 1.6; font-size: 14.5px; }
 
+/* ---- /partners : the operator directory ---- */
+/* Same card idiom as the About pillars; one column, because each entry is a
+   company, not a bullet. */
+.partners-list { display: grid; gap: 18px; margin-bottom: clamp(28px, 5vh, 56px); }
+.partners-list article { padding: clamp(22px, 2.4vw, 30px); border-radius: 22px; background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow-sm); }
+.partners-list h2 { margin: 0 0 10px; font-family: var(--font-display); font-weight: 500; font-size: clamp(20px, 2.2vw, 26px); letter-spacing: -0.02em; color: var(--ink); }
+.partners-list p { margin: 0 0 8px; color: var(--ink-soft); line-height: 1.65; max-width: 70ch; }
+.partners-list p:last-child { margin-bottom: 0; }
+.partner-verified { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #2c7a57; background: rgba(44, 122, 87, .1); padding: 4px 10px; border-radius: 999px; }
+.partner-verified svg { flex: 0 0 auto; }
+.partners-note { color: var(--ink-soft); }
+
 /* ---- Contact ---- */
 .contact-grid { display: grid; grid-template-columns: 0.9fr 1.1fr; gap: clamp(22px, 3vw, 44px); align-items: start; }
 .contact-methods { display: flex; flex-direction: column; gap: 12px; }

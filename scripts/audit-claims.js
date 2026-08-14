@@ -216,7 +216,7 @@ export const coverage = { degraded: null };
 export async function publicRoutes() {
   const fixed = ["/", "/about", "/contact", "/faq", "/how-it-works", "/privacy", "/terms",
     "/cookies", "/departures", "/goahead", "/goahead-promise", "/operators", "/verify",
-    "/widget", "/itineraries", "/blog", "/booking",
+    "/widget", "/itineraries", "/blog", "/booking", "/partners",
     "/destinations", "/destinations/cairo", "/destinations/luxor", "/destinations/aswan",
     "/destinations/siwa", "/destinations/abu-simbel"];
   let dynamic = [];

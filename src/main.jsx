@@ -1170,6 +1170,7 @@ function pageFromPath(p) {
   if (clean === "/booking" || clean.startsWith("/booking/")) return "booking";
   if (clean === "/blog") return "blog";
   if (clean.startsWith("/blog/")) return "blogpost";
+  if (clean === "/partners") return "partners";
   if (clean === "/") return "home";
   return "404";
 }
@@ -1279,7 +1280,7 @@ function SxFooter() {
       <div className="wrap">
         <div className="fgrid">
           <div><a className="logo" href="/"><SxLogoMark /><span className="nm"><b>Sawa</b><i>Tours · Egypt</i></span></a><p className="fblurb">Shared departures, confirmed together. Sawa pools travelers across Ministry-licensed Egyptian operators so the tours you want actually run.</p></div>
-          <div className="fcol"><h4>Travel</h4><a href="/itineraries">All itineraries</a><a href="/departures">Open departures</a><a href="/goahead">GoAhead departures</a><a href="/destinations">Destinations</a><a href="/how-it-works">How it works</a><a href="/trust">The GoAhead promise</a><a href="/faq">FAQ</a></div>
+          <div className="fcol"><h4>Travel</h4><a href="/itineraries">All itineraries</a><a href="/departures">Open departures</a><a href="/goahead">GoAhead departures</a><a href="/destinations">Destinations</a><a href="/how-it-works">How it works</a><a href="/trust">The GoAhead promise</a><a href="/partners">Operating partners</a><a href="/faq">FAQ</a></div>
           <div className="fcol"><h4>Operators</h4><a href="/operators">List a tour</a><a href="/verify">List with Sawa</a><a href="/widget">Get the widget</a></div>
           <div className="fcol"><h4>Company</h4><a href="/about">About Sawa</a><a href="/contact">Support</a><a href="/privacy">Privacy Policy</a><a href="/cookies">Cookies</a><a href="/terms">Terms and Conditions</a></div>
         </div>
@@ -2133,6 +2134,7 @@ function PublicSite({
           cityStats={cityStats}
           selectedCity={selectedCity}
           setSelectedCity={setSelectedCity}
+          operatorsByProduct={operatorsByProduct}
         />
       </SxChrome>
     );
@@ -2656,7 +2658,7 @@ function SectionHeading({ kicker, title }) {
 // PUBLIC PAGES — standalone marketing / legal / utility pages
 // ============================================================
 
-function PublicRoute({ page, path, navigate, customerCalendars, customerSummary, cityStats, selectedCity, setSelectedCity }) {
+function PublicRoute({ page, path, navigate, customerCalendars, customerSummary, cityStats, selectedCity, setSelectedCity, operatorsByProduct }) {
   switch (page) {
     case "tours":
       return (
@@ -2677,6 +2679,7 @@ function PublicRoute({ page, path, navigate, customerCalendars, customerSummary,
     case "booking": return <BookingLookupPage navigate={navigate} path={path} />;
     case "blog": return <BlogIndexPage navigate={navigate} />;
     case "blogpost": return <BlogPostPage navigate={navigate} slug={decodeURIComponent((path.match(/^\/blog\/([^/]+)/) || [])[1] || "")} />;
+    case "partners": return <PartnersPage navigate={navigate} operatorsByProduct={operatorsByProduct} customerCalendars={customerCalendars} />;
     default: return <NotFoundPage navigate={navigate} />;
   }
 }
@@ -2688,6 +2691,64 @@ function PageHead({ eyebrow, title, lead }) {
       <h1>{title}</h1>
       {lead && <p className="page-lead">{lead}</p>}
     </header>
+  );
+}
+
+// ---- /partners : the operator directory ----
+// Renders from operatorsByProduct — the publicOperator() whitelist keyed by
+// agency id — joined client-side to the public catalogue for each partner's
+// itineraries. The crawler body for this route (server/seo.js) states the same
+// facts from the same whitelist; neither surface knows more than the other,
+// and licence numbers and contacts are in neither.
+//
+// "Verified by Sawa" renders only from the verification state: a record makes
+// a company a partner; verification is a separate claim with its own date, and
+// an unverified partner is listed by name without the line (029's rule).
+function PartnersPage({ navigate, operatorsByProduct = {}, customerCalendars = [] }) {
+  const partners = Object.entries(operatorsByProduct)
+    .map(([id, op]) => ({ ...op, itineraries: customerCalendars.filter((p) => p.agencyId === id) }))
+    .filter((p) => p.name)
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  return (
+    <div className="page-wrap">
+      <PageHead
+        eyebrow="Partners"
+        title="The companies that operate Sawa departures."
+        lead="Sawa pools travellers into shared departures; the trips themselves are run by Egyptian travel companies licensed by the Ministry of Tourism and Antiquities and registered with ETAA. Where Sawa has completed its verification of a partner's records, that is shown with its date."
+      />
+      <section className="partners-list reveal in">
+        {partners.length === 0 ? (
+          <article>
+            <p>No operating partner is listed here yet. Every Sawa departure is still run by a licensed Egyptian travel company — the company responsible for a specific trip is named on that trip's page.</p>
+          </article>
+        ) : partners.map((p) => (
+          <article key={p.name}>
+            <h2>{p.name}</h2>
+            {p.verified && (
+              <p className="partner-verified"><ShieldCheck size={14} />Verified by Sawa{p.verifiedAt ? ` · ${formatDate(p.verifiedAt, { alwaysYear: true })}` : ""}</p>
+            )}
+            <p>
+              {p.licensedSince
+                ? `Licensed by the Egyptian Ministry of Tourism and Antiquities since ${p.licensedSince}. `
+                : "Licensed by the Egyptian Ministry of Tourism and Antiquities. "}
+              This is a company responsible for delivering Sawa departures.
+            </p>
+            {p.itineraries.length > 0 && (
+              <p>
+                {"Operates "}{p.itineraries.length === 1 ? "one itinerary" : `${p.itineraries.length} itineraries`}{" on Sawa: "}
+                {p.itineraries.map((t, i) => (
+                  <span key={t.id}>{i > 0 ? ", " : ""}<SpaLink navigate={navigate} to={`/${isPackage(t) ? "package" : "tour"}/${tourSlug(t)}`}>{t.title}</SpaLink></span>
+                ))}.
+              </p>
+            )}
+          </article>
+        ))}
+      </section>
+      <section className="reveal in">
+        <p className="partners-note">The directory grows as operators join — an Egyptian travel company can <a href="/verify">apply to list with Sawa</a>.</p>
+      </section>
+    </div>
   );
 }
 
