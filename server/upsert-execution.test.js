@@ -69,9 +69,11 @@ test("a tour save executes end to end against a stub client", async () => {
   assert.ok(insert, "no INSERT was issued");
   // The two 037 parameters, through blankNum: a number stays a number, an
   // empty field becomes NULL — never 0, which would mean "same-day requests".
-  assert.equal(insert.params.length, 41, "parameter count drifted from the 41 columns");
+  assert.equal(insert.params.length, 42, "parameter count drifted from the 42 columns");
   assert.equal(insert.params[39], 3);
   assert.equal(insert.params[40], null);
+  // The cutoff unit (038): BODY didn't choose one, so NULL — reads as hours.
+  assert.equal(insert.params[41], null);
 });
 
 test("the validations refuse in words, in the function that owns the fields", async () => {
@@ -84,6 +86,19 @@ test("the validations refuse in words, in the function that owns the fields", as
   await assert.rejects(
     upsertTourProduct(stubClient(), { ...BODY, requestMinLeadDays: 90, requestMaxHorizonDays: 30 }, { status: "approved" }),
     (e) => e.status === 422, "a window with no days in it must 422, not 500");
+  await assert.rejects(
+    upsertTourProduct(stubClient(), { ...BODY, bookingCutoffHours: 36, bookingCutoffUnit: "days" }, { status: "approved" }),
+    (e) => e.status === 422, "a days cutoff over non-whole days must 422, not hit the CHECK");
+});
+
+test("a cutoff chosen in days stores canonical hours plus the unit", async () => {
+  const c = stubClient();
+  await upsertTourProduct(c, { ...BODY, bookingCutoffHours: 72, bookingCutoffUnit: "days" }, { status: "approved" });
+  const insert = c.calls.find((q) => /INSERT INTO tour_products/.test(q.sql));
+  // $28 is booking_cutoff_hours, $42 the unit: enforcement keeps reading
+  // hours; the unit only decides how the editor shows it back.
+  assert.equal(insert.params[27], 72);
+  assert.equal(insert.params[41], "days");
 });
 
 test("the departures route no longer carries the listing's validation block", () => {

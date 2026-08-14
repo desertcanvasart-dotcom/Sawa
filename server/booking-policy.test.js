@@ -19,6 +19,7 @@ import {
   CANCELLATION_BEFORE_GOAHEAD, CANCELLATION_QUALIFIER, CANCELLATION_CAP,
   DAY_TOUR_DEPOSIT_PCT, PACKAGE_DEPOSIT_PCT,
   DAY_TOUR_BALANCE_DUE_DAYS, PACKAGE_BALANCE_DUE_DAYS,
+  cutoffUnitError, cutoffLabel,
 } from "../shared/booking-policy.js";
 import { bookingConfirmationEmail } from "./email.js";
 
@@ -303,4 +304,23 @@ test("nothing computes a refund from the schedule yet", () => {
   const hits = ["server/app.js", "server/jobs/cancel-unconfirmed.js"]
     .filter((f) => /cancellationBandsFor|ofDeposit/.test(read(f)));
   assert.deepEqual(hits, [], `${hits.join(", ")} now computes from the schedule — intended?`);
+});
+
+// ---- The cutoff unit (038) ----
+
+test("a days cutoff must be whole days; hours are free", () => {
+  assert.equal(cutoffUnitError(36, "days") == null, false, "36h as 'days' has no honest days rendering");
+  assert.equal(cutoffUnitError(72, "days"), null);
+  assert.equal(cutoffUnitError(36, "hours"), null);
+  assert.equal(cutoffUnitError(36, null), null, "no unit chosen reads as hours");
+  assert.equal(cutoffUnitError(24, "weeks") == null, false, "an unknown unit is refused in words");
+});
+
+test("one label for every surface that shows the cutoff", () => {
+  assert.equal(cutoffLabel(24, null), "24h before");
+  assert.equal(cutoffLabel(72, "days"), "3 days before");
+  assert.equal(cutoffLabel(24, "days"), "1 day before");
+  // A unit that disagrees with the number falls back to the truth in hours
+  // rather than rounding a lie into days.
+  assert.equal(cutoffLabel(36, "days"), "36h before");
 });

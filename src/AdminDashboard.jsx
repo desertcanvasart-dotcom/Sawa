@@ -26,7 +26,7 @@ const seatsOf = (d) => (d.pledges || []).reduce((s, p) => (p?.status === "cancel
 // empty slug and was stored at /blog/post.
 import { blogSlug } from "../shared/blog-slug.js";
 import { CURRENCY, CURRENCY_SYMBOL } from "../shared/currency.js";
-import { depositPctFor } from "../shared/booking-policy.js";
+import { depositPctFor, cutoffLabel } from "../shared/booking-policy.js";
 import {
   requestWindowError, minLeadDaysFor, maxHorizonDaysFor,
   DEFAULT_MIN_LEAD_DAYS, DEFAULT_MAX_HORIZON_DAYS,
@@ -632,7 +632,13 @@ export function ProductEditor({ type: typeProp, existing, destinations = [], dep
     description: existing?.description || "",
     meetingPoint: existing?.meetingPoint || "",
     pickupNote: existing?.pickupNote || "",
-    bookingCutoffHours: existing?.bookingCutoffHours ?? 24,
+    // The cutoff is edited in the unit the operator chose (038): a package set
+    // to "3 days" reopens as 3 days, not 72. The stored/enforced value is
+    // always hours — the conversion happens on save, below.
+    bookingCutoffUnit: existing?.bookingCutoffUnit === "days" ? "days" : "hours",
+    bookingCutoffValue: existing?.bookingCutoffUnit === "days"
+      ? (existing?.bookingCutoffHours ?? 24) / 24
+      : (existing?.bookingCutoffHours ?? 24),
     operatingDays: Array.isArray(existing?.operatingDays) ? existing.operatingDays : [],
     // The operating company. Platform staff choose it; an agency submitting its
     // own listing never sees this field and gets its id from the session.
@@ -782,7 +788,10 @@ export function ProductEditor({ type: typeProp, existing, destinations = [], dep
         requestMinLeadDays: f.requestMinLeadDays === "" ? null : Number(f.requestMinLeadDays),
         requestMaxHorizonDays: f.requestMaxHorizonDays === "" ? null : Number(f.requestMaxHorizonDays),
         pickupNote: (meetingPoints[0]?.note || f.pickupNote || "").trim(),
-        bookingCutoffHours: Number(f.bookingCutoffHours) || 0,
+        bookingCutoffHours: f.bookingCutoffUnit === "days"
+          ? (Number(f.bookingCutoffValue) || 0) * 24
+          : (Number(f.bookingCutoffValue) || 0),
+        bookingCutoffUnit: f.bookingCutoffUnit,
         images,
         // null clears any existing table, so turning the toggle off actually
         // reverts the listing to the interpolation rather than leaving a stale
@@ -871,7 +880,17 @@ export function ProductEditor({ type: typeProp, existing, destinations = [], dep
                 breakPrice={Number(f.breakPrice) || 0}
               />
               <Field label="Deposit %"><input type="number" min="0" max="100" value={f.depositPercent} onChange={set("depositPercent")} /></Field>
-              <Field label="Booking cutoff (hours before)"><input type="number" min="0" value={f.bookingCutoffHours} onChange={set("bookingCutoffHours")} /></Field>
+              <Field label="Booking cutoff (before departure)">
+                <div style={{ display: "flex", gap: 6 }}>
+                  <input type="number" min="0" value={f.bookingCutoffValue} onChange={set("bookingCutoffValue")} style={{ flex: 1 }} />
+                  {/* Hours suit a day tour; a package commits flights and
+                      cabins days out, so its cutoff is a number of days. */}
+                  <select value={f.bookingCutoffUnit} onChange={set("bookingCutoffUnit")} aria-label="Cutoff unit">
+                    <option value="hours">hours</option>
+                    <option value="days">days</option>
+                  </select>
+                </div>
+              </Field>
               {!agencyMode && (
                 <Field label="Operating company" full>
                   <select value={f.agencyId} onChange={set("agencyId")}>
@@ -1499,7 +1518,7 @@ function ListingPreviewModal({ p, agencyName, busy, onApprove, onReject, onClose
             {p.breakPrice ? <Row label="Full-group price">{money(p.breakPrice)} / person</Row> : null}
             <Row label="Group size">min {p.minSeats} · max {p.maxSeats}</Row>
             {p.depositPercent != null ? <Row label="Deposit">{p.depositPercent}%</Row> : null}
-            {p.bookingCutoffHours != null ? <Row label="Booking cutoff">{p.bookingCutoffHours}h before</Row> : null}
+            {p.bookingCutoffHours != null ? <Row label="Booking cutoff">{cutoffLabel(p.bookingCutoffHours, p.bookingCutoffUnit)}</Row> : null}
           </div>
 
           {p.description ? (
