@@ -150,3 +150,62 @@ export const CANCELLATION_BEFORE_GOAHEAD =
 // schedule applies "only if it was clearly disclosed before reservation".
 export const CANCELLATION_QUALIFIER =
   "This is our default schedule. An operator's own schedule applies only where it was disclosed before you reserved.";
+
+// ---------------------------------------------------------------------------
+// A product's TYPE and its DURATION have to describe the same trip.
+//
+// "Full Day Minya Archaeological Tour from Cairo" was published as a `package`
+// with a duration of "1 day · 15 hours". Nothing objected. `type` is what the
+// system acts on, so a fifteen-hour road trip carried a Nile cruise's deposit,
+// balance timing, cancellation schedule and thirty-day confirmation deadline —
+// and the only visible symptom was a duration string that read oddly.
+//
+// A `nights >= 1` rule would NOT have caught it: the row said `nights: 1`. The
+// tell was the duration, measured in hours on a product typed as multi-day. So
+// that is what this checks.
+//
+// It doubles as the house-format rule, which was previously written down
+// nowhere a machine could read:
+//
+//   day tour   "Full day · about 8 hours"        up to eight hours
+//              "Extended day · about 15 hours"   beyond eight
+//   package    "5 days · 4 nights"
+//
+// Checked only when a duration is given. Blank is left alone — an agency listing
+// in draft has no duration yet, and refusing to save it would push the work
+// somewhere this rule cannot see.
+export const DAY_TOUR_DURATION = /^(Full day|Extended day) · about (\d+(?:\.\d+)?) hours?$/;
+export const PACKAGE_DURATION = /^\d+ days? · \d+ nights?$/;
+
+// Beyond this, a day tour is an "Extended day". Eight hours is still a full day.
+export const EXTENDED_DAY_HOURS = 8;
+
+export function durationShapeError(type, duration) {
+  const d = String(duration || "").trim();
+  if (!d) return null;
+
+  if (isPackage({ type })) {
+    if (PACKAGE_DURATION.test(d)) return null;
+    return DAY_TOUR_DURATION.test(d)
+      ? `"${d}" is a day tour's duration, but this is saved as a package. `
+        + `A package carries a package's deposit, balance date and cancellation schedule — `
+        + `change the type, or write the duration as "5 days · 4 nights".`
+      : `A package's duration reads "5 days · 4 nights". Got "${d}".`;
+  }
+
+  const m = DAY_TOUR_DURATION.exec(d);
+  if (!m) {
+    return PACKAGE_DURATION.test(d)
+      ? `"${d}" is a package's duration, but this is saved as a day tour.`
+      : `A day tour's duration reads "Full day · about 8 hours" or `
+        + `"Extended day · about 10 hours". Got "${d}".`;
+  }
+  const hours = Number(m[2]);
+  const wanted = hours > EXTENDED_DAY_HOURS ? "Extended day" : "Full day";
+  if (m[1] !== wanted) {
+    return hours > EXTENDED_DAY_HOURS
+      ? `${hours} hours is an "Extended day", not a "Full day".`
+      : `${hours} hours is a "Full day". "Extended day" is for more than ${EXTENDED_DAY_HOURS} hours.`;
+  }
+  return null;
+}

@@ -1668,7 +1668,13 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
                       ? (<><span className="pill form"><span className="d" />New date</span> Your day — travelers join you</>)
                       : (<><span className={`pill${confirmed ? "" : " form"}`}><span className="d" />{confirmed ? "GoAhead" : "Forming"}</span> {confirmed ? "Confirmed — this date is running" : `${Math.max(0, goAhead - booked)} more to confirm`}</>)}</div>
                   </div>
-                  {!reqMode && <div className="seats-block">
+                  {/* `dep` and not just `!reqMode`: with no date published there is
+                      no capacity to report, and the figures fall to zero — which
+                      rendered "0 of 4 joined · 0 seats left" beside a disabled
+                      "Date full" button on a tour that had never opened a single
+                      date. Sold out and never offered are opposite states and
+                      were displaying identically. */}
+                  {!reqMode && dep && <div className="seats-block">
                     <div className="pbar"><i data-fill={`${seatPct}%`} /></div>
                     <div className="meta"><span><b className="tnum">{booked}</b> of {goAhead} joined</span><span><b className="tnum">{Math.max(0, remaining)}</b> seats left</span></div>
                     {/* BBBB5 — only once the date is confirmed. On a forming date
@@ -1849,7 +1855,7 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
                         </>
                       ) : (
                         <>
-                          <button className="btn gold full" type="submit" disabled={isSaving || !dep || remaining <= 0}>{isSaving ? "Holding…" : remaining <= 0 ? "Date full" : "Reserve a seat"}<span className="chip"><SxArrow /></span></button>
+                          <button className="btn gold full" type="submit" disabled={isSaving || !dep || remaining <= 0}>{isSaving ? "Holding…" : !dep ? "No open dates" : remaining <= 0 ? "Date full" : "Reserve a seat"}<span className="chip"><SxArrow /></span></button>
                           {err && <div className="bk-err" role="alert">{err}</div>}
                           {publicBooking && Number(publicBooking.departureId) === Number(dep?.id) && (
                             // Canceling a held seat is an action, not navigation, and it was an
