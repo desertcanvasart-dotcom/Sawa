@@ -76,7 +76,7 @@ must date the citation.
 | **Status** | **EXPIRED 2026-08-12** — five pledge rows landed in production between 14:35 and 15:47 UTC. **E-2 ENDED 2026-08-12.** |
 | **The claim** | `pledges` held no row at any time before 2026-08-12. Historical and bounded; it can no longer be quoted as a present-tense never. |
 | **Rests on** | the table having been empty from creation to that date. |
-| **What would arm it** | armed. Not by DIR-16's staged seed — that loads a whole CSV in one run; these are five rows spaced over 72 minutes, which reads as reserves made through the live site. Their provenance (client testing or real travellers) is the client's to state, and nothing here asserts it. |
+| **What would arm it** | armed. Not by DIR-16's staged seed — that loads a whole CSV in one run; these are five rows spaced over 72 minutes, reserves made through the live site. **The client confirmed on 2026-08-15: all five are real bookings.** Real traveller personal data has been in `pledges` since 2026-08-12 — which makes the still-unrotated database password (DDDD5) a live exposure, not a hygiene item. |
 | **Where that is defined** | `scripts/check-seed-expiry.js`, which went red the way EEEE3.1 designed |
 
 More depends on this one sentence than on any other in the repository:
