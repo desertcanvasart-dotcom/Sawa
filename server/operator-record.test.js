@@ -162,3 +162,25 @@ test("a failed operator-list fetch is shown, not swallowed", () => {
   assert.match(ui, /\{agenciesError\s*\n?\s*\? <small className="form-error">/,
     "the failure must reach the admin's screen");
 });
+
+test("the form only offers states the database will accept", () => {
+  // The route accepted "in_review" and the form offered it. No such value exists
+  // in 025's CHECK, so choosing it produced a constraint violation the admin
+  // could do nothing about — a dead end reachable from a dropdown.
+  const allowed = /IN \('([^)]*)\)/.exec(read("server/db/schema_025_agency_verification.sql"));
+  assert.ok(allowed, "the constraint is gone");
+  const states = allowed[1].split(",").map((x) => x.trim().replace(/'/g, ""));
+  assert.deepEqual(states.sort(), ["lapsed", "rejected", "verified"]);
+
+  const schema = /verificationState: z\.enum\(\[([^\]]*)\]\)/.exec(read("server/app.js"));
+  assert.ok(schema, "the route no longer validates the state");
+  const accepted = schema[1].split(",").map((x) => x.trim().replace(/"/g, ""));
+  assert.deepEqual(accepted.sort(), states.sort(), "the route and the database disagree");
+
+  const ui = read("src/AdminDashboard.jsx");
+  const opts = [...ui.matchAll(/<option value="(verified|rejected|lapsed|in_review)"/g)].map((m) => m[1]);
+  assert.ok(opts.length, "the form offers no states");
+  for (const o of opts) {
+    assert.ok(states.includes(o), `the form offers "${o}", which the database rejects`);
+  }
+});

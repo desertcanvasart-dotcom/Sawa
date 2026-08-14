@@ -2101,7 +2101,7 @@ function OperatorRecord({ agency, onSaved }) {
         <label><span>Verification</span>
           <select value={f.verificationState} onChange={set("verificationState")}>
             <option value="">Not assessed</option>
-            <option value="in_review">In review</option>
+            <option value="lapsed">Lapsed</option>
             <option value="verified">Verified</option>
             <option value="rejected">Rejected</option>
           </select>

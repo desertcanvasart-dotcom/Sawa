@@ -2188,7 +2188,12 @@ const operatorRecordSchema = z.object({
   insurancePolicyNo: z.string().trim().max(64).nullish(),
   insuranceExpires: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/).nullish(),
   trackRecord: z.string().trim().max(2000).nullish(),
-  verificationState: z.enum(["verified", "rejected", "in_review"]).nullish(),
+  // The three the CHECK constraint allows (025). "in_review" was invented here
+  // and does not exist in the database — the form offered it, the route
+  // accepted it, and Postgres rejected the write with a constraint violation
+  // the admin could do nothing about. "lapsed" is the one that was missing,
+  // and it is the one that matters: an insurance policy runs out.
+  verificationState: z.enum(["verified", "rejected", "lapsed"]).nullish(),
   verificationEvidence: z.string().trim().max(2000).nullish(),
 });
 
