@@ -71,9 +71,9 @@ export const DEFAULTS = {
 
 // ---- Meta for the SPA routes ----
 //
-// ONLY these three routes consume this map: /itineraries, /booking and /blog.
-// They are the public routes with no file in /site, so they are the only ones
-// that reach buildHead() at all.
+// ONLY these four routes consume this map: /itineraries, /booking, /blog and
+// /partners. They are the public routes with no file in /site, so they are the
+// only ones that reach buildHead() at all.
 //
 // Everything else the public can see — /, /about, /contact, /faq,
 // /how-it-works, /privacy, /terms, /cookies, /departures, /goahead,
@@ -94,6 +94,10 @@ export const STATIC = {
   "/itineraries": { title: `Egypt Tour Itineraries — Day Tours & Packages | ${BRAND.name}`, description: "Every Sawa itinerary: shared Egypt day tours and multi-day packages. Join a date that's forming or start your own — nothing is charged until it confirms.", crumb: "Itineraries" },
   "/booking": { title: `Check Your Booking | ${BRAND.name}`, description: "Enter your booking code to see whether your Sawa departure has reached GoAhead.", crumb: "Booking" },
   "/blog": { title: `Blog — Notes from the Nile | ${BRAND.name}`, description: "Guides, history and practical tips for travelling Egypt the shared way, from the people who run the tours.", crumb: "Blog" },
+  // The operator directory. Data-driven — a partner appears the day its record
+  // is created, so this is an SPA route rather than a hand-written /site file
+  // that would need editing every time one joins.
+  "/partners": { title: `Operating Partners — Licensed Egyptian Travel Companies | ${BRAND.name}`, description: "The travel companies that operate Sawa departures. Each partner is an Egyptian company licensed by the Ministry of Tourism and Antiquities; where Sawa has completed verification, the date is shown.", crumb: "Partners" },
 };
 
 // Resolve by raw DB id first (back-compat), then by the derived SEO slug.
@@ -479,6 +483,7 @@ export async function sitemapXml() {
   add("/itineraries", null, "daily");
   add("/goahead", null, "daily");
   ["/how-it-works", "/departures", "/goahead-promise", "/operators", "/verify", "/widget",
+   "/partners",
    "/about", "/contact", "/faq", "/blog", "/booking", "/privacy", "/cookies", "/terms",
    // The destination pages are real, linked from the primary nav, and now carry
    // canonicals — but were absent from the sitemap entirely.
@@ -575,6 +580,36 @@ function departureListHtml(deps) {
 const wrapBody = (inner) =>
   `<div data-server-rendered="true" style="max-width:720px;margin:40px auto;padding:0 20px;font-family:system-ui,sans-serif;line-height:1.65;color:#1b1a16">${inner}</div>`;
 
+// The /partners directory rows. Takes publicOperator() projections — the same
+// whitelist the tour page and the React card use, so no surface can name a
+// field the others may not (licence numbers and contacts never reach here).
+// Exported for partners-page.test.js, which also runs the rendered copy
+// through the claims rules.
+//
+// "Verified by Sawa" renders ONLY from verification_state (029's rule via
+// publicOperator): a record is a partner; verification is a separate claim
+// with its own date. An unverified partner is listed by name without it.
+export function partnersListHtml(partners) {
+  if (!Array.isArray(partners)) throw new TypeError("partnersListHtml expects an array of publicOperator projections");
+  if (!partners.length) {
+    // Honest empty state, not a hidden route. The directory exists before its
+    // second entry does, and saying so beats a page that looks broken.
+    return `<p>No operating partner is listed here yet. Every Sawa departure is still run by a licensed Egyptian travel company — the company responsible for a specific trip is named on that trip's page.</p>`;
+  }
+  // The licence sentence opens each row, directly after the name, and leads
+  // with "Licensed by the Ministry of Tourism" — deliberately. audit-claims'
+  // company-name rule flags any company-shaped name whose ±70-character
+  // context lacks a known token, and "Ministry of Tourism" is that token; the
+  // fewer characters between a partner's name and it, the longer a name can be
+  // before the window cuts the token off (~34 characters with this phrasing).
+  // A longer name would trip the audit — which is the audit asking a human to
+  // look at a new company name, not a defect here.
+  return `<ul>${partners.map((p) => `<li>
+  <h2>${esc(p.name)}</h2>
+  <p>Licensed by the Ministry of Tourism and Antiquities${p.licensedSince ? ` since ${esc(p.licensedSince)}` : ""}.${p.verified ? ` Verified by Sawa${p.verifiedAt ? ` · ${esc(dateLabel(p.verifiedAt))}` : ""}.` : ""}${p.itineraries ? ` Operates ${p.itineraries === 1 ? "one itinerary" : `${p.itineraries} itineraries`} on Sawa.` : ""}</p>
+</li>`).join("")}</ul>`;
+}
+
 // Returns the crawler-visible HTML for a pathname, or "" when the route has
 // no server-renderable content (portal, booking lookup, unknown routes).
 export async function buildBody(pathname) {
@@ -652,6 +687,26 @@ export async function buildBody(pathname) {
 <h1>Egypt tour itineraries — shared day tours &amp; packages</h1>
 <p>Every itinerary Sawa runs is operated by an Egyptian travel company licensed by the Ministry of Tourism and registered with ETAA. Open one to join a forming date or start your own. Each date shows exactly how many travellers it needs to confirm — that moment is the GoAhead — and no Sawa group ever goes above ${GROUP_MAX_WORD}. You pay nothing until your date confirms. Dates already filling are on <a href="/departures">the departures board</a>; confirmed trips are on <a href="/goahead">the GoAhead board</a>.</p>
 <ul>${catalogueListHtml(rows, byProduct)}</ul>`);
+  }
+
+  if (path === "/partners") {
+    // The whole agencies table is one small query; no cache needed at this
+    // size. Counts only listings the site itself shows (same VISIBLE rule as
+    // the sitemap) — a partner must not be credited with a pending listing.
+    const r = await pool.query(`
+      SELECT a.*, COUNT(p.id) FILTER (WHERE p.active IS NOT FALSE AND p.status = 'approved') AS itineraries
+        FROM agencies a
+        LEFT JOIN tour_products p ON p.agency_id = a.id
+       GROUP BY a.id
+       ORDER BY a.name`);
+    const partners = r.rows
+      .map((row) => ({ ...publicOperator(mapAgency(row)), itineraries: Number(row.itineraries) || 0 }))
+      .filter((p) => p.name);
+    return wrapBody(`
+<h1>The companies that operate Sawa departures</h1>
+<p>Sawa pools travellers into shared departures; the trips themselves are run by Egyptian travel companies licensed by the Ministry of Tourism and Antiquities and registered with ETAA. This page names them. Where Sawa has completed its verification of a partner's records, that is shown with its date — a listed company without the line is a partner whose verification has not been completed yet.</p>
+${partnersListHtml(partners)}
+<p>The directory grows as operators join: an Egyptian travel company can <a href="/verify">apply to list with Sawa</a>.</p>`);
   }
 
   return "";
