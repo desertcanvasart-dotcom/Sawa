@@ -22,6 +22,7 @@
     "sync:constants": "node scripts/sync-constants.js",
     "check:constants": "node scripts/sync-constants.js --check",
     "smoke": "node scripts/smoke-routes.js",
+    "smoke:dom": "node scripts/dom-smoke.js",
     "check:status-literals": "node scripts/check-status-literals.js",
     "check:catch-handlers": "node scripts/check-catch-handlers.js",
     "check:audit-coverage": "node scripts/audit-coverage.js",
@@ -40,7 +41,7 @@
     "audit:repo-truth": "node scripts/audit-repo-truth.js",
     "test:integration": "node --test server/seo-sitemap.integration.mjs",
     "rehearse:goahead": "bash scripts/rehearse-goahead-alert.sh",
-  "rehearse:staged-seed": "bash scripts/rehearse-staged-seed.sh",
+    "rehearse:staged-seed": "bash scripts/rehearse-staged-seed.sh",
     "audit:promises": "node scripts/audit-promises.js",
     "check:seed-expiry": "node scripts/check-seed-expiry.js"
   },
