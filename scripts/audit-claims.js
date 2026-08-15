@@ -104,8 +104,13 @@ export const RULES = [
   // nobody has thought of yet still trips it.
   { id: "company-name", why: "any company-shaped name must be a signed partner, or it must not appear",
     re: /\b(?!Sawa\b)[A-Z][a-z]+(?:\s+(?:[A-Z][a-z]+|&|and|el-|Al))*\s+(?:Travel|Travels|Tours|Touring|Tourism|Holidays|Voyages|Agency|Expeditions|Adventures)\b/g,
-    // Sawa's own names, the regulator, and generic phrases that happen to fit.
-    ok: (ctx) => /Sawa Tours|Capital Travel Service|Ministry of Tourism|Egyptian Travel Agents|e\.g\.|placeholder|Egypt Tours|Shared Tours|Day Tours|Group Tours|Sawa Shared/i.test(ctx) },
+    // Sawa's own names, the SIGNED PARTNERS, the regulator, and generic
+    // phrases that happen to fit. A partner joins this list when its record
+    // joins `agencies` — El Agamy Travel signed 15 Aug 2026 (ag_8, licence
+    // 1001, ETAA registry cross-checked) and the audit flagged the new name
+    // within hours, which is this rule doing its job: every company-shaped
+    // name is either vouched for here, with a date, or a finding.
+    ok: (ctx) => /Sawa Tours|Capital Travel Service|El Agamy Travel|Ministry of Tourism|Egyptian Travel Agents|e\.g\.|placeholder|Egypt Tours|Shared Tours|Day Tours|Group Tours|Sawa Shared/i.test(ctx) },
   // V1.2 — language describing a financial process that does not occur. There
   // is no payment gateway, no card is ever collected, and no authorization is
   // ever placed, so any sentence about holds, statements, chargebacks or refund
