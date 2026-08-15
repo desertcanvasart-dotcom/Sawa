@@ -4714,6 +4714,10 @@ button:disabled {
 .rich li { margin: 2px 0; }
 .rich a { color: var(--accent-deep); text-decoration: underline; }
 .rich strong { color: var(--ink); }
+/* Captioned images in article bodies (blog, 038-era sanitizer allows them). */
+.rich figure { margin: 18px 0; }
+.rich figure img { width: 100%; height: auto; border-radius: 14px; display: block; }
+.rich figcaption { margin-top: 8px; font-size: 13px; color: var(--ink-faint); line-height: 1.5; }
 
 .muted-line { color: var(--ink-faint); font-size: 13px; }
 
@@ -6218,6 +6222,11 @@ button:disabled {
 .blog-post-meta span { display: inline-flex; align-items: center; gap: 6px; }
 .blog-post-meta svg { color: var(--accent); }
 .blog-post-cover { width: 100%; max-height: 460px; object-fit: cover; border-radius: var(--radius-lg); margin: clamp(20px, 3vw, 32px) 0; box-shadow: var(--shadow-md); }
+/* 040: the cover is a figure now — the caption hangs under the image, and the
+   figure owns the vertical rhythm the bare img used to. */
+.blog-post-cover-fig { margin: 0; }
+.blog-post-cover-fig .blog-post-cover { margin-bottom: 8px; }
+.blog-post-cover-fig figcaption { margin: 0 0 clamp(20px, 3vw, 32px); font-size: 13px; color: var(--ink-faint); line-height: 1.5; }
 .blog-tldr { display: flex; flex-direction: column; gap: 4px; padding: 18px 20px; margin: 0 0 28px; border-left: 3px solid var(--gold); background: var(--sand-50); border-radius: 0 14px 14px 0; }
 .blog-tldr strong { font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: #c79a35; }
 .blog-tldr p { margin: 0; color: var(--ink); font-size: 16px; line-height: 1.55; }

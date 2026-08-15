@@ -661,6 +661,7 @@ export async function buildBody(pathname) {
 <article>
   <h1>${esc(p.title)}</h1>
   <p>${p.author ? `By ${esc(p.author)} · ` : ""}${esc(dateLabel(p.published_at))}</p>
+  ${p.cover_image ? `<figure><img src="${esc(p.cover_image)}" alt="${esc(p.cover_alt || p.title)}">${p.cover_caption ? `<figcaption>${esc(p.cover_caption)}</figcaption>` : ""}</figure>` : ""}
   ${p.tldr ? `<p><strong>In short:</strong> ${esc(p.tldr)}</p>` : ""}
   ${cleanHtml(p.body_html || "")}
   ${faq.length ? `<h2>Questions</h2>${faq.map((f) => `<h3>${esc(f.q)}</h3><p>${esc(f.a || "")}</p>`).join("")}` : ""}

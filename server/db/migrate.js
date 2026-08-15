@@ -48,6 +48,7 @@ const MIGRATIONS = [
   { name: "037_request_window", file: "schema_037_request_window.sql" },
   { name: "038_cutoff_unit", file: "schema_038_cutoff_unit.sql" },
   { name: "039_drop_decorative_cutoff", file: "schema_039_drop_decorative_cutoff.sql" },
+  { name: "040_cover_alt_caption", file: "schema_040_cover_alt_caption.sql" },
 ];
 
 async function main() {
