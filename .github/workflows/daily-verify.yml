@@ -1,0 +1,65 @@
+# The daily unattended verification — preflight's answer to "who runs you on
+# a Sunday?"
+#
+# The PR gate proves a change is sound at merge time. The audit-watch tick in
+# the server catches claims drift from inside. Neither notices the class of
+# break that needs an OUTSIDE observer with a browser: routes that stop
+# serving, an SPA that stops booting, images that stop loading, a promise
+# page that drifts. This runs that observation every morning and fails loudly
+# — a failed run emails the repository owner via GitHub's own notifications.
+#
+# Three tiers, by what credentials they need:
+#   always      route smoke (41 routes, served output) · promises audit ·
+#               DOM smoke (real Chrome, five traveller journeys)
+#   if secrets  the full 16-step preflight, exactly as run by hand — needs
+#               AUDITOR_DATABASE_URL (and optionally PRODUCTION_DB_HOST,
+#               SMOKE_TOKEN). Until those secrets exist this tier reports
+#               itself UNVERIFIED, never silently green:
+#                 gh secret set AUDITOR_DATABASE_URL
+#                 gh secret set PRODUCTION_DB_HOST
+#                 gh secret set SMOKE_TOKEN
+name: Daily verify
+
+on:
+  schedule:
+    - cron: "10 4 * * *"   # 04:10 UTC ≈ 06:10 Cairo, before anyone's workday
+  workflow_dispatch:
+
+concurrency:
+  group: daily-verify
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      BASE: https://sawa.tours
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      - name: Route smoke — 41 routes, served output
+        run: npm run smoke -- --base=$BASE
+
+      - name: Promises audit — served pages against the register
+        run: npm run audit:promises -- --base=$BASE
+
+      - name: DOM smoke — five journeys in real Chrome
+        run: node scripts/dom-smoke.js --base=$BASE
+
+      - name: Full preflight (only with auditor credentials)
+        env:
+          DATABASE_URL: ${{ secrets.AUDITOR_DATABASE_URL }}
+          PRODUCTION_DB_HOST: ${{ secrets.PRODUCTION_DB_HOST }}
+          SMOKE_TOKEN: ${{ secrets.SMOKE_TOKEN }}
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::notice::AUDITOR_DATABASE_URL is not set — the DB-facing steps ran UNVERIFIED today. The three commands to arm this tier are in this file's header."
+            exit 0
+          fi
+          npm run preflight -- --base=$BASE
