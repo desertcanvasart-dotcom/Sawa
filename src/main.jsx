@@ -3370,7 +3370,14 @@ function BlogPostPage({ navigate, slug }) {
           {p.geoRegion && <span><MapPin size={14} /> {p.geoRegion}</span>}
         </div>
       </header>
-      {p.coverImage && <img className="blog-post-cover reveal in" src={p.coverImage} alt={p.title} />}
+      {p.coverImage && (
+        <figure className="blog-post-cover-fig reveal in">
+          {/* Alt describes the PICTURE (040); the title only says what the
+              article is about, so it is the fallback, not the default. */}
+          <img className="blog-post-cover" src={p.coverImage} alt={p.coverAlt || p.title} title={p.coverAlt || undefined} />
+          {p.coverCaption && <figcaption>{p.coverCaption}</figcaption>}
+        </figure>
+      )}
       {p.tldr && <div className="blog-tldr reveal in"><strong>In short</strong><p>{p.tldr}</p></div>}
       <div className="blog-post-body rich reveal in" dangerouslySetInnerHTML={{ __html: p.bodyHtml || "" }} />
       {takeaways.length > 0 && (

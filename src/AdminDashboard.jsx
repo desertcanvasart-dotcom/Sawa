@@ -471,6 +471,7 @@ function BlogEditor({ existing, onClose, onSaved }) {
   const [f, setF] = useState({
     title: existing?.title || "", slug: existing?.slug || "", excerpt: existing?.excerpt || "",
     coverImage: existing?.coverImage || "", author: existing?.author || "Sawa Tours",
+    coverAlt: existing?.coverAlt || "", coverCaption: existing?.coverCaption || "",
     authorCredentials: existing?.authorCredentials || "", tags: (existing?.tags || []).join(", "),
     metaTitle: existing?.metaTitle || "", metaDescription: existing?.metaDescription || "",
     keywords: (existing?.keywords || []).join(", "), canonicalUrl: existing?.canonicalUrl || "",
@@ -504,7 +505,8 @@ function BlogEditor({ existing, onClose, onSaved }) {
       const body = {
         ...(existing?.id ? { id: existing.id } : {}),
         title: f.title.trim(), slug: (f.slug || blogSlug(f.title)).trim(), excerpt: f.excerpt.trim(),
-        coverImage: f.coverImage, bodyHtml, author: f.author.trim(), authorCredentials: f.authorCredentials.trim(),
+        coverImage: f.coverImage, coverAlt: f.coverAlt.trim(), coverCaption: f.coverCaption.trim(),
+        bodyHtml, author: f.author.trim(), authorCredentials: f.authorCredentials.trim(),
         tags: csv(f.tags), status,
         metaTitle: f.metaTitle.trim(), metaDescription: f.metaDescription.trim(), keywords: csv(f.keywords),
         canonicalUrl: f.canonicalUrl.trim(), ogImage: f.ogImage, noindex: f.noindex,
@@ -549,6 +551,10 @@ function BlogEditor({ existing, onClose, onSaved }) {
           <Field label="Excerpt (card + meta fallback)" full><textarea rows={2} value={f.excerpt} onChange={set("excerpt")} placeholder="One or two sentences shown on the blog card and in search results." /></Field>
         </div>
         <ImageField label="Cover image" field="coverImage" hint="Recommended ~1600px wide, JPG." />
+        <div className="form-grid">
+          <Field label="Cover alt text"><input value={f.coverAlt} onChange={set("coverAlt")} placeholder="What the PICTURE shows — for screen readers and image search." /></Field>
+          <Field label="Cover caption"><input value={f.coverCaption} onChange={set("coverCaption")} placeholder="Shown under the image. Empty = no caption." /></Field>
+        </div>
         <Field label="Article body" full asDiv><RichText value={bodyHtml} onChange={setBodyHtml} placeholder="Write your article — headings, bold, lists, links…" /></Field>
         <div className="form-grid">
           <Field label="Author"><input value={f.author} onChange={set("author")} placeholder="Sawa Tours" /></Field>

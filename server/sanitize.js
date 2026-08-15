@@ -16,15 +16,25 @@ const OPTIONS = {
     "strong", "b", "em", "i", "u", "s", "code", "pre", "blockquote",
     "h1", "h2", "h3", "h4", "h5", "h6",
     "ul", "ol", "li", "a",
+    // Added for the blog (15 Aug 2026): an article body may carry captioned
+    // images. The src filter below is the boundary that makes this safe.
+    "img", "figure", "figcaption",
   ],
   allowedAttributes: {
     a: ["href", "target", "rel"],
+    img: ["src", "alt", "title", "width", "height", "loading"],
   },
   allowedSchemes: ["http", "https", "mailto", "tel"],
   // Force outbound links to be safe (no window.opener access, no referrer leak).
   transformTags: {
     a: sanitizeHtml.simpleTransform("a", { rel: "noopener noreferrer nofollow", target: "_blank" }),
   },
+  // An image must be one of OUR files: a site-relative /images/ path, nothing
+  // else. A remote URL in an <img> is an offsite request every reader makes —
+  // a tracking pixel anyone with a rich-text field could plant. Same class as
+  // the CSP argument: content may only point at what we serve.
+  exclusiveFilter: (frame) =>
+    frame.tag === "img" && !/^\/images\/[^\s"'\\]+$/.test(frame.attribs?.src || ""),
   // Drop the *contents* of these entirely, not just the tags.
   nonTextTags: ["style", "script", "textarea", "option", "noscript"],
 };

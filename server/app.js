@@ -1771,6 +1771,9 @@ app.delete("/api/admin/destinations/:id", requireAuth, requireRole("super_admin"
 // ---- Blog posts (content + SEO + GEO) ----
 const mapPost = (b) => ({
   id: b.id, slug: b.slug, title: b.title, excerpt: b.excerpt || "", coverImage: b.cover_image || "",
+  // 040 — the cover's own alt and caption. Alt falls back to the title at
+  // RENDER time, not here: "" must stay distinguishable from "set".
+  coverAlt: b.cover_alt || "", coverCaption: b.cover_caption || "",
   bodyHtml: b.body_html || "", author: b.author || "", authorCredentials: b.author_credentials || "",
   tags: b.tags || [], status: b.status || "draft",
   publishedAt: b.published_at instanceof Date ? b.published_at.toISOString() : b.published_at,
@@ -1820,10 +1823,11 @@ app.post("/api/admin/blog", requireAuth, requireRole("super_admin", "ops_staff")
     `INSERT INTO blog_posts
        (id, slug, title, excerpt, cover_image, body_html, author, author_credentials, tags, status, published_at,
         meta_title, meta_description, keywords, canonical_url, og_image, noindex,
-        tldr, key_takeaways, faq, geo_region, geo_place, geo_lat, geo_lng, local_keywords, updated_at)
+        tldr, key_takeaways, faq, geo_region, geo_place, geo_lat, geo_lng, local_keywords, updated_at,
+        cover_alt, cover_caption)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,
         CASE WHEN $10='published' THEN COALESCE($11::timestamptz, now()) ELSE $11::timestamptz END,
-        $12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25, now())
+        $12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25, now(), $26,$27)
      ON CONFLICT (id) DO UPDATE SET
         slug=EXCLUDED.slug, title=EXCLUDED.title, excerpt=EXCLUDED.excerpt, cover_image=EXCLUDED.cover_image,
         body_html=EXCLUDED.body_html, author=EXCLUDED.author, author_credentials=EXCLUDED.author_credentials,
@@ -1833,7 +1837,8 @@ app.post("/api/admin/blog", requireAuth, requireRole("super_admin", "ops_staff")
         canonical_url=EXCLUDED.canonical_url, og_image=EXCLUDED.og_image, noindex=EXCLUDED.noindex,
         tldr=EXCLUDED.tldr, key_takeaways=EXCLUDED.key_takeaways, faq=EXCLUDED.faq,
         geo_region=EXCLUDED.geo_region, geo_place=EXCLUDED.geo_place, geo_lat=EXCLUDED.geo_lat,
-        geo_lng=EXCLUDED.geo_lng, local_keywords=EXCLUDED.local_keywords, updated_at=now()
+        geo_lng=EXCLUDED.geo_lng, local_keywords=EXCLUDED.local_keywords, updated_at=now(),
+        cover_alt=EXCLUDED.cover_alt, cover_caption=EXCLUDED.cover_caption
      RETURNING *`,
     [
       id, slug, title, b.excerpt || null, b.coverImage || null, cleanHtml(b.bodyHtml) || null, b.author || null,
@@ -1841,6 +1846,7 @@ app.post("/api/admin/blog", requireAuth, requireRole("super_admin", "ops_staff")
       b.metaTitle || null, b.metaDescription || null, arr(b.keywords), b.canonicalUrl || null, b.ogImage || null,
       b.noindex === true, b.tldr || null, arr(b.keyTakeaways), faq, b.geoRegion || null, b.geoPlace || null,
       b.geoLat || null, b.geoLng || null, arr(b.localKeywords),
+      b.coverAlt || null, b.coverCaption || null,
     ]
   )).rows[0];
   await logAudit(req, { action: "blog.save", entity: "blog_post", entityId: row.id, detail: { title, status } });
