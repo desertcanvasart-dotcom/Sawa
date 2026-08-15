@@ -1196,7 +1196,7 @@ const SxLogoMark = () => (
 // Plain <a> on purpose: /departures, /goahead and /destinations are static
 // server pages, not SPA routes — SpaLink would client-route them into the 404.
 // Mirrors the nav on the static pages; keep the two in sync.
-const SX_NAV_LINKS = [["Itineraries", "/itineraries"], ["Departures", "/departures"], ["GoAhead", "/goahead"], ["How it works", "/how-it-works"], ["FAQ", "/faq"]];
+const SX_NAV_LINKS = [["Itineraries", "/itineraries"], ["Departures", "/departures"], ["GoAhead", "/goahead"], ["How it works", "/how-it-works"], ["Blog", "/blog"]];
 
 // The skip link the static pages all carry. It only becomes visible on focus,
 // and it targets the #main that SxChrome/TourDetailV2 put on their <main>.
