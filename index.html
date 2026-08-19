@@ -26,6 +26,13 @@
     <title>Sawa Shared Tours</title>
   </head>
   <body>
+    <!-- Google Tag Manager (noscript) — the script half is injected into every
+         SPA route's head by buildHead() in server/seo.js, so the container ID
+         stays in site/assets/gtm.js alone. This half cannot be: no script runs
+         in the case it exists for. -->
+    <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-MJNDLPKG"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+    <!-- End Google Tag Manager (noscript) -->
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
