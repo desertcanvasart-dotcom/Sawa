@@ -72,6 +72,44 @@ test("the scroll reveal is implemented once, in sawa.js, and every page loads it
   }
 });
 
+test("Google Tag Manager is on every page, from one file, and waits for consent", () => {
+  // Google's snippet is meant to be pasted into every head. Pasted here it
+  // would put the container ID in twenty-one places, and — the part that
+  // matters more — it would load GTM on sight, firing the container's tags
+  // before anyone had been asked. site/cookies.html says analytics does not
+  // run until you accept it, so a self-loading GTM would make that page false.
+  const gtm = read(join(root, "site/assets/gtm.js"));
+  assert.ok(gtm.includes("GTM-MJNDLPKG"), "gtm.js should own the container ID");
+  assert.ok(
+    gtm.includes("window.sawaConsent") && gtm.includes("onChange"),
+    "gtm.js must load the container through a consent decision, not on sight"
+  );
+
+  const shell = read(join(root, "index.html"));
+  assert.ok(
+    shell.includes("googletagmanager.com/ns.html?id=GTM-MJNDLPKG"),
+    "the SPA shell carries the <noscript> half — buildHead() cannot reach the body"
+  );
+
+  for (const file of pages()) {
+    const html = read(file);
+    const consent = html.indexOf("/assets/consent.js");
+    const gtmTag = html.indexOf('<script defer src="/assets/gtm.js"></script>');
+    assert.notEqual(gtmTag, -1, `${name(file)} does not load gtm.js, or loads it without defer`);
+    assert.ok(consent < gtmTag, `${name(file)} loads gtm.js before consent.js`);
+    assert.ok(
+      !html.includes("googletagmanager.com/gtm.js"),
+      `${name(file)} inlines Google's loader — the container ID belongs in gtm.js alone`
+    );
+    // The <noscript> half cannot be gated: no script runs in the case it
+    // exists for. It has to be in the page itself.
+    assert.ok(
+      html.includes("googletagmanager.com/ns.html?id=GTM-MJNDLPKG"),
+      `${name(file)} is missing the GTM <noscript> iframe`
+    );
+  }
+});
+
 test("consent runs before analytics on every page, and neither blocks rendering", () => {
   for (const file of pages()) {
     const html = read(file);

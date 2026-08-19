@@ -366,6 +366,10 @@ export async function buildHead(pathname) {
     // pasted into every head on the site.
     `<script defer src="/assets/consent.js"></script>`,
     `<script defer src="/assets/analytics.js"></script>`,
+    // Google Tag Manager, same reasoning: the container ID lives in
+    // site/assets/gtm.js alone. Its <noscript> half is in index.html, which is
+    // the shell every one of these routes renders into.
+    `<script defer src="/assets/gtm.js"></script>`,
   ].join("\n");
 
   return { title: m.title, head, notFound: !!m.notFound };
