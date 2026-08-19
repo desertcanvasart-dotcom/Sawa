@@ -17,6 +17,26 @@
  * The <noscript> iframe half of Google's snippet is still written into each
  * page's body directly: no script runs in the case it exists for, so there is
  * nothing there for this file to gate.
+ *
+ * The container is EMPTY, and that is the intended state — not a broken
+ * install. GA4 is owned by analytics.js, which loads and configures
+ * G-VG2G0Q5JFM directly; src/main.jsx sends its own page_view on SPA route
+ * changes, because client-side routing never reloads. A GA4 tag added here for
+ * that same measurement ID would be a second, independent config on the same
+ * page, and every page_view would be counted twice. Moving GA4 into the
+ * container instead is a real change, not a swap: the SPA's gtag() call would
+ * have to become a dataLayer push with a trigger to match, or every tour and
+ * blog page opened after landing goes unrecorded. That was weighed on
+ * 2026-08-20 and declined.
+ *
+ * So this container is a pipe kept ready for the tags that are NOT GA4 — Ads
+ * conversions, Meta, Clarity and the like. Those can be added and published in
+ * the Tag Manager UI without touching this repository, and they inherit the
+ * consent gate for free, because nothing below runs until consent.js says so.
+ *
+ * An empty Tags list in Tag Manager is therefore the correct reading, and
+ * Google's Tag Assistant reporting the container as "not installed" before the
+ * cookie banner is accepted is the gate working rather than a fault.
  */
 (function () {
   var ID = "GTM-MJNDLPKG";
