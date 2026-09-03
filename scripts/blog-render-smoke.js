@@ -11,7 +11,7 @@ import { mapPost } from "../server/blog-post.js";
 
 process.env.DATABASE_URL = "postgres://u:p@127.0.0.1:1/none";
 const { pool } = await import("../server/db/index.js");
-const { buildHead, buildBody } = await import("../server/seo.js");
+const { buildHead, buildBody, inlineScriptJson, sliceBootstrapForRoute } = await import("../server/seo.js");
 const fixture = {
   id: "blog_render_fixture", slug: "fayoum-in-a-day-from-cairo", status: "published",
   title: "Fayoum in a Day from Cairo", author: "Sawa Tours",
@@ -27,6 +27,24 @@ pool.query = async (sql, params) => {
 const root = fileURLToPath(new URL("../", import.meta.url));
 const template = readFileSync(new URL("../dist/index.html", import.meta.url), "utf8");
 const app = express();
+const packagePath = "/package/nile-discovery-4-day-cruise-from-aswan-to-luxor";
+const packageFixture = {
+  id: "pkg_nile_discovery_internal_id", type: "package", status: "approved", active: true,
+  title: "Nile Discovery: 4-Day Cruise from Aswan to Luxor", city: "Cairo",
+  cities: ["Aswan", "Kom Ombo", "Edfu", "Luxor"], duration: "4 days · 3 nights",
+  minSeats: 4, maxSeats: 12, publishedRate: 595, breakPrice: 500,
+  description: "A published Nile cruise package.", images: [], itinerary: [],
+  included: [], notIncluded: [], operatingDays: [], depositPercent: 25,
+};
+app.get(packagePath, (_req, res) => {
+  const payload = sliceBootstrapForRoute({
+    agencies: [], operatorsByProduct: {}, cities: [], tourProducts: [packageFixture], departures: [],
+  }, packagePath);
+  const html = template
+    .replace(/<title>.*?<\/title>/s, `<title>${packageFixture.title} | Sawa Tours</title>`)
+    .replace('<div id="root"></div>', () => `<div id="root"><div data-server-rendered="true"><h1>${packageFixture.title}</h1></div></div><script>window.__SAWA_BOOTSTRAP__=${inlineScriptJson(payload)}</script>`);
+  res.status(200).type("html").send(html);
+});
 app.get("/api/blog", (_req, res) => res.json({ posts: [mapPost(fixture)] }));
 app.get("/api/blog/:slug", (req, res) => req.params.slug === fixture.slug
   ? res.json({ post: mapPost(fixture) }) : res.status(404).json({ error: "Post not found." }));
@@ -119,6 +137,20 @@ if (serveOnly) {
       await page.goto(base + path, { waitUntil: "networkidle" });
       await articleVisible(page);
     }, { viewport: { width: 390, height: 844 }, isMobile: true });
+    await check("server-bound package survives blocked APIs", async (page) => {
+      let devSnapshotRequests = 0;
+      page.on("request", (request) => {
+        if (new URL(request.url()).pathname === "/_dev_bootstrap.json") devSnapshotRequests += 1;
+      });
+      await page.route("**/api/**", (route) => route.abort("blockedbyclient"));
+      assert.equal((await page.goto(base + packagePath, { waitUntil: "networkidle" })).status(), 200);
+      const heading = page.getByRole("heading", { name: packageFixture.title, exact: true });
+      await heading.waitFor();
+      assert.equal(await page.locator(".sx").count(), 1, "the React package detail page must render");
+      assert.equal(await page.getByText("Not found.", { exact: true }).count(), 0);
+      assert.equal(await page.locator("[data-server-rendered]").count(), 0, "React must replace the fallback");
+      assert.equal(devSnapshotRequests, 0, "production client must never load the development catalogue snapshot");
+    });
     console.log(`${passed} browser regressions passed (local fixture; no production credentials).`);
   } finally {
     await browser.close();
