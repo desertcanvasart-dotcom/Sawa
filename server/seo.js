@@ -31,7 +31,8 @@ const esc = (s) => String(s == null ? "" : s)
 // blanks the entire graph. The bootstrap escaper sitting next to it had always
 // handled that. There is one implementation now, shared with static-seo.js.
 // Re-exported because app.js imports inlineScriptJson from this module.
-import { ldScript } from "./inline-json.js";
+import { ldScript, inlineScriptJson } from "./inline-json.js";
+import { mapPost } from "./blog-post.js";
 import { recordFailure } from "./effect-log.js";
 import { rethrowIfProgrammerError } from "./errors.js";
 export { inlineScriptJson } from "./inline-json.js";
@@ -304,7 +305,7 @@ async function postSchema(slug, url) {
   if (p.geo_place) geoMeta.push(meta("name", "geo.placename", p.geo_place));
   if (p.geo_lat && p.geo_lng) { geoMeta.push(meta("name", "geo.position", `${p.geo_lat};${p.geo_lng}`)); geoMeta.push(meta("name", "ICBM", `${p.geo_lat}, ${p.geo_lng}`)); }
   if (p.keywords && p.keywords.length) geoMeta.push(meta("name", "keywords", p.keywords.join(", ")));
-  return { schema: out, meta: { title: `${title} | ${BRAND.name}`, description: desc, ogImage: img || DEFAULT_OG, ogType: "article", author: p.author, noindex: p.noindex === true, extraMeta: geoMeta.join("") }, crumbName: p.title };
+  return { post: mapPost({ ...p, body_html: cleanHtml(p.body_html) }), schema: out, meta: { title: `${title} | ${BRAND.name}`, description: desc, ogImage: img || DEFAULT_OG, ogType: "article", author: p.author, noindex: p.noindex === true, extraMeta: geoMeta.join("") }, crumbName: p.title };
 }
 
 // Build the injected <head> for a given pathname.
@@ -314,6 +315,7 @@ export async function buildHead(pathname) {
   const graph = [travelAgencySchema(), websiteSchema()];
   let m = { title: DEFAULTS.title, description: DEFAULTS.description, ogType: "website", ogImage: DEFAULT_OG, noindex: false, extraMeta: "" };
   const crumbs = [{ name: "Home", url: BRAND.url }];
+  let blogPost = null;
 
   if (STATIC[path]) {
     m = { ...m, ...STATIC[path] };
@@ -326,7 +328,7 @@ export async function buildHead(pathname) {
     else m = { ...m, noindex: true, notFound: true, title: `Tour not found | ${BRAND.name}` };
   } else if (/^\/blog\/[^/]+$/.test(path)) {
     const res = await postSchema(decodeURIComponent(path.split("/")[2]), url);
-    if (res) { m = { ...m, ...res.meta }; res.schema.forEach((s) => graph.push(s)); crumbs.push({ name: "Blog", url: `${BRAND.url}/blog` }, { name: res.crumbName, url }); }
+    if (res) { blogPost = res.post; m = { ...m, ...res.meta }; res.schema.forEach((s) => graph.push(s)); crumbs.push({ name: "Blog", url: `${BRAND.url}/blog` }, { name: res.crumbName, url }); }
     else m = { ...m, noindex: true, notFound: true, title: `Post not found | ${BRAND.name}` };
   } else if (/^\/(admin|agency|portal)(\/|$)/.test(path)) {
     // Real, working app routes — they must not read (or respond) as "not found".
@@ -361,6 +363,10 @@ export async function buildHead(pathname) {
     meta("name", "twitter:image", ogImg),
     m.extraMeta || "",
     ldScript({ "@context": "https://schema.org", "@graph": graph }),
+    // Google renders JavaScript but /api/ is disallowed in robots.txt. Keep
+    // the published article available on React's very first render without a
+    // second API request, independently of the tour catalogue bootstrap.
+    blogPost ? `<script>window.__SAWA_BLOG_POST__=${inlineScriptJson(blogPost)}</script>` : "",
     // Analytics. The same file the 18 static pages load, so the measurement ID
     // lives in exactly one place (site/assets/analytics.js) rather than being
     // pasted into every head on the site.
