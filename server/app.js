@@ -67,6 +67,7 @@ import { startJobScheduler, jobSchedulerEnabled, cancelJobDryRun, goAheadNotifyD
 import { TOUR_TIMEZONE } from "./tz.js";
 import { cleanHtml, cleanItinerary } from "./sanitize.js";
 import { canonicalRedirect } from "./canonical.js";
+import { canonicalPathRedirect } from "./path-canonical.js";
 import { injectStaticSchema } from "./static-seo.js";
 import { cacheState, staleWhileRevalidate, PAGE_TTL_MS, PAGE_STALE_TTL_MS } from "./page-cache.js";
 
@@ -2592,6 +2593,15 @@ app.get("/sitemap.xml", h(async (_req, res) => res.type("application/xml").send(
 // those to the live React booking app so real departures keep working.
 const siteDir = join(__dirname, "..", "site");
 if (existsSync(siteDir)) {
+  // One public URL per document. This removes trailing-slash duplicates before
+  // static files or the SPA can answer 200, and retires the literal placeholder
+  // URL once advertised by the old WebSite/SearchAction schema.
+  app.use((req, res, next) => {
+    if (req.method !== "GET" && req.method !== "HEAD") return next();
+    const target = canonicalPathRedirect(req.originalUrl);
+    return target ? res.redirect(301, target) : next();
+  });
+
   // Canonicalize to clean, extensionless, SEO-friendly URLs: any /page.html
   // permanently redirects to /page. `index` -> /, and the two designed links
   // that have no page of their own map to real pages.
