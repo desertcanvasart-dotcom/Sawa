@@ -10,6 +10,25 @@ export function canonicalPathRedirect(originalUrl = "/") {
   }
 
   let changed = false;
+  const html = /^\/([a-z0-9][a-z0-9\-/]*)\.html$/i.exec(url.pathname);
+  if (html) {
+    const raw = html[1].toLowerCase();
+    const aliases = {
+      index: "/",
+      tour: "/itineraries",
+      pricing: "/operators",
+      trust: "/goahead-promise",
+    };
+    if (aliases[raw]) {
+      url.pathname = aliases[raw];
+    } else if (raw.endsWith("/index")) {
+      url.pathname = `/${raw.slice(0, -"/index".length)}`;
+    } else {
+      url.pathname = `/${raw}`;
+    }
+    changed = true;
+  }
+
   if (url.pathname.length > 1 && url.pathname.endsWith("/")) {
     url.pathname = url.pathname.replace(/\/+$/, "");
     changed = true;

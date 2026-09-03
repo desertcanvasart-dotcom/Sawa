@@ -2602,18 +2602,9 @@ if (existsSync(siteDir)) {
     return target ? res.redirect(301, target) : next();
   });
 
-  // Canonicalize to clean, extensionless, SEO-friendly URLs: any /page.html
-  // permanently redirects to /page. `index` -> /, and the two designed links
-  // that have no page of their own map to real pages.
-  // `trust` was renamed to `goahead-promise`; keep the old URL working.
-  const htmlAlias = { index: "/", tour: "/itineraries", pricing: "/operators", trust: "/goahead-promise" };
-  app.use((req, res, next) => {
-    if (req.method !== "GET") return next();
-    const m = req.path.match(/^\/([a-z0-9-]+)\.html$/i);
-    if (!m) return next();
-    const name = m[1].toLowerCase();
-    return res.redirect(301, htmlAlias[name] || `/${name}`);
-  });
+  // `trust` was renamed to `goahead-promise`; keep the old clean URL working.
+  // HTML-file variants (including nested destination pages) are normalized by
+  // canonicalPathRedirect above before express.static can serve a duplicate.
   app.get("/trust", (_req, res) => res.redirect(301, "/goahead-promise"));
   // The catalogue moved from /tours to /itineraries (and /packages was only
   // ever an alias of it). 301 so indexed links and old referral URLs

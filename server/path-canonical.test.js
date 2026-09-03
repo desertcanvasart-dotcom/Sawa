@@ -8,6 +8,14 @@ test("removes trailing slashes while preserving query parameters", () => {
   assert.equal(canonicalPathRedirect("/"), null);
 });
 
+test("redirects top-level and nested HTML files to clean public paths", () => {
+  assert.equal(canonicalPathRedirect("/about.html"), "/about");
+  assert.equal(canonicalPathRedirect("/destinations/luxor.html"), "/destinations/luxor");
+  assert.equal(canonicalPathRedirect("/destinations/index.html"), "/destinations");
+  assert.equal(canonicalPathRedirect("/index.html"), "/");
+  assert.equal(canonicalPathRedirect("/trust.html?ref=old"), "/goahead-promise?ref=old");
+});
+
 test("removes the obsolete literal SearchAction placeholder", () => {
   assert.equal(
     canonicalPathRedirect("/itineraries?q=%7Bsearch_term_string%7D"),
