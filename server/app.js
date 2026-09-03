@@ -59,6 +59,7 @@ import { watchdogReport, lastWatchRunAt } from "./watchdog.js";
 import { rethrowIfProgrammerError, surfaceProgrammerError } from "./errors.js";
 import { tourSlug, tourPath } from "./slug.js";
 import { blogSlug } from "../shared/blog-slug.js";
+import { mapPost } from "./blog-post.js";
 import { cancelDepartureAndPledges, reportNotifications, CANCEL_REASONS } from "./departure-cancel.js";
 
 import { BRAND } from "./brand.js";
@@ -1769,22 +1770,6 @@ app.delete("/api/admin/destinations/:id", requireAuth, requireRole("super_admin"
 }));
 
 // ---- Blog posts (content + SEO + GEO) ----
-const mapPost = (b) => ({
-  id: b.id, slug: b.slug, title: b.title, excerpt: b.excerpt || "", coverImage: b.cover_image || "",
-  // 040 — the cover's own alt and caption. Alt falls back to the title at
-  // RENDER time, not here: "" must stay distinguishable from "set".
-  coverAlt: b.cover_alt || "", coverCaption: b.cover_caption || "",
-  bodyHtml: b.body_html || "", author: b.author || "", authorCredentials: b.author_credentials || "",
-  tags: b.tags || [], status: b.status || "draft",
-  publishedAt: b.published_at instanceof Date ? b.published_at.toISOString() : b.published_at,
-  metaTitle: b.meta_title || "", metaDescription: b.meta_description || "", keywords: b.keywords || [],
-  canonicalUrl: b.canonical_url || "", ogImage: b.og_image || "", noindex: b.noindex === true,
-  tldr: b.tldr || "", keyTakeaways: b.key_takeaways || [], faq: b.faq || [],
-  geoRegion: b.geo_region || "", geoPlace: b.geo_place || "", geoLat: b.geo_lat || "", geoLng: b.geo_lng || "",
-  localKeywords: b.local_keywords || [],
-  updatedAt: b.updated_at instanceof Date ? b.updated_at.toISOString() : b.updated_at,
-});
-
 // Public: published posts (list).
 app.get("/api/blog", h(async (_req, res) => {
   if (publicBlogCache.payload && Date.now() - publicBlogCache.at < PUBLIC_BLOG_TTL) {
