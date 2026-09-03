@@ -467,8 +467,12 @@ function App() {
         data = await response.json();
       } catch (apiError) {
         // Local dev has no database, so /api/bootstrap fails — fall back to a
-        // snapshot of live data so tour pages preview. In production the live
-        // API succeeds and this fallback is never used.
+        // snapshot of live data so tour pages preview.
+        // The checked-in snapshot exists only to make local development usable
+        // without a database. In production, falling back to it after a
+        // crawler-blocked /api/ request replaced current server data with an
+        // older catalogue and turned valid detail URLs into soft 404s.
+        if (!import.meta.env.DEV) throw apiError;
         const snap = await fetch("/_dev_bootstrap.json", { signal: controller.signal });
         if (!snap.ok) throw new Error("Could not load portal data.");
         data = await snap.json();
