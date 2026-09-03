@@ -525,9 +525,9 @@ an unstated environmental condition is not a verdict.
 
 ---
 
-## Migrations do not run on deploy
+## Schema migrations do not run on deploy
 
-`npm start` is `node server/app.js`. There is **no migrate step**. Every
+`npm start` does **not** run the general migration runner. Every schema
 migration must be run by hand against production:
 
 ```bash
@@ -536,6 +536,13 @@ DATABASE_URL=<production> npm run db:migrate
 
 Do not assume a migration has been applied. Any commit adding one should say so
 in the message and give the exact command.
+
+The sole exception is the create-only catalogue repair in migration `041`.
+`npm start` applies that one named data fix before starting the web process so
+the restored Cairo–Luxor URL can be deployed atomically. It inserts only when
+the stable product id is absent, never overwrites a live record, records its own
+migration marker, and is a read-only no-op on later boots. It does not apply any
+other migration.
 
 ---
 
