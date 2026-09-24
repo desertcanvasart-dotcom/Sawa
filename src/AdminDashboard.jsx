@@ -2148,42 +2148,42 @@ function OperatorRecord({ agency, onSaved }) {
   return (
     <form className="op-record" onSubmit={save}>
       <div className="op-grid">
-        <label><span>Tourism licence no.</span>
+        <label className="field"><span>Tourism licence no.</span>
           <input value={f.tourismLicenseNo} onChange={set("tourismLicenseNo")} placeholder="Ministry licence" />
-          <small>Never published. Used only to confirm registration.</small>
+          <em className="field-hint">Never published. Used only to confirm registration.</em>
         </label>
-        <label><span>Registered (year)</span>
+        <label className="field"><span>Registered (year)</span>
           <input value={f.tourismLicenseYear} onChange={set("tourismLicenseYear")} inputMode="numeric" placeholder="e.g. 2011" />
-          <small>An Egyptian tourism licence has no expiry.</small>
+          <em className="field-hint">An Egyptian tourism licence has no expiry.</em>
         </label>
-        <label><span>ETAA registration no.</span>
+        <label className="field"><span>ETAA registration no.</span>
           <input value={f.etaaRegistrationNo} onChange={set("etaaRegistrationNo")} />
         </label>
-        <label><span>Insurer</span>
+        <label className="field"><span>Insurer</span>
           <input value={f.insuranceInsurer} onChange={set("insuranceInsurer")} />
         </label>
-        <label><span>Policy no.</span>
+        <label className="field"><span>Policy no.</span>
           <input value={f.insurancePolicyNo} onChange={set("insurancePolicyNo")} />
         </label>
-        <label><span>Insurance expires</span>
+        <label className="field"><span>Insurance expires</span>
           <input type="date" value={f.insuranceExpires} onChange={set("insuranceExpires")} />
-          <small>Insurance does expire — this one is a real date.</small>
+          <em className="field-hint">Insurance does expire — this one is a real date.</em>
         </label>
       </div>
-      <label className="op-wide"><span>Track record</span>
+      <label className="field op-wide"><span>Track record</span>
         <textarea rows={2} value={f.trackRecord} onChange={set("trackRecord")} />
       </label>
       <div className="op-grid">
-        <label><span>Verification</span>
+        <label className="field"><span>Verification</span>
           <select value={f.verificationState} onChange={set("verificationState")}>
             <option value="">Not assessed</option>
             <option value="lapsed">Lapsed</option>
             <option value="verified">Verified</option>
             <option value="rejected">Rejected</option>
           </select>
-          <small>Only &ldquo;Verified&rdquo; names this operator publicly. The date is stamped on save.</small>
+          <em className="field-hint">Only &ldquo;Verified&rdquo; names this operator publicly. The date is stamped on save.</em>
         </label>
-        <label className="op-wide"><span>Evidence</span>
+        <label className="field op-wide"><span>Evidence</span>
           <input value={f.verificationEvidence} onChange={set("verificationEvidence")} placeholder="What was checked, and against what" />
         </label>
       </div>
@@ -2204,6 +2204,7 @@ function AgenciesSection({ flash }) {
   // Which agency's operator record is open. One at a time: these are ten fields
   // and a verification decision, not a cell edit.
   const [editing, setEditing] = useState(null);
+  const [creating, setCreating] = useState(false);
   const set = (k) => (e) => setForm((s) => ({ ...s, [k]: e.target.value }));
 
   async function load() {
@@ -2237,51 +2238,113 @@ function AgenciesSection({ flash }) {
     } catch (e2) { setErr(e2.message); }
   }
 
+  const open = list && editing ? list.find((a) => a.id === editing) : null;
+  // Escape closes whichever panel is open.
+  useEffect(() => {
+    if (!creating && !editing) return undefined;
+    const onKey = (e) => { if (e.key === "Escape") { setCreating(false); setEditing(null); } };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [creating, editing]);
+
   return (
     <>
-      <PageHead title="Agencies" sub="Create partner agencies and their owner logins." />
-      <div className="dash-two">
-        <div className="dash-card">
-          <div className="dash-card-head"><h2>All agencies</h2></div>
-          <div className="table-wrap">
-            <table className="dash-table">
-              <thead><tr><th>Agency</th><th>Contact</th><th>Members</th><th>Status</th><th></th></tr></thead>
-              <tbody>
-                {(list || []).map((a) => (
-                  <Fragment key={a.id}>
-                  <tr><td><strong>{a.name}</strong>{a.verificationState === "verified"
-                    ? <div className="sub"><ShieldCheck size={12} /> Verified{a.verifiedAt ? ` ${fmtDate(a.verifiedAt)}` : ""}</div>
-                    : a.verificationState ? <div className="sub">{a.verificationState.replace("_", " ")}</div> : null}</td><td>{a.contactName}{a.phone ? <div className="sub">{a.phone}</div> : ""}</td><td>{a.staffCount}</td><td><span className="tag tag-on">{a.status}</span></td><td><button className="btn-mini" onClick={() => setEditing(editing === a.id ? null : a.id)}>{editing === a.id ? "Close" : "Operator record"}</button>{" "}<button className="btn-mini" onClick={() => remove(a)} title={a.staffCount ? "Remove its team logins first" : `Delete ${a.name}`}><Trash2 size={14} />Delete</button></td></tr>
-                  {editing === a.id && (
-                    <tr><td colSpan={5}><OperatorRecord agency={a} onSaved={() => { load(); flash("Operator record saved."); }} /></td></tr>
-                  )}
-                  </Fragment>
-                ))}
-                {list && list.length === 0 && <tr><td colSpan={5}><Empty label="No agencies yet." /></td></tr>}
-              </tbody>
-            </table>
-          </div>
-        </div>
-        <div className="dash-card">
-          <div className="dash-card-head"><h2>New agency</h2></div>
-          <form className="stack-form" onSubmit={create}>
-            <Field label="Agency name" full><input value={form.name} onChange={set("name")} placeholder="Nile Star Travel" /></Field>
-            <Field label="Phone (optional)" full><input value={form.phone} onChange={set("phone")} /></Field>
-            <Field label="Owner name" full><input value={form.ownerName} onChange={set("ownerName")} /></Field>
-            <Field label="Owner email" full><input type="email" value={form.ownerEmail} onChange={set("ownerEmail")} /></Field>
-            {err && <div className="auth-error">{err}</div>}
-            {created && (
-              <div className="temp-pass">
-                <strong>{created.name} created — {created.email}</strong>
-                <p>One-time password (share securely):</p><code>{created.tempPassword}</code>
-              </div>
-            )}
-            <button className="btn-primary" disabled={busy}>{busy ? "Creating…" : "Create agency + owner"}</button>
-          </form>
+      <PageHead
+        title="Agencies"
+        sub="Partner operators, their owner logins, and the record that verifies them."
+        action={<button className="btn-primary" onClick={() => { setCreating(true); setCreated(null); setErr(""); }}><Plus size={16} />New agency</button>}
+      />
+      {err && !creating && <div className="auth-error" role="alert">{err}</div>}
+      <div className="dash-card">
+        <div className="table-wrap table-scroll">
+          <table className="dash-table agencies-table">
+            <thead><tr><th>Agency</th><th>Owner / contact</th><th>Team</th><th>Status</th><th aria-label="Actions" /></tr></thead>
+            <tbody>
+              {(list || []).map((a) => (
+                <tr key={a.id}>
+                  <td>
+                    <strong className="agency-name">{a.name}</strong>
+                    <div className="agency-verify">{verificationTag(a)}</div>
+                  </td>
+                  <td>
+                    {a.contactName ? a.contactName : <span className="muted-line">No contact on file</span>}
+                    {a.phone && <div className="sub">{a.phone}</div>}
+                  </td>
+                  <td>{a.staffCount} login{a.staffCount === 1 ? "" : "s"}</td>
+                  <td><span className={`tag ${a.status === "active" ? "tag-on" : "tag-off"}`}>{a.status}</span></td>
+                  <td>
+                    <div className="row-actions">
+                      <button className="btn-ghost sm" onClick={() => setEditing(a.id)}><ShieldCheck size={14} />Operator record</button>
+                      <button className="icon-btn danger" onClick={() => remove(a)} aria-label={`Delete ${a.name}`}
+                        title={a.staffCount ? "Delete — its team logins are removed with it" : `Delete ${a.name}`}><Trash2 size={15} /></button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {list && list.length === 0 && <tr><td colSpan={5}><Empty label="No agencies yet. Create the first with “New agency”." /></td></tr>}
+            </tbody>
+          </table>
         </div>
       </div>
+
+      {creating && (
+        <div className="drawer-overlay" onClick={() => setCreating(false)}>
+          <aside className="drawer" onClick={(e) => e.stopPropagation()} aria-label="New agency">
+            <div className="drawer-head">
+              <div><h2>New agency</h2><span className="sub">Creates the agency and its owner's login.</span></div>
+              <button className="icon-btn" onClick={() => setCreating(false)} aria-label="Close"><X size={18} /></button>
+            </div>
+            <div className="drawer-body">
+              {created ? (
+                <div className="temp-pass">
+                  <strong>{created.name} created — {created.email}</strong>
+                  <p>One-time password (share securely):</p><code>{created.tempPassword}</code>
+                  <div className="op-actions">
+                    <button className="btn-ghost" onClick={() => setCreated(null)}>Create another</button>
+                    <button className="btn-primary" onClick={() => setCreating(false)}>Done</button>
+                  </div>
+                </div>
+              ) : (
+                <form className="stack-form" onSubmit={create}>
+                  <Field label="Agency name" full><input value={form.name} onChange={set("name")} placeholder="e.g. Nile Star Travel" required autoFocus /></Field>
+                  <Field label="Phone (optional)" full><input type="tel" value={form.phone} onChange={set("phone")} placeholder="+20 …" /></Field>
+                  <Field label="Owner name" full><input value={form.ownerName} onChange={set("ownerName")} required /></Field>
+                  <Field label="Owner email" full hint="Their login. A one-time password is shown once, after creation."><input type="email" value={form.ownerEmail} onChange={set("ownerEmail")} required /></Field>
+                  {err && <div className="auth-error" role="alert">{err}</div>}
+                  <button className="btn-primary" disabled={busy}>{busy ? "Creating…" : "Create agency + owner"}</button>
+                </form>
+              )}
+            </div>
+          </aside>
+        </div>
+      )}
+
+      {open && (
+        <div className="drawer-overlay" onClick={() => setEditing(null)}>
+          <aside className="drawer drawer-wide" onClick={(e) => e.stopPropagation()} aria-label={`Operator record — ${open.name}`}>
+            <div className="drawer-head">
+              <div><h2>{open.name}</h2><span className="sub">Operator record · {verificationLabel(open)}</span></div>
+              <button className="icon-btn" onClick={() => setEditing(null)} aria-label="Close"><X size={18} /></button>
+            </div>
+            <div className="drawer-body">
+              <OperatorRecord agency={open} onSaved={() => { load(); setEditing(null); flash("Operator record saved."); }} />
+            </div>
+          </aside>
+        </div>
+      )}
     </>
   );
+}
+
+function verificationLabel(a) {
+  if (a.verificationState === "verified") return `Verified${a.verifiedAt ? ` ${fmtDate(a.verifiedAt)}` : ""}`;
+  if (a.verificationState) return a.verificationState.replace("_", " ");
+  return "Not assessed";
+}
+function verificationTag(a) {
+  const tone = a.verificationState === "verified" ? "tag-on"
+    : a.verificationState === "rejected" || a.verificationState === "lapsed" ? "tag-warn" : "tag-off";
+  return <span className={`tag ${tone}`}>{a.verificationState === "verified" && <ShieldCheck size={12} />}{verificationLabel(a)}</span>;
 }
 
 /* ---------------- Operations team (platform staff) ---------------- */
