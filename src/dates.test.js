@@ -70,3 +70,22 @@ test("fmtDate renders an em dash for empty and invalid input", () => {
 test("fmtDate formats a date-only value without shifting it", () => {
   inTimeZone("America/Los_Angeles", () => assert.match(fmtDate("2026-07-10"), /Jul 10, 2026/));
 });
+
+import { fmtReceived, timeAgo } from "./dates.js";
+
+test("a received time is shown in Cairo, labelled, with how long ago", () => {
+  // 20:33 UTC on 21 Sep 2026 is 23:33 in Cairo (UTC+3 in September).
+  const at = "2026-09-21T20:33:32.281Z";
+  const now = Date.parse("2026-09-24T14:00:00Z");
+  // ICU spells September "Sep" or "Sept" depending on version.
+  assert.match(fmtReceived(at, now), /^21 Sept? 2026, 23:33 Cairo · 3 days ago$/);
+});
+
+test("time ago reads naturally at each scale", () => {
+  const now = Date.parse("2026-09-24T14:00:00Z");
+  assert.equal(timeAgo("2026-09-24T13:59:50Z", now), "just now");
+  assert.equal(timeAgo("2026-09-24T13:15:00Z", now), "45 min ago");
+  assert.equal(timeAgo("2026-09-24T09:00:00Z", now), "5 h ago");
+  assert.equal(timeAgo("2026-09-23T14:00:00Z", now), "1 day ago");
+  assert.equal(fmtReceived(null, now), "—");
+});

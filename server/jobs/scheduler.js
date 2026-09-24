@@ -159,7 +159,7 @@ export function startJobScheduler(env = process.env) {
     const { runAuditWatch } = await import("../../scripts/audit-watch.js");
     const { recordSuccess, recordFailure } = await import("../effect-log.js");
     const { rethrowIfProgrammerError } = await import("../errors.js");
-    const r = await runAuditWatch({ base: auditWatchBase(env) });
+    const r = await runAuditWatch({ base: auditWatchBase(env), retry: { log } });
 
     // The site not answering is an AVAILABILITY problem, not a claims
     // regression. A throttled or unreachable run returns a mass of
@@ -167,6 +167,11 @@ export function startJobScheduler(env = process.env) {
     // "27 findings appeared" is a false alarm of exactly the kind TTT1 says
     // kills a signal. Observed on the first live tick: 40 routes -> 23 with 27
     // fetch-failed, while the site was in fact serving 200s throughout.
+    //
+    // That observation was not availability at all: the audit was fetching
+    // localhost:8795, because the base never reached audit-claims (fixed via
+    // setAuditBase). Every tick from 10 Aug to 24 Sep 2026 failed that way.
+    // Genuine unreachability is now retried inside runAuditWatch first.
     const unreachable = (r.current.findings["fetch-failed"] || 0);
     if (unreachable >= 5) {
       log(`SITE DID NOT ANSWER — ${unreachable} routes failed to fetch. This is availability, not drift; the claims were never read.`);
@@ -254,7 +259,11 @@ export function startJobScheduler(env = process.env) {
     if (schema) log(schema);
 
     if (r.regressed || r.degraded || schema) {
-      const lines = r.drift.filter((d) => d.now > d.was).map((d) => `${d.rule}: ${d.was} -> ${d.now}`);
+      // Unreachable after the retries: say THAT, once, instead of listing
+      // fetch-failed as though 28 pages' copy had regressed.
+      const lines = r.unreachable
+        ? [`the site did not answer — every page failed to load on all ${r.attempts} attempts; the claims were not read`]
+        : r.drift.filter((d) => d.now > d.was).map((d) => `${d.rule}: ${d.was} -> ${d.now}`);
       if (r.degraded) lines.push(`coverage degraded — ${r.degraded}`);
       if (schema) lines.push(schema);
       recordFailure("claimsAudit", lines.join(", "));

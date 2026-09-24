@@ -69,11 +69,38 @@ export function compare(baseline, current) {
 // The audit and the comparison, callable in process. The scheduler imports this
 // lazily — eagerly would pull the database pool into the scheduler's graph, and
 // merely asking "is the scheduler enabled?" would then need a DATABASE_URL.
-export async function runAuditWatch({ base, baseline = readBaseline() } = {}) {
-  const { auditRendered, auditDatabase, auditEmailTemplates, auditBundles, metadataOwnership, coverage } =
-    await import("./audit-claims.js");
+// Every page failing at once is the site not answering — a deploy switching
+// over, a network blip — not every page's copy regressing together. Such a
+// run read nothing, so it is retried before anyone is told. If the site is
+// still silent after the retries, that IS worth an alert, and it is reported
+// as what it is: availability, not claims.
+export const UNREACHABLE_RETRY_DELAYS_MS = [2 * 60 * 1000, 5 * 60 * 1000];
 
-  const rendered = await auditRendered();
+export function allRoutesFailed(rendered) {
+  const routes = rendered.routes.length;
+  const failed = new Set(rendered.findings.filter((f) => f.rule === "fetch-failed").map((f) => f.where.split(" ")[0]));
+  return routes > 0 && rendered.routes.every((r) => failed.has(r));
+}
+
+export async function renderWithRetry(render, { delays = UNREACHABLE_RETRY_DELAYS_MS, sleep = (ms) => new Promise((r) => setTimeout(r, ms)), log = () => {} } = {}) {
+  let rendered = await render();
+  let attempts = 1;
+  for (const ms of delays) {
+    if (!allRoutesFailed(rendered)) break;
+    log(`site did not answer on any of ${rendered.routes.length} routes — retrying in ${Math.round(ms / 1000)}s`);
+    await sleep(ms);
+    rendered = await render();
+    attempts += 1;
+  }
+  return { rendered, attempts, unreachable: allRoutesFailed(rendered) };
+}
+
+export async function runAuditWatch({ base, baseline = readBaseline(), retry = {} } = {}) {
+  const { auditRendered, auditDatabase, auditEmailTemplates, auditBundles, metadataOwnership, coverage, setAuditBase } =
+    await import("./audit-claims.js");
+  setAuditBase(base);
+
+  const { rendered, attempts, unreachable } = await renderWithRetry(auditRendered, retry);
   const db = await auditDatabase().catch((e) => ({ findings: [{ rule: "db-error", where: "database", match: e.message }], inventory: [] }));
   const emails = await auditEmailTemplates().catch((e) => ({ findings: [{ rule: "template-error", where: "email templates", match: e.message }], rendered: [] }));
   const ownership = await metadataOwnership();
@@ -81,7 +108,7 @@ export async function runAuditWatch({ base, baseline = readBaseline() } = {}) {
   const all = [...dead, ...rendered.findings, ...auditBundles(), ...emails.findings, ...db.findings];
 
   const current = { routes: rendered.routes.length, findings: countByRule(all) };
-  return { base, current, all, degraded: coverage.degraded, ...compare(baseline, current) };
+  return { base, current, all, degraded: coverage.degraded, attempts, unreachable, ...compare(baseline, current) };
 }
 
 const isCli = process.argv[1] && process.argv[1].endsWith("audit-watch.js");
@@ -100,6 +127,7 @@ if (isCli) {
   console.log(`  routes    ${r.current.routes}${r.routeChange ? `   (baseline ${r.routeChange.was})` : ""}`);
   console.log(`  findings  ${r.all.length}`);
   if (r.degraded) console.error(`  COVERAGE DEGRADED — ${r.degraded}`);
+  if (r.unreachable) console.error(`  SITE DID NOT ANSWER — every route failed on all ${r.attempts} attempts`);
 
   // PPP1.2 — a new route is information even when the total is acceptable.
   // Route count 39 -> 41 was the signal production had moved, and nothing was

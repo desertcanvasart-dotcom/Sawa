@@ -86,3 +86,86 @@ test("the scheduled base is this site, and overridable", () => {
   assert.equal(auditWatchBase({ AUDIT_WATCH_BASE: "http://localhost:8795" }), "http://localhost:8795");
   assert.equal(auditWatchBase({}), "https://sawa.tours");
 });
+
+// ---- 24 Sep 2026: the scheduled watch never read the site ----------------
+//
+// runAuditWatch took a `base` and used it only to label the alert. The fetch
+// came from audit-claims' own argv default, localhost:8795, so all 116
+// scheduled runs from 10 Aug failed with 28 fetch-failed while production
+// served 200s.
+import { createServer } from "node:http";
+import { setAuditBase, publicRoutes, coverage } from "../scripts/audit-claims.js";
+import { allRoutesFailed, renderWithRetry } from "../scripts/audit-watch.js";
+
+test("the base a caller gives is the base that is fetched", async () => {
+  const hits = [];
+  const server = createServer((req, res) => {
+    hits.push(req.url);
+    res.setHeader("content-type", "application/xml");
+    res.end("<urlset><url><loc>https://x/tour/a-tour</loc></url></urlset>");
+  });
+  await new Promise((r) => server.listen(0, "127.0.0.1", r));
+  const before = setAuditBase();
+  try {
+    setAuditBase(`http://127.0.0.1:${server.address().port}/`);
+    const routes = await publicRoutes();
+    assert.ok(hits.includes("/sitemap.xml"), "the sitemap was not fetched from the given base");
+    assert.ok(routes.includes("/tour/a-tour"));
+    assert.equal(coverage.degraded, null);
+  } finally {
+    setAuditBase(before);
+    server.close();
+  }
+});
+
+test("a degraded run does not stay degraded in a long-lived process", async () => {
+  const before = setAuditBase();
+  try {
+    setAuditBase("http://127.0.0.1:1");
+    await publicRoutes();
+    assert.ok(coverage.degraded, "precondition: the unreachable sitemap marks the run degraded");
+    const server = createServer((_req, res) => res.end("<urlset></urlset>"));
+    await new Promise((r) => server.listen(0, "127.0.0.1", r));
+    setAuditBase(`http://127.0.0.1:${server.address().port}`);
+    await publicRoutes();
+    server.close();
+    assert.equal(coverage.degraded, null, "the previous run's degradation leaked into this one");
+  } finally {
+    setAuditBase(before);
+  }
+});
+
+const down = { routes: ["/", "/about"], findings: [
+  { rule: "fetch-failed", where: "/" }, { rule: "fetch-failed", where: "/about" }] };
+const up = { routes: ["/", "/about"], findings: [] };
+
+test("all routes failing is unreachable; one failing is a finding", () => {
+  assert.equal(allRoutesFailed(down), true);
+  assert.equal(allRoutesFailed(up), false);
+  assert.equal(allRoutesFailed({ routes: ["/", "/about"], findings: [{ rule: "fetch-failed", where: "/about (HTTP 500)" }] }), false);
+  assert.equal(allRoutesFailed({ routes: [], findings: [] }), false);
+});
+
+test("an unreachable site is retried, and recovers without an alert", async () => {
+  const seq = [down, up];
+  const slept = [];
+  const r = await renderWithRetry(async () => seq.shift(), { delays: [10, 20], sleep: async (ms) => slept.push(ms) });
+  assert.equal(r.unreachable, false);
+  assert.equal(r.attempts, 2);
+  assert.deepEqual(slept, [10]);
+});
+
+test("still silent after every retry is reported as unreachable", async () => {
+  const slept = [];
+  const r = await renderWithRetry(async () => down, { delays: [10, 20], sleep: async (ms) => slept.push(ms) });
+  assert.equal(r.unreachable, true);
+  assert.equal(r.attempts, 3);
+  assert.deepEqual(slept, [10, 20]);
+});
+
+test("a reachable site is read once, with no waiting", async () => {
+  let calls = 0;
+  const r = await renderWithRetry(async () => { calls += 1; return up; }, { delays: [10], sleep: async () => { throw new Error("slept"); } });
+  assert.equal(calls, 1);
+  assert.equal(r.attempts, 1);
+});
