@@ -39,6 +39,7 @@ import {
   listingApprovedEmail, listingRejectedEmail,
   departureRequestReceivedEmail, departureRequestApprovedEmail, departureRequestDeclinedEmail,
   operatorApplicationEmail, operatorApplicationReceiptEmail, operatorApplicationText,
+  opsNewBookingEmail, opsRecipient,
 } from "./email.js";
 import { randomBytes, randomInt } from "node:crypto";
 import { existsSync, readFileSync, statSync } from "node:fs";
@@ -1101,6 +1102,20 @@ app.post("/api/departures/:id/pledges", requireAuth, requireRole("agency_owner",
   res.status(201).json({ departure: presentDeparture(departure, req.user) });
 }));
 
+// Tell Sawa about new demand from the public site. Fire-and-forget like the
+// traveller's own email: a mail outage must never fail the booking.
+function notifyOps(departure, booking, input, { isRequest }) {
+  const d = departure;
+  sendEmailInBackground(opsNewBookingEmail({
+    to: opsRecipient(), isRequest, route: d.route,
+    dateLabel: d.startDate && d.endDate ? `${d.startDate} – ${d.endDate}` : (d.startDate || d.date),
+    seats: input.seats, seatsNow: seatsTotal(d.pledges), minSeats: goAheadSeatsFor(d),
+    customerName: input.customerName, customerEmail: input.customerEmail, customerPhone: input.customerPhone,
+    bookingCode: booking.bookingCode, note: input.note,
+    portalLink: process.env.APP_URL ? `${process.env.APP_URL.replace(/\/$/, "")}/portal` : "",
+  }));
+}
+
 // Public (direct traveller) booking — intentionally open, no auth, but the
 // stricter write limiter guards this and the public cancel below from abuse.
 app.post("/api/public/departures/:id/bookings", writeLimiter, h(async (req, res) => {
@@ -1152,6 +1167,7 @@ app.post("/api/public/departures/:id/bookings", writeLimiter, h(async (req, res)
       product: d,
     }));
   }
+  notifyOps(result.departure, result.booking, input, { isRequest: false });
   // The direct traveller gets their own booking receipt back in full.
   emitDepartureSync(result.departure.id);
   res.status(201).json({ departure: presentDeparture(result.departure, req.user), booking: result.booking });
@@ -1563,6 +1579,7 @@ app.post("/api/public/departure-requests", writeLimiter, h(async (req, res) => {
     dateLabel: d.startDate ? `${d.startDate} – ${d.endDate}` : d.date,
     seats: input.seats, bookingCode: result.booking.bookingCode,
   }));
+  notifyOps(d, result.booking, input, { isRequest: true });
   res.status(201).json({ departure: presentDeparture(result.departure, req.user), booking: result.booking });
 }));
 
@@ -1572,6 +1589,12 @@ app.post("/api/admin/departure-requests/:id/approve", requireAuth, requireRole("
     const dep = await loadDeparture(c, Number(req.params.id), { forUpdate: true });
     if (!dep) throw new AppError(404, "Departure not found.");
     if (dep.status !== "pending_review") throw new AppError(409, "This departure is not awaiting review.");
+    // On 24 Sep 2026 two requests for dates already gone (8 and 20 Sep) were
+    // approved from the list, and both travellers — who had cancelled — were
+    // emailed "Your date is live". A date that has started cannot be opened.
+    if (departureStarted(dep)) {
+      throw new AppError(409, "This date has already passed, so it can't be opened. Decline it to clear the request.");
+    }
     await c.query(`UPDATE departures SET status='open' WHERE id=$1`, [dep.id]);
     // Only `pending` rows: requests made before bookings carried that status are
     // already `confirmed` and stay exactly as the traveller was told.
@@ -1580,7 +1603,8 @@ app.post("/api/admin/departure-requests/:id/approve", requireAuth, requireRole("
   });
   await logAudit(req, { action: "departure_request.approve", entity: "departure", entityId: String(departure.id) });
   const seed = departure.pledges.find((p) => p.source === "public_request");
-  if (seed?.customerEmail) {
+  // A traveller who withdrew their request is not told their date is live.
+  if (seed?.customerEmail && seed.status !== "cancelled") {
     sendEmailInBackground(departureRequestApprovedEmail({
       to: seed.customerEmail, customerName: seed.customers, route: departure.route,
       dateLabel: departure.startDate ? `${departure.startDate} – ${departure.endDate}` : departure.date,

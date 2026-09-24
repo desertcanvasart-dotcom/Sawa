@@ -425,7 +425,9 @@ export async function auditEmailTemplates() {
     // #144's GoAhead payment-link mail to ops. The unlisted check caught it —
     // two days after it shipped rather than within the hour, which is the
     // check doing exactly what "add it, do not skip it" is for.
-    "goAheadPaymentLinkEmail"];
+    "goAheadPaymentLinkEmail",
+    // The ops notice for new requests and bookings, listed the day it was written.
+    "opsNewBookingEmail"];
   const templates = TEMPLATES.filter((k) => typeof t[k] === "function").map((k) => [k, t[k]]);
   const missing = TEMPLATES.filter((k) => typeof t[k] !== "function");
   const unlisted = Object.keys(t).filter((k) => /Email$|Text$/.test(k) && k !== "sendEmail" && !TEMPLATES.includes(k));

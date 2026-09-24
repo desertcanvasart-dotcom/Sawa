@@ -1280,12 +1280,17 @@ function DateRequestsSection({ data, reload, flash }) {
       <div className="listing-grid">
         {pending.map((d) => {
           const seed = seedOf(d) || {};
+          // The server refuses these (a date that has started cannot open);
+          // say so here rather than let the click fail.
+          const passed = new Date(`${d.startDate || d.date}T23:59:59`) < new Date();
           return (
             <article className="listing-card" key={d.id}>
               <div className="listing-body">
                 <div className="listing-top">
                   <h3>{d.route}</h3>
-                  <span className="tag tag-ready"><Clock3 size={13} /> Awaiting review</span>
+                  {passed
+                    ? <span className="tag tag-off">Date passed — decline</span>
+                    : <span className="tag tag-ready"><Clock3 size={13} /> Awaiting review</span>}
                 </div>
                 <p className="listing-agency">
                   <strong>{fmtDate(d.startDate || d.date)}</strong>{d.time ? ` · ${d.time}` : ""} · {d.city}
@@ -1300,7 +1305,7 @@ function DateRequestsSection({ data, reload, flash }) {
                   {d.notes ? ` — ${d.notes}` : ""}
                 </p>
                 <div className="listing-actions">
-                  <button className="btn-primary" disabled={busy === d.id} onClick={() => act(d, "approve")}>
+                  <button className="btn-primary" disabled={busy === d.id || passed} onClick={() => act(d, "approve")}>
                     <Check size={14} /> Approve &amp; open
                   </button>
                   <button className="btn-ghost danger" disabled={busy === d.id} onClick={() => { setDeclining(d); setReason(""); setErr(""); }}>
