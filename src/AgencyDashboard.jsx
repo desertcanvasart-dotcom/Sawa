@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { priceFromTiers } from "../shared/pricing.js";
+import { depositPctFor, balanceDueDate } from "../shared/booking-policy.js";
+import { isGoAheadDeparture } from "../shared/departure-state.js";
 import { CURRENCY_SYMBOL } from "../shared/currency.js";
 import {
   LayoutDashboard, Ticket, ClipboardList, Users as UsersIcon, ShieldCheck, ArrowUpRight,
@@ -145,11 +147,13 @@ export function AgencyDashboard({ user, agency, signOut, navigate, departures, t
                       <td>{r.seats}</td>
                       <td>{money(r.bookingTotal)}</td>
                       <td>{money(r.depositDue)}</td>
-                      <td>{r.departure.status === "supplier_confirmed"
-                        ? <span className="tag tag-on">Confirmed</span>
-                        : r.departure.status === "cancelled"
-                          ? <span className="tag tag-off">Cancelled</span>
-                          : <span className="tag">Forming</span>}</td>
+                      <td>{r.status === "cancelled" || r.departure.status === "cancelled"
+                        ? <span className="tag tag-off">Cancelled</span>
+                        : r.departure.status === "supplier_confirmed"
+                          ? <span className="tag tag-on">Confirmed</span>
+                          : isGoAheadDeparture(r.departure)
+                            ? <span className="tag tag-on">GoAhead</span>
+                            : <span className="tag">Forming</span>}</td>
                     </tr>
                   ))}
                   {myRows.length === 0 && <tr><td colSpan={7}><div className="dash-empty">No bookings yet. Head to "Book seats" to add your first.</div></td></tr>}
@@ -407,11 +411,14 @@ function TourBooking({ product, agencyId, agencyName, agencyPax = 0, onBack, onR
   let pp = dep ? livePrice({ ...product, ...dep }, projected) : product.publishedRate;
   if (pkg && tier) pp += (Number(tier.perPersonSupplement) || 0) + (rooming === "single" ? Number(tier.singleSupplement) || 0 : 0);
   const total = pp * nSeats;
-  const depositPct = Number(dep?.depositPercent || product.depositPercent || (pkg ? 20 : 10));
+  // The policy's own numbers (shared/booking-policy.js), not a local copy: this
+  // said 20% for packages after the rate moved to 25%, and "the day before" for
+  // a balance the policy puts at 48 hours (day tour) or 14 days (package).
+  const depositPct = Number(dep?.depositPercent || product.depositPercent || depositPctFor(product));
   const deposit = Math.ceil(total * depositPct / 100);
   const balance = Math.max(0, total - deposit);
   const depDate = dep ? (dep.startDate || dep.date) : null;
-  const balanceDue = depDate ? fmtDate(new Date(new Date(`${depDate}T12:00:00`).getTime() - 86400000)) : "before departure";
+  const balanceDue = depDate ? fmtDate(balanceDueDate(depDate, product)) : "before departure";
 
   // Auto reference: agency initial + seats in this booking + running pax total.
   const initial = (agencyName || "X").trim().charAt(0).toUpperCase() || "X";

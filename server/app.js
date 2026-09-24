@@ -39,7 +39,7 @@ import {
   listingApprovedEmail, listingRejectedEmail,
   departureRequestReceivedEmail, departureRequestApprovedEmail, departureRequestDeclinedEmail,
   operatorApplicationEmail, operatorApplicationReceiptEmail, operatorApplicationText,
-  opsNewBookingEmail, opsRecipient,
+  opsNewBookingEmail, opsNewListingEmail, opsRecipient,
 } from "./email.js";
 import { randomBytes, randomInt } from "node:crypto";
 import { existsSync, readFileSync, statSync } from "node:fs";
@@ -913,6 +913,7 @@ app.post("/api/admin/tour-products", requireAuth, requireRole("super_admin", "op
 app.post("/api/agency/tour-products", requireAuth, requireRole("agency_owner", "agency_agent"), h(async (req, res) => {
   const body = req.body || {};
   if (!req.user.agencyId) throw new AppError(403, "Your account is not linked to an agency.");
+  let agencyName = null;
   const product = await withTransaction(async (c) => {
     if (body.id) {
       const owner = await c.query(`SELECT agency_id FROM tour_products WHERE id=$1`, [body.id]);
@@ -921,9 +922,14 @@ app.post("/api/agency/tour-products", requireAuth, requireRole("agency_owner", "
         throw new AppError(403, "You can only edit your own listings.");
       }
     }
-    return upsertTourProduct(c, body, { status: "pending", agencyId: req.user.agencyId, submittedBy: req.user.id });
+    const saved = await upsertTourProduct(c, body, { status: "pending", agencyId: req.user.agencyId, submittedBy: req.user.id });
+    agencyName = (await c.query(`SELECT name FROM agencies WHERE id=$1`, [req.user.agencyId])).rows[0]?.name || null;
+    return saved;
   });
   await logAudit(req, { action: "listing.submit", entity: "tour_product", entityId: product.id, detail: { title: product.title } });
+  sendEmailInBackground(opsNewListingEmail({
+    to: opsRecipient(), title: product.title, agencyName, isEdit: Boolean(body.id), portalLink: portalLink(),
+  }));
   res.status(201).json({ product });
 }));
 
@@ -1071,6 +1077,7 @@ app.post("/api/admin/departures/:id/confirm", requireAuth, requireRole("super_ad
 // Agency pledge — identity (agency) comes from the token, never the body.
 app.post("/api/departures/:id/pledges", requireAuth, requireRole("agency_owner", "agency_agent"), h(async (req, res) => {
   const input = parse(pledgeSchema, req.body);
+  let agencyName = null;
   const departure = await withTransaction(async (c) => {
     const dep = await loadDeparture(c, Number(req.params.id), { forUpdate: true });
     if (!dep) throw new AppError(404, "Departure not found.");
@@ -1084,6 +1091,7 @@ app.post("/api/departures/:id/pledges", requireAuth, requireRole("agency_owner",
     const agency = (await c.query(`SELECT * FROM agencies WHERE id=$1`, [req.user.agencyId])).rows[0];
     const pricing = computePledgePricing(dep, product, input);
 
+    agencyName = agency.name;
     await insertPledge(c, dep.id, {
       id: newPledgeId(dep.id),
       agencyId: agency.id,
@@ -1098,21 +1106,24 @@ app.post("/api/departures/:id/pledges", requireAuth, requireRole("agency_owner",
     return loadDeparture(c, dep.id);
   });
   await logAudit(req, { action: "pledge.create", entity: "departure", entityId: Number(req.params.id), detail: { seats: input.seats, agencyId: req.user.agencyId } });
+  notifyOps(departure, {}, { ...input, customerName: input.customers }, { isRequest: false, bookedBy: agencyName || "an operator" });
   emitDepartureSync(departure.id);
   res.status(201).json({ departure: presentDeparture(departure, req.user) });
 }));
 
 // Tell Sawa about new demand from the public site. Fire-and-forget like the
 // traveller's own email: a mail outage must never fail the booking.
-function notifyOps(departure, booking, input, { isRequest }) {
+const portalLink = () => (process.env.APP_URL ? `${process.env.APP_URL.replace(/\/$/, "")}/portal` : "");
+
+function notifyOps(departure, booking, input, { isRequest, bookedBy }) {
   const d = departure;
   sendEmailInBackground(opsNewBookingEmail({
     to: opsRecipient(), isRequest, route: d.route,
     dateLabel: d.startDate && d.endDate ? `${d.startDate} – ${d.endDate}` : (d.startDate || d.date),
     seats: input.seats, seatsNow: seatsTotal(d.pledges), minSeats: goAheadSeatsFor(d),
     customerName: input.customerName, customerEmail: input.customerEmail, customerPhone: input.customerPhone,
-    bookingCode: booking.bookingCode, note: input.note,
-    portalLink: process.env.APP_URL ? `${process.env.APP_URL.replace(/\/$/, "")}/portal` : "",
+    bookingCode: booking.bookingCode, note: input.note, bookedBy,
+    portalLink: portalLink(),
   }));
 }
 

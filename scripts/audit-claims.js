@@ -380,6 +380,9 @@ export async function auditEmailTemplates() {
     title: "A Listing", reason: "A reason", reference: "REF-1",
     company: "An Operator", contact: "A Person", email: "op@example.com", phone: "+20 100 000 0000",
     city: "Aswan", about: "Some tours",
+    // ops notices
+    isRequest: true, bookedBy: "An Operator", seatsNow: 2, minSeats: 4, note: "A note",
+    portalLink: "https://sawa.tours/portal",
     // auditDriftEmail
     base: "https://sawa.tours", lines: ["availability: 0 -> 2"],
     // goAheadPaymentLinkEmail — the queue payload goahead-alert builds. One
@@ -414,7 +417,7 @@ export async function auditEmailTemplates() {
     // check doing exactly what "add it, do not skip it" is for.
     "goAheadPaymentLinkEmail",
     // The ops notice for new requests and bookings, listed the day it was written.
-    "opsNewBookingEmail"];
+    "opsNewBookingEmail", "opsNewListingEmail"];
   const templates = TEMPLATES.filter((k) => typeof t[k] === "function").map((k) => [k, t[k]]);
   const missing = TEMPLATES.filter((k) => typeof t[k] !== "function");
   const unlisted = Object.keys(t).filter((k) => /Email$|Text$/.test(k) && k !== "sendEmail" && !TEMPLATES.includes(k));

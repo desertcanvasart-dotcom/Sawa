@@ -9,7 +9,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 process.env.DATABASE_URL ||= "postgres://unused@127.0.0.1:1/never-connected";
-const { opsNewBookingEmail, opsRecipient } = await import("./email.js");
+const { opsNewBookingEmail, opsNewListingEmail, opsRecipient } = await import("./email.js");
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const app = readFileSync(join(ROOT, "server", "app.js"), "utf8");
 
@@ -57,4 +57,25 @@ test("approving refuses a date that has already started, and never tells a withd
   const body = app.slice(from, app.indexOf("\n}));", from));
   assert.match(body, /if \(departureStarted\(dep\)\)[\s\S]{0,40}throw new AppError\(409/);
   assert.match(body, /seed\?\.customerEmail && seed\.status !== "cancelled"/);
+});
+
+test("an operator's booking names the operator", () => {
+  const m = opsNewBookingEmail({ ...base, isRequest: false, bookedBy: "El Agamy Travel", customerName: "E-2-6" });
+  assert.match(m.subject, /^New booking by El Agamy Travel — /);
+  assert.match(m.text, /Booked by: El Agamy Travel \(operator dashboard\)/);
+});
+
+test("an operator's tour submission reaches ops, new or edited", () => {
+  const n = opsNewListingEmail({ to: "hello@sawa.tours", title: "Giza at dawn", agencyName: "Capital Travel Service", portalLink: "https://sawa.tours/portal" });
+  assert.equal(n.kind, "ops_new_listing");
+  assert.match(n.subject, /^New tour listing to review — Giza at dawn$/);
+  assert.match(n.text, /Capital Travel Service/);
+  assert.match(n.text, /Listing requests/);
+  assert.match(opsNewListingEmail({ title: "X", isEdit: true }).subject, /^Tour listing updated to review/);
+});
+
+test("the operator dashboard's booking and listing routes notify ops", () => {
+  const route = (sig) => { const f = app.indexOf(sig); assert.ok(f > 0, sig); return app.slice(f, app.indexOf("\n}));", f)); };
+  assert.match(route('app.post("/api/departures/:id/pledges"'), /notifyOps\([^;]*bookedBy/);
+  assert.match(route('app.post("/api/agency/tour-products"'), /opsNewListingEmail\(/);
 });
