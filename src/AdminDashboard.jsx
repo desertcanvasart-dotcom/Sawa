@@ -1273,7 +1273,7 @@ function DateRequestsSection({ data, reload, flash }) {
 
   return (
     <>
-      <PageHead title="Date requests" sub="Departures started by travellers on the public site. Nothing shows on the board until you approve it." />
+      <PageHead title="Date requests" sub="New dates asked for by travellers on the public site and by operators from their dashboard. Nothing shows on the board until you approve it." />
       {err && !declining && <div className="auth-error" role="alert">{err}</div>}
       {!pending.length && <div className="dash-empty">No traveller-requested dates awaiting review right now.</div>}
 
@@ -1295,7 +1295,8 @@ function DateRequestsSection({ data, reload, flash }) {
                 <p className="listing-agency">
                   <strong>{fmtDate(d.startDate || d.date)}</strong>{d.time ? ` · ${d.time}` : ""} · {d.city}
                 </p>
-                <p className="field-hint"><Clock3 size={12} /> Requested {fmtReceived(seed.createdAt)}</p>
+                <p className="field-hint"><Clock3 size={12} /> Requested {fmtReceived(seed.createdAt)}
+                  {seed.source === "agency_request" ? <> · by operator <strong>{seed.agency}</strong></> : " · by the traveller"}</p>
                 <div className="listing-facts">
                   <span><Users size={13} />{seed.seats || 1} seat{(seed.seats || 1) > 1 ? "s" : ""} pledged · min {d.minSeats} · max {d.maxSeats}</span>
                   <span><ClipboardList size={13} />{seed.customers || "Traveller"}</span>

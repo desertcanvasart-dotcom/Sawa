@@ -9,7 +9,7 @@ import { durationShapeError, cutoffUnitError } from "../shared/booking-policy.js
 import { operatingDayError } from "../shared/operating-days.js";
 import { minLeadDaysFor, maxHorizonDaysFor, requestWindowError } from "../shared/request-window.js";
 import { cleanRefCode } from "../shared/ref-code.js";
-import { mapAgency, mapCity, mapProduct, mapDeparture, mapPledge } from "./db/mappers.js";
+import { mapAgency, mapCity, mapProduct, mapDeparture, mapPledge, isoDate } from "./db/mappers.js";
 import {
   enrichDeparture,
   computePledgePricing,
@@ -39,7 +39,7 @@ import {
   listingApprovedEmail, listingRejectedEmail,
   departureRequestReceivedEmail, departureRequestApprovedEmail, departureRequestDeclinedEmail,
   operatorApplicationEmail, operatorApplicationReceiptEmail, operatorApplicationText,
-  opsNewBookingEmail, opsRecipient,
+  opsNewBookingEmail, opsNewListingEmail, opsRecipient,
 } from "./email.js";
 import { randomBytes, randomInt } from "node:crypto";
 import { existsSync, readFileSync, statSync } from "node:fs";
@@ -287,28 +287,24 @@ const operatorApplicationSchema = z.object({
 
 // Agency-created pooling request. Numeric fields are bounded so a malformed or
 // hostile body can't create a departure with negative seats or absurd pricing.
-const createDepartureSchema = z.object({
-  route: z.string().trim().min(1, "Route is required."),
-  tourProductId: z.string().trim().optional(),
-  date: z.string().trim().optional(),
-  time: z.string().trim().optional(),
-  city: z.string().trim().optional(),
-  customers: z.string().trim().optional(),
-  minSeats: z.coerce.number().int().min(MIN_GROUP_SIZE, {
-    message: `Minimum group size is ${MIN_GROUP_SIZE} travellers — what the booking conditions promise a departure confirms at.`,
-  }).max(MAX_GROUP_SIZE).optional(),
-  maxSeats: z.coerce.number().int().positive().max(MAX_GROUP_SIZE, {
-    message: `Maximum group size is ${MAX_GROUP_SIZE} travellers — the limit stated in the booking conditions.`,
-  }).optional(),
-  baseCost: z.coerce.number().min(0).max(1_000_000).optional(),
-  publishedRate: z.coerce.number().positive().max(1_000_000).optional(),
-  breakPrice: z.coerce.number().min(0).max(1_000_000).optional(),
-}).refine((v) => !(v.minSeats && v.maxSeats) || v.maxSeats >= v.minSeats, {
-  message: "Max seats cannot be less than min seats.",
-});
-
 // Traveler-initiated departure request (Phase A of the traveler-initiated
 // departures addendum). Email is required — approval/decline needs a channel.
+// An operator asking for a new date for their customer. Same shape as the
+// traveller's, with the operator's auto-reference in place of a name and the
+// customer's contact required, as it is for an operator booking.
+const agencyDepartureRequestSchema = z.object({
+  tourProductId: z.string().trim().min(1, "Tour is required."),
+  date: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, "A valid date (YYYY-MM-DD) is required."),
+  customers: z.string().trim().max(120).optional(),
+  customerEmail: z.string().trim().email("A valid customer email is required."),
+  customerPhone: z.string().trim().min(6, "A customer phone number is required."),
+  seats: z.coerce.number().int().min(1).max(20),
+  note: z.string().trim().max(500).optional(),
+  roomingType: z.enum(["single", "double", "triple"]).optional(),
+  accommodationTier: z.string().optional(),
+  ignoreMatches: z.coerce.boolean().optional(),
+});
+
 const publicDepartureRequestSchema = z.object({
   tourProductId: z.string().trim().min(1, "Tour is required."),
   date: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, "A valid date (YYYY-MM-DD) is required."),
@@ -583,48 +579,6 @@ app.get("/api/bootstrap", h(async (req, res) => {
   res.json(await buildBootstrap(req.user));
 }));
 
-// Agency creates a custom day-tour pooling request (agency users only).
-app.post("/api/departures", requireAuth, requireRole("agency_owner", "agency_agent"), h(async (req, res) => {
-  const body = parse(createDepartureSchema, req.body);
-  const route = body.route;
-
-  const departure = await withTransaction(async (c) => {
-    const agencyRes = await c.query(`SELECT * FROM agencies WHERE id=$1`, [req.user.agencyId]);
-    const agency = agencyRes.rows[0];
-    const id = (await c.query("SELECT nextval('departures_id_seq') AS id")).rows[0].id;
-    const publishedRate = Number(body.publishedRate || 80);
-
-    await c.query(
-      `INSERT INTO departures
-        (id, type, tour_product_id, route, date, time, city, guide, vehicle,
-         min_seats, max_seats, base_cost, published_rate, break_price, quality,
-         status, notes, deposit_percent)
-       VALUES ($1,'day_tour',$2,$3,$4,$5,$6,'Verified guide','Shared vehicle',
-         $7,$8,$9,$10,$11,4.6,'open',$12,10)`,
-      [
-        id, body.tourProductId || null, route, body.date || "2026-05-25",
-        body.time || "09:00", body.city || "Cairo",
-        Number(body.minSeats || 4), Number(body.maxSeats || 12),
-        Number(body.baseCost || 280), publishedRate,
-        Number(body.breakPrice || Math.round(publishedRate * 0.8)),
-        "New pooling request. Agencies can add seats before supplier confirmation.",
-      ]
-    );
-    await c.query(
-      `INSERT INTO pledges (id, departure_id, agency_id, agency, seats, customers, created_by_user_id)
-       VALUES ($1,$2,$3,$4,1,$5,$6)`,
-      [newPledgeId(id), id, agency.id, agency.name, body.customers || "Lead request", req.user.id]
-    );
-    return loadDeparture(c, id);
-  });
-
-  emitDepartureSync(departure.id);
-  await logAudit(req, {
-    action: "departure.create", entity: "departure", entityId: String(departure.id),
-    detail: { route, date: body.date, agencyId: req.user.agencyId, source: "agency" },
-  });
-  res.status(201).json({ departure: presentDeparture(departure, req.user) });
-}));
 
 // Admin publishes a departure from a product (platform staff only).
 app.post("/api/admin/departures", requireAuth, requireRole("super_admin", "ops_staff"), h(async (req, res) => {
@@ -913,6 +867,7 @@ app.post("/api/admin/tour-products", requireAuth, requireRole("super_admin", "op
 app.post("/api/agency/tour-products", requireAuth, requireRole("agency_owner", "agency_agent"), h(async (req, res) => {
   const body = req.body || {};
   if (!req.user.agencyId) throw new AppError(403, "Your account is not linked to an agency.");
+  let agencyName = null;
   const product = await withTransaction(async (c) => {
     if (body.id) {
       const owner = await c.query(`SELECT agency_id FROM tour_products WHERE id=$1`, [body.id]);
@@ -921,9 +876,14 @@ app.post("/api/agency/tour-products", requireAuth, requireRole("agency_owner", "
         throw new AppError(403, "You can only edit your own listings.");
       }
     }
-    return upsertTourProduct(c, body, { status: "pending", agencyId: req.user.agencyId, submittedBy: req.user.id });
+    const saved = await upsertTourProduct(c, body, { status: "pending", agencyId: req.user.agencyId, submittedBy: req.user.id });
+    agencyName = (await c.query(`SELECT name FROM agencies WHERE id=$1`, [req.user.agencyId])).rows[0]?.name || null;
+    return saved;
   });
   await logAudit(req, { action: "listing.submit", entity: "tour_product", entityId: product.id, detail: { title: product.title } });
+  sendEmailInBackground(opsNewListingEmail({
+    to: opsRecipient(), title: product.title, agencyName, isEdit: Boolean(body.id), portalLink: portalLink(),
+  }));
   res.status(201).json({ product });
 }));
 
@@ -1071,6 +1031,7 @@ app.post("/api/admin/departures/:id/confirm", requireAuth, requireRole("super_ad
 // Agency pledge — identity (agency) comes from the token, never the body.
 app.post("/api/departures/:id/pledges", requireAuth, requireRole("agency_owner", "agency_agent"), h(async (req, res) => {
   const input = parse(pledgeSchema, req.body);
+  let agencyName = null;
   const departure = await withTransaction(async (c) => {
     const dep = await loadDeparture(c, Number(req.params.id), { forUpdate: true });
     if (!dep) throw new AppError(404, "Departure not found.");
@@ -1084,6 +1045,7 @@ app.post("/api/departures/:id/pledges", requireAuth, requireRole("agency_owner",
     const agency = (await c.query(`SELECT * FROM agencies WHERE id=$1`, [req.user.agencyId])).rows[0];
     const pricing = computePledgePricing(dep, product, input);
 
+    agencyName = agency.name;
     await insertPledge(c, dep.id, {
       id: newPledgeId(dep.id),
       agencyId: agency.id,
@@ -1098,21 +1060,24 @@ app.post("/api/departures/:id/pledges", requireAuth, requireRole("agency_owner",
     return loadDeparture(c, dep.id);
   });
   await logAudit(req, { action: "pledge.create", entity: "departure", entityId: Number(req.params.id), detail: { seats: input.seats, agencyId: req.user.agencyId } });
+  notifyOps(departure, {}, { ...input, customerName: input.customers }, { isRequest: false, bookedBy: agencyName || "an operator" });
   emitDepartureSync(departure.id);
   res.status(201).json({ departure: presentDeparture(departure, req.user) });
 }));
 
 // Tell Sawa about new demand from the public site. Fire-and-forget like the
 // traveller's own email: a mail outage must never fail the booking.
-function notifyOps(departure, booking, input, { isRequest }) {
+const portalLink = () => (process.env.APP_URL ? `${process.env.APP_URL.replace(/\/$/, "")}/portal` : "");
+
+function notifyOps(departure, booking, input, { isRequest, bookedBy }) {
   const d = departure;
   sendEmailInBackground(opsNewBookingEmail({
     to: opsRecipient(), isRequest, route: d.route,
     dateLabel: d.startDate && d.endDate ? `${d.startDate} – ${d.endDate}` : (d.startDate || d.date),
     seats: input.seats, seatsNow: seatsTotal(d.pledges), minSeats: goAheadSeatsFor(d),
     customerName: input.customerName, customerEmail: input.customerEmail, customerPhone: input.customerPhone,
-    bookingCode: booking.bookingCode, note: input.note,
-    portalLink: process.env.APP_URL ? `${process.env.APP_URL.replace(/\/$/, "")}/portal` : "",
+    bookingCode: booking.bookingCode, note: input.note, bookedBy,
+    portalLink: portalLink(),
   }));
 }
 
@@ -1441,8 +1406,12 @@ app.get("/api/public/unavailable-dates", h(async (_req, res) => {
 // A traveler picks tour + date + contact; the departure lands as
 // `pending_review` with the traveler's seed pledge attached. Admin approves it
 // into `open` (or declines -> cancelled). No payment is taken in Phase A.
-app.post("/api/public/departure-requests", writeLimiter, h(async (req, res) => {
-  const input = parse(publicDepartureRequestSchema, req.body);
+// A new date, started by someone outside Sawa — a traveller on the public site
+// or an operator from their dashboard. Both go through the same rules (window,
+// operating days, blackouts, join-first) and land in the same place: a
+// `pending_review` date with one `pending` booking, waiting on Date requests.
+// Returns { nearMatches } when open dates already exist close by.
+async function createDateRequest(input, req, requester = {}) {
 
   const today = new Date(); today.setHours(12, 0, 0, 0);
   const picked = new Date(`${input.date}T12:00:00`);
@@ -1460,7 +1429,7 @@ app.post("/api/public/departure-requests", writeLimiter, h(async (req, res) => {
     throw new AppError(422, "That day isn't available operationally — please pick another date.");
   }
 
-  const result = await withTransaction(async (c) => {
+  return withTransaction(async (c) => {
     const product = await loadProduct(c, input.tourProductId);
     if (!product || product.active === false || product.status !== "approved") {
       throw new AppError(404, "Tour not found.");
@@ -1519,7 +1488,7 @@ app.post("/api/public/departure-requests", writeLimiter, h(async (req, res) => {
          city, guide, vehicle, min_seats, max_seats, base_cost, published_rate, break_price,
          quality, status, notes, deposit_percent, created_by)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,
-         $11,$12,$13,$14,$15,$16,$17,$18,$19,'pending_review',$20,$21,'traveler')`,
+         $11,$12,$13,$14,$15,$16,$17,$18,$19,'pending_review',$20,$21,$22)`,
       [
         id, product.type, product.id, product.title, input.date,
         isPkg ? input.date : null, isPkg ? endDate : null, isPkg ? product.nights : null,
@@ -1529,8 +1498,11 @@ app.post("/api/public/departure-requests", writeLimiter, h(async (req, res) => {
         Number(product.baseCost || 0), Number(product.publishedRate),
         Number(product.breakPrice || Math.round(product.publishedRate * 0.8)),
         product.quality,
-        input.note ? `Traveller request: ${input.note}` : "Traveller-requested date awaiting review.",
+        requester.agencyId
+          ? `Operator request (${requester.agencyName})${input.note ? `: ${input.note}` : " awaiting review."}`
+          : input.note ? `Traveller request: ${input.note}` : "Traveller-requested date awaiting review.",
         Number(product.depositPercent || defaultDepositFor(product)),
+        requester.agencyId ? "agency" : "traveler",
       ]
     );
 
@@ -1539,13 +1511,14 @@ app.post("/api/public/departure-requests", writeLimiter, h(async (req, res) => {
     const pledgeId = newPledgeId(id);
     await insertPledge(c, id, {
       id: pledgeId,
-      agencyId: "direct_customer",
-      agency: "Direct traveler",
+      agencyId: requester.agencyId || "direct_customer",
+      agency: requester.agencyName || "Direct traveler",
       seats: input.seats,
       customers: input.customerName,
       customerEmail: input.customerEmail,
       customerPhone: input.customerPhone || null,
-      source: "public_request",
+      source: requester.agencyId ? "agency_request" : "public_request",
+      createdByUserId: requester.userId || null,
       bookingCode: await uniqueBookingCode(c),
       refCode: null,
       ...pricing,
@@ -1559,6 +1532,11 @@ app.post("/api/public/departure-requests", writeLimiter, h(async (req, res) => {
     const saved = await c.query(`SELECT * FROM pledges WHERE id=$1`, [pledgeId]);
     return { departure, booking: mapPledge(saved.rows[0]) };
   });
+}
+
+app.post("/api/public/departure-requests", writeLimiter, h(async (req, res) => {
+  const input = parse(publicDepartureRequestSchema, req.body);
+  const result = await createDateRequest(input, req);
 
   if (result.nearMatches) {
     // Not an error for the traveler — the UI offers these to join instead.
@@ -1581,6 +1559,57 @@ app.post("/api/public/departure-requests", writeLimiter, h(async (req, res) => {
   }));
   notifyOps(d, result.booking, input, { isRequest: true });
   res.status(201).json({ departure: presentDeparture(result.departure, req.user), booking: result.booking });
+}));
+
+// An operator requests a new date from their dashboard. Until 24 Sep 2026 an
+// operator could only join dates Sawa had already published; a tour with none
+// was greyed out. The old POST /api/departures, which opened a date directly
+// with placeholder values and no review, is gone — this is the only way in.
+app.post("/api/agency/departure-requests", requireAuth, requireRole("agency_owner", "agency_agent"), writeLimiter, h(async (req, res) => {
+  const body = parse(agencyDepartureRequestSchema, req.body);
+  if (!req.user.agencyId) throw new AppError(403, "Your account is not linked to an agency.");
+  const agency = (await pool.query(`SELECT id, name FROM agencies WHERE id=$1`, [req.user.agencyId])).rows[0];
+  if (!agency) throw new AppError(403, "Your account is not linked to an agency.");
+  const input = { ...body, customerName: (body.customers || "Customer details pending").trim() };
+  const result = await createDateRequest(input, req, { agencyId: agency.id, agencyName: agency.name, userId: req.user.id });
+
+  if (result.nearMatches) {
+    return res.status(409).json({
+      error: "Open departures already exist near this date.",
+      code: "near_matches",
+      nearMatches: result.nearMatches,
+    });
+  }
+  await logAudit(req, {
+    action: "departure_request.create", entity: "departure", entityId: String(result.departure.id),
+    detail: { tourProductId: input.tourProductId, date: input.date, seats: input.seats, source: "agency", agencyId: agency.id },
+  });
+  // Sawa's own customers are emailed by Sawa; an operator's customer is the
+  // operator's to tell. Ops is told either way.
+  notifyOps(result.departure, result.booking, input, { isRequest: true, bookedBy: agency.name });
+  res.status(201).json({ departure: presentDeparture(result.departure, req.user), booking: result.booking });
+}));
+
+// The operator's own date requests, whatever their state. Dates in review are
+// withheld from the operator's bootstrap (it shows only what the public may
+// see), so without this a request vanished from their view the moment it was
+// made.
+app.get("/api/agency/departure-requests", requireAuth, requireRole("agency_owner", "agency_agent"), h(async (req, res) => {
+  const r = await pool.query(
+    `SELECT p.id, p.seats, p.customers, p.customer_email, p.status AS booking_status, p.created_at,
+            d.id AS departure_id, d.route, d.date, d.start_date, d.end_date, d.status AS departure_status
+       FROM pledges p JOIN departures d ON d.id = p.departure_id
+      WHERE p.agency_id = $1 AND p.source = 'agency_request'
+      ORDER BY p.created_at DESC LIMIT 100`,
+    [req.user.agencyId]
+  );
+  res.json({ requests: r.rows.map((x) => ({
+    id: x.id, seats: Number(x.seats), customers: x.customers, customerEmail: x.customer_email,
+    bookingStatus: x.booking_status, departureId: x.departure_id, route: x.route,
+    date: isoDate(x.start_date) || isoDate(x.date), endDate: isoDate(x.end_date),
+    departureStatus: x.departure_status,
+    createdAt: x.created_at instanceof Date ? x.created_at.toISOString() : x.created_at,
+  })) });
 }));
 
 // Admin approves a traveler-requested departure into the open pool.

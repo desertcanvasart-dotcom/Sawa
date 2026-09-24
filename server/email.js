@@ -505,22 +505,39 @@ export function opsRecipient(env = process.env) {
 // Internal: to ops, never to a traveller. Everything needed to act without
 // opening anything else, and a link to where the decision is made.
 export function opsNewBookingEmail({ to, isRequest, route, dateLabel, seats, seatsNow, minSeats,
-  customerName, customerEmail, customerPhone, bookingCode, note, portalLink }) {
-  const what = isRequest ? "New date request" : "New booking";
+  customerName, customerEmail, customerPhone, bookingCode, note, portalLink, bookedBy }) {
+  const what = isRequest
+    ? (bookedBy ? `New date request from ${bookedBy}` : "New date request")
+    : bookedBy ? `New booking by ${bookedBy}` : "New booking";
   const subject = `${what} — ${route} on ${dateLabel} (${seats} seat${seats === 1 ? "" : "s"})`;
   const text =
     `${what}\n\n${route}\n${dateLabel}\n\n`
+    + (bookedBy ? `Booked by: ${bookedBy} (operator dashboard)\n` : "")
     + `Traveller: ${customerName || "(no name)"}\n`
     + `Email: ${customerEmail || "(none)"}\n`
     + `Phone: ${customerPhone || "(none)"}\n`
     + `Seats: ${seats}${bookingCode ? ` · booking ${bookingCode}` : ""}\n`
     + (note ? `Note: ${note}\n` : "")
     + (isRequest
-      ? `\nThis date is not open yet. Approve or decline it under Date requests — the traveller has been told it is under review.\n`
+      ? `\nThis date is not open yet. Approve or decline it under Date requests — ${bookedBy ? "the operator sees it as under review" : "the traveller has been told it is under review"}.\n`
       : `\nSeats on this date now: ${seatsNow ?? "?"} of ${minSeats ?? "?"} needed for GoAhead.\n`)
     + (portalLink ? `\n${portalLink}\n` : "");
   return { to, subject, text, html: `<pre style="font:14px/1.5 ui-monospace,monospace">${
     text.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</pre>`, kind: isRequest ? "ops_new_request" : "ops_new_booking" };
+}
+
+// An operator submitted (or resubmitted) a tour for review. "Nothing goes live
+// until you approve it" was true — and nobody was told there was anything to
+// approve.
+export function opsNewListingEmail({ to, title, agencyName, isEdit, portalLink }) {
+  const subject = `${isEdit ? "Tour listing updated" : "New tour listing"} to review — ${title}`;
+  const text =
+    `${isEdit ? "An operator updated a tour listing" : "An operator submitted a new tour listing"}.\n\n`
+    + `${title}\nOperator: ${agencyName || "(unknown)"}\n\n`
+    + `It is not live until you approve it under Listing requests.\n`
+    + (portalLink ? `\n${portalLink}\n` : "");
+  return { to, subject, text, html: `<pre style="font:14px/1.5 ui-monospace,monospace">${
+    text.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</pre>`, kind: "ops_new_listing" };
 }
 
 export function auditDriftEmail({ to, base, lines = [], stale }) {

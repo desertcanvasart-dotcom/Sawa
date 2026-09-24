@@ -110,7 +110,7 @@ test("an unanswered request is closed with the request's own letter, not the GoA
     ...c,
     kind: "lapsed_request",
     dep: { ...c.dep, status: "pending_review",
-      pledges: [{ id: "p1", seats: 2, status: "pending", customers: "Ana", customerEmail: "traveller@example.test" }] },
+      pledges: [{ id: "p1", seats: 2, status: "pending", source: "public_request", customers: "Ana", customerEmail: "traveller@example.test" }] },
   }];
   const mails = [];
   const { calls, deps } = spies({ candidates: lapsed });
@@ -129,4 +129,19 @@ test("an unanswered request is closed with the request's own letter, not the GoA
   assert.equal(mails[0].kind, "departure_request_declined");
   assert.match(mails[0].text, /Hi Ana/);
   assert.match(mails[0].text, /weren't able to review this date/);
+});
+
+test("an operator's lapsed request is closed without Sawa emailing the operator's customer", async () => {
+  const [c] = oneCandidate();
+  const lapsed = [{
+    ...c,
+    kind: "lapsed_request",
+    dep: { ...c.dep, status: "pending_review",
+      pledges: [{ id: "p1", seats: 2, status: "pending", source: "agency_request", customers: "C-2-2", customerEmail: "their.customer@example.test" }] },
+  }];
+  const { calls, deps } = spies({ candidates: lapsed });
+  const result = await runCancelUnconfirmed({ dryRun: false, deps, log: () => {} });
+  assert.ok(result.candidates >= 1, "no candidate was present — this test proves nothing");
+  assert.equal(calls.cancelOne, 1, "the lapsed operator request was not closed");
+  assert.equal(calls.send, 0, "Sawa emailed an operator's customer");
 });
