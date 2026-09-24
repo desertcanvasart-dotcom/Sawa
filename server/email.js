@@ -494,6 +494,35 @@ export function goAheadPaymentLinkEmail({ to, payload }) {
     text.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</pre>`, kind: "goahead_payment_link" };
 }
 
+// Who at Sawa hears about new demand. Until 24 Sep 2026 nobody did: a date
+// request or a direct booking emailed the traveller only, and the one
+// "request received" the team ever saw was a test made with their own address.
+// Same recipient as the GoAhead payment-link alert, so ops has one inbox.
+export function opsRecipient(env = process.env) {
+  return env.OPS_NOTIFY_TO || env.GOAHEAD_ALERT_TO || REPLY_TO;
+}
+
+// Internal: to ops, never to a traveller. Everything needed to act without
+// opening anything else, and a link to where the decision is made.
+export function opsNewBookingEmail({ to, isRequest, route, dateLabel, seats, seatsNow, minSeats,
+  customerName, customerEmail, customerPhone, bookingCode, note, portalLink }) {
+  const what = isRequest ? "New date request" : "New booking";
+  const subject = `${what} — ${route} on ${dateLabel} (${seats} seat${seats === 1 ? "" : "s"})`;
+  const text =
+    `${what}\n\n${route}\n${dateLabel}\n\n`
+    + `Traveller: ${customerName || "(no name)"}\n`
+    + `Email: ${customerEmail || "(none)"}\n`
+    + `Phone: ${customerPhone || "(none)"}\n`
+    + `Seats: ${seats}${bookingCode ? ` · booking ${bookingCode}` : ""}\n`
+    + (note ? `Note: ${note}\n` : "")
+    + (isRequest
+      ? `\nThis date is not open yet. Approve or decline it under Date requests — the traveller has been told it is under review.\n`
+      : `\nSeats on this date now: ${seatsNow ?? "?"} of ${minSeats ?? "?"} needed for GoAhead.\n`)
+    + (portalLink ? `\n${portalLink}\n` : "");
+  return { to, subject, text, html: `<pre style="font:14px/1.5 ui-monospace,monospace">${
+    text.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</pre>`, kind: isRequest ? "ops_new_request" : "ops_new_booking" };
+}
+
 export function auditDriftEmail({ to, base, lines = [], stale }) {
   const subject = stale
     ? `Sawa: the claims watcher has not run for ${stale}`
