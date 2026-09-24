@@ -13,7 +13,10 @@ import { apiFetch } from "./supabaseClient";
 import { ProductEditor } from "./AdminDashboard";
 // Date-only departure values need a local-noon anchor or they render a day
 // early west of UTC — see src/dates.js.
-import { fmtDate } from "./dates.js";
+import { fmtDate, fmtReceived } from "./dates.js";
+import { RequestCalendar } from "./RequestCalendar.jsx";
+import { minLeadDaysFor, maxHorizonDaysFor } from "../shared/request-window.js";
+import { operatingDaysLabel } from "../shared/operating-days.js";
 
 const money = (n) => (n == null ? "—" : CURRENCY_SYMBOL + Number(n).toLocaleString());
 // Cancelled pledges have released their seats — excluded so seats-left and
@@ -160,6 +163,7 @@ export function AgencyDashboard({ user, agency, signOut, navigate, departures, t
                 </tbody>
               </table>
             </div>
+            <MyDateRequests />
           </>
         )}
 
@@ -363,7 +367,7 @@ function BookTours({ tourProducts, departures, agencyId, agencyName, agencyPax =
           const full = p.dates.length > 0 && open.length === 0;
           const from = p.breakPrice || p.publishedRate;
           return (
-            <button key={p.id} className="cat-card" onClick={() => setOpenId(p.id)} disabled={!p.dates.length}>
+            <button key={p.id} className="cat-card" onClick={() => setOpenId(p.id)}>
               <div className="cat-media" style={{ backgroundImage: `url(${coverOf(p)})` }}>
                 {isPkg(p) && <span className="cat-flag pkg"><Package size={11} />Package</span>}
                 {full && <span className="cat-flag full">Fully booked</span>}
@@ -373,7 +377,7 @@ function BookTours({ tourProducts, departures, agencyId, agencyName, agencyPax =
                 <span className="cat-meta"><MapPin size={13} />{isPkg(p) ? (p.cities || [p.city]).join(" → ") : p.city}{p.duration ? ` · ${p.duration}` : ""}</span>
                 <div className="cat-foot">
                   <span className="cat-price">from {CURRENCY_SYMBOL}{from}{isPkg(p) ? "/pp" : ""}</span>
-                  <span className="cat-dates">{p.dates.length ? `${p.dates.length} date${p.dates.length > 1 ? "s" : ""}` : "No dates yet"}</span>
+                  <span className="cat-dates">{p.dates.length ? `${p.dates.length} date${p.dates.length > 1 ? "s" : ""}` : "Request a date"}</span>
                 </div>
               </div>
             </button>
@@ -399,6 +403,8 @@ function TourBooking({ product, agencyId, agencyName, agencyPax = 0, onBack, onR
   const [msg, setMsg] = useState("");
   const [err, setErr] = useState("");
   const [gi, setGi] = useState(0);
+  // "join" an existing date, or "request" a new one for Sawa to approve.
+  const [mode, setMode] = useState(product.dates.length ? "join" : "request");
 
   const dep = product.dates.find((d) => Number(d.id) === Number(depId));
   const booked = dep ? seatsOf(dep) : 0;
@@ -408,7 +414,10 @@ function TourBooking({ product, agencyId, agencyName, agencyPax = 0, onBack, onR
   const tier = tiers.find((t) => t.id === tierId) || tiers[0];
   const nSeats = Math.max(1, Number(seats || 1));
   const projected = dep ? Math.min(dep.maxSeats, booked + nSeats) : nSeats;
-  let pp = dep ? livePrice({ ...product, ...dep }, projected) : product.publishedRate;
+  // No date chosen (requesting a new one): quote what the tour costs at its
+  // GoAhead headcount, from the same table — not the bare publishedRate, which
+  // can differ from the tiers the booking is actually priced on.
+  let pp = dep ? livePrice({ ...product, ...dep }, projected) : livePrice(product, goAheadOf(product));
   if (pkg && tier) pp += (Number(tier.perPersonSupplement) || 0) + (rooming === "single" ? Number(tier.singleSupplement) || 0 : 0);
   const total = pp * nSeats;
   // The policy's own numbers (shared/booking-policy.js), not a local copy: this
@@ -519,8 +528,15 @@ function TourBooking({ product, agencyId, agencyName, agencyPax = 0, onBack, onR
             <span className="tb-price-cap">Live shared price</span>
             <div className="tb-price-now"><strong>{CURRENCY_SYMBOL}{pp}</strong><em>per person</em></div>
           </div>
-          {!product.dates.length ? (
-            <div className="dash-empty">No dates published yet. Ask the admin to publish a departure.</div>
+          {mode === "request" ? (
+            <RequestDateForm
+              product={product}
+              reference={reference}
+              agencyName={agencyName}
+              canJoin={product.dates.length > 0}
+              onJoin={(id) => { if (id) setDepId(id); setMode("join"); }}
+              onDone={onReload}
+            />
           ) : (
             <form className="tb-form" onSubmit={book}>
               {dep && (
@@ -598,6 +614,9 @@ function TourBooking({ product, agencyId, agencyName, agencyPax = 0, onBack, onR
               {err && <div className="auth-error">{err}</div>}
               {msg && <div className="tb-ok"><Check size={15} />{msg}</div>}
               <button className="btn-primary tb-submit" type="submit" disabled={busy || remaining <= 0}><Check size={17} />{busy ? "Booking…" : remaining <= 0 ? "Date full" : "Confirm booking"}</button>
+              <button type="button" className="link-btn tb-alt" onClick={() => setMode("request")}>
+                <CalendarDays size={14} /> None of these dates work? Request a new date
+              </button>
             </form>
           )}
         </aside>
@@ -606,6 +625,198 @@ function TourBooking({ product, agencyId, agencyName, agencyPax = 0, onBack, onR
   );
 }
 function hasHtml(s) { return s && s.replace(/<[^>]*>/g, "").trim().length > 0; }
+
+/* ---------------- Request a new date (operator) ----------------
+   The same rules the traveller's request follows — notice period, how far
+   ahead, operating days, operator blackouts, and join-first when a date is
+   already forming nearby — enforced by the server; the calendar only greys out
+   what the server would refuse. Sawa reviews every request before it opens. */
+const isoIn = (days) => { const d = new Date(); d.setDate(d.getDate() + days); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
+
+function RequestDateForm({ product, reference, agencyName, canJoin, onJoin, onDone }) {
+  const pkg = isPkg(product);
+  const tiers = product.accommodationTiers || [];
+  const minIso = isoIn(minLeadDaysFor(product));
+  const maxIso = isoIn(maxHorizonDaysFor(product));
+  const opDays = Array.isArray(product.operatingDays) ? product.operatingDays : [];
+  const [date, setDate] = useState("");
+  const [month, setMonth] = useState(() => { const d = new Date(`${minIso}T12:00:00`); return new Date(d.getFullYear(), d.getMonth(), 1); });
+  const [blocked, setBlocked] = useState(null);
+  const [seats, setSeats] = useState(1);
+  const [tierId, setTierId] = useState(tiers[0]?.id || "");
+  const [rooming, setRooming] = useState("double");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const [matches, setMatches] = useState(null);
+  const [sent, setSent] = useState(null);
+
+  useEffect(() => {
+    apiFetch("/public/unavailable-dates").then((r) => r.json())
+      .then((j) => setBlocked(new Set(j.dates || []))).catch(() => setBlocked(new Set()));
+  }, []);
+
+  async function submit(e, { ignoreMatches = false } = {}) {
+    e?.preventDefault?.();
+    setErr("");
+    if (!date) return setErr("Pick a date on the calendar.");
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return setErr("Enter a valid customer email.");
+    if (phone.trim().length < 6) return setErr("Enter a customer phone number.");
+    setBusy(true);
+    try {
+      const body = {
+        tourProductId: product.id, date, seats: Math.max(1, Number(seats) || 1),
+        customers: reference, customerEmail: email.trim(), customerPhone: phone.trim(),
+        note: note.trim() || undefined, ignoreMatches,
+      };
+      if (pkg) { body.roomingType = rooming; body.accommodationTier = tierId; }
+      const r = await apiFetch("/agency/departure-requests", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const j = await r.json();
+      if (r.status === 409 && j.code === "near_matches") { setMatches(j.nearMatches || []); return; }
+      if (!r.ok) throw new Error(j.error || "Could not send the request.");
+      setSent({ date, seats: body.seats });
+      setMatches(null);
+      onDone && onDone();
+    } catch (e2) { setErr(e2.message); } finally { setBusy(false); }
+  }
+
+  if (sent) {
+    return (
+      <div className="tb-form">
+        <div className="tb-ok"><Check size={15} />Request sent — {fmtDate(sent.date)}, {sent.seats} seat{sent.seats > 1 ? "s" : ""}.</div>
+        <p className="tb-sum-note">Sawa reviews every requested date. It opens for booking once approved — follow it under <strong>My bookings → Date requests</strong>. Nothing is charged until the date reaches GoAhead.</p>
+        <button type="button" className="btn-ghost" onClick={() => { setSent(null); setDate(""); setEmail(""); setPhone(""); setNote(""); setSeats(1); }}>Request another date</button>
+      </div>
+    );
+  }
+
+  return (
+    <form className="tb-form" onSubmit={submit}>
+      <div className="tb-field">
+        <label>Request a new date</label>
+        <span className="tb-hint">
+          {minLeadDaysFor(product)} days' notice minimum · up to {maxHorizonDaysFor(product)} days ahead
+          {opDays.length ? ` · runs ${operatingDaysLabel(opDays)}` : ""}. Sawa approves every request before it opens.
+        </span>
+        <RequestCalendar
+          value={date}
+          operatingDays={opDays}
+          blockedDates={blocked}
+          minIso={minIso}
+          maxIso={maxIso}
+          monthCursor={month}
+          onCursorChange={(delta) => setMonth((m) => new Date(m.getFullYear(), m.getMonth() + delta, 1))}
+          onPick={(d) => { setDate(d); setMatches(null); setErr(""); }}
+        />
+        {date && <span className="tb-hint"><CalendarDays size={13} /> {fmtDate(date)}</span>}
+      </div>
+
+      {matches && (
+        <div className="tb-matches" role="alert">
+          <strong>Dates are already forming near {fmtDate(date)}.</strong>
+          <p>Joining one fills it faster than starting another:</p>
+          <ul>
+            {matches.map((m) => (
+              <li key={m.id}>
+                <span>{fmtDate(m.startDate || m.date)} · {seatsOf(m)}/{m.minSeats || 4} to GoAhead</span>
+                <button type="button" className="btn-ghost sm" onClick={() => onJoin(m.id)}>Join this date</button>
+              </li>
+            ))}
+          </ul>
+          <button type="button" className="link-btn" disabled={busy} onClick={(e) => submit(e, { ignoreMatches: true })}>No — request {fmtDate(date)} anyway</button>
+        </div>
+      )}
+
+      {pkg && tiers.length > 0 && (
+        <div className="tb-row">
+          <div className="tb-field">
+            <label htmlFor="rq-tier">Hotel &amp; cruise tier</label>
+            <select id="rq-tier" value={tierId} onChange={(e) => setTierId(e.target.value)}>
+              {tiers.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+            </select>
+          </div>
+          <div className="tb-field">
+            <label htmlFor="rq-room">Room type</label>
+            <select id="rq-room" value={rooming} onChange={(e) => setRooming(e.target.value)}>
+              <option value="single">Single</option><option value="double">Double / twin</option><option value="triple">Triple</option>
+            </select>
+          </div>
+        </div>
+      )}
+      <div className="tb-field tb-seats">
+        <label htmlFor="rq-seats">Seats</label>
+        <input id="rq-seats" type="number" min="1" max={product.maxSeats || 12} value={seats} onChange={(e) => setSeats(e.target.value)} />
+      </div>
+
+      <div className="tb-divider"><span>Customer details</span></div>
+      <div className="tb-field">
+        <label>Booking reference</label>
+        <input className="tb-ref" value={reference} readOnly tabIndex={-1} aria-label="Auto-generated booking reference" />
+        <span className="tb-hint">Auto-generated · {agencyName || "agency"}</span>
+      </div>
+      <div className="tb-row">
+        <div className="tb-field">
+          <label htmlFor="rq-email">Customer email</label>
+          <input id="rq-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="customer@email.com" />
+        </div>
+        <div className="tb-field">
+          <label htmlFor="rq-phone">Customer phone</label>
+          <input id="rq-phone" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+20 1XX XXX XXXX" />
+        </div>
+      </div>
+      <div className="tb-field">
+        <label htmlFor="rq-note">Note for Sawa (optional)</label>
+        <textarea id="rq-note" rows={2} maxLength={500} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Pickup hotel, flexibility on the date…" />
+      </div>
+
+      {err && <div className="auth-error">{err}</div>}
+      <button className="btn-primary tb-submit" type="submit" disabled={busy}><CalendarDays size={17} />{busy ? "Sending…" : "Send date request"}</button>
+      {canJoin && (
+        <button type="button" className="link-btn tb-alt" onClick={() => onJoin(null)}>Back to published dates</button>
+      )}
+    </form>
+  );
+}
+
+/* ---------------- My date requests ---------------- */
+function requestStateTag(r) {
+  if (r.bookingStatus === "cancelled" || r.departureStatus === "cancelled") return <span className="tag tag-off">Declined / closed</span>;
+  if (r.departureStatus === "pending_review") return <span className="tag tag-warn"><Clock3 size={12} /> Under review</span>;
+  return <span className="tag tag-on"><Check size={12} /> Approved — open</span>;
+}
+
+function MyDateRequests() {
+  const [rows, setRows] = useState(null);
+  useEffect(() => {
+    apiFetch("/agency/departure-requests").then((r) => r.json())
+      .then((j) => setRows(j.requests || [])).catch(() => setRows([]));
+  }, []);
+  if (!rows || rows.length === 0) return null;
+  return (
+    <>
+      <div className="dash-head" style={{ marginTop: 28 }}><div><h2>Date requests</h2><p>New dates you asked Sawa to open.</p></div></div>
+      <div className="table-wrap">
+        <table className="dash-table">
+          <thead><tr><th>Reference</th><th>Tour</th><th>Date</th><th>Seats</th><th>Requested</th><th>Status</th></tr></thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.id}>
+                <td><strong>{r.customers || "—"}</strong>{r.customerEmail && <div className="sub">{r.customerEmail}</div>}</td>
+                <td>{r.route}</td>
+                <td>{fmtDate(r.date)}</td>
+                <td>{r.seats}</td>
+                <td className="sub">{fmtReceived(r.createdAt)}</td>
+                <td>{requestStateTag(r)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
+  );
+}
 
 /* ---------------- Promote: self-serve tracked widget ---------------- */
 const EMBED_SCRIPT = `<script>

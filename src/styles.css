@@ -4930,6 +4930,30 @@ button:disabled {
 .tb-sum-note { margin: 2px 0 0; font-size: 11.5px; color: var(--ink-faint); }
 .tb-ok { display: flex; gap: 8px; align-items: center; background: #e6f3ea; border: 1px solid #bfe0cb; color: #1f5c3a; border-radius: 10px; padding: 10px 12px; font-size: 13px; font-weight: 600; }
 .tb-ok svg { flex: none; }
+/* Operator: request a new date */
+.tb-alt { justify-content: center; width: 100%; padding: 6px 0; }
+.tb-form textarea { width: 100%; font: inherit; font-size: 14px; padding: 10px 12px; border: 1px solid var(--d-line, #e3e3e3); border-radius: 10px; resize: vertical; }
+.tb-matches { display: grid; gap: 8px; padding: 12px 14px; border-radius: 12px; background: #fdf6e7; border: 1px solid #f0dcaa; font-size: 13px; }
+.tb-matches p { margin: 0; color: var(--ink-soft); }
+.tb-matches ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.tb-matches li { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.tb-matches li .btn-ghost { white-space: nowrap; flex: none; }
+.tb-matches .link-btn { justify-self: start; }
+/* The request calendar's own styles are scoped to the public site (.sx); these
+   are the dashboard's, in the dashboard's palette. */
+.tb-form .req-cal { border: 1px solid var(--d-line, #e3e3e3); border-radius: 12px; padding: 10px; background: #fff; }
+.tb-form .req-cal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.tb-form .req-cal-head strong { font-size: 14px; font-weight: 700; color: var(--d-ink, #1a1a1a); }
+.tb-form .req-cal-head button { width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--d-line, #e3e3e3); background: #fff; font-size: 16px; line-height: 1; cursor: pointer; color: var(--d-ink-soft, #5c5f62); }
+.tb-form .req-cal-head button:disabled { opacity: .3; cursor: default; }
+.tb-form .req-cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+.tb-form .req-cal-dow { text-align: center; font-size: 10.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--d-ink-faint, #8c9196); padding-bottom: 4px; }
+.tb-form .req-cal-day { aspect-ratio: 1; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--d-ink, #1a1a1a); font-size: 13px; cursor: pointer; }
+.tb-form .req-cal-day:hover:not(:disabled) { border-color: var(--d-accent, #1f3d2b); }
+.tb-form .req-cal-day:disabled { color: var(--d-ink-faint, #8c9196); opacity: .4; cursor: not-allowed; text-decoration: line-through; }
+.tb-form .req-cal-day.on { background: var(--d-accent, #1f3d2b); color: #fff; border-color: var(--d-accent, #1f3d2b); font-weight: 700; }
+.tb-form .req-cal-day:focus-visible { outline: 2px solid var(--d-accent, #1f3d2b); outline-offset: 1px; }
+.tb-form .req-cal-blank { visibility: hidden; }
 .tb-book .btn-primary { width: 100%; justify-content: center; min-height: 48px; border-radius: 12px; }
 
 @media (max-width: 880px) {

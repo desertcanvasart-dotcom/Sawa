@@ -1,5 +1,12 @@
 {
  "reviewed": {
+  "d8444aa2a6d2": {
+   "where": "server/app.js:1567",
+   "text": "with placeholder values and no review, is gone — this is the only way in.",
+   "verdict": "AGREES",
+   "contradicts": null,
+   "note": "POST /api/departures and createDepartureSchema are removed (operator-date-requests.test.js asserts both absent). Operators now open dates only via POST /api/agency/departure-requests, which calls createDateRequest and lands pending_review, same as a traveller's request."
+  },
   "57ef14eafc46": {
    "where": "server/domain.js:160",
    "text": "pending_review: traveler-requested, not yet approved by ops — never",

@@ -143,9 +143,15 @@ export async function runCancelUnconfirmed({
     // committed by this point, and a mail outage must not leave it open.
     //
     // PP2 — the intended count is fixed before any send, and checked after.
-    const intended = result.recipients.length;
+    // A lapsed OPERATOR request is the operator's customer to tell, not Sawa's;
+    // only a traveller who asked Sawa directly gets Sawa's letter.
+    const recipients = lapsed
+      ? result.recipients.filter((to) => (result.departure.pledges || [])
+        .some((p) => p.customerEmail === to && p.source === "public_request"))
+      : result.recipients;
+    const intended = recipients.length;
     let reached = 0;
-    for (const to of result.recipients) {
+    for (const to of recipients) {
       // A lapsed request was never a running date, so it gets the request's
       // own "couldn't open this date" letter, not the GoAhead cancellation.
       const mail = lapsed

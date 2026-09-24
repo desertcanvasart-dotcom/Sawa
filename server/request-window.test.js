@@ -86,7 +86,8 @@ test("the request route reads the product's window, not a constant", () => {
   assert.match(app, /const minLead = minLeadDaysFor\(product\);/);
   assert.match(app, /const maxHorizon = maxHorizonDaysFor\(product\);/);
   // And it must run where the product exists — it used to run before the load.
-  const route = app.slice(app.indexOf("publicDepartureRequestSchema, req.body"));
+  // Both callers (traveller and operator) share createDateRequest since 24 Sep 2026.
+  const route = app.slice(app.indexOf("async function createDateRequest("));
   assert.ok(route.indexOf("loadProduct") < route.indexOf("minLeadDaysFor(product)"),
     "the window is checked before the product is known");
 });

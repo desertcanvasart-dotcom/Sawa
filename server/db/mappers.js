@@ -10,7 +10,7 @@
 // Cairo machine. Production runs UTC, where the two happen to agree, which is
 // why this stayed hidden. Read the local calendar fields instead — same fix as
 // balanceDueDate in domain.js, from the other direction.
-function isoDate(value) {
+export function isoDate(value) {
   if (!value) return value ?? null;
   if (value instanceof Date) {
     if (Number.isNaN(value.getTime())) return null;

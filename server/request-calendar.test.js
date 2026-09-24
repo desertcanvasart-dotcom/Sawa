@@ -20,6 +20,9 @@ import { fileURLToPath } from "node:url";
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const read = (p) => readFileSync(join(ROOT, p), "utf8");
 const ui = read("src/main.jsx");
+// The component moved to its own module on 24 Sep 2026 so the operator
+// dashboard's "Request a date" could use the same picker.
+const calendar = read("src/RequestCalendar.jsx");
 
 test("the chip list is gone, and with it its twelve-date cap", () => {
   // `for (let i = 3; i <= 90 && out.length < 12; i++)` — whichever bound hit
@@ -37,7 +40,7 @@ test("one picker serves restricted and unrestricted tours alike", () => {
 });
 
 test("a closed day is disabled and says why", () => {
-  const cmp = /function RequestCalendar\([\s\S]*?\n\}/.exec(ui);
+  const cmp = /function RequestCalendar\([\s\S]*?\n\}/.exec(calendar);
   assert.ok(cmp, "the calendar component is gone");
   for (const reason of ["too soon", "too far ahead", "doesn't run this day", "unavailable"]) {
     assert.ok(cmp[0].includes(reason), `no reason given for "${reason}"`);
@@ -73,7 +76,7 @@ test("the fences come from one authority, not a constant on each side", () => {
 });
 
 test("month navigation stops at the fences rather than running forever", () => {
-  const cmp = /function RequestCalendar\([\s\S]*?\n\}/.exec(ui)[0];
+  const cmp = /function RequestCalendar\([\s\S]*?\n\}/.exec(calendar)[0];
   assert.match(cmp, /disabled=\{!withinMonth\(-1\)\}/);
   assert.match(cmp, /disabled=\{!withinMonth\(1\)\}/);
 });
@@ -97,4 +100,12 @@ test("the dev fixture exercises the restricted path", () => {
   const fixture = JSON.parse(read("site/_dev_bootstrap.json"));
   const restricted = (fixture.tourProducts || []).filter((p) => (p.operatingDays || []).length);
   assert.ok(restricted.length >= 3, "no fixture product carries operating days");
+});
+
+test("the operator's request form uses the same picker and the same fences", () => {
+  const agency = read("src/AgencyDashboard.jsx");
+  assert.match(agency, /import \{ RequestCalendar \} from "\.\/RequestCalendar\.jsx"/);
+  assert.match(agency, /minIso = isoIn\(minLeadDaysFor\(product\)\)/);
+  assert.match(agency, /maxIso = isoIn\(maxHorizonDaysFor\(product\)\)/);
+  assert.match(agency, /apiFetch\("\/public\/unavailable-dates"\)/, "operator blackouts must grey out here too");
 });

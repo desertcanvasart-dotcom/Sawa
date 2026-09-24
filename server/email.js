@@ -506,7 +506,9 @@ export function opsRecipient(env = process.env) {
 // opening anything else, and a link to where the decision is made.
 export function opsNewBookingEmail({ to, isRequest, route, dateLabel, seats, seatsNow, minSeats,
   customerName, customerEmail, customerPhone, bookingCode, note, portalLink, bookedBy }) {
-  const what = isRequest ? "New date request" : bookedBy ? `New booking by ${bookedBy}` : "New booking";
+  const what = isRequest
+    ? (bookedBy ? `New date request from ${bookedBy}` : "New date request")
+    : bookedBy ? `New booking by ${bookedBy}` : "New booking";
   const subject = `${what} — ${route} on ${dateLabel} (${seats} seat${seats === 1 ? "" : "s"})`;
   const text =
     `${what}\n\n${route}\n${dateLabel}\n\n`
@@ -517,7 +519,7 @@ export function opsNewBookingEmail({ to, isRequest, route, dateLabel, seats, sea
     + `Seats: ${seats}${bookingCode ? ` · booking ${bookingCode}` : ""}\n`
     + (note ? `Note: ${note}\n` : "")
     + (isRequest
-      ? `\nThis date is not open yet. Approve or decline it under Date requests — the traveller has been told it is under review.\n`
+      ? `\nThis date is not open yet. Approve or decline it under Date requests — ${bookedBy ? "the operator sees it as under review" : "the traveller has been told it is under review"}.\n`
       : `\nSeats on this date now: ${seatsNow ?? "?"} of ${minSeats ?? "?"} needed for GoAhead.\n`)
     + (portalLink ? `\n${portalLink}\n` : "");
   return { to, subject, text, html: `<pre style="font:14px/1.5 ui-monospace,monospace">${
