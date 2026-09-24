@@ -1,6 +1,6 @@
 {
-  "routes": 40,
+  "routes": 44,
   "findings": {},
-  "base": "http://localhost:8795",
-  "updated": "2026-08-10"
+  "base": "https://sawa.tours",
+  "updated": "2026-09-24"
 }

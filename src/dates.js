@@ -31,3 +31,31 @@ export function fmtDate(value) {
     ? "—"
     : new Intl.DateTimeFormat("en", { month: "short", day: "numeric", year: "numeric" }).format(d);
 }
+
+// When something ARRIVED — a request, a booking. A full timestamp, shown in
+// Cairo time and labelled as such (ops reads it in Egypt; a laptop set to
+// another zone must not quietly shift it), plus how long ago, because "is
+// this one waiting on me for days?" is the question it answers.
+const RECEIVED_FMT = new Intl.DateTimeFormat("en-GB", {
+  timeZone: "Africa/Cairo", day: "numeric", month: "short", year: "numeric",
+  hour: "2-digit", minute: "2-digit", hour12: false,
+});
+
+export function timeAgo(value, nowMs = Date.now()) {
+  const d = toDate(value);
+  if (!value || Number.isNaN(d.getTime())) return "";
+  const mins = Math.max(0, Math.round((nowMs - d.getTime()) / 60000));
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins} min ago`;
+  const hours = Math.round(mins / 60);
+  if (hours < 24) return `${hours} h ago`;
+  const days = Math.round(hours / 24);
+  return `${days} day${days === 1 ? "" : "s"} ago`;
+}
+
+export function fmtReceived(value, nowMs = Date.now()) {
+  if (!value) return "—";
+  const d = toDate(value);
+  if (Number.isNaN(d.getTime())) return "—";
+  return `${RECEIVED_FMT.format(d)} Cairo · ${timeAgo(d, nowMs)}`;
+}

@@ -10,7 +10,7 @@ import { DashSidebar } from "./DashSidebar";
 import { RichText } from "./RichText";
 // Date-only departure values need a local-noon anchor or they render a day
 // early west of UTC — see src/dates.js.
-import { fmtDate } from "./dates.js";
+import { fmtDate, fmtReceived } from "./dates.js";
 
 const money = (n) => (n == null ? "—" : CURRENCY_SYMBOL + Number(n).toLocaleString());
 const isPkg = (x) => x?.type === "package";
@@ -1290,6 +1290,7 @@ function DateRequestsSection({ data, reload, flash }) {
                 <p className="listing-agency">
                   <strong>{fmtDate(d.startDate || d.date)}</strong>{d.time ? ` · ${d.time}` : ""} · {d.city}
                 </p>
+                <p className="field-hint"><Clock3 size={12} /> Requested {fmtReceived(seed.createdAt)}</p>
                 <div className="listing-facts">
                   <span><Users size={13} />{seed.seats || 1} seat{(seed.seats || 1) > 1 ? "s" : ""} pledged · min {d.minSeats} · max {d.maxSeats}</span>
                   <span><ClipboardList size={13} />{seed.customers || "Traveller"}</span>
@@ -1904,20 +1905,21 @@ function BookingsSection({ data, stats }) {
           {view === "list" ? (
             <div className="table-wrap">
               <table className="dash-table">
-                <thead><tr><th>Customer</th><th>Route</th><th>Booked by</th><th>Seats</th><th>Total</th><th>Balance</th><th>Status</th></tr></thead>
+                <thead><tr><th>Customer</th><th>Route</th><th>Booked by</th><th>Received</th><th>Seats</th><th>Total</th><th>Balance</th><th>Status</th></tr></thead>
                 <tbody>
                   {shown.map((b) => (
                     <tr key={b.id} className="clickable" onClick={() => setOpen(b)}>
                       <td><strong>{b.customers || "—"}</strong>{b.customerEmail && <div className="sub">{b.customerEmail}</div>}{b.bookingCode && <div className="sub">{b.bookingCode}</div>}</td>
                       <td>{b.route}<div className="sub">{fmtDate(b.date)}</div></td>
                       <td>{b.source === "public" || b.source === "public_request" ? <span className="tag">Direct</span> : b.agency}</td>
+                      <td className="sub">{fmtReceived(b.createdAt)}</td>
                       <td>{b.seats}</td>
                       <td>{money(b.bookingTotal)}</td>
                       <td>{money(b.balanceDue)}{b.balanceDueDate && <div className="sub">by {fmtDate(b.balanceDueDate)}</div>}</td>
                       <td><span className={`tag ${bookingStatusTag(b.status)}`}>{bookingStatusLabel(b)}</span></td>
                     </tr>
                   ))}
-                  {shown.length === 0 && <tr><td colSpan={7}><Empty label="No bookings found." /></td></tr>}
+                  {shown.length === 0 && <tr><td colSpan={8}><Empty label="No bookings found." /></td></tr>}
                 </tbody>
               </table>
             </div>
@@ -1988,7 +1990,7 @@ function BookingDrawer({ booking: b, onClose, onStatus }) {
             <div><span>Balance</span><strong>{money(b.balanceDue)}</strong></div>
             {b.balanceDueDate && <div className="full"><span>Balance due</span><strong>{fmtDate(b.balanceDueDate)}</strong></div>}
           </div>
-          <p className="sub">Booked {fmtDate(b.createdAt)}</p>
+          <p className="sub">{b.source === "public_request" ? "Requested" : "Booked"} {fmtReceived(b.createdAt)}</p>
         </div>
       </aside>
     </div>

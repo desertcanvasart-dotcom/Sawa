@@ -39,7 +39,17 @@ const arg = (name, dflt) => {
   const hit = process.argv.find((a) => a.startsWith(`--${name}=`));
   return hit ? hit.slice(name.length + 3) : dflt;
 };
-const BASE = arg("base", "http://localhost:8795").replace(/\/$/, "");
+let BASE = arg("base", "http://localhost:8795").replace(/\/$/, "");
+
+// The scheduled watch runs this INSIDE the web server, whose argv carries no
+// --base. So every scheduled run from 10 Aug 2026 fetched localhost:8795 —
+// a port nothing in production listens on — and reported 28 fetch-failed
+// daily for six weeks while the site served 200s. The base a caller is given
+// has to reach the fetch, not only the alert's subject line.
+export function setAuditBase(base) {
+  if (base) BASE = String(base).replace(/\/$/, "");
+  return BASE;
+}
 
 // The agreed support-availability string, from the one place that owns it.
 // null while undecided, in which case every availability phrasing is a finding
@@ -219,6 +229,9 @@ export const coverage = { degraded: null };
 // Every route the public can reach. Product and blog routes come from the
 // sitemap, so a new product is audited without anyone updating this list.
 export async function publicRoutes() {
+  // A long-lived process (the scheduler) calls this daily. Without the reset,
+  // one unreachable sitemap marked every later run degraded, forever.
+  coverage.degraded = null;
   const fixed = ["/", "/about", "/contact", "/faq", "/how-it-works", "/privacy", "/terms",
     "/cookies", "/departures", "/goahead", "/goahead-promise", "/operators", "/verify",
     "/widget", "/itineraries", "/blog", "/booking", "/partners",
