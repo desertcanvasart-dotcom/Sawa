@@ -28,6 +28,7 @@ import { withTransaction } from "./db/index.js";
 export const CANCEL_REASONS = {
   MINIMUM_NOT_REACHED: "minimum_not_reached",
   DATE_CANCELLED: "date_cancelled",
+  REQUEST_NOT_REVIEWED: "request_not_reviewed",
 };
 
 // Everyone who should hear about this. Read BEFORE anything is cancelled.

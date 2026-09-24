@@ -255,6 +255,20 @@ export function missedConfirmDeadline(departure, product, nowMs = Date.now()) {
   return nowMs > deadline;
 }
 
+// A traveller-requested date that reached its day with nobody approving or
+// declining it. Left alone, it sits in `pending_review` forever and the
+// traveller is never told.
+//
+// Only requests whose booking is still `pending` — requests made before
+// bookings carried that status keep the answer they were given. Waits for the
+// date itself to start rather than guessing a deadline: until then a person may
+// still decide, and this must never pre-empt them.
+export function lapsedRequest(departure, nowMs = Date.now()) {
+  if (departure?.status !== "pending_review") return false;
+  if (!(departure.pledges || []).some((p) => p?.status === "pending")) return false;
+  return departureStarted(departure, nowMs);
+}
+
 // Booking cutoff: returns true if bookings are CLOSED for this departure now.
 // cutoffHours comes from the tour product (default 24). nowMs lets tests inject time.
 export function bookingClosed(departure, product, nowMs = Date.now()) {
@@ -320,6 +334,13 @@ export function computePledgePricing(departure, product, { seats, roomingType, a
 export function bookingLookupState({ departureStatus, pledgeStatus, seatsBooked = 0, goAhead = DEFAULT_GO_AHEAD }) {
   if (departureStatus === "cancelled") return "date_cancelled";
   if (pledgeStatus === "cancelled") return "booking_cancelled";
+  // A traveller-requested date nobody has approved yet. Keyed on the PLEDGE
+  // being `pending`, which only requests made after the change carry — the
+  // requests already answered under the old copy keep reading as they did.
+  if (departureStatus === "pending_review" && pledgeStatus === "pending") return "under_review";
+  // And whatever the pledge says, a date still in review is not running: four
+  // seats on an unapproved request used to read "Confirmed — GoAhead".
+  if (departureStatus === "pending_review") return "forming";
   if (departureStatus === "supplier_confirmed" || Number(seatsBooked) >= Number(goAhead)) return "confirmed";
   return "forming";
 }
@@ -328,6 +349,7 @@ const BOOKING_STATE_LABEL = {
   date_cancelled: "Date cancelled",
   booking_cancelled: "Booking cancelled",
   confirmed: "Confirmed — GoAhead",
+  under_review: "Under review",
   forming: "Forming",
 };
 
@@ -343,6 +365,8 @@ function bookingStateNote(state, goAhead) {
       return "This booking was cancelled. Nothing was charged for it.";
     case "confirmed":
       return "Your date is confirmed — the guide and transport are booked. See your confirmation email for the meeting point and time.";
+    case "under_review":
+      return "You asked us to open this date, and our team is reviewing it. We'll email you as soon as it's approved — nothing is charged.";
     default:
       return "Your seat is held. We'll let you know the moment this date reaches GoAhead.";
   }
@@ -358,7 +382,7 @@ export function bookingLookupView(input) {
     // information, it is an invitation to keep waiting.
     showProgress: state === "confirmed" || state === "forming",
     statusLabel: BOOKING_STATE_LABEL[state],
-    statusTone: state === "confirmed" ? "go" : state === "forming" ? "pending" : "cancelled",
+    statusTone: state === "confirmed" ? "go" : (state === "forming" || state === "under_review") ? "pending" : "cancelled",
     note: bookingStateNote(state, goAhead),
     // Whether the traveller may release this seat themselves, decided HERE and
     // not in the page — the same argument as `showProgress` and `note`, both of
@@ -387,7 +411,10 @@ export function bookingLookupView(input) {
     // stops only at `supplier_confirmed` and would let a traveller walk out of a
     // confirmed date for free. That route is unadvertised and stays as it is;
     // this is the one a link in an email will reach.
-    canCancel: state === "forming",
+    //
+    // `under_review` too: withdrawing a request nobody has approved moves even
+    // less than leaving a forming date.
+    canCancel: state === "forming" || state === "under_review",
   };
 }
 

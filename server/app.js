@@ -1531,6 +1531,11 @@ app.post("/api/public/departure-requests", writeLimiter, h(async (req, res) => {
       bookingCode: await uniqueBookingCode(c),
       refCode: null,
       ...pricing,
+      // Nobody has approved this date yet, so the booking is not confirmed
+      // either. It still holds its seats (every count reads `<> 'cancelled'`);
+      // approve moves it to `confirmed`, decline to `cancelled`. Before this it
+      // took the column default and every request read "confirmed" in admin.
+      status: "pending",
     });
     const departure = await loadDeparture(c, id);
     const saved = await c.query(`SELECT * FROM pledges WHERE id=$1`, [pledgeId]);
@@ -1566,6 +1571,9 @@ app.post("/api/admin/departure-requests/:id/approve", requireAuth, requireRole("
     if (!dep) throw new AppError(404, "Departure not found.");
     if (dep.status !== "pending_review") throw new AppError(409, "This departure is not awaiting review.");
     await c.query(`UPDATE departures SET status='open' WHERE id=$1`, [dep.id]);
+    // Only `pending` rows: requests made before bookings carried that status are
+    // already `confirmed` and stay exactly as the traveller was told.
+    await c.query(`UPDATE pledges SET status='confirmed' WHERE departure_id=$1 AND status='pending'`, [dep.id]);
     return loadDeparture(c, dep.id);
   });
   await logAudit(req, { action: "departure_request.approve", entity: "departure", entityId: String(departure.id) });
@@ -1613,6 +1621,7 @@ app.post("/api/admin/departure-requests/:id/decline", requireAuth, requireRole("
     if (!dep) throw new AppError(404, "Departure not found.");
     if (dep.status !== "pending_review") throw new AppError(409, "This departure is not awaiting review.");
     await c.query(`UPDATE departures SET status='cancelled' WHERE id=$1`, [dep.id]);
+    await c.query(`UPDATE pledges SET status='cancelled' WHERE departure_id=$1 AND status='pending'`, [dep.id]);
     // TT1 — a declined request moves from pending_review, which is withheld, to
     // cancelled, which is mirrored. Without this the partner never learns the
     // date is off, and nothing else ever corrects it.
@@ -1868,8 +1877,8 @@ async function insertPledge(c, departureId, p) {
       (id, departure_id, agency_id, agency, seats, customers, price_per_person, booking_total,
        deposit_percent, deposit_due, balance_due, balance_due_date, source, booking_code,
        rooming_type, accommodation_tier, accommodation_tier_name, created_by_user_id, customer_email,
-       customer_phone, ref_code, paid)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)`,
+       customer_phone, ref_code, paid, status)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)`,
     [
       p.id, departureId, p.agencyId ?? null, p.agency ?? null, p.seats, p.customers ?? null,
       p.pricePerPerson ?? null, p.bookingTotal ?? null, p.depositPercent ?? null,
@@ -1877,6 +1886,7 @@ async function insertPledge(c, departureId, p) {
       p.source ?? null, p.bookingCode ?? null, p.roomingType ?? null,
       p.accommodationTier ?? null, p.accommodationTierName ?? null, p.createdByUserId ?? null,
       p.customerEmail ?? null, p.customerPhone ?? null, p.refCode ?? null, p.paid === true,
+      p.status ?? "confirmed",
     ]
   );
   await refreshStatus(c, departureId);

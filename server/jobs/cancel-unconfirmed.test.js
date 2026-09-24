@@ -103,3 +103,30 @@ test("the vacuity guard fires when there is nothing to act on", async () => {
   // Identical to a passing dry run — which is why `candidates >= 1` has to be
   // asserted there and cannot be inferred.
 });
+
+test("an unanswered request is closed with the request's own letter, not the GoAhead cancellation", async () => {
+  const [c] = oneCandidate();
+  const lapsed = [{
+    ...c,
+    kind: "lapsed_request",
+    dep: { ...c.dep, status: "pending_review",
+      pledges: [{ id: "p1", seats: 2, status: "pending", customers: "Ana", customerEmail: "traveller@example.test" }] },
+  }];
+  const mails = [];
+  const { calls, deps } = spies({ candidates: lapsed });
+  const send = deps.send;
+  deps.send = async (mail) => { mails.push(mail); return send(mail); };
+
+  const dry = [];
+  await runCancelUnconfirmed({ dryRun: true, deps, log: (l) => dry.push(l) });
+  assert.equal(calls.cancelOne, 0, "dry run reached cancelOne()");
+  assert.ok(dry.some((l) => l.includes("unanswered request") && l.includes("[would cancel]")));
+
+  const result = await runCancelUnconfirmed({ dryRun: false, deps, log: () => {} });
+  assert.ok(result.candidates >= 1, "no candidate was present — this test proves nothing");
+  assert.equal(calls.cancelOne, 1);
+  assert.equal(mails.length, 1);
+  assert.equal(mails[0].kind, "departure_request_declined");
+  assert.match(mails[0].text, /Hi Ana/);
+  assert.match(mails[0].text, /weren't able to review this date/);
+});

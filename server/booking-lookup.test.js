@@ -115,3 +115,34 @@ test("no state promises a refund", () => {
     assert.ok(!/refunded/i.test(note), `a refund was promised: "${note}"`);
   }
 });
+
+// A traveller-requested date nobody has approved. Requests used to take the
+// column default and read "confirmed"; from now on the booking is `pending`
+// until someone decides.
+const UNDER_REVIEW = { departureStatus: "pending_review", pledgeStatus: "pending", seatsBooked: 2, goAhead: 4 };
+
+test("an unapproved request reads Under review, shows no seat count, and can be withdrawn", () => {
+  const view = bookingLookupView(UNDER_REVIEW);
+  assert.equal(view.state, "under_review");
+  assert.equal(view.statusLabel, "Under review");
+  assert.equal(view.confirmed, false);
+  assert.equal(view.showProgress, false);
+  assert.equal(view.canCancel, true);
+  assert.match(view.note, /reviewing/);
+  assert.ok(!/refunded/i.test(view.note));
+});
+
+test("a date still in review is never Confirmed, however many seats it holds", () => {
+  // Four seats on one request met the threshold and read "Confirmed — GoAhead"
+  // to someone whose date nobody had approved.
+  assert.equal(bookingLookupState({ ...UNDER_REVIEW, seatsBooked: 4 }), "under_review");
+  // A request made before `pending` existed carries `confirmed`. It keeps the
+  // answer it was given — forming — and still never reads confirmed.
+  assert.equal(bookingLookupState({ ...UNDER_REVIEW, pledgeStatus: "confirmed", seatsBooked: 4 }), "forming");
+  assert.equal(bookingLookupState({ ...UNDER_REVIEW, pledgeStatus: "confirmed", seatsBooked: 2 }), "forming");
+});
+
+test("approval moves an under-review booking to the ordinary states", () => {
+  assert.equal(bookingLookupState({ departureStatus: "open", pledgeStatus: "confirmed", seatsBooked: 2, goAhead: 4 }), "forming");
+  assert.equal(bookingLookupState({ departureStatus: "cancelled", pledgeStatus: "cancelled", seatsBooked: 0, goAhead: 4 }), "date_cancelled");
+});

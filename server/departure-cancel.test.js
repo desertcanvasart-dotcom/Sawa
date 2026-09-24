@@ -126,9 +126,11 @@ test("a partial shortfall counts the people, not the attempts", () => {
   assert.match(c.out.error[0], /1 person\(s\) were told nothing/);
 });
 
-test("the reasons are named, and only the two that are written exist here", () => {
+test("the reasons are named, and only the ones that are written exist here", () => {
   // `operator` is proposed in migration 023 and deliberately absent until
   // something writes it — an unwritten value in a live enum is the same shape
   // as an empty category rendered as a filter.
-  assert.deepEqual(Object.values(CANCEL_REASONS).sort(), ["date_cancelled", "minimum_not_reached"]);
+  // `request_not_reviewed` is written by cancel-unconfirmed when a traveller's
+  // requested date arrives with nobody having answered it.
+  assert.deepEqual(Object.values(CANCEL_REASONS).sort(), ["date_cancelled", "minimum_not_reached", "request_not_reviewed"]);
 });
