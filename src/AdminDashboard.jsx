@@ -1766,6 +1766,13 @@ function bookingStatusTag(s) {
   return "tag";
 }
 
+// A traveller-requested date nobody has approved: the booking is `pending`
+// because the DATE is — say so, and point at where the decision is made.
+function bookingStatusLabel(b) {
+  if (b.status === "pending" && b.departureStatus === "pending_review") return "awaiting review";
+  return b.status;
+}
+
 const BOOKING_FILTERS = [
   { id: "all", label: "All" },
   { id: "pending", label: "Requests" },
@@ -1903,11 +1910,11 @@ function BookingsSection({ data, stats }) {
                     <tr key={b.id} className="clickable" onClick={() => setOpen(b)}>
                       <td><strong>{b.customers || "—"}</strong>{b.customerEmail && <div className="sub">{b.customerEmail}</div>}{b.bookingCode && <div className="sub">{b.bookingCode}</div>}</td>
                       <td>{b.route}<div className="sub">{fmtDate(b.date)}</div></td>
-                      <td>{b.source === "public" ? <span className="tag">Direct</span> : b.agency}</td>
+                      <td>{b.source === "public" || b.source === "public_request" ? <span className="tag">Direct</span> : b.agency}</td>
                       <td>{b.seats}</td>
                       <td>{money(b.bookingTotal)}</td>
                       <td>{money(b.balanceDue)}{b.balanceDueDate && <div className="sub">by {fmtDate(b.balanceDueDate)}</div>}</td>
-                      <td><span className={`tag ${bookingStatusTag(b.status)}`}>{b.status}</span></td>
+                      <td><span className={`tag ${bookingStatusTag(b.status)}`}>{bookingStatusLabel(b)}</span></td>
                     </tr>
                   ))}
                   {shown.length === 0 && <tr><td colSpan={7}><Empty label="No bookings found." /></td></tr>}
@@ -1960,6 +1967,9 @@ function BookingDrawer({ booking: b, onClose, onStatus }) {
               ))}
             </div>
           </div>
+          {b.departureStatus === "pending_review" && (
+            <p className="field-hint">This date was requested by the traveller and is awaiting review. Approve or decline it under <strong>Date requests</strong> — that opens the date and updates this booking.</p>
+          )}
           <dl className="drawer-dl">
             <div><dt>Tour</dt><dd>{b.route}{b.type === "package" && <span className="tag tag-pkg">Package</span>}</dd></div>
             <div><dt>Date</dt><dd>{fmtDate(b.date)}{b.endDate ? ` – ${fmtDate(b.endDate)}` : ""}{b.time ? ` · ${b.time}` : ""}</dd></div>

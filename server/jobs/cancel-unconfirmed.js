@@ -18,9 +18,9 @@ import "dotenv/config";
 import { pathToFileURL } from "node:url";
 import { pool, withDepartureWrites } from "../db/index.js";
 import { mapDeparture, mapProduct } from "../db/mappers.js";
-import { missedConfirmDeadline, confirmDeadlineAt, seatsTotal, goAheadSeatsFor } from "../domain.js";
+import { missedConfirmDeadline, lapsedRequest, confirmDeadlineAt, seatsTotal, goAheadSeatsFor } from "../domain.js";
 import { cancelDepartureAndPledges, reportNotifications, CANCEL_REASONS } from "../departure-cancel.js";
-import { sendEmail, cancellationEmail } from "../email.js";
+import { sendEmail, cancellationEmail, departureRequestDeclinedEmail } from "../email.js";
 
 const DRY_RUN = process.env.DRY_RUN === "1";
 
@@ -29,10 +29,16 @@ function dateLabel(dep) {
   return dep.endDate && dep.endDate !== start ? `${start} – ${dep.endDate}` : start;
 }
 
+// Also closes traveller requests nobody answered before their date arrived —
+// see lapsedRequest. Same job, because it is the same act: a date that will not
+// run is cancelled and whoever holds a seat on it is told.
+export const LAPSED_REQUEST_REASON = "We weren't able to review this date before it arrived.";
+
 async function loadCandidates() {
-  // Only `open` dates can qualify — see missedConfirmDeadline. Narrowing here
-  // as well keeps the scan off the whole table.
-  const deps = await pool.query("SELECT * FROM departures WHERE status = 'open'");
+  // Only `open` dates can miss a deadline and only `pending_review` ones can
+  // lapse — see missedConfirmDeadline and lapsedRequest. Narrowing here as
+  // well keeps the scan off the whole table.
+  const deps = await pool.query("SELECT * FROM departures WHERE status IN ('open', 'pending_review')");
   const products = await pool.query("SELECT * FROM tour_products");
   const byId = new Map(products.rows.map((p) => [p.id, mapProduct(p)]));
   const out = [];
@@ -44,11 +50,13 @@ async function loadCandidates() {
     const dep = mapDeparture(row, pledges.rows);
     const product = byId.get(row.tour_product_id) || null;
     if (missedConfirmDeadline(dep, product)) out.push({ dep, product });
+    else if (lapsedRequest(dep)) out.push({ dep, product, kind: "lapsed_request" });
   }
   return out;
 }
 
-async function cancelOne({ dep, product }) {
+async function cancelOne({ dep, product, kind }) {
+  const lapsed = kind === "lapsed_request";
   // TT1 — the fourth writer that never told the mirror, and the only unattended
   // one. Autoura has been holding auto-cancelled departures as `open`, with
   // their seats, indefinitely: nothing else ever corrects it.
@@ -59,7 +67,8 @@ async function cancelOne({ dep, product }) {
     if (!fresh.rows.length) return { skipped: "gone" };
     const pledges = await c.query("SELECT * FROM pledges WHERE departure_id = $1", [dep.id]);
     const current = mapDeparture(fresh.rows[0], pledges.rows);
-    if (!missedConfirmDeadline(current, product)) return { skipped: "no longer qualifies" };
+    const qualifies = lapsed ? lapsedRequest(current) : missedConfirmDeadline(current, product);
+    if (!qualifies) return { skipped: "no longer qualifies" };
 
     // PP5 — the date and its pledges change together, and the recipient list is
     // read before either. Shared with the admin cancel route so this cannot be
@@ -70,8 +79,14 @@ async function cancelOne({ dep, product }) {
       `INSERT INTO audit_log (actor_email, actor_role, action, entity, entity_id, detail)
        VALUES ($1,$2,$3,$4,$5,$6)`,
       [
-        "system@sawa.tours", "system", "departure.auto_cancel", "departure", String(dep.id),
-        JSON.stringify({
+        "system@sawa.tours", "system", lapsed ? "departure_request.lapse" : "departure.auto_cancel", "departure", String(dep.id),
+        JSON.stringify(lapsed ? {
+          reason: "request not reviewed before its date",
+          cancelledReason: CANCEL_REASONS.REQUEST_NOT_REVIEWED,
+          seats: seatsTotal(current.pledges),
+          pledgesCancelled,
+          notifying: recipients.length,
+        } : {
           reason: "minimum not reached by the GoAhead deadline",
           // The machine-readable form. Migration 023 proposes carrying this on
           // the pledge row itself; until it is applied this is where it lives.
@@ -114,7 +129,9 @@ export async function runCancelUnconfirmed({
   for (const candidate of candidates) {
     const { dep } = candidate;
     const seats = seatsTotal(dep.pledges);
-    const line = `  #${dep.id} ${dateLabel(dep)} — ${seats}/${goAheadSeatsFor(dep)} seats — ${dep.route}`;
+    const lapsed = candidate.kind === "lapsed_request";
+    const line = `  #${dep.id} ${dateLabel(dep)} — ${seats}/${goAheadSeatsFor(dep)} seats — ${dep.route}`
+      + (lapsed ? " — unanswered request" : "");
 
     if (dryRun) { log(line + "  [would cancel]"); continue; }
 
@@ -129,9 +146,16 @@ export async function runCancelUnconfirmed({
     const intended = result.recipients.length;
     let reached = 0;
     for (const to of result.recipients) {
-      const sent = await deps.send(cancellationEmail({
-        to, route: result.departure.route, dateLabel: dateLabel(result.departure),
-      })).catch(() => ({ ok: false }));
+      // A lapsed request was never a running date, so it gets the request's
+      // own "couldn't open this date" letter, not the GoAhead cancellation.
+      const mail = lapsed
+        ? departureRequestDeclinedEmail({
+          to, route: result.departure.route, dateLabel: dateLabel(result.departure),
+          customerName: (result.departure.pledges || []).find((p) => p.customerEmail === to)?.customers,
+          reason: LAPSED_REQUEST_REASON,
+        })
+        : cancellationEmail({ to, route: result.departure.route, dateLabel: dateLabel(result.departure) });
+      const sent = await deps.send(mail).catch(() => ({ ok: false }));
       if (sent?.ok) { reached += 1; notified += 1; }
     }
     log(line + `  [cancelled, ${result.pledgesCancelled} booking(s) released]`);

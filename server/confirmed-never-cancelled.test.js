@@ -78,8 +78,15 @@ test("the ratchet is in the writer too, not only the reader", () => {
 test("the job's own query cannot reach a confirmed departure", () => {
   // Belt and braces: even if the rule above changed, the selection is narrowed
   // to `open`. Both must hold — the rule is the reason, the query is the floor.
+  //
+  // `pending_review` joined it for unanswered traveller requests — a date nobody
+  // approved, which by definition has never run. The floor is the same: the
+  // selection names every status it reads, and none of them is a GoAhead one.
   const job = readFileSync(join(ROOT, "server", "jobs", "cancel-unconfirmed.js"), "utf8");
-  assert.match(job, /WHERE status = 'open'/);
+  const m = job.match(/FROM departures WHERE status IN \(([^)]*)\)/);
+  assert.ok(m, "the job's departure selection no longer names its statuses");
+  const statuses = m[1].split(",").map((v) => v.trim().replace(/^'|'$/g, "")).sort();
+  assert.deepEqual(statuses, ["open", "pending_review"]);
 });
 
 test("BBBB1 is scoped to headcount, not to running at all", () => {
