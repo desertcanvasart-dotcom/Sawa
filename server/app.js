@@ -59,6 +59,7 @@ import { watchdogReport, lastWatchRunAt } from "./watchdog.js";
 import { rethrowIfProgrammerError, surfaceProgrammerError } from "./errors.js";
 import { tourSlug, tourPath } from "./slug.js";
 import { blogSlug } from "../shared/blog-slug.js";
+import { mapPost } from "./blog-post.js";
 import { cancelDepartureAndPledges, reportNotifications, CANCEL_REASONS } from "./departure-cancel.js";
 
 import { BRAND } from "./brand.js";
@@ -66,6 +67,7 @@ import { startJobScheduler, jobSchedulerEnabled, cancelJobDryRun, goAheadNotifyD
 import { TOUR_TIMEZONE } from "./tz.js";
 import { cleanHtml, cleanItinerary } from "./sanitize.js";
 import { canonicalRedirect } from "./canonical.js";
+import { canonicalPathRedirect } from "./path-canonical.js";
 import { injectStaticSchema } from "./static-seo.js";
 import { cacheState, staleWhileRevalidate, PAGE_TTL_MS, PAGE_STALE_TTL_MS } from "./page-cache.js";
 
@@ -1778,22 +1780,6 @@ app.delete("/api/admin/destinations/:id", requireAuth, requireRole("super_admin"
 }));
 
 // ---- Blog posts (content + SEO + GEO) ----
-const mapPost = (b) => ({
-  id: b.id, slug: b.slug, title: b.title, excerpt: b.excerpt || "", coverImage: b.cover_image || "",
-  // 040 — the cover's own alt and caption. Alt falls back to the title at
-  // RENDER time, not here: "" must stay distinguishable from "set".
-  coverAlt: b.cover_alt || "", coverCaption: b.cover_caption || "",
-  bodyHtml: b.body_html || "", author: b.author || "", authorCredentials: b.author_credentials || "",
-  tags: b.tags || [], status: b.status || "draft",
-  publishedAt: b.published_at instanceof Date ? b.published_at.toISOString() : b.published_at,
-  metaTitle: b.meta_title || "", metaDescription: b.meta_description || "", keywords: b.keywords || [],
-  canonicalUrl: b.canonical_url || "", ogImage: b.og_image || "", noindex: b.noindex === true,
-  tldr: b.tldr || "", keyTakeaways: b.key_takeaways || [], faq: b.faq || [],
-  geoRegion: b.geo_region || "", geoPlace: b.geo_place || "", geoLat: b.geo_lat || "", geoLng: b.geo_lng || "",
-  localKeywords: b.local_keywords || [],
-  updatedAt: b.updated_at instanceof Date ? b.updated_at.toISOString() : b.updated_at,
-});
-
 // Public: published posts (list).
 app.get("/api/blog", h(async (_req, res) => {
   if (publicBlogCache.payload && Date.now() - publicBlogCache.at < PUBLIC_BLOG_TTL) {
@@ -2617,18 +2603,18 @@ app.get("/sitemap.xml", h(async (_req, res) => res.type("application/xml").send(
 // those to the live React booking app so real departures keep working.
 const siteDir = join(__dirname, "..", "site");
 if (existsSync(siteDir)) {
-  // Canonicalize to clean, extensionless, SEO-friendly URLs: any /page.html
-  // permanently redirects to /page. `index` -> /, and the two designed links
-  // that have no page of their own map to real pages.
-  // `trust` was renamed to `goahead-promise`; keep the old URL working.
-  const htmlAlias = { index: "/", tour: "/itineraries", pricing: "/operators", trust: "/goahead-promise" };
+  // One public URL per document. This removes trailing-slash duplicates before
+  // static files or the SPA can answer 200, and retires the literal placeholder
+  // URL once advertised by the old WebSite/SearchAction schema.
   app.use((req, res, next) => {
-    if (req.method !== "GET") return next();
-    const m = req.path.match(/^\/([a-z0-9-]+)\.html$/i);
-    if (!m) return next();
-    const name = m[1].toLowerCase();
-    return res.redirect(301, htmlAlias[name] || `/${name}`);
+    if (req.method !== "GET" && req.method !== "HEAD") return next();
+    const target = canonicalPathRedirect(req.originalUrl);
+    return target ? res.redirect(301, target) : next();
   });
+
+  // `trust` was renamed to `goahead-promise`; keep the old clean URL working.
+  // HTML-file variants (including nested destination pages) are normalized by
+  // canonicalPathRedirect above before express.static can serve a duplicate.
   app.get("/trust", (_req, res) => res.redirect(301, "/goahead-promise"));
   // The catalogue moved from /tours to /itineraries (and /packages was only
   // ever an alias of it). 301 so indexed links and old referral URLs

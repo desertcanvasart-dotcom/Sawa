@@ -467,8 +467,12 @@ function App() {
         data = await response.json();
       } catch (apiError) {
         // Local dev has no database, so /api/bootstrap fails — fall back to a
-        // snapshot of live data so tour pages preview. In production the live
-        // API succeeds and this fallback is never used.
+        // snapshot of live data so tour pages preview.
+        // The checked-in snapshot exists only to make local development usable
+        // without a database. In production, falling back to it after a
+        // crawler-blocked /api/ request replaced current server data with an
+        // older catalogue and turned valid detail URLs into soft 404s.
+        if (!import.meta.env.DEV) throw apiError;
         const snap = await fetch("/_dev_bootstrap.json", { signal: controller.signal });
         if (!snap.ok) throw new Error("Could not load portal data.");
         data = await snap.json();
@@ -899,12 +903,14 @@ function App() {
   }
 
   const isPortalRoute = path.startsWith("/admin") || path.startsWith("/agency") || path.startsWith("/portal");
+  // Editorial pages do not need the tour catalogue to load successfully.
+  const isBlogRoute = /^\/blog(?:\/|$)/.test(path);
 
-  if (loadFailed && !isLoading) {
+  if (loadFailed && !isLoading && !isBlogRoute) {
     return <LoadErrorScreen onRetry={() => { setLoadFailed(false); setIsLoading(true); loadBootstrap(); }} />;
   }
 
-  if (isLoading) {
+  if (isLoading && !isBlogRoute) {
     // The portal is a different shape entirely, so the catalogue skeleton would
     // be a lie there; it keeps the neutral loader. So does any route that isn't
     // going to render a catalogue at all — a mistyped URL used to announce
@@ -2678,7 +2684,7 @@ function PublicRoute({ page, path, navigate, customerCalendars, customerSummary,
     case "terms": return <LegalPage kind="terms" navigate={navigate} />;
     case "booking": return <BookingLookupPage navigate={navigate} path={path} />;
     case "blog": return <BlogIndexPage navigate={navigate} />;
-    case "blogpost": return <BlogPostPage navigate={navigate} slug={decodeURIComponent((path.match(/^\/blog\/([^/]+)/) || [])[1] || "")} />;
+    case "blogpost": return <BlogPostPage key={path} navigate={navigate} slug={decodeURIComponent((path.match(/^\/blog\/([^/]+)/) || [])[1] || "")} />;
     case "partners": return <PartnersPage navigate={navigate} operatorsByProduct={operatorsByProduct} customerCalendars={customerCalendars} />;
     default: return <NotFoundPage navigate={navigate} />;
   }
@@ -3343,18 +3349,48 @@ function BlogIndexPage({ navigate }) {
 
 // ---- /blog/:slug : article ----
 function BlogPostPage({ navigate, slug }) {
-  const [state, setState] = useState({ status: "loading", post: null });
+  const [state, setState] = useState(() => {
+    const post = window.__SAWA_BLOG_POST__;
+    return post?.slug === slug && post.status === "published" && typeof post.bodyHtml === "string"
+      ? { status: "done", post }
+      : { status: "loading", post: null };
+  });
+  const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     let alive = true;
-    fetch(`${API_BASE}/blog/${encodeURIComponent(slug)}`)
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), BOOTSTRAP_TIMEOUT_MS);
+    if (state.post) applyPostMeta(state.post);
+    fetch(`${API_BASE}/blog/${encodeURIComponent(slug)}`, { signal: controller.signal })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(r.status === 404 ? "nf" : "err"))))
-      .then((j) => { if (alive) { setState({ status: "done", post: j.post }); applyPostMeta(j.post); } })
-      .catch(() => alive && setState({ status: "error", post: null }));
-    return () => { alive = false; resetMeta(); };
-  }, [slug]);
+      .then((j) => {
+        if (!j.post || j.post.slug !== slug || typeof j.post.bodyHtml !== "string") throw new Error("err");
+        if (alive) { setState({ status: "done", post: j.post }); applyPostMeta(j.post); }
+      })
+      .catch((error) => {
+        if (!alive) return;
+        // A blocked request, timeout or 5xx is not evidence the post vanished.
+        // Keep the server snapshot on refresh failure; only a real 404 is nf.
+        setState((current) => error.message === "nf"
+          ? { status: "not-found", post: null }
+          : current.post ? current : { status: "error", post: null });
+      })
+      .finally(() => clearTimeout(timeout));
+    return () => { alive = false; controller.abort(); clearTimeout(timeout); resetMeta(); };
+  }, [slug, attempt]);
 
   if (state.status === "loading") return <div className="page-wrap"><div className="blog-post-skel" /></div>;
-  if (state.status !== "done" || !state.post) return <NotFoundPage navigate={navigate} />;
+  if (state.status === "not-found") return <NotFoundPage navigate={navigate} />;
+  if (state.status === "error") return (
+    <div className="page-wrap"><div className="page-empty" role="alert">
+      <strong>We couldn't load this article.</strong>
+      <p>Please try again in a moment.</p>
+      <button className="btn-pill primary" onClick={() => {
+        setState({ status: "loading", post: null });
+        setAttempt((n) => n + 1);
+      }}>Try again</button>
+    </div></div>
+  );
   const p = state.post;
   const takeaways = (p.keyTakeaways || []).filter(Boolean);
   const faq = (p.faq || []).filter((f) => f.q);

@@ -154,7 +154,9 @@ export function travelAgencySchema() {
   return s;
 }
 
-// schema.org WebSite — with a SearchAction so AI systems know how to query us.
+// schema.org WebSite. SearchAction was deliberately removed: Google's sitelinks
+// search box is retired, while crawlers were requesting its URL template
+// literally (`?q={search_term_string}`) and creating duplicate crawl URLs.
 export function websiteSchema() {
   return {
     "@type": "WebSite",
@@ -162,10 +164,5 @@ export function websiteSchema() {
     name: BRAND.name,
     url: BRAND.url,
     publisher: { "@id": ORG_ID },
-    potentialAction: {
-      "@type": "SearchAction",
-      target: { "@type": "EntryPoint", urlTemplate: `${BRAND.url}/itineraries?q={search_term_string}` },
-      "query-input": "required name=search_term_string",
-    },
   };
 }
