@@ -4757,6 +4757,27 @@ button:disabled {
 .drawer-head .sub { font-size: 12px; color: var(--d-ink-faint, #8c9196); }
 .drawer-body { padding: 22px; display: grid; gap: 20px; }
 
+/* Agencies — the operator record needs room: ten fields and a decision. */
+.drawer.drawer-wide { width: min(640px, 100%); }
+/* Scroll sideways on a narrow screen rather than clip the actions column. */
+.table-wrap.table-scroll { overflow-x: auto; }
+.agencies-table { min-width: 640px; }
+.agencies-table td { vertical-align: top; }
+.agencies-table .agency-name { display: block; }
+.agencies-table .agency-verify { margin-top: 6px; }
+.agencies-table .agency-verify .tag { text-transform: none; }
+.agencies-table .row-actions { justify-content: flex-end; }
+.op-record { display: grid; gap: 18px; }
+.op-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.op-grid .op-wide, .op-record > .op-wide { grid-column: 1 / -1; }
+.op-record .field-hint { font-style: normal; }
+.op-actions { display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
+.temp-pass .op-actions { margin-top: 14px; }
+@media (max-width: 560px) {
+  .op-grid { grid-template-columns: 1fr; }
+  .agencies-table .row-actions { justify-content: flex-start; }
+}
+
 .drawer-status { display: grid; gap: 8px; }
 .drawer-status .dl { font-size: 12px; font-weight: 700; color: var(--d-ink-soft, #5c5f62); }
 .seg.sm { display: inline-flex; gap: 2px; padding: 3px; background: #ededed; border-radius: 999px; }
