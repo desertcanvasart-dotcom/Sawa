@@ -31,11 +31,11 @@ const esc = (s) => String(s == null ? "" : s)
 // blanks the entire graph. The bootstrap escaper sitting next to it had always
 // handled that. There is one implementation now, shared with static-seo.js.
 // Re-exported because app.js imports inlineScriptJson from this module.
-import { ldScript, inlineScriptJson } from "./inline-json.js";
+import { ldScript, inlineScriptJson, dataScript } from "./inline-json.js";
 import { mapPost } from "./blog-post.js";
 import { recordFailure } from "./effect-log.js";
 import { rethrowIfProgrammerError } from "./errors.js";
-export { inlineScriptJson } from "./inline-json.js";
+export { inlineScriptJson, dataScript } from "./inline-json.js";
 const meta = (attr, key, val) => (val ? `<meta ${attr}="${esc(key)}" content="${esc(val)}">` : "");
 const abs = (u) => (u && !u.startsWith("http") ? BRAND.url + (u.startsWith("/") ? "" : "/") + u : u);
 const clean = (p) => (p || "/").replace(/\/+$/, "") || "/";
@@ -369,7 +369,7 @@ export async function buildHead(pathname) {
     // Google renders JavaScript but /api/ is disallowed in robots.txt. Keep
     // the published article available on React's very first render without a
     // second API request, independently of the tour catalogue bootstrap.
-    blogPost ? `<script>window.__SAWA_BLOG_POST__=${inlineScriptJson(blogPost)}</script>` : "",
+    blogPost ? dataScript("sawa-blog-post", blogPost) : "",
     // Analytics. The same file the 18 static pages load, so the measurement ID
     // lives in exactly one place (site/assets/analytics.js) rather than being
     // pasted into every head on the site.

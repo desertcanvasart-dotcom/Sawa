@@ -537,6 +537,11 @@ export function departureActionBuckets(rows = [], seatsFor = () => 0, nowMs = Da
 // same answer from the same rows. Its limit, stated plainly: if a booking made
 // BEFORE GoAhead is later cancelled (after GoAhead that goes through Sawa, per
 // the Terms), the replay no longer sees it and can name a different leader.
+// What a direct booking stores as its agency (app.js, the public and admin
+// booking routes): not an agency record, so it counts as the direct-bookings
+// operator's, exactly as a missing one does.
+export const DIRECT_CUSTOMER = "direct_customer";
+
 export function operatorForDeparture(departure, { listingAgencyId = null, directAgencyId = null } = {}) {
   const fallback = listingAgencyId || directAgencyId || null;
   const live = (departure?.pledges || [])
@@ -551,7 +556,7 @@ export function operatorForDeparture(departure, { listingAgencyId = null, direct
   let total = 0;
   let leader = null;
   for (const p of live) {
-    const owner = p.agencyId || directAgencyId;
+    const owner = p.agencyId && p.agencyId !== DIRECT_CUSTOMER ? p.agencyId : directAgencyId;
     const seats = Number(p.seats) || 0;
     total += seats;
     if (owner) {

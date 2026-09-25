@@ -18,3 +18,12 @@ export function inlineScriptJson(value) {
 
 export const ldScript = (obj) =>
   `<script type="application/ld+json">${inlineScriptJson(obj)}</script>`;
+
+// Data for the page's own script to read, as a JSON block the browser does not
+// execute. It used to be `<script>window.__X__=…</script>`, an inline script,
+// which the Content Security Policy could only allow with 'unsafe-inline' — the
+// switch that lets an injected inline script run too. A data block needs no
+// permission at all (script-src governs executable scripts only); the client
+// reads it back with readInlineData (src/inline-data.js).
+export const dataScript = (id, value) =>
+  `<script type="application/json" id="${id}">${inlineScriptJson(value)}</script>`;

@@ -50,6 +50,7 @@ import { cleanRefCode } from "../shared/ref-code.js";
 import { operatingDaysLabel } from "../shared/operating-days.js";
 import { minLeadDaysFor, maxHorizonDaysFor } from "../shared/request-window.js";
 import { RequestCalendar } from "./RequestCalendar.jsx";
+import { readInlineData } from "./inline-data.js";
 import { CURRENCY, CURRENCY_SYMBOL, CURRENCY_PROSE } from "../shared/currency.js";
 import {
   isPackage, balanceDueDate, depositPctFor, cancellationBandsFor, chargeText,
@@ -391,7 +392,7 @@ function DetailPending({ heading }) {
 
 const INLINE_BOOTSTRAP = (() => {
   try {
-    const data = typeof window !== "undefined" ? window.__SAWA_BOOTSTRAP__ : null;
+    const data = readInlineData("sawa-bootstrap");
     // Guard the shape: a truncated or half-written payload should fall through
     // to the normal fetch rather than render an empty catalogue as if it were real.
     return data && Array.isArray(data.tourProducts) && Array.isArray(data.departures) ? data : null;
@@ -3471,7 +3472,7 @@ function BlogIndexPage({ navigate }) {
 // ---- /blog/:slug : article ----
 function BlogPostPage({ navigate, slug }) {
   const [state, setState] = useState(() => {
-    const post = window.__SAWA_BLOG_POST__;
+    const post = readInlineData("sawa-blog-post");
     return post?.slug === slug && post.status === "published" && typeof post.bodyHtml === "string"
       ? { status: "done", post }
       : { status: "loading", post: null };

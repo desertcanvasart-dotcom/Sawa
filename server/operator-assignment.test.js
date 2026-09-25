@@ -32,6 +32,10 @@ test("the first booker runs it; a tie does not take it away", () => {
 test("travellers booking directly count as the direct-bookings operator's", () => {
   assert.equal(op(date(bk(null, 3), bk(A, 1))), CTS, "3 direct vs 1 from A");
   assert.equal(op(date(bk(null, 1), bk(A, 2))), A);
+  // What the booking routes actually store for a direct traveller. It is not an
+  // agency, and must not become the "operator" and name nobody.
+  assert.equal(op(date(bk("direct_customer", 3), bk(A, 1))), CTS, "the stored direct marker counts as CTS");
+  assert.equal(op(date(bk("direct_customer", 1), bk(null, 1), bk(A, 1))), CTS, "marker and null pool together");
 });
 
 test("fixed at GoAhead: bookings after the minimum don't change it", () => {

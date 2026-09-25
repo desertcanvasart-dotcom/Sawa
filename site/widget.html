@@ -28,7 +28,7 @@
 height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 <!-- End Google Tag Manager (noscript) -->
 <div class="grain"></div>
-<a href="#main" style="position:absolute;left:-999px;top:0;z-index:99;background:var(--teal);color:#fff;padding:10px 16px;border-radius:8px" onfocus="this.style.left='12px'" onblur="this.style.left='-999px'">Skip to content</a>
+<a href="#main" class="skip-link" style="position:absolute;left:-999px;top:0;z-index:99;background:var(--teal);color:#fff;padding:10px 16px;border-radius:8px">Skip to content</a>
 <div class="nav-shell">
   <nav class="nav" id="nav" aria-label="Primary">
     <a href="/" class="logo" aria-label="Sawa Tours home">
@@ -93,28 +93,25 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         <div class="it" style="border-color:rgba(247,243,234,.14)"><span class="ck"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span><div><b style="color:var(--cream)">Live shared price that drops as groups grow</b></div></div>
       </div>
     </div>
-    <!-- mock widget -->
+    <!-- Preview: a copy of the REAL single-tour widget (EmbedWidget in
+         src/main.jsx, styles .embed-card in src/styles.css) — one card with the
+         live shared price that opens the tour on Sawa. It used to show a list
+         of forming departures with seat counters, which no widget renders. -->
     <div class="rv" data-d="1">
-      <div class="panel">
-        <div class="panel-in" style="padding:0;overflow:hidden">
-          <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;background:var(--paper-2)">
-            <span style="font-size:.7rem;letter-spacing:.16em;text-transform:uppercase;color:var(--gold-ink);font-weight:700;display:flex;align-items:center;gap:9px"><span class="eyebrow" style="all:unset;display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--gold)"></span>Forming now</span>
-            <span style="font-size:.74rem;color:var(--muted)">powered by Sawa</span>
-          </div>
-          <a href="/departures" style="display:grid;grid-template-columns:auto 1fr auto;gap:14px;align-items:center;padding:16px 20px;border-top:1px solid var(--line)">
-            <div style="width:60px;height:60px;border-radius:14px;overflow:hidden"><img src="https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/tours/aswan-highlights/04.jpg" alt="Dahab" style="width:100%;height:100%;object-fit:cover"/></div>
-            <div style="min-width:0"><span style="font-size:.62rem;letter-spacing:.12em;text-transform:uppercase;color:var(--gold-ink);font-weight:700">Red Sea · 06 Oct</span><h4 class="serif" style="font-family:'Fraunces',serif;font-weight:500;font-size:1.05rem;color:var(--teal);margin-top:2px">Dahab &amp; the Blue Hole</h4><div style="display:flex;align-items:center;gap:9px;margin-top:8px"><span class="pbar teal" style="flex:0 1 90px;height:6px"><i data-fill="75%"></i></span><span style="font-size:.72rem;color:var(--muted)"><b style="color:var(--teal)">3</b>/4</span></div></div>
-            <span class="serif tnum" style="font-family:'Fraunces',serif;font-weight:600;color:var(--teal)">€510</span>
-          </a>
-          <a href="/departures" style="display:grid;grid-template-columns:auto 1fr auto;gap:14px;align-items:center;padding:16px 20px;border-top:1px solid var(--line)">
-            <div style="width:60px;height:60px;border-radius:14px;overflow:hidden"><img src="https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/tours/abu-simbel/01.jpg" alt="Abu Simbel" style="width:100%;height:100%;object-fit:cover"/></div>
-            <div style="min-width:0"><span style="font-size:.62rem;letter-spacing:.12em;text-transform:uppercase;color:var(--gold-ink);font-weight:700">Nile &amp; South · 26 Sep</span><h4 class="serif" style="font-family:'Fraunces',serif;font-weight:500;font-size:1.05rem;color:var(--teal);margin-top:2px">Abu Simbel &amp; Aswan</h4><div style="display:flex;align-items:center;gap:9px;margin-top:8px"><span class="pbar gold" style="flex:0 1 90px;height:6px"><i data-fill="70%"></i></span><span style="font-size:.72rem;color:var(--ok);font-weight:600"><b>7</b>/10 ✓</span></div></div>
-            <span class="serif tnum" style="font-family:'Fraunces',serif;font-weight:600;color:var(--teal)">€420</span>
-          </a>
-          <div style="padding:14px 20px;border-top:1px solid var(--line);background:rgba(23,50,58,.025);text-align:center"><a href="/departures" style="font-size:.84rem;font-weight:600;color:var(--teal)">View all departures →</a></div>
+      <div style="max-width:360px;margin:0 auto;background:#fff;border:1px solid var(--line);border-radius:18px;overflow:hidden;box-shadow:0 18px 40px -20px rgba(23,50,58,.45);color:var(--teal)">
+        <div style="position:relative;aspect-ratio:16/10;background:#e9dfc9 url('https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/tours/aswan-highlights/04.jpg') center/cover">
+          <span style="position:absolute;top:12px;left:12px;padding:5px 11px;border-radius:999px;background:rgba(255,255,255,.92);font-size:.75rem;font-weight:700;color:var(--teal)">Aswan</span>
+        </div>
+        <div style="padding:15px 16px 14px;display:grid;gap:7px">
+          <span style="font-size:.78rem;font-weight:600;color:var(--muted)">Aswan · Full day</span>
+          <strong style="font-family:'Fraunces',serif;font-weight:600;font-size:1.12rem;line-height:1.25">Aswan Highlights — Unfinished Obelisk, High Dam &amp; Philae</strong>
+          <div style="display:flex;align-items:baseline;gap:6px;margin-top:2px"><span style="font-size:.78rem;font-weight:600;color:var(--muted)">from</span><b class="tnum" style="font-family:'Fraunces',serif;font-weight:600;font-size:1.6rem">€55</b><span style="font-size:.78rem;font-weight:600;color:var(--muted)">EUR / person</span></div>
+          <p style="margin:0;font-size:.75rem;color:var(--muted);line-height:1.45">Shared price — it drops as the group grows, down to €44 EUR/person.</p>
+          <span style="margin-top:6px;display:flex;align-items:center;justify-content:center;min-height:44px;border-radius:12px;background:var(--gold);color:#14242a;font-weight:800;font-size:.9rem">View &amp; book →</span>
+          <span style="text-align:center;font-size:.7rem;color:var(--muted)">Powered by <b>Sawa&nbsp;Tours</b></span>
         </div>
       </div>
-      <p class="center" style="font-size:.78rem;color:rgba(247,243,234,.55);margin-top:14px">Illustrative preview · styled to your brand on install</p>
+      <p class="center" style="font-size:.78rem;color:rgba(247,243,234,.55);margin-top:14px">Illustrative preview of a single-tour widget · it takes your page's colours on install</p>
     </div>
   </div>
 </section>
