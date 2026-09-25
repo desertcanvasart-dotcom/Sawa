@@ -169,6 +169,10 @@ const h = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(
 // aggregate the frontend computes). This keeps customer data isolated.
 function viewPledges(pledges, user) {
   if (isPlatform(user)) return pledges;
+  // S02/S03 — an anonymous visitor gets what the public pages count and nothing
+  // else. The pledge id was the whole credential of the old public cancel
+  // route; the agency id and timestamp were never theirs to see either.
+  if (!user) return pledges.map((p) => ({ seats: p.seats, status: p.status }));
   return pledges.map((p) => {
     const owned = user && isAgency(user) && p.agencyId === user.agencyId;
     if (owned) return p;
@@ -1138,8 +1142,11 @@ app.post("/api/public/departures/:id/bookings", writeLimiter, h(async (req, res)
   res.status(201).json({ departure: presentDeparture(result.departure, req.user), booking: result.booking });
 }));
 
-// Agency cancels a pledge — only its own (platform may cancel any).
-app.delete("/api/departures/:id/pledges/:pledgeId", requireAuth, requireRole("agency_owner", "agency_agent", "super_admin", "ops_staff"), h(async (req, res) => {
+// Platform staff remove a pledge outright. Agencies no longer come through
+// here: this erases the row and stops only at supplier_confirmed, so an agency
+// could walk a seat out of a GoAhead date for free. They use
+// POST /api/agency/bookings/:pledgeId/cancel, which follows the Terms.
+app.delete("/api/departures/:id/pledges/:pledgeId", requireAuth, requireRole("super_admin", "ops_staff"), h(async (req, res) => {
   const departure = await withTransaction(async (c) => {
     const dep = await loadDeparture(c, Number(req.params.id), { forUpdate: true });
     if (!dep) throw new AppError(404, "Departure not found.");
@@ -1223,30 +1230,11 @@ app.post("/api/agency/bookings/:pledgeId/cancel", requireAuth, requireRole("agen
   res.json({ cancelled: true });
 }));
 
-// Public cancels a booking — open, but only public-sourced pledges.
-app.delete("/api/public/departures/:id/bookings/:pledgeId", writeLimiter, h(async (req, res) => {
-  const departure = await withTransaction(async (c) => {
-    const dep = await loadDeparture(c, Number(req.params.id), { forUpdate: true });
-    if (!dep) throw new AppError(404, "Departure not found.");
-    if (dep.status === "supplier_confirmed") throw new AppError(409, "Supplier-confirmed departures need support cancellation.");
-    const del = await c.query(
-      `DELETE FROM pledges WHERE id=$1 AND departure_id=$2 AND source='public'`,
-      [req.params.pledgeId, dep.id]
-    );
-    if (del.rowCount === 0) throw new AppError(404, "Public booking not found.");
-    await refreshStatus(c, dep.id);
-    return loadDeparture(c, dep.id);
-  });
-  emitDepartureSync(departure.id);
-  // DIR-1 — a traveller removing their own seat is a status change that moves
-  // a departure toward or away from its minimum. Unauthenticated, so logAudit
-  // records the actor as "public"; the pledge id is the only handle there is.
-  await logAudit(req, {
-    action: "booking.cancel", entity: "pledge", entityId: req.params.pledgeId,
-    detail: { departureId: departure.id, source: "public" },
-  });
-  res.json({ departure: presentDeparture(departure, req.user) });
-}));
+// S02 — `DELETE /api/public/departures/:id/bookings/:pledgeId` is gone. It took
+// no credential but the pledge id, and the anonymous catalogue published every
+// pledge id, so any visitor could cancel any traveller's booking; it also
+// erased the row and ignored the GoAhead boundary. A traveller cancels with
+// their booking code: POST /api/public/bookings/:code/cancel below.
 
 // Public: an operator applies to be verified and list (site/verify.html).
 //

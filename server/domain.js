@@ -342,7 +342,12 @@ export function bookingLookupState({ departureStatus, pledgeStatus, seatsBooked 
   // And whatever the pledge says, a date still in review is not running: four
   // seats on an unapproved request used to read "Confirmed — GoAhead".
   if (departureStatus === "pending_review") return "forming";
-  if (departureStatus === "supplier_confirmed" || Number(seatsBooked) >= Number(goAhead)) return "confirmed";
+  // F04 — a date that reached GoAhead STAYS confirmed. The stored
+  // `minimum_reached` is authoritative (see statusFor in shared/): a traveller
+  // leaving a four-seat date at three used to turn it back into "Forming" here,
+  // and with it free self-cancellation for everyone else on it.
+  if (["supplier_confirmed", "minimum_reached"].includes(departureStatus)
+    || Number(seatsBooked) >= Number(goAhead)) return "confirmed";
   return "forming";
 }
 
