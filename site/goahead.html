@@ -262,7 +262,8 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     (data.tourProducts||[]).forEach(function(p){if(p.active!==false&&(!p.status||p.status==='approved'))byId[p.id]=p;});
     var today=new Date();today.setHours(0,0,0,0);
     var deps=(data.departures||[]).filter(function(d){
-      return byId[d.tourProductId]&&new Date((d.startDate||d.date)+'T00:00:00')>=today;
+      /* F05 — and still before its booking cutoff, which the server enforces. */
+      return byId[d.tourProductId]&&new Date((d.startDate||d.date)+'T00:00:00')>=today&&R.isBookingOpen(d);
     });
     var items=[],formingCount=0;
     deps.forEach(function(d){

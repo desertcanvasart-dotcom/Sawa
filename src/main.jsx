@@ -44,7 +44,7 @@ const SUPPORT_AVAILABILITY = INTERIM_COPY["support-availability"];
 // NN2.1 — the board rules, from the one module that declares them. This file
 // used to carry hand-written copies of seatsTotal and goAheadFor with a comment
 // asking the next person to keep them in sync with domain.js.
-import { seatsTotal, goAheadSeatsFor } from "../shared/departure-state.js";
+import { seatsTotal, goAheadSeatsFor, isGoAheadDeparture, isBookingOpen } from "../shared/departure-state.js";
 import { livePriceFor, priceFromTiers, clampPrice } from "../shared/pricing.js";
 import { cleanRefCode } from "../shared/ref-code.js";
 import { operatingDaysLabel } from "../shared/operating-days.js";
@@ -144,8 +144,10 @@ function routeStopsFor(product) {
 // copy read `minSeats` only, where the authority also accepts a raw `min_seats`
 // row straight from the database.
 
-function confidenceFor(seats, goAhead = DEFAULT_GO_AHEAD) {
-  if (seats >= goAhead) return { label: "GoAhead confirmed", tone: "go" };
+// `confirmed` is the date's own state (isGoAheadDeparture), not a recount: a
+// date that reached GoAhead stays confirmed when a traveller later leaves.
+function confidenceFor(seats, goAhead = DEFAULT_GO_AHEAD, confirmed = false) {
+  if (confirmed) return { label: "GoAhead confirmed", tone: "go" };
   if (seats >= goAhead - 1) return { label: "Likely to confirm", tone: "likely" };
   if (seats >= 2) return { label: "Growing group", tone: "growing" };
   return { label: "Early interest", tone: "early" };
@@ -345,7 +347,7 @@ function departureStatusLabel(departure) {
   const seats = seatsTotal(departure.pledges);
   const goAhead = goAheadSeatsFor(departure);
   if (departure.status === "supplier_confirmed") return "Supplier confirmed";
-  if (seats >= goAhead) return "GoAhead";
+  if (isGoAheadDeparture(departure)) return "GoAhead";
   const need = goAhead - seats;
   return need === 1 ? "1 seat needed" : `${need} seats needed`;
 }
@@ -593,7 +595,7 @@ function App() {
     return rateFor(selected);
   }, [selected, selectedProduct, seatCount, roomingType, tierId]);
   const goAheadSelected = selected ? goAheadSeatsFor(selected) : DEFAULT_GO_AHEAD;
-  const isConfirmed = selected ? selectedSeats >= goAheadSelected : false;
+  const isConfirmed = selected ? isGoAheadDeparture(selected) : false;
 
   // Reset/sync package-specific form fields when switching selection
   useEffect(() => {
@@ -611,7 +613,7 @@ function App() {
       const cityProducts = tourProducts.filter((product) => product.city === cityName);
       const cityDepartures = departures.filter((departure) => departure.city === cityName);
       const seats = cityDepartures.reduce((sum, departure) => sum + seatsTotal(departure.pledges), 0);
-      const goAhead = cityDepartures.filter((departure) => seatsTotal(departure.pledges) >= goAheadSeatsFor(departure) || departure.status === "supplier_confirmed").length;
+      const goAhead = cityDepartures.filter((departure) => isGoAheadDeparture(departure)).length;
       return { name: cityName, products: cityProducts.length, departures: cityDepartures.length, seats, goAhead };
     });
   }, [cities, departures, tourProducts]);
@@ -621,7 +623,7 @@ function App() {
       seats: visibleDepartures.reduce((sum, departure) => sum + seatsTotal(departure.pledges), 0),
       departures: visibleDepartures.length,
       products: visibleProducts.length,
-      goAhead: visibleDepartures.filter((departure) => seatsTotal(departure.pledges) >= goAheadSeatsFor(departure) || departure.status === "supplier_confirmed").length,
+      goAhead: visibleDepartures.filter((departure) => isGoAheadDeparture(departure)).length,
     };
   }, [visibleDepartures, visibleProducts]);
 
@@ -634,13 +636,16 @@ function App() {
         // the tour page picks tour.dates[0] as its lead — so a stale row used to
         // become the headline date on the detail page.
         .filter((departure) => !departurePast(departure))
+        // F05 — nor is one past its booking cutoff: the server refuses those,
+        // and the page used to offer "Reserve a seat" on them anyway.
+        .filter((departure) => isBookingOpen(departure))
         .sort((a, b) => `${a.date}T${a.time || ""}`.localeCompare(`${b.date}T${b.time || ""}`)),
     }));
   }, [departures, visibleProducts]);
 
   const customerSummary = useMemo(() => {
     const goAheadDates = visibleDepartures.filter((departure) => {
-      return departure.status === "supplier_confirmed" || seatsTotal(departure.pledges) >= goAheadSeatsFor(departure);
+      return isGoAheadDeparture(departure);
     }).length;
     return {
       tours: visibleProducts.length,
@@ -709,11 +714,14 @@ function App() {
     setIsSaving(true);
     setNotice("");
     try {
-      const response = await apiFetch(`/departures/${selected.id}/pledges/${pledgeId}`, { method: "DELETE" });
-      const data = await response.json();
+      // The agency cancel route: marked cancelled rather than erased, and the
+      // GoAhead boundary applies (the old DELETE stopped only at
+      // supplier_confirmed).
+      const response = await apiFetch(`/agency/bookings/${encodeURIComponent(pledgeId)}/cancel`, { method: "POST" });
+      const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error || "Could not cancel client.");
-      setDepartures((current) => current.map((departure) => (departure.id === data.departure.id ? data.departure : departure)));
       setNotice("Client canceled from this shared group.");
+      await loadBootstrap();
     } catch (error) {
       setNotice(error.message);
     } finally {
@@ -835,8 +843,11 @@ function App() {
   // away — even though the API accepts it, the column stores it, and the admin
   // bookings table has a column for it. WhatsApp is the primary contact channel
   // for these tours, so this was the operator's main way to reach a traveler.
+  // Resolves to { ok: true } or { ok: false, error }. The tour page renders
+  // before the shared `notice` banner, so a failure reported only there was
+  // never seen — the caller shows the error itself and keeps the form (F01).
   async function bookPublicDeparture({ departureId, customerName, customerEmail, customerPhone, seats, roomingType, accommodationTier }) {
-    if (isSaving) return;
+    if (isSaving) return { ok: false, error: "" };
     setIsSaving(true);
     setNotice("");
     try {
@@ -863,8 +874,15 @@ function App() {
         tierName: data.booking.accommodationTierName,
       });
       setNotice("Seat request added. Price and availability updated live.");
+      return { ok: true };
     } catch (error) {
-      setNotice(error.message);
+      // A dropped connection surfaces as a TypeError with a browser-specific
+      // message; say what it means instead.
+      const message = error instanceof TypeError
+        ? "We couldn't reach Sawa — check your connection and try again. Nothing was booked."
+        : error.message;
+      setNotice(message);
+      return { ok: false, error: message };
     } finally {
       setIsSaving(false);
     }
@@ -875,16 +893,19 @@ function App() {
     setIsSaving(true);
     setNotice("");
     try {
-      const response = await fetch(`${API_BASE}/public/departures/${publicBooking.departureId}/bookings/${publicBooking.pledgeId}`, {
-        method: "DELETE",
-      });
-      const data = await response.json();
+      // S02 — the booking CODE is the credential, the same route the email's
+      // cancel link uses. The old DELETE took only the pledge id, which the
+      // public catalogue handed to every visitor, so anyone could cancel anyone.
+      const response = await fetch(`${API_BASE}/public/bookings/${encodeURIComponent(publicBooking.code)}/cancel`, { method: "POST" });
+      const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error || "Could not cancel this booking.");
-      setDepartures((current) => current.map((departure) => (departure.id === data.departure.id ? data.departure : departure)));
       setPublicBooking(null);
       setNotice("Booking canceled. Availability updated live.");
+      await loadBootstrap();
+      return { ok: true };
     } catch (error) {
       setNotice(error.message);
+      return { ok: false, error: error.message };
     } finally {
       setIsSaving(false);
     }
@@ -1391,7 +1412,7 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
   const pp = isPackage(tour)
     ? packagePriceFor(tour, dep, dep ? projected : goAhead, { roomingType, tierId })
     : dep ? livePriceFor({ ...tour, ...dep }, projected) : livePriceFor(tour, goAhead);
-  const confirmed = !!dep && (dep.status === "supplier_confirmed" || booked >= goAhead);
+  const confirmed = !!dep && isGoAheadDeparture(dep);
   const depositPct = Number(dep?.depositPercent || tour.depositPercent || 10);
   const total = pp * nSeats;
   const deposit = depositFor(total, depositPct);
@@ -1416,19 +1437,26 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
     return () => { stop(); clearTimeout(t); };
   }, [tour.id]);
 
-  function reserve(e) {
+  async function reserve(e) {
     e.preventDefault();
     setErr("");
     if (!dep) return setErr("Pick a departure date.");
     if (name.trim().length < 2) return setErr("Enter the lead traveler's name.");
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return setErr("Enter a valid email.");
     if (Number(seats) > remaining) return setErr(`Only ${remaining} seat${remaining === 1 ? "" : "s"} left on this date.`);
-    onBookPublicDeparture({
+    const result = await onBookPublicDeparture({
       departureId: dep.id, customerName: name.trim(), customerEmail: email.trim(),
       customerPhone: phone.trim(), seats: nSeats,
       // Only meaningful for packages; the server ignores them for day tours.
       ...(isPackage(tour) ? { roomingType, accommodationTier: tierId } : {}),
     });
+    // F01 — the form used to clear straight away, before the server answered:
+    // a full date, a closed cutoff or a dropped connection left the traveller
+    // with an empty form and no message. Clear only on a confirmed booking.
+    if (!result?.ok) {
+      if (result?.error) setErr(result.error);
+      return;
+    }
     setName(""); setEmail(""); setPhone(""); setSeats(1);
   }
 
@@ -1737,7 +1765,7 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
                       <div className="lbl">{reqMode ? "Start your own date" : "Live dates for this tour"}</div>
                       {!reqMode && tour.dates.map((d) => {
                         const s = seatsTotal(d.pledges); const left = d.maxSeats - s; const on = Number(d.id) === Number(depId);
-                        const ga = goAheadSeatsFor(d); const cf = d.status === "supplier_confirmed" || s >= ga;
+                        const ga = goAheadSeatsFor(d); const cf = isGoAheadDeparture(d);
                         return (
                           <button
                             type="button"
@@ -1904,7 +1932,7 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
                             // Canceling a held seat is an action, not navigation, and it was an
                             // <a> with no href: unreachable by keyboard and announced to screen
                             // readers as plain text. A real <button> restores focus and Enter/Space.
-                            <div className="bk-ok" role="status">Seat held — {publicBooking.code}. {publicBooking.depositDue ? `${CURRENCY_SYMBOL}${publicBooking.depositDue} ${CURRENCY} deposit due at GoAhead.` : ""} <button type="button" className="bk-cancel" onClick={onCancelPublicBooking}>Cancel</button></div>
+                            <div className="bk-ok" role="status">Seat held — {publicBooking.code}. {publicBooking.depositDue ? `${CURRENCY_SYMBOL}${publicBooking.depositDue} ${CURRENCY} deposit due at GoAhead.` : ""} <button type="button" className="bk-cancel" onClick={async () => { setErr(""); const r = await onCancelPublicBooking(); if (r && !r.ok) setErr(r.error); }}>Cancel</button></div>
                           )}
                           <div className="note"><SxCheck />Free hold — you only pay once the date confirms</div>
                         </>
@@ -1928,7 +1956,7 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
               <div className="rel-grid">
                 {related.map((p) => {
                   const ld = openDates(p)[0] || p.dates[0]; const s = ld ? seatsTotal(ld.pledges) : 0; const ga = goAheadSeatsFor(p);
-                  const cf = ld && (ld.status === "supplier_confirmed" || s >= ga); const pr = ld ? livePriceFor({ ...p, ...ld }, s) : livePriceFor(p, ga);
+                  const cf = !!ld && isGoAheadDeparture(ld); const pr = ld ? livePriceFor({ ...p, ...ld }, s) : livePriceFor(p, ga);
                   // Was an <a> with no href and an onClick to /tour/<raw id>:
                   // not keyboard-reachable, no open-in-new-tab, invisible to
                   // crawlers, and every click paid a 301 because the id-shaped
@@ -2005,8 +2033,8 @@ function PublicSite({
     const bLead = b.dates[0];
     const aSeats = aLead ? seatsTotal(aLead.pledges) : 0;
     const bSeats = bLead ? seatsTotal(bLead.pledges) : 0;
-    const aConfirmed = aSeats >= goAheadSeatsFor(aLead || a) ? 1 : 0;
-    const bConfirmed = bSeats >= goAheadSeatsFor(bLead || b) ? 1 : 0;
+    const aConfirmed = aLead && isGoAheadDeparture(aLead) ? 1 : 0;
+    const bConfirmed = bLead && isGoAheadDeparture(bLead) ? 1 : 0;
     return bConfirmed - aConfirmed || bSeats - aSeats;
   });
 
@@ -2702,7 +2730,7 @@ function ToursPage({ navigate, customerCalendars, cityStats, selectedCity, setSe
   items = items.slice().sort((a, b) => {
     const al = a.dates[0], bl = b.dates[0];
     const as = al ? seatsTotal(al.pledges) : 0, bs = bl ? seatsTotal(bl.pledges) : 0;
-    const ac = as >= goAheadSeatsFor(al || a) ? 1 : 0, bc = bs >= goAheadSeatsFor(bl || b) ? 1 : 0;
+    const ac = al && isGoAheadDeparture(al) ? 1 : 0, bc = bl && isGoAheadDeparture(bl) ? 1 : 0;
     return bc - ac || bs - as;
   });
 
@@ -3451,10 +3479,10 @@ function CardLink(props) {
 
 function TourCard({ navigate, product }) {
   const goAhead = goAheadSeatsFor(product);
-  const goAheadDates = product.dates.filter((departure) => departure.status === "supplier_confirmed" || seatsTotal(departure.pledges) >= goAheadSeatsFor(departure)).length;
+  const goAheadDates = product.dates.filter((departure) => isGoAheadDeparture(departure)).length;
   const leadDate = openDates(product)[0] || product.dates[0];
   const seats = leadDate ? seatsTotal(leadDate.pledges) : 0;
-  const confidence = confidenceFor(seats, goAhead);
+  const confidence = confidenceFor(seats, goAhead, !!leadDate && isGoAheadDeparture(leadDate));
   const stops = routeStopsFor(product);
   const livePrice = leadDate ? livePriceFor({ ...product, ...leadDate }, seats) : livePriceFor(product, goAhead);
   const breakPrice = clampPrice(product.breakPrice, Math.round(product.publishedRate * 0.8));
@@ -3466,7 +3494,7 @@ function TourCard({ navigate, product }) {
         <span className="tour-card-city">{product.city}</span>
         {full
           ? <span className="tour-card-flag full">Fully booked</span>
-          : seats >= goAhead && <span className="tour-card-flag go">GoAhead</span>}
+          : leadDate && isGoAheadDeparture(leadDate) && <span className="tour-card-flag go">GoAhead</span>}
       </div>
       <div className="tour-card-body">
         <div className="tour-card-top">
@@ -3518,7 +3546,7 @@ function PackageCard({ navigate, product }) {
   const goAhead = goAheadSeatsFor(product);
   const leadDate = openDates(product)[0] || product.dates[0];
   const seats = leadDate ? seatsTotal(leadDate.pledges) : 0;
-  const confidence = confidenceFor(seats, goAhead);
+  const confidence = confidenceFor(seats, goAhead, !!leadDate && isGoAheadDeparture(leadDate));
   const cities = product.cities || [product.city];
   const livePrice = leadDate ? livePriceFor({ ...product, ...leadDate }, seats) : livePriceFor(product, goAhead);
   const breakPrice = clampPrice(product.breakPrice, Math.round(product.publishedRate * 0.8));
@@ -3530,7 +3558,7 @@ function PackageCard({ navigate, product }) {
         <span className="tour-card-city"><Package size={12} />{product.nights}-night package</span>
         {full
           ? <span className="tour-card-flag full">Fully booked</span>
-          : seats >= goAhead && <span className="tour-card-flag go">GoAhead</span>}
+          : leadDate && isGoAheadDeparture(leadDate) && <span className="tour-card-flag go">GoAhead</span>}
       </div>
       <div className="tour-card-body">
         <div className="tour-card-top">
@@ -3687,7 +3715,7 @@ function AgencyDesk(props) {
                         {dIsPackage && <span className="type-badge"><Package size={11} />Package</span>}
                         {departure.route}
                       </strong>
-                      <span className={seats >= ga ? "status ok" : "status"}>{departureStatusLabel(departure)}</span>
+                      <span className={isGoAheadDeparture(departure) ? "status ok" : "status"}>{departureStatusLabel(departure)}</span>
                     </div>
                     <p>
                       <MapPin size={14} />

@@ -169,6 +169,10 @@ const h = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(
 // aggregate the frontend computes). This keeps customer data isolated.
 function viewPledges(pledges, user) {
   if (isPlatform(user)) return pledges;
+  // S02/S03 — an anonymous visitor gets what the public pages count and nothing
+  // else. The pledge id was the whole credential of the old public cancel
+  // route; the agency id and timestamp were never theirs to see either.
+  if (!user) return pledges.map((p) => ({ seats: p.seats, status: p.status }));
   return pledges.map((p) => {
     const owned = user && isAgency(user) && p.agencyId === user.agencyId;
     if (owned) return p;
@@ -187,8 +191,34 @@ function viewPledges(pledges, user) {
   });
 }
 
-function presentDeparture(enriched, user) {
-  return { ...enriched, pledges: viewPledges(enriched.pledges, user) };
+// S03 — fields that are Sawa's business, not the viewer's. The public catalogue
+// used to carry them all: internal cost, staff notes on every date, and the
+// review trail (why a listing was rejected, and when). Hiding them in the page
+// did nothing; they were in the JSON and in the HTML the server inlines.
+const STAFF_ONLY_PRODUCT_FIELDS = ["baseCost", "submittedAt", "reviewedAt", "rejectionReason"];
+const STAFF_ONLY_DEPARTURE_FIELDS = ["baseCost"];
+// Ops notes on a date reach signed-in agencies (their tour preview falls back
+// to them) but never an anonymous visitor.
+const SIGNED_IN_DEPARTURE_FIELDS = ["notes"];
+
+const omit = (obj, keys) => {
+  const out = { ...obj };
+  for (const k of keys) delete out[k];
+  return out;
+};
+
+export function presentProduct(product, user) {
+  if (isPlatform(user)) return product;
+  // An operator sees its own listing's review trail — that is how it learns why
+  // a listing was sent back.
+  if (user && isAgency(user) && product.agencyId && product.agencyId === user.agencyId) return product;
+  return omit(product, STAFF_ONLY_PRODUCT_FIELDS);
+}
+
+export function presentDeparture(enriched, user) {
+  const keys = isPlatform(user) ? [] : user ? STAFF_ONLY_DEPARTURE_FIELDS
+    : [...STAFF_ONLY_DEPARTURE_FIELDS, ...SIGNED_IN_DEPARTURE_FIELDS];
+  return { ...omit(enriched, keys), pledges: viewPledges(enriched.pledges, user) };
 }
 
 // ---- DB helpers ------------------------------------------------------------
@@ -551,7 +581,7 @@ async function buildBootstrap(user) {
         .filter(([, op]) => op)
     ),
     cities: cities.rows.map(mapCity),
-    tourProducts: mappedProducts,
+    tourProducts: mappedProducts.map((p) => presentProduct(p, user)),
     // pending_review = traveler-requested, awaiting ops approval. Only
     // platform staff see them; the public board and agencies must not.
     //
@@ -1138,8 +1168,11 @@ app.post("/api/public/departures/:id/bookings", writeLimiter, h(async (req, res)
   res.status(201).json({ departure: presentDeparture(result.departure, req.user), booking: result.booking });
 }));
 
-// Agency cancels a pledge — only its own (platform may cancel any).
-app.delete("/api/departures/:id/pledges/:pledgeId", requireAuth, requireRole("agency_owner", "agency_agent", "super_admin", "ops_staff"), h(async (req, res) => {
+// Platform staff remove a pledge outright. Agencies no longer come through
+// here: this erases the row and stops only at supplier_confirmed, so an agency
+// could walk a seat out of a GoAhead date for free. They use
+// POST /api/agency/bookings/:pledgeId/cancel, which follows the Terms.
+app.delete("/api/departures/:id/pledges/:pledgeId", requireAuth, requireRole("super_admin", "ops_staff"), h(async (req, res) => {
   const departure = await withTransaction(async (c) => {
     const dep = await loadDeparture(c, Number(req.params.id), { forUpdate: true });
     if (!dep) throw new AppError(404, "Departure not found.");
@@ -1223,30 +1256,11 @@ app.post("/api/agency/bookings/:pledgeId/cancel", requireAuth, requireRole("agen
   res.json({ cancelled: true });
 }));
 
-// Public cancels a booking — open, but only public-sourced pledges.
-app.delete("/api/public/departures/:id/bookings/:pledgeId", writeLimiter, h(async (req, res) => {
-  const departure = await withTransaction(async (c) => {
-    const dep = await loadDeparture(c, Number(req.params.id), { forUpdate: true });
-    if (!dep) throw new AppError(404, "Departure not found.");
-    if (dep.status === "supplier_confirmed") throw new AppError(409, "Supplier-confirmed departures need support cancellation.");
-    const del = await c.query(
-      `DELETE FROM pledges WHERE id=$1 AND departure_id=$2 AND source='public'`,
-      [req.params.pledgeId, dep.id]
-    );
-    if (del.rowCount === 0) throw new AppError(404, "Public booking not found.");
-    await refreshStatus(c, dep.id);
-    return loadDeparture(c, dep.id);
-  });
-  emitDepartureSync(departure.id);
-  // DIR-1 — a traveller removing their own seat is a status change that moves
-  // a departure toward or away from its minimum. Unauthenticated, so logAudit
-  // records the actor as "public"; the pledge id is the only handle there is.
-  await logAudit(req, {
-    action: "booking.cancel", entity: "pledge", entityId: req.params.pledgeId,
-    detail: { departureId: departure.id, source: "public" },
-  });
-  res.json({ departure: presentDeparture(departure, req.user) });
-}));
+// S02 — `DELETE /api/public/departures/:id/bookings/:pledgeId` is gone. It took
+// no credential but the pledge id, and the anonymous catalogue published every
+// pledge id, so any visitor could cancel any traveller's booking; it also
+// erased the row and ignored the GoAhead boundary. A traveller cancels with
+// their booking code: POST /api/public/bookings/:code/cancel below.
 
 // Public: an operator applies to be verified and list (site/verify.html).
 //
@@ -1515,6 +1529,14 @@ async function createDateRequest(input, req, requester = {}) {
     const dayProblem = operatingDayError(product, input.date);
     if (dayProblem) throw new AppError(422, dayProblem);
 
+    // F02 — the new date is created with the product's maxSeats, so the request
+    // that seeds it cannot be bigger. The schema allowed 20 against a 12-seat
+    // ceiling (and less on smaller tours), leaving an over-capacity date behind.
+    const capacity = Number(product.maxSeats);
+    if (Number.isFinite(capacity) && capacity > 0 && input.seats > capacity) {
+      throw new AppError(422, `${product.title} takes up to ${capacity} traveler${capacity === 1 ? "" : "s"} per date.`);
+    }
+
     // Join-first rule: surface open departures for the same tour within the
     // match window. The client must explicitly reject them (ignoreMatches)
     // before a new departure is created — fragmenting demand kills pooling.
@@ -1685,6 +1707,11 @@ app.post("/api/admin/departure-requests/:id/approve", requireAuth, requireRole("
     // emailed "Your date is live". A date that has started cannot be opened.
     if (departureStarted(dep)) {
       throw new AppError(409, "This date has already passed, so it can't be opened. Decline it to clear the request.");
+    }
+    // F02 — requests created before the size check existed can still hold more
+    // than the date seats. Opening one would publish an overbooked date.
+    if (seatsTotal(dep.pledges) > dep.maxSeats) {
+      throw new AppError(409, `This request holds ${seatsTotal(dep.pledges)} travelers on a date that seats ${dep.maxSeats}. Decline it, or raise the tour's capacity first.`);
     }
     await c.query(`UPDATE departures SET status='open' WHERE id=$1`, [dep.id]);
     // Only `pending` rows: requests made before bookings carried that status are
@@ -2588,11 +2615,32 @@ app.patch("/api/admin/bookings/:id", requireAuth, requireRole("super_admin", "op
   // Run inside a transaction and recompute the departure's status so that
   // cancelling (or reinstating) a booking frees or reclaims its seats.
   await withDepartureWrites(async (c, touch) => {
-    const r = await c.query(`UPDATE pledges SET status=$1 WHERE id=$2 RETURNING departure_id`, [status, req.params.id]);
-    if (!r.rows.length) throw new AppError(404, "Booking not found.");
-    await refreshStatus(c, r.rows[0].departure_id);
+    const found = await c.query(`SELECT departure_id FROM pledges WHERE id=$1`, [req.params.id]);
+    if (!found.rows.length) throw new AppError(404, "Booking not found.");
+    // F03 — the departure is locked first, the same order every booking takes,
+    // and the pledge re-read under that lock. Reinstating a cancelled booking
+    // takes its seats back; it used to do so unchecked, so a date whose released
+    // seats had since been sold went over capacity.
+    const dep = await loadDeparture(c, found.rows[0].departure_id, { forUpdate: true });
+    if (!dep) throw new AppError(404, "Booking not found.");
+    const cur = await c.query(`SELECT status, seats FROM pledges WHERE id=$1 FOR UPDATE`, [req.params.id]);
+    if (!cur.rows.length) throw new AppError(404, "Booking not found.");
+    const reinstating = cur.rows[0].status === "cancelled" && status !== "cancelled";
+    if (reinstating) {
+      if (["cancelled", "closed"].includes(dep.status)) {
+        throw new AppError(409, "This date is no longer running, so the booking can't be reinstated on it.");
+      }
+      const taken = seatsTotal(dep.pledges);   // excludes this (cancelled) booking
+      const wanted = Number(cur.rows[0].seats) || 0;
+      if (taken + wanted > dep.maxSeats) {
+        const left = Math.max(0, dep.maxSeats - taken);
+        throw new AppError(409, `Only ${left} seat${left === 1 ? "" : "s"} left on this date; reinstating needs ${wanted}.`);
+      }
+    }
+    await c.query(`UPDATE pledges SET status=$1 WHERE id=$2`, [status, req.params.id]);
+    await refreshStatus(c, dep.id);
     // TT1 — both seatsTaken and the departure's own status can move here.
-    touch(r.rows[0].departure_id);
+    touch(dep.id);
   });
   await logAudit(req, { action: "booking.status", entity: "pledge", entityId: req.params.id, detail: { status } });
   res.json({ ok: true, status });
