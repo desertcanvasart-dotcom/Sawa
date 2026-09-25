@@ -4,7 +4,7 @@ import { z } from "zod";
 import { pool, withTransaction, withDepartureWrites } from "./db/index.js";
 import { pendingGoAheads, alertPayload } from "./goahead-alert.js";
 import { refreshStatus } from "./departure-status.js";
-import { publicOperator } from "./domain.js";
+import { publicOperator, operatorForDeparture, directOperatorId } from "./domain.js";
 import { durationShapeError, cutoffUnitError } from "../shared/booking-policy.js";
 import { operatingDayError } from "../shared/operating-days.js";
 import { minLeadDaysFor, maxHorizonDaysFor, requestWindowError } from "../shared/request-window.js";
@@ -63,7 +63,7 @@ import { blogSlug } from "../shared/blog-slug.js";
 import { mapPost } from "./blog-post.js";
 import { cancelDepartureAndPledges, reportNotifications, CANCEL_REASONS } from "./departure-cancel.js";
 
-import { BRAND } from "./brand.js";
+import { BRAND, DIRECT_BOOKINGS_OPERATOR } from "./brand.js";
 import { startJobScheduler, jobSchedulerEnabled, cancelJobDryRun, goAheadNotifyDryRun, goAheadAlertDryRun } from "./jobs/scheduler.js";
 import { TOUR_TIMEZONE } from "./tz.js";
 import { cleanHtml, cleanItinerary } from "./sanitize.js";
@@ -565,7 +565,11 @@ async function buildBootstrap(user) {
 
   // Mapped once and shared: the payload lists them, and each departure needs
   // its own to resolve the confirm deadline.
-  const mappedProducts = products.rows.map(mapProduct);
+  // U01 — the direct-bookings operator, and each listing's default operator
+  // (the agency that listed it, else the direct-bookings operator).
+  const directAgencyId = directOperatorId(agencies.rows, DIRECT_BOOKINGS_OPERATOR);
+  const mappedProducts = products.rows.map(mapProduct)
+    .map((p) => ({ ...p, operatorAgencyId: p.agencyId || directAgencyId || null }));
   const productsById = new Map(mappedProducts.map((p) => [p.id, p]));
 
   return {
@@ -595,7 +599,16 @@ async function buildBootstrap(user) {
       .filter((d) => user || !departureStarted(d))
       // productsById so each departure's confirm deadline honours any override
       // on its listing rather than only the type default.
-      .map((d) => presentDeparture(enrichDeparture(d, productsById.get(d.tourProductId) || null), user)),
+      .map((d) => {
+        const product = productsById.get(d.tourProductId) || null;
+        const enriched = enrichDeparture(d, product);
+        // Worked out here, from the full pledge list, before presentDeparture
+        // strips it for the viewer.
+        enriched.operatorAgencyId = operatorForDeparture(enriched, {
+          listingAgencyId: product?.agencyId || null, directAgencyId,
+        });
+        return presentDeparture(enriched, user);
+      }),
   };
 }
 
