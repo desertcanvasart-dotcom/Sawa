@@ -996,6 +996,8 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       if(!p)return;
       var start=d.startDate||d.date;
       if(new Date(start+'T00:00:00')<today)return;
+      /* F05 — past its booking cutoff: the server would refuse the seat. */
+      if(!R.isBookingOpen(d))return;
       /* A fourth hand-written copy of the rule lived here. `confirmed` trusted a
          STORED minimum_reached, so a date whose bookings had since been
          cancelled still rendered as confirmed and running. */

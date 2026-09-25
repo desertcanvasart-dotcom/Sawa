@@ -162,6 +162,8 @@ export function enrichDeparture(departure, product = null) {
     livePrice: livePriceFor(withPriceTiers(departure, product), seats),
     status: statusFor(departure, departure.pledges),
     confirmDeadline: Number.isNaN(deadlineMs) ? null : new Date(deadlineMs).toISOString().slice(0, 10),
+    // F05 — pages offered "Reserve a seat" on dates this server would refuse.
+    bookingClosesAt: Number.isNaN(bookingClosesAtMs(departure, product)) ? null : new Date(bookingClosesAtMs(departure, product)).toISOString(),
     confirmDeadlineDays: confirmDeadlineDaysFor(product, departure),
   };
 }
@@ -272,16 +274,24 @@ export function lapsedRequest(departure, nowMs = Date.now()) {
 
 // Booking cutoff: returns true if bookings are CLOSED for this departure now.
 // cutoffHours comes from the tour product (default 24). nowMs lets tests inject time.
-export function bookingClosed(departure, product, nowMs = Date.now()) {
+// The instant bookings close, in epoch ms (NaN when the date can't be read).
+// One computation for the write path (bookingClosed) and for what the pages are
+// told (enrichDeparture's bookingClosesAt), so they close at the same moment.
+export function bookingClosesAtMs(departure, product) {
   const startStr = departure.startDate || departure.date;
-  if (!startStr) return false;
+  if (!startStr) return NaN;
   const cutoffHours = Number(product?.bookingCutoffHours ?? 24);
   // A departure's date+time is Egyptian local time, NOT the server's — resolving
   // it with `new Date(...)` made the cutoff depend on the host's timezone and
   // fire hours late in production. See server/tz.js.
   const start = zonedDateTimeToUtc(startStr, departure.time);
-  if (Number.isNaN(start)) return false;
-  const deadline = start - cutoffHours * 3600 * 1000;
+  if (Number.isNaN(start)) return NaN;
+  return start - cutoffHours * 3600 * 1000;
+}
+
+export function bookingClosed(departure, product, nowMs = Date.now()) {
+  const deadline = bookingClosesAtMs(departure, product);
+  if (Number.isNaN(deadline)) return false;
   return nowMs > deadline;
 }
 

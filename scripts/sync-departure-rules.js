@@ -33,7 +33,7 @@ const SOURCES = [
 const PUBLIC = [
   "DEFAULT_GO_AHEAD", "MAX_GROUP_SIZE", "numberWord",
   "goAheadSeatsFor", "seatsTotal", "statusFor",
-  "isFormingDeparture", "isGoAheadDeparture",
+  "isFormingDeparture", "isGoAheadDeparture", "isBookingOpen",
 ];
 
 export function generate() {

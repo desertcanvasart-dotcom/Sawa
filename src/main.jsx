@@ -44,7 +44,7 @@ const SUPPORT_AVAILABILITY = INTERIM_COPY["support-availability"];
 // NN2.1 — the board rules, from the one module that declares them. This file
 // used to carry hand-written copies of seatsTotal and goAheadFor with a comment
 // asking the next person to keep them in sync with domain.js.
-import { seatsTotal, goAheadSeatsFor, isGoAheadDeparture } from "../shared/departure-state.js";
+import { seatsTotal, goAheadSeatsFor, isGoAheadDeparture, isBookingOpen } from "../shared/departure-state.js";
 import { livePriceFor, priceFromTiers, clampPrice } from "../shared/pricing.js";
 import { cleanRefCode } from "../shared/ref-code.js";
 import { operatingDaysLabel } from "../shared/operating-days.js";
@@ -636,6 +636,9 @@ function App() {
         // the tour page picks tour.dates[0] as its lead — so a stale row used to
         // become the headline date on the detail page.
         .filter((departure) => !departurePast(departure))
+        // F05 — nor is one past its booking cutoff: the server refuses those,
+        // and the page used to offer "Reserve a seat" on them anyway.
+        .filter((departure) => isBookingOpen(departure))
         .sort((a, b) => `${a.date}T${a.time || ""}`.localeCompare(`${b.date}T${b.time || ""}`)),
     }));
   }, [departures, visibleProducts]);
@@ -840,8 +843,11 @@ function App() {
   // away — even though the API accepts it, the column stores it, and the admin
   // bookings table has a column for it. WhatsApp is the primary contact channel
   // for these tours, so this was the operator's main way to reach a traveler.
+  // Resolves to { ok: true } or { ok: false, error }. The tour page renders
+  // before the shared `notice` banner, so a failure reported only there was
+  // never seen — the caller shows the error itself and keeps the form (F01).
   async function bookPublicDeparture({ departureId, customerName, customerEmail, customerPhone, seats, roomingType, accommodationTier }) {
-    if (isSaving) return;
+    if (isSaving) return { ok: false, error: "" };
     setIsSaving(true);
     setNotice("");
     try {
@@ -868,8 +874,15 @@ function App() {
         tierName: data.booking.accommodationTierName,
       });
       setNotice("Seat request added. Price and availability updated live.");
+      return { ok: true };
     } catch (error) {
-      setNotice(error.message);
+      // A dropped connection surfaces as a TypeError with a browser-specific
+      // message; say what it means instead.
+      const message = error instanceof TypeError
+        ? "We couldn't reach Sawa — check your connection and try again. Nothing was booked."
+        : error.message;
+      setNotice(message);
+      return { ok: false, error: message };
     } finally {
       setIsSaving(false);
     }
@@ -889,8 +902,10 @@ function App() {
       setPublicBooking(null);
       setNotice("Booking canceled. Availability updated live.");
       await loadBootstrap();
+      return { ok: true };
     } catch (error) {
       setNotice(error.message);
+      return { ok: false, error: error.message };
     } finally {
       setIsSaving(false);
     }
@@ -1422,19 +1437,26 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
     return () => { stop(); clearTimeout(t); };
   }, [tour.id]);
 
-  function reserve(e) {
+  async function reserve(e) {
     e.preventDefault();
     setErr("");
     if (!dep) return setErr("Pick a departure date.");
     if (name.trim().length < 2) return setErr("Enter the lead traveler's name.");
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return setErr("Enter a valid email.");
     if (Number(seats) > remaining) return setErr(`Only ${remaining} seat${remaining === 1 ? "" : "s"} left on this date.`);
-    onBookPublicDeparture({
+    const result = await onBookPublicDeparture({
       departureId: dep.id, customerName: name.trim(), customerEmail: email.trim(),
       customerPhone: phone.trim(), seats: nSeats,
       // Only meaningful for packages; the server ignores them for day tours.
       ...(isPackage(tour) ? { roomingType, accommodationTier: tierId } : {}),
     });
+    // F01 — the form used to clear straight away, before the server answered:
+    // a full date, a closed cutoff or a dropped connection left the traveller
+    // with an empty form and no message. Clear only on a confirmed booking.
+    if (!result?.ok) {
+      if (result?.error) setErr(result.error);
+      return;
+    }
     setName(""); setEmail(""); setPhone(""); setSeats(1);
   }
 
@@ -1910,7 +1932,7 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
                             // Canceling a held seat is an action, not navigation, and it was an
                             // <a> with no href: unreachable by keyboard and announced to screen
                             // readers as plain text. A real <button> restores focus and Enter/Space.
-                            <div className="bk-ok" role="status">Seat held — {publicBooking.code}. {publicBooking.depositDue ? `${CURRENCY_SYMBOL}${publicBooking.depositDue} ${CURRENCY} deposit due at GoAhead.` : ""} <button type="button" className="bk-cancel" onClick={onCancelPublicBooking}>Cancel</button></div>
+                            <div className="bk-ok" role="status">Seat held — {publicBooking.code}. {publicBooking.depositDue ? `${CURRENCY_SYMBOL}${publicBooking.depositDue} ${CURRENCY} deposit due at GoAhead.` : ""} <button type="button" className="bk-cancel" onClick={async () => { setErr(""); const r = await onCancelPublicBooking(); if (r && !r.ok) setErr(r.error); }}>Cancel</button></div>
                           )}
                           <div className="note"><SxCheck />Free hold — you only pay once the date confirms</div>
                         </>

@@ -112,3 +112,14 @@ export function isFormingDeparture(departure, pledges = departure?.pledges) {
 export function isGoAheadDeparture(departure, pledges = departure?.pledges) {
   return ["minimum_reached", "supplier_confirmed"].includes(statusFor(departure, pledges || []));
 }
+
+// F05 — may a traveller still reserve this date? `bookingClosesAt` is the
+// instant the server's own bookingClosed() rule shuts it (the product's cutoff
+// before the Egyptian-local start), published with every departure. Pages
+// compare against their own clock, so a page left open, or a payload served
+// from cache, still closes the date on time. A departure without the field
+// reads as open, as before, and the server refuses the booking regardless.
+export function isBookingOpen(departure, nowMs = Date.now()) {
+  const at = Date.parse(departure?.bookingClosesAt || "");
+  return Number.isNaN(at) || nowMs <= at;
+}

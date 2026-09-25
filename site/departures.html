@@ -299,7 +299,8 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
        but the local-dev snapshot may be stale — filter again so a card can
        never show a date that has left. */
     var deps=(data.departures||[]).filter(function(d){
-      return byId[d.tourProductId]&&new Date((d.startDate||d.date)+'T00:00:00')>=today;
+      /* F05 — and still before its booking cutoff, which the server enforces. */
+      return byId[d.tourProductId]&&new Date((d.startDate||d.date)+'T00:00:00')>=today&&R.isBookingOpen(d);
     });
     var items=[],goCount=0;
     deps.forEach(function(d){
