@@ -235,8 +235,12 @@ export async function retryPendingEmails({ db = pool, fetchImpl = fetch, limit =
 // then protects no state, and it would stop the site serving pages that have
 // nothing to do with email. A broken template is recorded, counted under
 // `programmerErrors`, and reported by `codeIsWrong` in /api/modes.
+//
+// `message` may also be a promise of one, for a message that needs a lookup
+// first (the operator's name, U01): the lookup then runs after the response
+// too, and a bug in it is surfaced the same way as a broken template.
 export function sendEmailInBackground(message) {
-  return fireAndForget("email", sendEmail(message), { onProgrammerError: "surface" });
+  return fireAndForget("email", Promise.resolve(message).then(sendEmail), { onProgrammerError: "surface" });
 }
 
 // ---- Templates -------------------------------------------------------------
@@ -476,7 +480,7 @@ export function inviteEmail({ to, fullName, agencyName, tempPassword, role }) {
 // `product` carries the type, and nothing else is read off it. Without it this
 // mail could only print one schedule, and would have printed the day-tour one
 // to everyone who booked a package.
-export function bookingConfirmationEmail({ to, customerName, route, dateLabel, seats, depositDue, balanceDue, balanceDueDate, bookingCode, product = null }) {
+export function bookingConfirmationEmail({ to, customerName, route, dateLabel, seats, depositDue, balanceDue, balanceDueDate, bookingCode, product = null, operator = null }) {
   const subject = `Booking received — ${route}`;
   // The one durable handle on this booking. Before this link existed, the only
   // way to release a seat was a button held in React state on the page the
@@ -485,9 +489,14 @@ export function bookingConfirmationEmail({ to, customerName, route, dateLabel, s
   // already looks bookings up by, so one link answers "where is my date?" and
   // "let me out" both.
   const manageUrl = bookingCode ? `${APP_URL}/booking/${encodeURIComponent(bookingCode)}` : null;
+  // U01 — the partner running this date so far. Until GoAhead it is whichever
+  // partner has the most travellers on it, so it can still change.
+  const operatorName = operator?.name ? String(operator.name) : "";
+  const operatorNote = "Until GoAhead, the date is run by the partner with the most travellers on it, so this can change.";
   const text =
     `Hi ${customerName || ""},\n\nWe've recorded your booking for ${route} on ${dateLabel}.\n` +
     `Seats: ${seats}\n${bookingCode ? `Booking code: ${bookingCode}\n` : ""}` +
+    (operatorName ? `Run by: ${operatorName}${operator.verified ? " (verified operator)" : ""}\n${operatorNote}\n` : "") +
     `Deposit at GoAhead: ${CURRENCY_SYMBOL}${depositDue} ${CURRENCY}\nBalance: ${CURRENCY_SYMBOL}${balanceDue} ${CURRENCY} (due ${balanceDueDate})\n\n` +
     `Nothing has been charged. Your seat is held free — the deposit only falls due once this ` +
     `date reaches its minimum travellers (GoAhead), and we'll email you when that happens.` +
@@ -507,9 +516,11 @@ export function bookingConfirmationEmail({ to, customerName, route, dateLabel, s
      ${panel(
        `${row("Seats:", esc(seats))}<br/>
         ${bookingCode ? `${row("Booking code:", esc(bookingCode))}<br/>` : ""}
+        ${operatorName ? `${row("Run by:", `${esc(operatorName)}${operator.verified ? " ✓" : ""}`)}<br/>` : ""}
         ${row("Deposit at GoAhead:", `${CURRENCY_SYMBOL}${esc(depositDue)} ${CURRENCY}`)}<br/>
         ${row("Balance:", `${CURRENCY_SYMBOL}${esc(balanceDue)} ${CURRENCY}`)} <span style="color:${C.muted}">(due ${esc(balanceDueDate)})</span>`
      )}
+     ${operatorName ? note(esc(operatorNote)) : ""}
      ${note(`<strong style="color:${C.ink}">Nothing has been charged.</strong> Your seat is held free — the deposit only falls due once this date reaches its minimum travellers, and we'll email you when it's GoAhead.`)}
      ${manageUrl ? `${button(manageUrl, "Check or cancel your booking")}` : ""}
      <p style="margin:0 0 8px;font-family:${SANS};font-size:13px;font-weight:700;color:${C.ink}">Cancellation</p>
@@ -679,9 +690,14 @@ export function auditDriftEmail({ to, base, lines = [], stale }) {
   return { to, subject, html, text, kind: "audit_drift" };
 }
 
-export function goAheadEmail({ to, route, dateLabel }) {
+export function goAheadEmail({ to, route, dateLabel, operator = null }) {
   const subject = `Confirmed: ${route} is running`;
-  const text = `Good news — ${route} on ${dateLabel} has reached its minimum travellers and is confirmed to run (GoAhead).`;
+  // U01 — the operator is fixed at GoAhead, so this email can name it.
+  const operatorName = operator?.name ? String(operator.name) : "";
+  const handover = operatorName
+    ? `${operatorName}${operator.verified ? " (verified operator)" : ""} runs this date and has been notified; they are confirming the guide and vehicle.`
+    : "Your operator has been notified and is confirming the guide and vehicle.";
+  const text = `Good news — ${route} on ${dateLabel} has reached its minimum travellers and is confirmed to run (GoAhead).\n\n${handover} We'll be in touch with your joining details and anything still outstanding on payment.`;
   // The GoAhead is the whole promise the brand is built on, so this is the one
   // email that gets the gold treatment rather than the standard paper panel.
   const html = shell(
@@ -703,7 +719,7 @@ export function goAheadEmail({ to, route, dateLabel }) {
          </td>
        </tr>
      </table>
-     ${note("Your operator has been notified and is confirming the guide and vehicle. We'll be in touch with your joining details and anything still outstanding on payment.")}`,
+     ${note(`${esc(handover)} We'll be in touch with your joining details and anything still outstanding on payment.`)}`,
     { eyebrow: "GoAhead confirmed", preheader: `${route} on ${dateLabel} is confirmed to run` }
   );
   return { to, subject, html, text, kind: "goahead" };

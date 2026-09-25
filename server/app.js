@@ -69,6 +69,7 @@ import { mapPost } from "./blog-post.js";
 import { cancelDepartureAndPledges, reportNotifications, CANCEL_REASONS } from "./departure-cancel.js";
 
 import { BRAND, DIRECT_BOOKINGS_OPERATOR } from "./brand.js";
+import { operatorFor } from "./operator-lookup.js";
 import { startJobScheduler, jobSchedulerEnabled, cancelJobDryRun, goAheadNotifyDryRun, goAheadAlertDryRun } from "./jobs/scheduler.js";
 import { TOUR_TIMEZONE } from "./tz.js";
 import { cleanHtml, cleanItinerary } from "./sanitize.js";
@@ -773,13 +774,13 @@ app.post("/api/admin/departures", requireAuth, requireRole("super_admin", "ops_s
     detail: { tourProductId: body.tourProductId, date: departure.startDate || departure.date, seats: travelerSeats, source: "admin" },
   });
   if (travelerEmail) {
-    sendEmailInBackground(bookingConfirmationEmail({
+    sendEmailInBackground(operatorFor(departure.id).then((operator) => bookingConfirmationEmail({
       to: travelerEmail, customerName: travelerName, route: departure.route,
       dateLabel: departure.startDate ? `${departure.startDate} – ${departure.endDate}` : departure.date,
       seats: travelerSeats, depositDue: result.pricing.depositDue, balanceDue: result.pricing.balanceDue,
       balanceDueDate: result.pricing.balanceDueDate, bookingCode: result.bookingCode,
-      product: departure,
-    }));
+      product: departure, operator,
+    })));
   }
   res.status(201).json({ departure: presentDeparture(departure, req.user), bookingCode: result.bookingCode });
 }));
@@ -1104,8 +1105,10 @@ app.post("/api/admin/departures/:id/confirm", requireAuth, requireRole("super_ad
       WHERE departure_id=$1 AND customer_email IS NOT NULL AND status <> 'cancelled'`,
     [departure.id]
   );
+  // Looked up once for all of them, after the response (U01).
+  const operator = recips.rows.length ? operatorFor(departure.id) : null;
   for (const row of recips.rows) {
-    sendEmailInBackground(goAheadEmail({ to: row.customer_email, route: departure.route, dateLabel }));
+    sendEmailInBackground(operator.then((op) => goAheadEmail({ to: row.customer_email, route: departure.route, dateLabel, operator: op })));
   }
   emitDepartureSync(departure.id);
   res.json({ departure: presentDeparture(departure, req.user) });
@@ -1268,13 +1271,13 @@ app.post("/api/public/departures/:id/bookings", writeLimiter, h(async (req, res)
   await logAudit(req, { action: "booking.create", entity: "pledge", entityId: result.booking.id, detail: { departureId: Number(req.params.id), seats: input.seats, source: "public" } });
   if (input.customerEmail) {
     const d = result.departure;
-    sendEmailInBackground(bookingConfirmationEmail({
+    sendEmailInBackground(operatorFor(d.id).then((operator) => bookingConfirmationEmail({
       to: input.customerEmail, customerName: input.customerName, route: d.route,
       dateLabel: d.startDate ? `${d.startDate} – ${d.endDate}` : d.date, seats: input.seats,
       depositDue: result.booking.depositDue, balanceDue: result.booking.balanceDue,
       balanceDueDate: result.booking.balanceDueDate, bookingCode: result.booking.bookingCode,
-      product: d,
-    }));
+      product: d, operator,
+    })));
   }
   notifyOps(result.departure, result.booking, input, { isRequest: false });
   // The direct traveller gets their own booking receipt back in full.

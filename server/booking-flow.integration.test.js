@@ -157,3 +157,21 @@ test("a date request can't be bigger than the tour", { skip }, async () => {
   const n = Number((await db.query("SELECT count(*) AS n FROM departures WHERE tour_product_id=$1 AND status='pending_review'", [TOUR])).rows[0].n);
   assert.equal(n, 0, "F02: nothing half-created");
 });
+
+test("the operator named in the emails comes from the live bookings", { skip }, async () => {
+  // Against the real schema: the lookup's four queries, and U01's rule — the
+  // listing agency until someone books, then the partner with most travellers
+  // (direct travellers count as Capital Travel Service's).
+  const { operatorFor } = await import("./operator-lookup.js");
+  const dep = 900010;
+  await db.query(`INSERT INTO agencies (id, name, verification_state) VALUES ('ag_it_cts','Capital Travel Service','verified'), ('ag_it_list','Listing Agency',NULL)`);
+  await db.query(`UPDATE tour_products SET agency_id='ag_it_list' WHERE id=$1`, [TOUR]);
+  await db.query(
+    `INSERT INTO departures (id, type, tour_product_id, route, date, time, city, min_seats, max_seats, published_rate, break_price, status)
+     VALUES ($1,'day_tour',$2,'Integration Tour',$3,'08:00','Cairo',4,12,80,64,'open')`, [dep, TOUR, cairoDay(14)]);
+  assert.equal((await operatorFor(dep, db))?.name, "Listing Agency", "no bookings: the listing agency");
+  assert.equal((await book(dep, 2, "direct")).status, 201);
+  const op = await operatorFor(dep, db);
+  assert.equal(op?.name, "Capital Travel Service", "direct travellers are CTS's");
+  assert.equal(op.verified, true);
+});

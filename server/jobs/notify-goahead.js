@@ -48,6 +48,7 @@
 //   DRY_RUN=0 node server/jobs/notify-goahead.js  # live
 import { pool } from "../db/index.js";
 import { sendEmail, goAheadEmail } from "../email.js";
+import { operatorFor } from "../operator-lookup.js";
 import { pendingGoAheadNotices, markNotified, reportNotices } from "../goahead-alert.js";
 
 const DRY_RUN = process.env.DRY_RUN !== "0";
@@ -114,8 +115,9 @@ export async function runGoAheadNotices({ dryRun = DRY_RUN } = {}) {
       // send leaves it queued and the whole set is retried, which may re-send to
       // someone. That is the deliberate trade: a duplicate "your trip is
       // confirmed" is a far smaller harm than a traveller never hearing.
+      const operator = await operatorFor(departure.id);
       for (const address of to) {
-        await sendEmail(goAheadEmail({ to: address, route: departure.route, dateLabel }));
+        await sendEmail(goAheadEmail({ to: address, route: departure.route, dateLabel, operator }));
       }
       await markNotified(pool, departure.id, { recipients: to.length });
       sent += 1;
