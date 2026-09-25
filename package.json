@@ -43,7 +43,8 @@
     "rehearse:goahead": "bash scripts/rehearse-goahead-alert.sh",
     "rehearse:staged-seed": "bash scripts/rehearse-staged-seed.sh",
     "audit:promises": "node scripts/audit-promises.js",
-    "check:seed-expiry": "node scripts/check-seed-expiry.js"
+    "check:seed-expiry": "node scripts/check-seed-expiry.js",
+    "check:db-tls": "node scripts/check-db-tls.js"
   },
   "engines": {
     "node": ">=22"
