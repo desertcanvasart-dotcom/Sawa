@@ -1161,6 +1161,68 @@ app.delete("/api/departures/:id/pledges/:pledgeId", requireAuth, requireRole("ag
   res.json({ departure: presentDeparture(departure, req.user) });
 }));
 
+// Agency cancels one of its own bookings (or withdraws a date request) from the
+// portal's "My bookings".
+//
+// The DELETE route above predates this and is not what the portal offers: it
+// erases the row, so the booking vanishes from the agency's own list and from
+// ops' records, and it lets a seat walk out of a date that has reached GoAhead
+// for free. This follows the traveller's cancel link instead
+// (POST /api/public/bookings/:code/cancel): the pledge is marked `cancelled`, the
+// seat is released, and the Terms' boundary is the same — before GoAhead or
+// while the date is still under review, free and self-serve; after it, §13.2's
+// schedule applies and that goes through Sawa.
+//
+// Idempotent, like the traveller's route: a double click answers 200.
+app.post("/api/agency/bookings/:pledgeId/cancel", requireAuth, requireRole("agency_owner", "agency_agent"), writeLimiter, h(async (req, res) => {
+  const pledgeId = String(req.params.pledgeId || "").trim();
+  if (!pledgeId) throw new AppError(422, "Booking id required.");
+
+  const result = await withTransaction(async (c) => {
+    const found = await c.query(
+      `SELECT id, status, departure_id, agency_id FROM pledges WHERE id = $1`,
+      [pledgeId]
+    );
+    // Another agency's booking answers exactly like a missing one — its
+    // existence is not this agency's business.
+    if (!found.rows.length || found.rows[0].agency_id !== req.user.agencyId) {
+      throw new AppError(404, "Booking not found.");
+    }
+    const pledge = found.rows[0];
+
+    const dep = await loadDeparture(c, pledge.departure_id, { forUpdate: true });
+    if (!dep) throw new AppError(404, "Booking not found.");
+
+    const view = bookingLookupView({
+      departureStatus: dep.status,
+      pledgeStatus: pledge.status,
+      seatsBooked: seatsTotal(dep.pledges),
+      goAhead: goAheadSeatsFor(dep),
+    });
+    if (view.state === "booking_cancelled" || view.state === "date_cancelled") {
+      return { alreadyDone: true, departureId: dep.id };
+    }
+    if (!view.canCancel) {
+      throw new AppError(409,
+        "This date has reached GoAhead, so Sawa's cancellation schedule applies — see section 13 of the Terms. "
+        + "Email hello@sawa.tours with the booking and we'll take it from there.");
+    }
+
+    await c.query(`UPDATE pledges SET status='cancelled' WHERE id=$1`, [pledge.id]);
+    await refreshStatus(c, dep.id);
+    return { alreadyDone: false, departureId: dep.id };
+  });
+
+  if (!result.alreadyDone) {
+    emitDepartureSync(result.departureId);
+    await logAudit(req, {
+      action: "booking.cancel", entity: "pledge", entityId: pledgeId,
+      detail: { departureId: result.departureId, source: "agency" },
+    });
+  }
+  res.json({ cancelled: true });
+}));
+
 // Public cancels a booking — open, but only public-sourced pledges.
 app.delete("/api/public/departures/:id/bookings/:pledgeId", writeLimiter, h(async (req, res) => {
   const departure = await withTransaction(async (c) => {
@@ -2432,7 +2494,7 @@ app.get("/api/admin/audit", requireAuth, requireRole("super_admin", "ops_staff")
 // Admin: dashboard overview stats (platform staff).
 app.get("/api/admin/stats", requireAuth, requireRole("super_admin", "ops_staff"), h(async (_req, res) => {
   const [deps, pledges, products, agencies] = await Promise.all([
-    pool.query(`SELECT id, status, date, start_date, type, route, min_seats, max_seats FROM departures`),
+    pool.query(`SELECT id, status, date, start_date, time, type, route, min_seats, max_seats FROM departures`),
     // status is needed to exclude cancelled bookings — without it these totals
     // counted cancelled seats as booked and cancelled bookings as revenue, and
     // seatsByDep (below) mis-drove readyToConfirm / atRisk. The Bookings tab
@@ -2462,7 +2524,7 @@ app.get("/api/admin/stats", requireAuth, requireRole("super_admin", "ops_staff")
 
   // PP3 — the bucketing lives in domain.js so it can be tested; see the note
   // there for what it used to count.
-  const { open, readyToConfirm, confirmed, atRisk } =
+  const { forming, awaiting, readyToConfirm, confirmed, atRisk, departed } =
     departureActionBuckets(deps.rows, (id) => seatsByDep.get(id) || 0, now.getTime());
 
   res.json({
@@ -2480,7 +2542,7 @@ app.get("/api/admin/stats", requireAuth, requireRole("super_admin", "ops_staff")
       depositsDue: totalDeposits,
     },
     pendingListings,
-    departureStatus: { open, readyToConfirm, confirmed, atRisk },
+    departureStatus: { forming, awaiting, readyToConfirm, confirmed, atRisk, departed },
   });
 }));
 

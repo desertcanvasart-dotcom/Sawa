@@ -4279,6 +4279,9 @@ button:disabled {
 .btn-ghost { background: var(--d-surface); color: var(--d-ink); border-color: var(--d-line); }
 .btn-ghost:hover { background: #f1f1f2; }
 .link-btn { color: var(--d-accent); }
+.link-btn.link-danger { color: #b42318; }
+.link-btn:disabled { opacity: .55; cursor: default; }
+.cancel-err { color: #b42318; max-width: 260px; white-space: normal; }
 .btn-mini { background: var(--d-accent); }
 .btn-mini:disabled { background: var(--d-ink-faint); }
 .icon-btn { border-color: var(--d-line); color: var(--d-ink-soft); background: var(--d-surface); }

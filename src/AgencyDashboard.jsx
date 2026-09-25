@@ -9,6 +9,8 @@ import {
   Share2, Copy,
 } from "lucide-react";
 import { DashSidebar } from "./DashSidebar";
+import { usePortalSection } from "./portal-section.js";
+import { useBackToClose, useUnsavedGuard } from "./back-to-close.js";
 import { apiFetch } from "./supabaseClient";
 import { ProductEditor } from "./AdminDashboard";
 // Date-only departure values need a local-noon anchor or they render a day
@@ -42,9 +44,10 @@ function livePrice(item, seats) {
 }
 
 export function AgencyDashboard({ user, agency, signOut, navigate, departures, tourProducts = [], onReload, agencyDeskProps, AgencyDesk, StaffPanel }) {
-  const [section, setSection] = useState("overview");
   const agencyId = agency?.id;
   const isOwner = user.role === "agency_owner";
+  const [section, setSection] = usePortalSection(
+    ["overview", "book", "listings", "bookings", "widget", ...(isOwner ? ["team"] : [])], "overview");
 
   // built after `stats` so badges can read live counts (see below)
 
@@ -140,7 +143,7 @@ export function AgencyDashboard({ user, agency, signOut, navigate, departures, t
             <div className="dash-head"><div><h1>My bookings</h1><p>Every seat your agency has booked.</p></div></div>
             <div className="table-wrap">
               <table className="dash-table">
-                <thead><tr><th>Customer</th><th>Tour</th><th>When</th><th>Seats</th><th>Total</th><th>Deposit</th><th>Status</th></tr></thead>
+                <thead><tr><th>Customer</th><th>Tour</th><th>When</th><th>Seats</th><th>Total</th><th>Deposit</th><th>Status</th><th aria-label="Actions" /></tr></thead>
                 <tbody>
                   {myRows.map((r) => (
                     <tr key={r.id}>
@@ -157,13 +160,14 @@ export function AgencyDashboard({ user, agency, signOut, navigate, departures, t
                           : isGoAheadDeparture(r.departure)
                             ? <span className="tag tag-on">GoAhead</span>
                             : <span className="tag">Forming</span>}</td>
+                      <td><BookingCancelCell row={r} onDone={onReload} /></td>
                     </tr>
                   ))}
-                  {myRows.length === 0 && <tr><td colSpan={7}><div className="dash-empty">No bookings yet. Head to "Book seats" to add your first.</div></td></tr>}
+                  {myRows.length === 0 && <tr><td colSpan={8}><div className="dash-empty">No bookings yet. Head to "Book seats" to add your first.</div></td></tr>}
                 </tbody>
               </table>
             </div>
-            <MyDateRequests />
+            <MyDateRequests onChange={onReload} />
           </>
         )}
 
@@ -191,7 +195,9 @@ function listingStatusTag(status) {
 function MyListingsSection() {
   const [products, setProducts] = useState(null);
   const [editor, setEditor] = useState(null); // {type} for new, {existing} for edit
+  const guard = useUnsavedGuard(!!editor, () => setEditor(null));
   const [picking, setPicking] = useState(false);
+  useBackToClose(picking, () => setPicking(false));
   const [err, setErr] = useState("");
 
   async function load() {
@@ -207,14 +213,16 @@ function MyListingsSection() {
 
   if (editor) {
     return (
-      <ProductEditor
-        type={editor.existing?.type || editor.type}
-        existing={editor.existing}
-        agencyMode
-        saveEndpoint="/agency/tour-products"
-        onClose={() => setEditor(null)}
-        onSaved={() => { setEditor(null); load(); }}
-      />
+      <div {...guard.dirtyProps}>
+        <ProductEditor
+          type={editor.existing?.type || editor.type}
+          existing={editor.existing}
+          agencyMode
+          saveEndpoint="/agency/tour-products"
+          onClose={guard.requestClose}
+          onSaved={() => { setEditor(null); load(); }}
+        />
+      </div>
     );
   }
 
@@ -300,6 +308,7 @@ function MyListingsSection() {
 /* ---------------- Book seats: catalog -> tour detail -> book ---------------- */
 function BookTours({ tourProducts, departures, agencyId, agencyName, agencyPax = 0, onReload }) {
   const [openId, setOpenId] = useState(null);
+  useBackToClose(!!openId, () => setOpenId(null));
   const [q, setQ] = useState("");
   const [type, setType] = useState("all");
 
@@ -780,26 +789,71 @@ function RequestDateForm({ product, reference, agencyName, canJoin, onJoin, onDo
   );
 }
 
+/* ---------------- Cancelling a booking ----------------
+   Free and self-serve before GoAhead (Terms §13.1); after it, §13.2's schedule
+   applies and the server refuses — so the button is only offered while the
+   server would accept it, and a GoAhead booking points to Sawa instead. The
+   booking is marked cancelled, not erased: it stays in this list, tagged. */
+async function cancelBooking(pledgeId) {
+  const r = await apiFetch(`/agency/bookings/${encodeURIComponent(pledgeId)}/cancel`, { method: "POST" });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || "Could not cancel this booking. Please retry.");
+}
+
+function CancelButton({ pledgeId, label, confirmText, onDone }) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  async function run() {
+    if (!window.confirm(confirmText)) return;
+    setBusy(true); setErr("");
+    try { await cancelBooking(pledgeId); await onDone?.(); }
+    catch (e) { setErr(e.message); }
+    finally { setBusy(false); }
+  }
+  return (
+    <>
+      <button type="button" className="link-btn link-danger" onClick={run} disabled={busy}>{busy ? "Cancelling…" : label}</button>
+      {err && <div className="sub cancel-err" role="alert">{err}</div>}
+    </>
+  );
+}
+
+function BookingCancelCell({ row, onDone }) {
+  const d = row.departure;
+  if (row.status === "cancelled" || d.status === "cancelled") return null;
+  if (d.status === "supplier_confirmed" || isGoAheadDeparture(d)) {
+    return <a className="sub" href="mailto:hello@sawa.tours">Contact Sawa to cancel</a>;
+  }
+  return (
+    <CancelButton
+      pledgeId={row.id}
+      label="Cancel"
+      confirmText={`Cancel ${row.customers || "this booking"} (${row.seats} seat${Number(row.seats) === 1 ? "" : "s"}) on ${d.route}? The seat is released and nothing is charged.`}
+      onDone={onDone}
+    />
+  );
+}
+
 /* ---------------- My date requests ---------------- */
 function requestStateTag(r) {
+  if (r.bookingStatus === "cancelled" && r.departureStatus !== "cancelled") return <span className="tag tag-off">Withdrawn</span>;
   if (r.bookingStatus === "cancelled" || r.departureStatus === "cancelled") return <span className="tag tag-off">Declined / closed</span>;
   if (r.departureStatus === "pending_review") return <span className="tag tag-warn"><Clock3 size={12} /> Under review</span>;
   return <span className="tag tag-on"><Check size={12} /> Approved — open</span>;
 }
 
-function MyDateRequests() {
+function MyDateRequests({ onChange }) {
   const [rows, setRows] = useState(null);
-  useEffect(() => {
-    apiFetch("/agency/departure-requests").then((r) => r.json())
-      .then((j) => setRows(j.requests || [])).catch(() => setRows([]));
-  }, []);
+  const load = () => apiFetch("/agency/departure-requests").then((r) => r.json())
+    .then((j) => setRows(j.requests || [])).catch(() => setRows([]));
+  useEffect(() => { load(); }, []);
   if (!rows || rows.length === 0) return null;
   return (
     <>
       <div className="dash-head" style={{ marginTop: 28 }}><div><h2>Date requests</h2><p>New dates you asked Sawa to open.</p></div></div>
       <div className="table-wrap">
         <table className="dash-table">
-          <thead><tr><th>Reference</th><th>Tour</th><th>Date</th><th>Seats</th><th>Requested</th><th>Status</th></tr></thead>
+          <thead><tr><th>Reference</th><th>Tour</th><th>Date</th><th>Seats</th><th>Requested</th><th>Status</th><th aria-label="Actions" /></tr></thead>
           <tbody>
             {rows.map((r) => (
               <tr key={r.id}>
@@ -809,6 +863,14 @@ function MyDateRequests() {
                 <td>{r.seats}</td>
                 <td className="sub">{fmtReceived(r.createdAt)}</td>
                 <td>{requestStateTag(r)}</td>
+                <td>{r.departureStatus === "pending_review" && r.bookingStatus !== "cancelled" && (
+                  <CancelButton
+                    pledgeId={r.id}
+                    label="Withdraw"
+                    confirmText={`Withdraw the request for ${r.route} on ${fmtDate(r.date)}?`}
+                    onDone={async () => { await load(); await onChange?.(); }}
+                  />
+                )}</td>
               </tr>
             ))}
           </tbody>

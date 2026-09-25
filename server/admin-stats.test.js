@@ -29,7 +29,7 @@ test("a cancelled date is not counted anywhere, least of all as at risk", () => 
     { 1: 4 }
   );
   assert.equal(b.atRisk, 0, "ops would be sent to chase a cancelled departure");
-  assert.equal(b.open, 0);
+  assert.equal(b.forming + b.awaiting, 0);
   assert.equal(b.readyToConfirm, 0, "its seats still meet the minimum — that must not make it 'ready'");
   assert.equal(b.confirmed, 0);
   assert.equal(b.excluded, 1);
@@ -61,8 +61,8 @@ test("closed and pending_review are excluded too, for different reasons", () => 
   ], { 1: 4, 2: 4 });
   assert.equal(b.excluded, 2);
   assert.deepEqual(
-    [b.open, b.readyToConfirm, b.confirmed, b.atRisk],
-    [0, 0, 0, 0]
+    [b.forming, b.awaiting, b.readyToConfirm, b.confirmed, b.atRisk],
+    [0, 0, 0, 0, 0]
   );
 });
 
@@ -74,7 +74,8 @@ test("live departures still land in the right buckets", () => {
     { id: 4, status: "supplier_confirmed", min_seats: 4, start_date: soon },
   ], { 1: 1, 2: 1, 3: 4, 4: 0 });
 
-  assert.equal(b.open, 2);
+  assert.equal(b.forming, 2);
+  assert.equal(b.awaiting, 0);
   assert.equal(b.readyToConfirm, 1);
   assert.equal(b.confirmed, 1);
   assert.equal(b.atRisk, 1, "only the near date under its minimum");
@@ -93,8 +94,40 @@ test("at risk means under the minimum and inside the window", () => {
 test("a departure that has already left is not at risk", () => {
   const past = "2026-08-01";
   const b = buckets([{ id: 1, status: "open", min_seats: 4, start_date: past }], { 1: 1 });
-  assert.equal(b.open, 1);
+  assert.equal(b.forming, 0, "a departed date is not forming — the public board hides it");
+  assert.equal(b.departed, 1, "but it was never closed, so ops still hear about it");
   assert.equal(b.atRisk, 0, "nothing can be done about a date that has gone");
+});
+
+test("a past date at its minimum is not 'ready to confirm' — it has left", () => {
+  const b = buckets([{ id: 1, status: "open", min_seats: 4, start_date: "2026-08-01" }], { 1: 4 });
+  assert.equal(b.readyToConfirm, 0);
+  assert.equal(b.departed, 1);
+});
+
+test("a confirmed date that has run is history, not a loose end", () => {
+  const b = buckets([{ id: 1, status: "supplier_confirmed", min_seats: 4, start_date: "2026-08-01" }], { 1: 4 });
+  assert.equal(b.confirmed, 0);
+  assert.equal(b.departed, 0);
+  assert.equal(b.excluded, 1);
+});
+
+test("forming matches the public board: zero-booking dates are counted apart", () => {
+  // The panel read "8 open & forming" while /departures showed four cards: it
+  // counted unbooked inventory and departed dates as forming.
+  const b = buckets([
+    { id: 1, status: "open", min_seats: 4, start_date: later },       // 1 seat — on the board
+    { id: 2, status: "open", min_seats: 4, start_date: later },       // 0 seats — inventory
+    { id: 3, status: "open", min_seats: 4, start_date: "2026-08-01" }, // 1 seat — departed
+  ], { 1: 1, 2: 0, 3: 1 });
+  assert.equal(b.forming, 1);
+  assert.equal(b.awaiting, 1);
+  assert.equal(b.departed, 1);
+});
+
+test("pg's DATE-as-Date shape is read as the calendar day", () => {
+  const b = buckets([{ id: 1, status: "open", min_seats: 4, start_date: new Date(2026, 7, 1) }], { 1: 1 });
+  assert.equal(b.departed, 1);
 });
 
 test("the window is the constant, not a number typed twice", () => {

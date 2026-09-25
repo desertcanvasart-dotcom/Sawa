@@ -7,6 +7,8 @@ import {
 } from "lucide-react";
 import { apiFetch, supabase, uploadImage } from "./supabaseClient";
 import { DashSidebar } from "./DashSidebar";
+import { usePortalSection } from "./portal-section.js";
+import { useBackToClose, useUnsavedGuard } from "./back-to-close.js";
 import { RichText } from "./RichText";
 // Date-only departure values need a local-noon anchor or they render a day
 // early west of UTC — see src/dates.js.
@@ -56,9 +58,10 @@ const NAV_GROUPS = [
     ],
   },
 ];
+const SECTION_IDS = NAV_GROUPS.flatMap((g) => g.items.map((it) => it.id));
 
 export function AdminDashboard({ user, agency, signOut, navigate }) {
-  const [section, setSection] = useState("overview");
+  const [section, setSection] = usePortalSection(SECTION_IDS, "overview");
   const [data, setData] = useState(null);       // bootstrap
   const [stats, setStats] = useState(null);
   const [destinations, setDestinations] = useState([]);
@@ -150,6 +153,16 @@ function PageHead({ title, sub, action }) {
 function Overview({ stats, data, onGo }) {
   const t = stats?.totals || {};
   const s = stats?.departureStatus || {};
+  // Dates still ahead, unconfirmed, with at least one seat taken.
+  // This list used to take every non-cancelled departure, so dates that had
+  // already left (and full, supplier-confirmed ones) crowded out the groups
+  // actually forming.
+  const today = cairoToday();
+  const topForming = data.departures
+    .filter((d) => ["open", "minimum_reached"].includes(d.status))
+    .filter((d) => (d.startDate || d.date || "") >= today)
+    .filter((d) => seatsOf(d) > 0)
+    .sort((a, b) => seatsOf(b) - seatsOf(a) || String(a.startDate || a.date).localeCompare(String(b.startDate || b.date)));
   return (
     <>
       <PageHead title="Overview" sub="Everything happening across Sawa right now." />
@@ -166,17 +179,21 @@ function Overview({ stats, data, onGo }) {
           <div className="status-rows">
             <StatusRow tone="warn" icon={AlertTriangle} label="At risk (≤14 days, under min seats)" value={s.atRisk ?? 0} />
             <StatusRow tone="go" icon={Check} label="Ready to confirm" value={s.readyToConfirm ?? 0} />
-            <StatusRow tone="muted" icon={CalendarDays} label="Open & forming" value={s.open ?? 0} />
+            {/* Forming = a traveller holds a seat — the same dates /departures shows. */}
+            <StatusRow tone="muted" icon={Users} label="Forming (on the public board)" value={s.forming ?? 0} />
+            <StatusRow tone="muted" icon={CalendarDays} label="Open, no bookings yet" value={s.awaiting ?? 0} />
             <StatusRow tone="ok" icon={ShieldCheck} label="Confirmed (GoAhead)" value={s.confirmed ?? 0} />
+            {(s.departed ?? 0) > 0 && (
+              <StatusRow tone="warn" icon={Clock3} label="Date passed, never closed" value={s.departed} />
+            )}
           </div>
         </div>
 
         <div className="dash-card">
           <div className="dash-card-head"><h2>Top forming departures</h2><button className="link-btn" onClick={() => onGo("departures")}>View all <ArrowUpRight size={14} /></button></div>
           <div className="mini-list">
-            {[...data.departures]
-              .filter((d) => d.status !== "cancelled")
-              .sort((a, b) => seatsOf(b) - seatsOf(a)).slice(0, 5)
+            {topForming
+              .slice(0, 5)
               .map((d) => {
                 const seats = seatsOf(d), min = d.minSeats || 4;
                 return (
@@ -187,7 +204,7 @@ function Overview({ stats, data, onGo }) {
                   </div>
                 );
               })}
-            {data.departures.length === 0 && <Empty label="No departures yet." />}
+            {topForming.length === 0 && <Empty label="No departures forming yet." />}
           </div>
         </div>
       </div>
@@ -204,6 +221,11 @@ function Kpi({ icon: Icon, label, value, foot, accent }) {
     </div>
   );
 }
+// Departure dates are Egyptian calendar days (server/tz.js), so "today" is
+// Cairo's, not the browser's.
+function cairoToday() {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(new Date());
+}
 function StatusRow({ tone, icon: Icon, label, value }) {
   return <div className={`status-line ${tone}`}><Icon size={16} /><span>{label}</span><b>{value}</b></div>;
 }
@@ -212,6 +234,7 @@ function Empty({ label }) { return <div className="dash-empty">{label}</div>; }
 /* ---------------- Tours & Packages ---------------- */
 function ToursSection({ data, destinations = [], reload, flash }) {
   const [editor, setEditor] = useState(null); // null | {type}
+  const guard = useUnsavedGuard(!!editor, () => setEditor(null));
   // Only what's on sale. Archived listings live in their own sidebar section —
   // mixed into this list they read as clutter, and made it look as if a
   // cancelled tour was still being sold.
@@ -228,14 +251,16 @@ function ToursSection({ data, destinations = [], reload, flash }) {
   // Full-page editor takes over the section when adding/editing.
   if (editor) {
     return (
-      <ProductEditor
-        type={editor.type}
-        existing={editor.existing}
-        destinations={destinations}
-        departures={data.departures || []}
-        onClose={() => setEditor(null)}
-        onSaved={() => { setEditor(null); flash(editor.existing ? "Tour updated." : "Tour created."); reload(); }}
-      />
+      <div {...guard.dirtyProps}>
+        <ProductEditor
+          type={editor.type}
+          existing={editor.existing}
+          destinations={destinations}
+          departures={data.departures || []}
+          onClose={guard.requestClose}
+          onSaved={() => { setEditor(null); flash(editor.existing ? "Tour updated." : "Tour created."); reload(); }}
+        />
+      </div>
     );
   }
 
@@ -320,6 +345,7 @@ function ArchiveSection({ data, reload, flash }) {
 /* ---------------- Destinations ---------------- */
 function DestinationsSection({ destinations, reload, flash }) {
   const [editor, setEditor] = useState(null); // null | {} | { existing }
+  const guard = useUnsavedGuard(!!editor, () => setEditor(null));
 
   async function remove(d) {
     if (!window.confirm(`Delete "${d.name}"? Tours that already saved its meeting points keep them.`)) return;
@@ -354,11 +380,13 @@ function DestinationsSection({ destinations, reload, flash }) {
         </table>
       </div>
       {editor && (
-        <DestinationEditor
-          existing={editor.existing}
-          onClose={() => setEditor(null)}
-          onSaved={() => { setEditor(null); flash("Destination saved."); reload(); }}
-        />
+        <div {...guard.dirtyProps}>
+          <DestinationEditor
+            existing={editor.existing}
+            onClose={guard.requestClose}
+            onSaved={() => { setEditor(null); flash("Destination saved."); reload(); }}
+          />
+        </div>
       )}
     </>
   );
@@ -394,7 +422,7 @@ function DestinationEditor({ existing, onClose, onSaved }) {
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <h2>{existing ? "Edit destination" : "New destination"}</h2>
-          <button className="icon-btn" onClick={onClose}><X size={18} /></button>
+          <button data-keeps-clean className="icon-btn" onClick={onClose}><X size={18} /></button>
         </div>
         <div className="modal-body">
           <Field label="Destination name"><input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Alexandria" /></Field>
@@ -413,8 +441,8 @@ function DestinationEditor({ existing, onClose, onSaved }) {
           {err && <p className="dest-err">{err}</p>}
         </div>
         <div className="modal-foot">
-          <button type="button" className="btn-ghost" onClick={onClose}>Cancel</button>
-          <button type="button" className="btn-primary" disabled={busy} onClick={save}>{busy ? "Saving…" : "Save destination"}</button>
+          <button data-keeps-clean type="button" className="btn-ghost" onClick={onClose}>Cancel</button>
+          <button data-keeps-clean type="button" className="btn-primary" disabled={busy} onClick={save}>{busy ? "Saving…" : "Save destination"}</button>
         </div>
       </div>
     </div>
@@ -424,6 +452,7 @@ function DestinationEditor({ existing, onClose, onSaved }) {
 /* ---------------- Blog ---------------- */
 function BlogSection({ posts, reload, flash }) {
   const [editor, setEditor] = useState(null); // null | {} | { existing }
+  const guard = useUnsavedGuard(!!editor, () => setEditor(null));
 
   async function remove(p) {
     if (!window.confirm(`Delete "${p.title}"? This can't be undone.`)) return;
@@ -432,7 +461,11 @@ function BlogSection({ posts, reload, flash }) {
   }
 
   if (editor) {
-    return <BlogEditor existing={editor.existing} onClose={() => setEditor(null)} onSaved={() => { setEditor(null); flash("Post saved."); reload(); }} />;
+    return (
+      <div {...guard.dirtyProps}>
+        <BlogEditor existing={editor.existing} onClose={guard.requestClose} onSaved={() => { setEditor(null); flash("Post saved."); reload(); }} />
+      </div>
+    );
   }
 
   return (
@@ -538,7 +571,7 @@ function BlogEditor({ existing, onClose, onSaved }) {
   return (
     <div className="editor-page">
       <div className="editor-page-head">
-        <button className="editor-back" onClick={onClose}><ArrowLeft size={16} />Back to Blog</button>
+        <button data-keeps-clean className="editor-back" onClick={onClose}><ArrowLeft size={16} />Back to Blog</button>
         <h1>{editing ? "Edit post" : "New post"}</h1>
       </div>
 
@@ -596,10 +629,10 @@ function BlogEditor({ existing, onClose, onSaved }) {
       </div>
 
       <div className="editor-page-foot">
-        <button type="button" className="btn-ghost" onClick={onClose}>Cancel</button>
+        <button data-keeps-clean type="button" className="btn-ghost" onClick={onClose}>Cancel</button>
         <div className="wiz-nav">
-          <button type="button" className="btn-ghost" disabled={busy} onClick={() => save("draft")}>{busy ? "Saving…" : "Save draft"}</button>
-          <button type="button" className="btn-primary" disabled={busy} onClick={() => save("published")}>{busy ? "Saving…" : "Publish"}</button>
+          <button data-keeps-clean type="button" className="btn-ghost" disabled={busy} onClick={() => save("draft")}>{busy ? "Saving…" : "Save draft"}</button>
+          <button data-keeps-clean type="button" className="btn-primary" disabled={busy} onClick={() => save("published")}>{busy ? "Saving…" : "Publish"}</button>
         </div>
       </div>
     </div>
@@ -850,11 +883,11 @@ export function ProductEditor({ type: typeProp, existing, destinations = [], dep
   return (
     <div className="editor-page">
       <div className="editor-page-head">
-        <button className="editor-back" onClick={onClose}><ArrowLeft size={16} />{agencyMode ? "Back to my listings" : "Back to Tours"}</button>
+        <button data-keeps-clean className="editor-back" onClick={onClose}><ArrowLeft size={16} />{agencyMode ? "Back to my listings" : "Back to Tours"}</button>
         <h1>{editing ? "Edit " : (agencyMode ? "List a new " : "New ")}{pkg ? "package" : "day tour"}</h1>
         <div className="wiz-steps">
           {steps.map((s, i) => (
-            <button key={s} className={`wiz-step ${i === step ? "active" : ""} ${i < step ? "done" : ""}`} onClick={() => setStep(i)}>
+            <button data-keeps-clean key={s} className={`wiz-step ${i === step ? "active" : ""} ${i < step ? "done" : ""}`} onClick={() => setStep(i)}>
               <span className="wiz-num">{i + 1}</span>{s}
             </button>
           ))}
@@ -1108,11 +1141,11 @@ export function ProductEditor({ type: typeProp, existing, destinations = [], dep
         </div>
 
         <div className="editor-page-foot">
-          <button type="button" className="btn-ghost" onClick={onClose}>Cancel</button>
+          <button data-keeps-clean type="button" className="btn-ghost" onClick={onClose}>Cancel</button>
           <div className="wiz-nav">
-            {step > 0 && <button type="button" className="btn-ghost" onClick={() => setStep(step - 1)}>Back</button>}
-            {step < last && <button type="button" className="btn-primary" onClick={() => setStep(step + 1)}>Next</button>}
-            {step === last && <button type="button" className="btn-primary" disabled={busy} onClick={save}>{busy ? "Saving…" : agencyMode ? (editing ? "Save & resubmit" : "Submit for review") : editing ? "Save changes" : (pkg ? "Create package" : "Create tour")}</button>}
+            {step > 0 && <button data-keeps-clean type="button" className="btn-ghost" onClick={() => setStep(step - 1)}>Back</button>}
+            {step < last && <button data-keeps-clean type="button" className="btn-primary" onClick={() => setStep(step + 1)}>Next</button>}
+            {step === last && <button data-keeps-clean type="button" className="btn-primary" disabled={busy} onClick={save}>{busy ? "Saving…" : agencyMode ? (editing ? "Save & resubmit" : "Submit for review") : editing ? "Save changes" : (pkg ? "Create package" : "Create tour")}</button>}
           </div>
         </div>
     </div>
@@ -1245,6 +1278,7 @@ const LISTING_TABS = [
 // Approve -> departure opens on the public board; decline -> cancelled + email.
 function DateRequestsSection({ data, reload, flash }) {
   const [declining, setDeclining] = useState(null); // departure being declined
+  useBackToClose(!!declining, () => setDeclining(null));
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState("");
   const [err, setErr] = useState("");
@@ -1351,10 +1385,12 @@ function statusTag(status) {
 function ListingRequestsSection({ data, reload, flash }) {
   const [tab, setTab] = useState("pending");
   const [rejecting, setRejecting] = useState(null); // product being rejected
+  useBackToClose(!!rejecting, () => setRejecting(null));
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState("");
   const [err, setErr] = useState("");
   const [preview, setPreview] = useState(null); // listing being viewed in full
+  useBackToClose(!!preview, () => setPreview(null));
 
   // Only agency-submitted listings enter this queue (agency_id present).
   const submitted = (data.tourProducts || []).filter((p) => p.agencyId);
@@ -1623,6 +1659,7 @@ function ListingPreviewModal({ p, agencyName, busy, onApprove, onReject, onClose
 function DeparturesSection({ data, reload, flash }) {
   const [filter, setFilter] = useState("all");
   const [pub, setPub] = useState(null); // {type}
+  useBackToClose(!!pub, () => setPub(null));
   const deps = data.departures || [];
   const shown = deps.filter((d) => {
     if (filter === "all") return true;
@@ -1800,6 +1837,7 @@ function BookingsSection({ data, stats }) {
   const [view, setView] = useState("list");   // list | tours
   const [filter, setFilter] = useState("all");
   const [open, setOpen] = useState(null); // selected booking
+  useBackToClose(!!open, () => setOpen(null));
 
   const [total, setTotal] = useState(0);
 
@@ -2205,7 +2243,9 @@ function AgenciesSection({ flash }) {
   // Which agency's operator record is open. One at a time: these are ten fields
   // and a verification decision, not a cell edit.
   const [editing, setEditing] = useState(null);
+  useBackToClose(!!editing, () => setEditing(null));
   const [creating, setCreating] = useState(false);
+  useBackToClose(creating, () => setCreating(false));
   const set = (k) => (e) => setForm((s) => ({ ...s, [k]: e.target.value }));
 
   async function load() {
