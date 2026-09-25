@@ -438,6 +438,24 @@ function App() {
   const [publicBooking, setPublicBooking] = useState(null);
   const [authToken, setAuthToken] = useState(null); // changes when login/logout happens -> reloads data
 
+  // E01 — after a client-side navigation, the <head> still described the page
+  // the visitor LANDED on: open a tour from /itineraries and the title and
+  // canonical still said /itineraries. The server's own buildHead() facts for
+  // the new route are applied instead. Skipped on first render (the server
+  // already rendered that head), on blog routes (they manage their own meta)
+  // and in the portal.
+  const headRendered = useRef(false);
+  useEffect(() => {
+    if (!headRendered.current) { headRendered.current = true; return undefined; }
+    if (/^\/(blog|admin|agency|portal|embed)(\/|$)/.test(path)) return undefined;
+    const ctl = new AbortController();
+    fetch(`${API_BASE}/public/route-head?path=${encodeURIComponent(path)}`, { signal: ctl.signal })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`route-head ${r.status}`))))
+      .then(applyRouteHead)
+      .catch((e) => { if (e.name !== "AbortError") warnOnce("route-head", "[head] couldn't update the page title —", e.message); });
+    return () => ctl.abort();
+  }, [path]);
+
   useEffect(() => {
     const handlePop = () => setPath(window.location.pathname);
     window.addEventListener("popstate", handlePop);
@@ -1314,7 +1332,12 @@ function SxFooter() {
           <div><a className="logo" href="/"><SxLogoMark /><span className="nm"><b>Sawa</b><i>Tours · Egypt</i></span></a><p className="fblurb">Shared departures, confirmed together. Sawa pools travelers across Ministry-licensed Egyptian operators so the tours you want actually run.</p></div>
           <div className="fcol"><h4>Travel</h4><a href="/itineraries">All itineraries</a><a href="/departures">Open departures</a><a href="/goahead">GoAhead departures</a><a href="/destinations">Destinations</a><a href="/how-it-works">How it works</a><a href="/trust">The GoAhead promise</a><a href="/faq">FAQ</a></div>
           <div className="fcol"><h4>Operators</h4><a href="/partners">Operating partners</a><a href="/operators">List a tour</a><a href="/verify">List with Sawa</a><a href="/widget">Get the widget</a></div>
-          <div className="fcol"><h4>Company</h4><a href="/about">About Sawa</a><a href="/contact">Support</a><a href="/privacy">Privacy Policy</a><a href="/cookies">Cookies</a><a href="/terms">Terms and Conditions</a></div>
+          <div className="fcol"><h4>Company</h4><a href="/about">About Sawa</a><a href="/contact">Support</a><a href="/privacy">Privacy Policy</a><a href="/cookies">Cookies</a><a href="/terms">Terms and Conditions</a>
+            {/* U05 — the static pages get this link from consent.js, which adds it
+                on load and on Back/Forward only; the SPA's own navigation never
+                re-added it, so it went missing on tour pages. Rendered here, with
+                the class consent.js looks for so it doesn't add a second one. */}
+            <a href="#" className="ck-link" onClick={(e) => { e.preventDefault(); window.sawaConsent?.open?.(); }}>Cookie settings</a></div>
         </div>
         <div className="fbot"><span>© 2026 Sawa Tours · Operated by Online Era · Registration 148500</span></div>
       </div>
@@ -1690,9 +1713,9 @@ function TourDetailV2({ isSaving, navigate, phoneVerification = false, onBookPub
                     stated source, per the amended acceptance criteria. */}
               </div>
             </div>
-            <div className="share-row">
-              <button className="icon-btn" aria-label="Save"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M19 14c1.5-1.5 3-3.4 3-5.5A4.5 4.5 0 0 0 12 5 4.5 4.5 0 0 0 2 8.5c0 2.1 1.5 4 3 5.5l7 7z" /></svg></button>
-            </div>
+            {/* U03 — a heart "Save" button sat here, alone in its row, with no
+                handler and no saved list behind it: a promise the page couldn't
+                keep. Removed with its row until saving exists. */}
           </header>
 
           <section className="gallery rv" aria-label="Tour photos">
@@ -3317,6 +3340,28 @@ function PageCTA({ navigate, note }) {
       <button className="btn-pill primary lg" onClick={() => navigate("/itineraries")}>Browse itineraries <ArrowRight size={18} /></button>
     </section>
   );
+}
+
+// E01 — write a route's head facts (from /api/public/route-head) into the
+// document, updating the tags the server rendered rather than adding copies.
+function setHeadTag(attr, key, content) {
+  let el = document.head.querySelector(`meta[${attr}="${key}"]`);
+  if (!el) { el = document.createElement("meta"); el.setAttribute(attr, key); document.head.appendChild(el); }
+  el.setAttribute("content", content || "");
+}
+function applyRouteHead(m) {
+  if (!m?.title) return;
+  document.title = m.title;
+  setHeadTag("name", "description", m.description);
+  setHeadTag("name", "robots", m.noindex ? "noindex,nofollow" : "index,follow");
+  setHeadTag("property", "og:title", m.title);
+  setHeadTag("property", "og:description", m.description);
+  setHeadTag("property", "og:url", m.canonical);
+  setHeadTag("name", "twitter:title", m.title);
+  setHeadTag("name", "twitter:description", m.description);
+  let link = document.head.querySelector('link[rel="canonical"]');
+  if (!link) { link = document.createElement("link"); link.setAttribute("rel", "canonical"); document.head.appendChild(link); }
+  link.setAttribute("href", m.canonical);
 }
 
 // ---- Blog: SEO + GEO meta injection ----

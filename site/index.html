@@ -1088,7 +1088,11 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     var fSt=f.confirmed?'<span class="st ok">Confirmed · running</span>'
       :'<span class="st">'+(f.toGo===1?'1 seat to GoAhead':f.toGo+' seats to GoAhead')+'</span>';
     var seatsLeft=Math.max(0,f.max-f.joined);
-    var fWhenTop=f.confirmed?(seatsLeft>0?'Almost full':'Running'):(starterMode?'Awaiting its first traveler':'Forming now');
+    /* U02 — "Almost full" went on every confirmed date with a seat left, so a
+       date with 8 of 12 seats free read as nearly sold out. It now means what
+       it says: ALMOST_FULL or fewer seats left. */
+    var ALMOST_FULL=2;
+    var fWhenTop=f.confirmed?(seatsLeft===0?'Full':seatsLeft<=ALMOST_FULL?'Almost full':'Confirmed · seats left'):(starterMode?'Awaiting its first traveler':'Forming now');
     var fWhenB=(f.confirmed&&seatsLeft>0)?(seatsLeft+' seat'+(seatsLeft===1?'':'s')+' left'):('€'+f.price+' EUR / person');
     var fCta=starterMode?'Start this date':'Reserve a seat';
     /* P3.3 — the featured card is the one place both states are reachable, so

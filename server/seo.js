@@ -381,7 +381,13 @@ export async function buildHead(pathname) {
     `<script defer src="/assets/gtm.js"></script>`,
   ].join("\n");
 
-  return { title: m.title, head, notFound: !!m.notFound };
+  // E01 — the same facts, unrendered, for the SPA: moving between routes in the
+  // browser never reloads the page, so the <head> the server injected for the
+  // FIRST route used to stay put for every route after it.
+  return {
+    title: m.title, head, notFound: !!m.notFound,
+    meta: { title: m.title, description: m.description || "", canonical: url, noindex: !!m.noindex },
+  };
 }
 
 // ---- Route-scoped bootstrap slice --------------------------------------

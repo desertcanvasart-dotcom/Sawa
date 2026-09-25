@@ -1560,6 +1560,20 @@ app.get("/api/public/tour-products/:id", h(async (req, res) => {
   res.json({ product });
 }));
 
+// E01 — the <head> facts for a route, for the SPA to apply after a client-side
+// navigation. The same buildHead() the server renders pages with, so a title
+// can't differ between a direct load and a click. Only paths that buildHead
+// serves; portal, API and static /site pages never reach here.
+app.get("/api/public/route-head", h(async (req, res) => {
+  const path = String(req.query.path || "");
+  if (!/^\/[A-Za-z0-9\-/_.%]*$/.test(path) || path.length > 300 || /^\/(api|admin|agency|portal|embed)(\/|$)/.test(path)) {
+    throw new AppError(422, "Invalid path.");
+  }
+  const { meta, notFound } = await buildHead(path);
+  res.set("Cache-Control", "public, max-age=60, s-maxage=300");
+  res.json({ ...meta, notFound });
+}));
+
 app.get("/api/public/unavailable-dates", h(async (_req, res) => {
   const blocked = await unavailableDates();
   res.set("Cache-Control", "public, max-age=300");
