@@ -91,6 +91,10 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     <div class="rv" data-d="1">
       <div class="panel" style="position:sticky;top:108px"><div class="panel-in">
         <h3 class="serif" style="font-family:'Fraunces',serif;font-weight:500;font-size:1.5rem;color:var(--teal)">Send us a message</h3>
+        <!-- U04 — said BEFORE the visitor types: this form opens their own email
+             app with the message ready; it does not send anything by itself.
+             Visitors without a mail app configured learned that only afterwards. -->
+        <p class="cf-how" style="color:var(--muted);font-size:.9rem;margin-top:8px">This opens your email app with your message ready to send to <a href="mailto:hello@sawa.tours" style="color:var(--gold-ink);font-weight:600">hello@sawa.tours</a>. No email app? Write to that address from any inbox, or message us on <a href="https://wa.me/201092847613" rel="noopener" style="color:var(--gold-ink);font-weight:600">WhatsApp</a>.</p>
         <!-- Named fields + a mailto action: with JS the handler below composes a
              tidy message, and without it the native submit still reaches an
              inbox. Previously the fields were nameless and the form defaulted to
@@ -105,7 +109,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
           <div class="field"><label for="cf-subject">Subject</label><input id="cf-subject" name="subject" placeholder="How can we help?" /></div>
           <div class="field"><label for="cf-message">Message <span class="req">*</span></label><textarea id="cf-message" name="message" required placeholder="Tell us what you need."></textarea></div>
           <label class="consent"><input type="checkbox" name="consent" value="yes" required /><span>I agree to be contacted about my enquiry.</span></label>
-          <button class="btn gold block" type="submit">Send message <span class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></button>
+          <button class="btn gold block" type="submit">Open in my email app <span class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></button>
           <div class="done" role="status" style="display:none;align-items:center;gap:10px;background:rgba(244,201,93,.14);border:1px solid rgba(217,171,69,.4);border-radius:14px;padding:14px;color:var(--teal);font-size:.9rem"><span style="color:var(--gold-ink)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>Opening your email app… if nothing happens, write to <a href="mailto:hello@sawa.tours" style="color:var(--gold-ink);font-weight:600">hello@sawa.tours</a>.</div>
         </form>
         <script>
