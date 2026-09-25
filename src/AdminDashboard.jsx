@@ -150,6 +150,16 @@ function PageHead({ title, sub, action }) {
 function Overview({ stats, data, onGo }) {
   const t = stats?.totals || {};
   const s = stats?.departureStatus || {};
+  // Dates still ahead, unconfirmed, with at least one seat taken.
+  // This list used to take every non-cancelled departure, so dates that had
+  // already left (and full, supplier-confirmed ones) crowded out the groups
+  // actually forming.
+  const today = cairoToday();
+  const topForming = data.departures
+    .filter((d) => ["open", "minimum_reached"].includes(d.status))
+    .filter((d) => (d.startDate || d.date || "") >= today)
+    .filter((d) => seatsOf(d) > 0)
+    .sort((a, b) => seatsOf(b) - seatsOf(a) || String(a.startDate || a.date).localeCompare(String(b.startDate || b.date)));
   return (
     <>
       <PageHead title="Overview" sub="Everything happening across Sawa right now." />
@@ -166,17 +176,21 @@ function Overview({ stats, data, onGo }) {
           <div className="status-rows">
             <StatusRow tone="warn" icon={AlertTriangle} label="At risk (≤14 days, under min seats)" value={s.atRisk ?? 0} />
             <StatusRow tone="go" icon={Check} label="Ready to confirm" value={s.readyToConfirm ?? 0} />
-            <StatusRow tone="muted" icon={CalendarDays} label="Open & forming" value={s.open ?? 0} />
+            {/* Forming = a traveller holds a seat — the same dates /departures shows. */}
+            <StatusRow tone="muted" icon={Users} label="Forming (on the public board)" value={s.forming ?? 0} />
+            <StatusRow tone="muted" icon={CalendarDays} label="Open, no bookings yet" value={s.awaiting ?? 0} />
             <StatusRow tone="ok" icon={ShieldCheck} label="Confirmed (GoAhead)" value={s.confirmed ?? 0} />
+            {(s.departed ?? 0) > 0 && (
+              <StatusRow tone="warn" icon={Clock3} label="Date passed, never closed" value={s.departed} />
+            )}
           </div>
         </div>
 
         <div className="dash-card">
           <div className="dash-card-head"><h2>Top forming departures</h2><button className="link-btn" onClick={() => onGo("departures")}>View all <ArrowUpRight size={14} /></button></div>
           <div className="mini-list">
-            {[...data.departures]
-              .filter((d) => d.status !== "cancelled")
-              .sort((a, b) => seatsOf(b) - seatsOf(a)).slice(0, 5)
+            {topForming
+              .slice(0, 5)
               .map((d) => {
                 const seats = seatsOf(d), min = d.minSeats || 4;
                 return (
@@ -187,7 +201,7 @@ function Overview({ stats, data, onGo }) {
                   </div>
                 );
               })}
-            {data.departures.length === 0 && <Empty label="No departures yet." />}
+            {topForming.length === 0 && <Empty label="No departures forming yet." />}
           </div>
         </div>
       </div>
@@ -203,6 +217,11 @@ function Kpi({ icon: Icon, label, value, foot, accent }) {
       {foot && <p>{foot}</p>}
     </div>
   );
+}
+// Departure dates are Egyptian calendar days (server/tz.js), so "today" is
+// Cairo's, not the browser's.
+function cairoToday() {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(new Date());
 }
 function StatusRow({ tone, icon: Icon, label, value }) {
   return <div className={`status-line ${tone}`}><Icon size={16} /><span>{label}</span><b>{value}</b></div>;

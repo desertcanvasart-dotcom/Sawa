@@ -1,5 +1,6 @@
 // Pure business rules: pricing, status, deposits. No DB, no HTTP — easy to test.
 import { zonedDateTimeToUtc } from "./tz.js";
+import { isoDate } from "./db/mappers.js";
 // The deposit rates, the balance timing, the type predicate and the
 // cancellation bands are ONE policy and live in shared/, where the browser
 // bundle and check:duplication can both see them. `isPackage` and
@@ -436,23 +437,40 @@ export function bookingLookupView(input) {
 // third hand-written reading of "seats >= min" (NN2.1).
 export const AT_RISK_DAYS = 14;
 
+//
+// A date whose start has passed is not waiting on travellers either, but it is
+// not dropped silently: a past date still `open` or `minimum_reached` was never
+// closed out, and that IS ops' to act on. It gets its own `departed` bucket and
+// nothing else — counting it as open made the panel read "8 open & forming"
+// while the public board, which hides departed dates, showed four.
+//
+// `open` is split the same way the public board splits it: `forming` is a date
+// a real traveller holds a seat on (isFormingDeparture — exactly what
+// /departures lists), `awaiting` is inventory nobody has booked yet.
 export function departureActionBuckets(rows = [], seatsFor = () => 0, nowMs = Date.now()) {
-  const buckets = { open: 0, readyToConfirm: 0, confirmed: 0, atRisk: 0, excluded: 0 };
+  const buckets = { forming: 0, awaiting: 0, readyToConfirm: 0, confirmed: 0, atRisk: 0, departed: 0, excluded: 0 };
   for (const row of rows) {
     if (["cancelled", "closed", "pending_review"].includes(row?.status)) {
       buckets.excluded += 1;
       continue;
     }
     const seats = Number(seatsFor(row.id)) || 0;
+    const start = row.start_date || row.startDate || row.date;
+    if (departureStarted({ startDate: isoDate(start), time: row.time }, nowMs)) {
+      // A confirmed date that has run is history, not a loose end.
+      if (row.status === "supplier_confirmed") buckets.excluded += 1;
+      else buckets.departed += 1;
+      continue;
+    }
     if (row.status === "supplier_confirmed") { buckets.confirmed += 1; continue; }
     if (statusFor(row, [{ seats, status: "confirmed" }]) === "minimum_reached") {
       buckets.readyToConfirm += 1;
       continue;
     }
-    buckets.open += 1;
-    const start = new Date(row.start_date || row.startDate || row.date);
-    const daysOut = (start - nowMs) / 86400000;
-    if (daysOut >= 0 && daysOut <= AT_RISK_DAYS) buckets.atRisk += 1;
+    if (seats >= 1) buckets.forming += 1;
+    else buckets.awaiting += 1;
+    const daysOut = (new Date(start) - nowMs) / 86400000;
+    if (daysOut <= AT_RISK_DAYS) buckets.atRisk += 1;
   }
   return buckets;
 }

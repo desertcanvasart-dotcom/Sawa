@@ -2432,7 +2432,7 @@ app.get("/api/admin/audit", requireAuth, requireRole("super_admin", "ops_staff")
 // Admin: dashboard overview stats (platform staff).
 app.get("/api/admin/stats", requireAuth, requireRole("super_admin", "ops_staff"), h(async (_req, res) => {
   const [deps, pledges, products, agencies] = await Promise.all([
-    pool.query(`SELECT id, status, date, start_date, type, route, min_seats, max_seats FROM departures`),
+    pool.query(`SELECT id, status, date, start_date, time, type, route, min_seats, max_seats FROM departures`),
     // status is needed to exclude cancelled bookings — without it these totals
     // counted cancelled seats as booked and cancelled bookings as revenue, and
     // seatsByDep (below) mis-drove readyToConfirm / atRisk. The Bookings tab
@@ -2462,7 +2462,7 @@ app.get("/api/admin/stats", requireAuth, requireRole("super_admin", "ops_staff")
 
   // PP3 — the bucketing lives in domain.js so it can be tested; see the note
   // there for what it used to count.
-  const { open, readyToConfirm, confirmed, atRisk } =
+  const { forming, awaiting, readyToConfirm, confirmed, atRisk, departed } =
     departureActionBuckets(deps.rows, (id) => seatsByDep.get(id) || 0, now.getTime());
 
   res.json({
@@ -2480,7 +2480,7 @@ app.get("/api/admin/stats", requireAuth, requireRole("super_admin", "ops_staff")
       depositsDue: totalDeposits,
     },
     pendingListings,
-    departureStatus: { open, readyToConfirm, confirmed, atRisk },
+    departureStatus: { forming, awaiting, readyToConfirm, confirmed, atRisk, departed },
   });
 }));
 
