@@ -164,6 +164,9 @@ class AppError extends Error {
     this.status = status;
   }
 }
+// The request's query string, "?" included, or "" — for redirects that move
+// the path and must not drop what the link carried.
+const queryOf = (req) => { const i = req.originalUrl.indexOf("?"); return i === -1 ? "" : req.originalUrl.slice(i); };
 const h = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 
 // ---- Tenant-aware pledge visibility ----------------------------------------
@@ -2957,7 +2960,8 @@ app.use(h(async (req, res, next) => {
     // this, which is the difference between a fix and a patch.
     const canonical = await canonicalTourPath(seg);
     if (!canonical || canonical === req.path) return next();
-    return res.redirect(301, canonical);
+    // Keep the query: ?date= (F06) and ?ref= must survive the move.
+    return res.redirect(301, canonical + queryOf(req));
   }
   const r = await pool.query("SELECT id, title, city, type FROM tour_products WHERE id=$1 AND active IS NOT FALSE LIMIT 1", [seg]);
   if (!r.rows.length) return next();
@@ -2967,7 +2971,7 @@ app.use(h(async (req, res, next) => {
   // but a 301 loop is cached by the browser and survives the server-side fix —
   // so the cheap guard stays regardless of what the slug logic does later.
   if (target === req.path) return next();
-  return res.redirect(301, target);
+  return res.redirect(301, target + queryOf(req));
 }));
 
 // ============================ STATIC SPA (production) ============================

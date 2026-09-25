@@ -1021,7 +1021,8 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       var pct=Math.max(12,Math.min(100,Math.round(joined/min*100)))+'%';
       var m={p:p,isPkg:isPkg,next:d,hasNext:true,start:start,img:img,alt:alt,price:price,hasPhoto:hasPhoto,
         min:min,max:max,joined:joined,confirmed:confirmed,toGo:toGo,pct:pct,
-        link:'/'+(isPkg?'package':'tour')+'/'+tourSlug(p),
+        /* F06 — open the tour page on this card's date. */
+        link:'/'+(isPkg?'package':'tour')+'/'+tourSlug(p)+'?date='+encodeURIComponent(d.id),
         dateTxt:'Departs '+fmt(start)};
       if(confirmed||joined>=1)withTravelers.push(m);else starters.push(m);
     });

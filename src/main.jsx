@@ -1340,6 +1340,14 @@ const SxX = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" str
 
 // S04 — "send me a code", then "here it is". Twilio sends and checks the code;
 // the server hands back a token for this number, which the booking carries.
+// F06 — the departure a link asked for (?date=<id>), if it is one of this
+// tour's bookable dates. An unknown or stale id is ignored, not an error.
+function requestedDate(tour) {
+  const want = new URLSearchParams(window.location.search).get("date");
+  if (!want) return null;
+  return (tour.dates || []).find((d) => String(d.id) === want) || null;
+}
+
 function PhoneCodeStep({ phone, confirmed, onVerified }) {
   const [sentTo, setSentTo] = useState("");
   const [code, setCode] = useState("");
@@ -1426,7 +1434,9 @@ function TourDetailV2({ isSaving, navigate, phoneVerification = false, onBookPub
   }, [tourProp.id, tourProp.detailPending]);
 
   const lead = tour.dates[0];
-  const [depId, setDepId] = useState(lead?.id || "");
+  // F06 — a date card links here with ?date=<departure id>; open on that date
+  // when this tour has it, else on the earliest.
+  const [depId, setDepId] = useState(() => requestedDate(tour)?.id ?? lead?.id ?? "");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
@@ -1480,8 +1490,19 @@ function TourDetailV2({ isSaving, navigate, phoneVerification = false, onBookPub
     ? packagePriceFor(tour, dep, dep ? projected : goAhead, { roomingType, tierId })
     : dep ? livePriceFor({ ...tour, ...dep }, projected) : livePriceFor(tour, goAhead);
   const confirmed = !!dep && isGoAheadDeparture(dep);
-  const depositPct = Number(dep?.depositPercent || tour.depositPercent || 10);
-  const total = pp * nSeats;
+  // F07 — a NEW date is priced the way the server prices its seed booking
+  // (computePledgePricing on an empty date copied from the tour): the party's
+  // own size, the tour's rates and deposit — never the headcount or deposit of
+  // whichever existing date happens to be selected.
+  const requestCapacity = Math.max(1, Number(tour.maxSeats) || MAX_GROUP_SIZE);
+  const newDatePP = isPackage(tour)
+    ? packagePriceFor(tour, null, nSeats, { roomingType, tierId })
+    : livePriceFor(tour, nSeats);
+  const quotePP = reqMode ? newDatePP : pp;
+  const depositPct = reqMode
+    ? Number(tour.depositPercent || depositPctFor(tour))
+    : Number(dep?.depositPercent || tour.depositPercent || 10);
+  const total = quotePP * nSeats;
   const deposit = depositFor(total, depositPct);
   const balance = Math.max(0, total - deposit);
   const seatPct = goAhead ? Math.min(100, Math.round((booked / goAhead) * 100)) : 0;
@@ -1493,7 +1514,19 @@ function TourDetailV2({ isSaving, navigate, phoneVerification = false, onBookPub
   const related = allProducts.filter((p) => p.id !== tour.id && (p.dates || []).length).slice(0, 3);
   const cityLabel = isPackage(tour) ? (tour.cities || [tour.city]).join(" → ") : tour.city;
 
-  useEffect(() => { setDepId(lead?.id || ""); }, [lead?.id]);
+  useEffect(() => { setDepId(requestedDate(tour)?.id ?? lead?.id ?? ""); }, [lead?.id, tour.id]);
+  // Picking a date writes it into the address, so a refresh, a shared link or
+  // Back returns to the same date.
+  function pickDate(id) {
+    setDepId(id);
+    try {
+      const u = new URL(window.location.href);
+      u.searchParams.set("date", String(id));
+      window.history.replaceState(window.history.state, "", u.pathname + u.search + u.hash);
+    } catch (e) {
+      warnOnce("date-param", "[tour] couldn't keep the chosen date in the address —", e.message);
+    }
+  }
   useEffect(() => {
     const root = rootRef.current; if (!root) return;
     // Scroll first: which elements count as "already on screen" depends on
@@ -1589,6 +1622,10 @@ function TourDetailV2({ isSaving, navigate, phoneVerification = false, onBookPub
     if (name.trim().length < 2) return setReqErr("Enter the lead traveler's name.");
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return setReqErr("Enter a valid email — we'll confirm your date there.");
     if (!phoneConfirmed) return setReqErr("Confirm your phone number with the code we send you first.");
+    // F07 — the same limit the server applies (the tour's own capacity), and
+    // the browser's number-field limit is not enforced on a type="button".
+    if (!Number.isInteger(Number(seats)) || Number(seats) < 1) return setReqErr("Enter how many travelers are coming.");
+    if (Number(seats) > requestCapacity) return setReqErr(`${tour.title} takes up to ${requestCapacity} travelers per date.`);
     setReqBusy(true);
     try {
       const response = await fetch(`${API_BASE}/public/departure-requests`, {
@@ -1845,7 +1882,7 @@ function TourDetailV2({ isSaving, navigate, phoneVerification = false, onBookPub
                             type="button"
                             className={`date-opt${on ? " on" : ""}`}
                             key={d.id}
-                            onClick={() => setDepId(d.id)}
+                            onClick={() => pickDate(d.id)}
                             disabled={left <= 0}
                             aria-pressed={on}
                             aria-label={`${formatDate(d.date, { alwaysYear: true })}${d.time ? ` at ${d.time}` : ""} — ${s} of ${ga} joined${left <= 0 ? ", full" : ""}`}
@@ -1893,7 +1930,7 @@ function TourDetailV2({ isSaving, navigate, phoneVerification = false, onBookPub
                               {reqMatches.map((m) => {
                                 const ms = seatsTotal(m.pledges); const mga = goAheadSeatsFor(m);
                                 return (
-                                  <button type="button" className="date-opt" key={m.id} onClick={() => { setDepId(m.id); setReqMode(false); setReqMatches(null); }}>
+                                  <button type="button" className="date-opt" key={m.id} onClick={() => { pickDate(m.id); setReqMode(false); setReqMatches(null); }}>
                                     <div className="d-left"><b>{formatDate(m.date, { alwaysYear: true })}{m.time ? ` · ${m.time}` : ""}</b><span>{ms} of {mga} joined</span></div>
                                     <span className="d-right form">Join this date</span>
                                   </button>
@@ -1968,7 +2005,7 @@ function TourDetailV2({ isSaving, navigate, phoneVerification = false, onBookPub
                       )}
                       <label className="bk-field">
                         <span>Seats</span>
-                        <input type="number" min="1" max={Math.max(1, remaining)} value={seats} onChange={(e) => setSeats(e.target.value)} required aria-required="true" />
+                        <input type="number" min="1" max={reqMode ? requestCapacity : Math.max(1, remaining)} value={seats} onChange={(e) => setSeats(e.target.value)} required aria-required="true" />
                       </label>
                     </div>
                     {/* The glyph is carried by the code as well as the symbol in
@@ -1977,17 +2014,20 @@ function TourDetailV2({ isSaving, navigate, phoneVerification = false, onBookPub
                         (it read as CAD, AUD or SGD to a good share of the people
                         this page is for), but a figure someone is about to owe
                         is the wrong place to economise on words. */}
-                    {!reqMode && <div className="bk-sum">
-                      <div className="r"><span>{CURRENCY_SYMBOL}{pp} {CURRENCY} × {nSeats}</span><b>{CURRENCY_SYMBOL}{total} {CURRENCY}</b></div>
+                    {/* F07 — shown for a requested date too: the traveller used to
+                        lose the price, deposit and cancellation terms at the
+                        point of asking for a date that would carry them. */}
+                    {<div className="bk-sum">
+                      <div className="r"><span>{CURRENCY_SYMBOL}{quotePP} {CURRENCY} × {nSeats}</span><b>{CURRENCY_SYMBOL}{total} {CURRENCY}</b></div>
                       <div className="r key"><span>Deposit at GoAhead ({depositPct}%)</span><b>{CURRENCY_SYMBOL}{deposit} {CURRENCY}</b></div>
                       <div className="r"><span>Balance</span><b>{CURRENCY_SYMBOL}{balance} {CURRENCY}</b></div>
-                      <div className="nt">All amounts in {CURRENCY_PROSE}. Nothing is charged today. Balance due {dep ? balanceDueLabel(dep.startDate || dep.date, tour) : "before departure"}.</div>
+                      <div className="nt">All amounts in {CURRENCY_PROSE}. Nothing is charged today. Balance due {reqMode ? (reqDate ? balanceDueLabel(reqDate, tour) : "before departure") : dep ? balanceDueLabel(dep.startDate || dep.date, tour) : "before departure"}.</div>
                       {/* The deadline is the other half of the GoAhead promise:
                           the date by which this either confirms or is canceled
                           and everyone refunded. Showing it before someone
                           reserves is the point — a commitment nobody can see is
                           not one they can rely on. */}
-                      {dep?.confirmDeadline && (
+                      {!reqMode && dep?.confirmDeadline && (
                         <div className="nt">
                           This date confirms or cancels by <b>{formatDate(dep.confirmDeadline, { alwaysYear: true })}</b> — {dep.confirmDeadlineDays} days before departure. If it hasn't reached {goAheadSeatsFor(dep)} travelers by then it's canceled and you're charged nothing.
                         </div>
