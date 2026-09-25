@@ -28,7 +28,7 @@ import {
 } from "lucide-react";
 import "./styles.css";
 import "./redesign.css";
-import { supabase, apiFetch, API_BASE } from "./supabaseClient";
+import { apiFetch, API_BASE } from "./supabaseClient";
 import { warnOnce } from "./warn-once.js";
 import { tourSlug } from "../server/slug.js";
 import { toDate } from "./dates.js";
