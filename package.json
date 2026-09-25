@@ -50,9 +50,9 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.106.2",
-    "@tiptap/extension-link": "^3.24.0",
-    "@tiptap/react": "^3.24.0",
-    "@tiptap/starter-kit": "^3.24.0",
+    "@tiptap/extension-link": "^3.31.3",
+    "@tiptap/react": "^3.31.3",
+    "@tiptap/starter-kit": "^3.31.3",
     "@vitejs/plugin-react": "^5.0.0",
     "concurrently": "^9.1.0",
     "dotenv": "^17.4.2",
