@@ -406,6 +406,8 @@ function App() {
   // agencyId -> { name, licensedSince, verified, verifiedAt }. Whitelisted on
   // the server by publicOperator(); the full agency rows stay staff-only.
   const [operatorsByProduct, setOperatorsByProduct] = useState(INLINE_BOOTSTRAP?.operatorsByProduct || {});
+  // S04 — whether direct bookings must confirm a phone code (server/phone-verify.js).
+  const [phoneVerification, setPhoneVerification] = useState(INLINE_BOOTSTRAP?.phoneVerification === true);
   const [cities, setCities] = useState(INLINE_BOOTSTRAP?.cities || []);
   const [tourProducts, setTourProducts] = useState(INLINE_BOOTSTRAP?.tourProducts || []);
   const [departures, setDepartures] = useState(INLINE_BOOTSTRAP?.departures || []);
@@ -488,6 +490,7 @@ function App() {
       setCities((prev) => same(prev, data.cities) ? prev : (data.cities || []));
       setTourProducts((prev) => same(prev, data.tourProducts) ? prev : (data.tourProducts || []));
       setOperatorsByProduct((prev) => same(prev, data.operatorsByProduct) ? prev : (data.operatorsByProduct || {}));
+      setPhoneVerification(data.phoneVerification === true);
       setDepartures((prev) => same(prev, data.departures) ? prev : (data.departures || []));
       setSelectedId((prev) => prev || data.departures?.[0]?.id || null);
       const firstDayTour = (data.tourProducts || []).find((p) => !isPackage(p));
@@ -846,7 +849,7 @@ function App() {
   // Resolves to { ok: true } or { ok: false, error }. The tour page renders
   // before the shared `notice` banner, so a failure reported only there was
   // never seen — the caller shows the error itself and keeps the form (F01).
-  async function bookPublicDeparture({ departureId, customerName, customerEmail, customerPhone, seats, roomingType, accommodationTier }) {
+  async function bookPublicDeparture({ departureId, customerName, customerEmail, customerPhone, phoneToken, seats, roomingType, accommodationTier }) {
     if (isSaving) return { ok: false, error: "" };
     setIsSaving(true);
     setNotice("");
@@ -854,7 +857,7 @@ function App() {
       const response = await fetch(`${API_BASE}/public/departures/${departureId}/bookings`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ customerName, customerEmail, customerPhone, seats: Number(seats), roomingType, accommodationTier, refCode: getStoredRef() }),
+        body: JSON.stringify({ customerName, customerEmail, customerPhone, phoneToken, seats: Number(seats), roomingType, accommodationTier, refCode: getStoredRef() }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Could not request seats.");
@@ -958,6 +961,7 @@ function App() {
         routeTour={routeTour}
         routePackage={routePackage}
         operatorsByProduct={operatorsByProduct}
+        phoneVerification={phoneVerification}
         selectedCity={selectedCity}
         setSelectedCity={setSelectedCity}
         tourId={routeTourId}
@@ -1334,7 +1338,62 @@ const SxCheck = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
 const SxX = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M6 6l12 12M18 6 6 18" /></svg>;
 
 
-function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPublicBooking, publicBooking, tour: tourProp, allProducts = [], operatorsByProduct = {} }) {
+// S04 — "send me a code", then "here it is". Twilio sends and checks the code;
+// the server hands back a token for this number, which the booking carries.
+function PhoneCodeStep({ phone, confirmed, onVerified }) {
+  const [sentTo, setSentTo] = useState("");
+  const [code, setCode] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState("");
+  const typed = phone.trim();
+
+  async function post(path, body) {
+    const r = await fetch(`${API_BASE}/public/phone-verifications${path}`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(data.error || "Something went wrong. Please try again.");
+    return data;
+  }
+  async function send(channel) {
+    setMsg("");
+    if (typed.length < 6) return setMsg("Enter your mobile number first.");
+    setBusy(true);
+    try { await post("", { phone: typed, channel }); setSentTo(typed); setCode(""); setMsg(channel === "whatsapp" ? "Code sent on WhatsApp." : "Code sent by text message."); }
+    catch (e) { setMsg(e instanceof TypeError ? "We couldn't reach Sawa — check your connection." : e.message); }
+    finally { setBusy(false); }
+  }
+  async function check() {
+    setMsg("");
+    setBusy(true);
+    try { const d = await post("/check", { phone: sentTo, code }); onVerified(d.phoneToken, sentTo); setMsg(""); }
+    catch (e) { setMsg(e instanceof TypeError ? "We couldn't reach Sawa — check your connection." : e.message); }
+    finally { setBusy(false); }
+  }
+
+  if (confirmed) return <div className="bk-ok" role="status"><SxCheck /> Mobile number confirmed.</div>;
+  const awaitingCode = sentTo && sentTo === typed;
+  return (
+    <div className="bk-verify">
+      <p className="bk-verify-note">To hold a seat, confirm your mobile number with a one-time code.</p>
+      {!awaitingCode ? (
+        <div className="bk-verify-row">
+          <button type="button" className="btn plain" disabled={busy} onClick={() => send("sms")}>{busy ? "Sending…" : "Text me a code"}</button>
+          <button type="button" className="btn plain" disabled={busy} onClick={() => send("whatsapp")}>WhatsApp me a code</button>
+        </div>
+      ) : (
+        <div className="bk-verify-row">
+          <input inputMode="numeric" autoComplete="one-time-code" aria-label="Verification code" placeholder="6-digit code" value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 10))} />
+          <button type="button" className="btn plain" disabled={busy || code.length < 4} onClick={check}>{busy ? "Checking…" : "Confirm"}</button>
+          <button type="button" className="link-btn" disabled={busy} onClick={() => { setSentTo(""); setMsg(""); }}>Send a new code</button>
+        </div>
+      )}
+      {msg && <div className={awaitingCode && !busy && /sent/.test(msg) ? "bk-verify-msg" : "bk-err"} role={/sent/.test(msg) ? "status" : "alert"}>{msg}</div>}
+    </div>
+  );
+}
+
+function TourDetailV2({ isSaving, navigate, phoneVerification = false, onBookPublicDeparture, onCancelPublicBooking, publicBooking, tour: tourProp, allProducts = [], operatorsByProduct = {} }) {
   const rootRef = useRef(null);
 
   // A page reached by clicking through from the catalogue holds the sliced copy
@@ -1371,6 +1430,11 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
+  // S04 — the token for the number the traveller confirmed. Editing the number
+  // afterwards drops it: the server checks the token against the number sent.
+  const [phoneToken, setPhoneToken] = useState(null);
+  const [verifiedPhone, setVerifiedPhone] = useState("");
+  const phoneConfirmed = !phoneVerification || (!!phoneToken && verifiedPhone === phone.trim());
   const [seats, setSeats] = useState(1);
   const [err, setErr] = useState("");
   // Packages are priced per hotel tier and per room type, and the server always
@@ -1447,9 +1511,10 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
     if (name.trim().length < 2) return setErr("Enter the lead traveler's name.");
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return setErr("Enter a valid email.");
     if (Number(seats) > remaining) return setErr(`Only ${remaining} seat${remaining === 1 ? "" : "s"} left on this date.`);
+    if (!phoneConfirmed) return setErr("Confirm your phone number with the code we send you first.");
     const result = await onBookPublicDeparture({
       departureId: dep.id, customerName: name.trim(), customerEmail: email.trim(),
-      customerPhone: phone.trim(), seats: nSeats,
+      customerPhone: phone.trim(), phoneToken: phoneToken || undefined, seats: nSeats,
       // Only meaningful for packages; the server ignores them for day tours.
       ...(isPackage(tour) ? { roomingType, accommodationTier: tierId } : {}),
     });
@@ -1523,6 +1588,7 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
     if (!reqDate) { setReqErr("Pick the date you want — we've highlighted the field."); showDateField(); return; }
     if (name.trim().length < 2) return setReqErr("Enter the lead traveler's name.");
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return setReqErr("Enter a valid email — we'll confirm your date there.");
+    if (!phoneConfirmed) return setReqErr("Confirm your phone number with the code we send you first.");
     setReqBusy(true);
     try {
       const response = await fetch(`${API_BASE}/public/departure-requests`, {
@@ -1530,7 +1596,7 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           tourProductId: tour.id, date: reqDate, customerName: name.trim(),
-          customerEmail: email.trim(), customerPhone: phone.trim(), seats: nSeats, ignoreMatches,
+          customerEmail: email.trim(), customerPhone: phone.trim(), phoneToken: phoneToken || undefined, seats: nSeats, ignoreMatches,
           // The seed pledge is priced on submission, so a traveler starting
           // their own package date needs the same tier/room choice as one
           // joining an existing date — otherwise it silently seeds at the
@@ -1889,10 +1955,17 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
                           <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@email.com" required aria-required="true" autoComplete="email" />
                         </label>
                         <label className="bk-field">
-                          <span>Phone <i className="opt">(optional)</i></span>
-                          <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+20 1XX XXX XXXX" autoComplete="tel" />
+                          <span>{phoneVerification ? "Mobile" : <>Phone <i className="opt">(optional)</i></>}</span>
+                          <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+20 1XX XXX XXXX" autoComplete="tel" required={phoneVerification} aria-required={phoneVerification} />
                         </label>
                       </div>
+                      {phoneVerification && (
+                        <PhoneCodeStep
+                          phone={phone}
+                          confirmed={phoneConfirmed}
+                          onVerified={(token, forPhone) => { setPhoneToken(token); setVerifiedPhone(forPhone); }}
+                        />
+                      )}
                       <label className="bk-field">
                         <span>Seats</span>
                         <input type="number" min="1" max={Math.max(1, remaining)} value={seats} onChange={(e) => setSeats(e.target.value)} required aria-required="true" />
@@ -2010,6 +2083,7 @@ function hasHtmlSx(s) { return s && s.replace(/<[^>]*>/g, "").trim().length > 0;
 
 function PublicSite({
   path,
+  phoneVerification = false,
   cityStats,
   customerCalendars,
   customerSummary,
@@ -2078,6 +2152,7 @@ function PublicSite({
       <TourDetailV2
         isSaving={isSaving}
         navigate={navigate}
+        phoneVerification={phoneVerification}
         onBookPublicDeparture={onBookPublicDeparture}
         onCancelPublicBooking={onCancelPublicBooking}
         publicBooking={publicBooking}

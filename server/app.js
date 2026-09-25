@@ -5,6 +5,10 @@ import { pool, withTransaction, withDepartureWrites } from "./db/index.js";
 import { pendingGoAheads, alertPayload } from "./goahead-alert.js";
 import { refreshStatus } from "./departure-status.js";
 import { publicOperator, operatorForDeparture, directOperatorId } from "./domain.js";
+import {
+  phoneVerificationEnabled, normalizePhone, issuePhoneToken, phoneTokenValid,
+  startVerification, checkVerification,
+} from "./phone-verify.js";
 import { durationShapeError, cutoffUnitError } from "../shared/booking-policy.js";
 import { operatingDayError } from "../shared/operating-days.js";
 import { minLeadDaysFor, maxHorizonDaysFor, requestWindowError } from "../shared/request-window.js";
@@ -290,8 +294,12 @@ const pledgeSchema = z.object({
 
 const publicBookingSchema = z.object({
   customerName: z.string().trim().min(1, "Customer name is required."),
-  customerEmail: z.string().trim().email("A valid email is required.").optional().or(z.literal("")),
-  customerPhone: z.string().trim().optional(),
+  // S04 — required here, not just in the form: a scripted post skipped it, and
+  // a seat nobody can be reached about still counts toward GoAhead.
+  customerEmail: z.string().trim().email("A valid email is required."),
+  customerPhone: z.string().trim().max(40).optional(),
+  // The token from POST /api/public/phone-verifications/check (S04).
+  phoneToken: z.string().trim().max(400).optional(),
   seats: z.coerce.number().int().min(1),
   roomingType: z.enum(["single", "double", "triple"]).optional(),
   accommodationTier: z.string().optional(),
@@ -340,7 +348,8 @@ const publicDepartureRequestSchema = z.object({
   date: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, "A valid date (YYYY-MM-DD) is required."),
   customerName: z.string().trim().min(1, "Traveller name is required."),
   customerEmail: z.string().trim().email("A valid email is required."),
-  customerPhone: z.string().trim().optional(),
+  customerPhone: z.string().trim().max(40).optional(),
+  phoneToken: z.string().trim().max(400).optional(),
   seats: z.coerce.number().int().min(1).max(20),
   note: z.string().trim().max(500).optional(),
   roomingType: z.enum(["single", "double", "triple"]).optional(),
@@ -584,6 +593,8 @@ async function buildBootstrap(user) {
         .map((a) => [a.id, publicOperator(a)])
         .filter(([, op]) => op)
     ),
+    // S04 — tells the booking form whether to ask for a phone code.
+    phoneVerification: phoneVerificationEnabled(),
     cities: cities.rows.map(mapCity),
     tourProducts: mappedProducts.map((p) => presentProduct(p, user)),
     // pending_review = traveler-requested, awaiting ops approval. Only
@@ -1125,12 +1136,73 @@ function notifyOps(departure, booking, input, { isRequest, bookedBy }) {
 }
 
 // Public (direct traveller) booking — intentionally open, no auth, but the
+// ---- S04 — phone verification for direct travellers -------------------------
+// See server/phone-verify.js. Off until Twilio is configured, and then required
+// for every direct booking and date request.
+const phoneStartSchema = z.object({
+  phone: z.string().trim().min(6, "Enter your mobile number.").max(40),
+  channel: z.enum(["sms", "whatsapp"]).optional(),
+});
+const phoneCheckSchema = z.object({
+  phone: z.string().trim().min(6).max(40),
+  code: z.string().trim().regex(/^\d{4,10}$/, "Enter the code we sent you."),
+});
+const PHONE_FORMAT_HELP = "Enter your mobile number with its country code, e.g. +44 7700 900123 (Egyptian numbers can start with 01).";
+
+// The traveller's number, normalised, once its token checks out — or, while
+// verification is off, whatever they typed, as before.
+function verifiedPhoneFor(input) {
+  if (!phoneVerificationEnabled()) return input.customerPhone || null;
+  const phone = normalizePhone(input.customerPhone);
+  if (!phone) throw new AppError(422, PHONE_FORMAT_HELP);
+  if (!phoneTokenValid(input.phoneToken, phone)) {
+    throw new AppError(422, "Please confirm your phone number with the code we send you before reserving.");
+  }
+  return phone;
+}
+
+app.post("/api/public/phone-verifications", writeLimiter, h(async (req, res) => {
+  if (!phoneVerificationEnabled()) throw new AppError(404, "Phone verification is not in use.");
+  const input = parse(phoneStartSchema, req.body);
+  const phone = normalizePhone(input.phone);
+  if (!phone) throw new AppError(422, PHONE_FORMAT_HELP);
+  const r = await startVerification(phone, input.channel);
+  if (!r.ok) {
+    // Twilio's own message can name the account or the number's carrier; it is
+    // logged for ops and the traveller gets a plain sentence.
+    console.warn(`[phone-verify] send failed (${r.status}): ${r.message || "no message"}`);
+    throw new AppError(r.status === 400 ? 422 : 502, r.status === 400
+      ? "We couldn't send a code to that number. Check it and try again."
+      : "We couldn't send a code just now. Please try again in a moment.");
+  }
+  await logAudit(req, { action: "phone.verify_start", entity: "phone", entityId: phone.slice(0, -4) + "····", detail: { channel: input.channel || "sms" } });
+  res.json({ sent: true, phone });
+}));
+
+app.post("/api/public/phone-verifications/check", writeLimiter, h(async (req, res) => {
+  if (!phoneVerificationEnabled()) throw new AppError(404, "Phone verification is not in use.");
+  const input = parse(phoneCheckSchema, req.body);
+  const phone = normalizePhone(input.phone);
+  if (!phone) throw new AppError(422, PHONE_FORMAT_HELP);
+  if (!(await checkVerification(phone, input.code))) {
+    throw new AppError(422, "That code isn't right, or it has expired. Check it, or ask for a new one.");
+  }
+  await logAudit(req, { action: "phone.verified", entity: "phone", entityId: phone.slice(0, -4) + "····" });
+  res.json({ verified: true, phone, phoneToken: issuePhoneToken(phone) });
+}));
+
 // stricter write limiter guards this and the public cancel below from abuse.
 app.post("/api/public/departures/:id/bookings", writeLimiter, h(async (req, res) => {
   const input = parse(publicBookingSchema, req.body);
+  input.customerPhone = verifiedPhoneFor(input);
   const result = await withTransaction(async (c) => {
     const dep = await loadDeparture(c, Number(req.params.id), { forUpdate: true });
     if (!dep) throw new AppError(404, "Departure not found.");
+    // S04 — one live booking per verified number per date. A double-click or a
+    // retried request used to make two; a party books its seats in one.
+    if (phoneVerificationEnabled() && dep.pledges.some((p) => p.status !== "cancelled" && p.customerPhone === input.customerPhone)) {
+      throw new AppError(409, "This phone number already holds a booking on this date. Check your email for its booking code, or reply to it to change the number of seats.");
+    }
     if (dep.status === "cancelled") throw new AppError(409, "This departure has been cancelled.");
     if (dep.status === "pending_review") throw new AppError(409, "This departure is awaiting review and not open for bookings yet.");
     if (seatsTotal(dep.pledges) + input.seats > dep.maxSeats) {
@@ -1633,6 +1705,7 @@ async function createDateRequest(input, req, requester = {}) {
 
 app.post("/api/public/departure-requests", writeLimiter, h(async (req, res) => {
   const input = parse(publicDepartureRequestSchema, req.body);
+  input.customerPhone = verifiedPhoneFor(input);
   const result = await createDateRequest(input, req);
 
   if (result.nearMatches) {
