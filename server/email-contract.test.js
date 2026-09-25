@@ -74,15 +74,27 @@ test("a PROGRAMMER error is not reported as a mail outage", async () => {
 });
 
 test("a programmer error writes no 'failed' row and no failure count", async () => {
-  // It escapes BEFORE recordEmail and recordFailure. Otherwise the email_log
+  // It escapes BEFORE anything records a failure. Otherwise the email_log
   // and /api/modes would both carry a delivery failure that never happened, and
   // ZZ2's neverWorked would start describing a template bug.
+  //
+  // O01 moved the Resend call into deliver(): its catch rethrows a programmer
+  // error first, and sendEmail records the outcome only after deliver RETURNS.
+  // The queued row is set 'aborted' — neither 'failed' nor retried.
   const src = readFileSync(join(ROOT, "server", "email.js"), "utf8");
-  const guard = src.indexOf("rethrowIfProgrammerError(e)");
-  const logged = src.indexOf('status: "failed", error: e.message');
-  const counted = src.indexOf('recordFailure("email", e.message)');
-  assert.ok(guard > -1 && logged > -1 && counted > -1, "the catch no longer has the shape this asserts");
-  assert.ok(guard < logged && guard < counted, "the programmer-error guard must come first in the catch");
+  const d = src.slice(src.indexOf("async function deliver("), src.indexOf("// Core send."));
+  const dc = d.slice(d.indexOf("} catch (e) {"));
+  assert.ok(dc.indexOf("rethrowIfProgrammerError(e)") > -1, "deliver's catch lost its programmer-error guard");
+  assert.ok(dc.indexOf("rethrowIfProgrammerError(e)") < dc.indexOf("return { ok: false"), "the guard must come first in deliver's catch");
+  const send = src.slice(src.indexOf("export async function sendEmail("), src.indexOf("// The scheduled half of the outbox."));
+  const call = send.indexOf("r = await deliver(");
+  assert.ok(call > -1);
+  for (const effect of ["outboxFinish(", "recordEmail(", "recordFailure("]) {
+    assert.ok(send.indexOf(effect, call) > call, `${effect} must run only after deliver returns`);
+  }
+  const thrown = send.slice(send.indexOf("} catch (e) {", call), send.indexOf("throw e;", call));
+  assert.match(thrown, /outboxAbort\(pool, id, e\)/);
+  assert.doesNotMatch(thrown, /recordFailure|'failed'/);
 });
 
 test("sendEmailInBackground swallows an operational failure", async () => {

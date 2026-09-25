@@ -48,45 +48,165 @@ async function recordEmail({ to, subject, kind, status, error }) {
   }
 }
 
+// ---- O01 — the outbox --------------------------------------------------------
+//
+// An email that failed, or was mid-send when the process restarted, used to be
+// gone: email_log recorded the failure but not the message. Each live send now
+// writes its row WITH the content first (status 'pending'), then marks it
+// 'sent' or 'failed'; retryPendingEmails() — a scheduled job — sends the
+// failed ones again with growing gaps, and picks up any row a restart left
+// pending. Resend's Idempotency-Key is the row id, so a retry of a send that
+// did in fact go through is not delivered twice.
+//
+// Until migration 042 is applied the extra columns don't exist: the first
+// insert fails with 42703 and every send falls back to the old log-only row.
+export const MAX_ATTEMPTS = 5;
+// Gap before attempt n+1 after attempt n failed: 5 min, 30 min, 2 h, 6 h.
+export const RETRY_GAPS_MS = [5 * 60e3, 30 * 60e3, 2 * 3600e3, 6 * 3600e3];
+export const retryGapAfter = (attempts) => RETRY_GAPS_MS[Math.min(Math.max(attempts, 1), RETRY_GAPS_MS.length) - 1];
+// A row still 'pending' this long after its last attempt was left by a restart.
+export const STALE_PENDING_MS = 10 * 60e3;
+
+let outboxReady = true;   // flips false for the process once 042 is found missing
+async function outboxStart(db, { to, subject, kind, html, text }) {
+  if (!outboxReady) return null;
+  try {
+    const r = await db.query(
+      `INSERT INTO email_log (recipient, subject, kind, status, html, text_body, attempts, updated_at)
+       VALUES ($1,$2,$3,'pending',$4,$5,1,now()) RETURNING id`,
+      [to, subject, kind, html || null, text || null]
+    );
+    return r.rows[0]?.id ?? null;
+  } catch (e) {
+    if (e.code === "42703") {
+      outboxReady = false;
+      console.warn("[email] migration 042 not applied — emails are sent once and not retried until it is.");
+    }
+    return null;
+  }
+}
+
+async function outboxFinish(db, id, attempts, { ok, error }) {
+  try {
+    await db.query(
+      ok
+        ? `UPDATE email_log SET status='sent', error=NULL, next_attempt_at=NULL, updated_at=now() WHERE id=$1`
+        : `UPDATE email_log SET status='failed', error=$2, updated_at=now(),
+             next_attempt_at = CASE WHEN $3::int >= $4::int THEN NULL ELSE now() + ($5::bigint * interval '1 millisecond') END
+           WHERE id=$1`,
+      ok ? [id] : [id, String(error || "").slice(0, 500), attempts, MAX_ATTEMPTS, retryGapAfter(attempts)]
+    );
+  } catch (e) {
+    console.error("email_log update failed:", e.message);
+  }
+}
+
+async function outboxAbort(db, id, e) {
+  try {
+    await db.query(`UPDATE email_log SET status='aborted', error=$2, next_attempt_at=NULL, updated_at=now() WHERE id=$1`,
+      [id, `programmer error: ${String(e?.message || e).slice(0, 400)}`]);
+  } catch (err) {
+    console.error("email_log update failed:", err.message);
+  }
+}
+
+// One call to Resend. Operational failures come back as { ok: false, error };
+// a programmer error is rethrown (see sendEmail).
+async function deliver({ to, subject, html, text }, idempotencyKey, fetchImpl = fetch) {
+  try {
+    const headers = { Authorization: `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" };
+    if (idempotencyKey) headers["Idempotency-Key"] = idempotencyKey;
+    const res = await fetchImpl("https://api.resend.com/emails", {
+      method: "POST", headers,
+      body: JSON.stringify({ from: EMAIL_FROM, to, subject, html, text, reply_to: REPLY_TO }),
+    });
+    if (!res.ok) {
+      const body = await res.text();
+      return { ok: false, error: body.slice(0, 500), rejected: true };
+    }
+    return { ok: true };
+  } catch (e) {
+    rethrowIfProgrammerError(e);
+    return { ok: false, error: e.message };
+  }
+}
+
 // Core send. Returns { ok, mode }. Never throws — email must not break bookings.
 export async function sendEmail({ to, subject, html, text, kind = "generic" }) {
   if (!to) return { ok: false, mode: emailMode };
-
   if (emailMode === "log") {
     console.log(`\n[email:log] to=${to} | ${subject}\n${text || "(html only)"}\n`);
     await recordEmail({ to, subject, kind, status: "logged" });
     return { ok: true, mode: "log" };
   }
-
+  // AAA2 / AAA1.2 — this function's contract is "never throws on an
+  // OPERATIONAL failure", which is what its thirteen callers defend against.
+  // It says nothing about a programmer error, and silently returning
+  // { ok: false } for one would make a broken template look like a mail
+  // outage. deliver() rethrows those. Asserted in server/email-contract.test.js.
+  const id = await outboxStart(pool, { to, subject, kind, html, text });
+  let r;
   try {
-    const res = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ from: EMAIL_FROM, to, subject, html, text, reply_to: REPLY_TO }),
-    });
-    if (!res.ok) {
-      const body = await res.text();
-      await recordEmail({ to, subject, kind, status: "failed", error: body.slice(0, 500) });
-      recordFailure("email", `Resend rejected: ${body.slice(0, 200)}`);
-      return { ok: false, mode: "live" };
-    }
-    await recordEmail({ to, subject, kind, status: "sent" });
-    // ZZ2.1 — `email: live` says a key is configured. This says a message has
-    // actually left the building, which is the question that mattered when the
-    // mirror turned out never to have transmitted.
-    recordSuccess("email");
-    return { ok: true, mode: "live" };
+    r = await deliver({ to, subject, html, text }, id ? `sawa-email-${id}` : undefined);
   } catch (e) {
-    // AAA2 / AAA1.2 — this function's contract is "never throws on an
-    // OPERATIONAL failure", which is what its thirteen callers defend against.
-    // It says nothing about a programmer error, and silently returning
-    // { ok: false } for one would make a broken template look like a mail
-    // outage. Asserted in server/email-contract.test.js.
-    rethrowIfProgrammerError(e);
-    await recordEmail({ to, subject, kind, status: "failed", error: e.message });
-    recordFailure("email", e.message);
+    // A programmer error: not a delivery failure, and not something a retry
+    // can fix. The queued row is set aside ('aborted') so the job leaves it,
+    // and nothing is counted as failed.
+    if (id) await outboxAbort(pool, id, e);
+    throw e;
+  }
+  if (id) await outboxFinish(pool, id, 1, r);
+  else await recordEmail({ to, subject, kind, status: r.ok ? "sent" : "failed", error: r.error });
+  if (!r.ok) {
+    recordFailure("email", r.rejected ? `Resend rejected: ${String(r.error).slice(0, 200)}` : r.error);
     return { ok: false, mode: "live" };
   }
+  // ZZ2.1 — `email: live` says a key is configured. This says a message has
+  // actually left the building, which is the question that mattered when the
+  // mirror turned out never to have transmitted.
+  recordSuccess("email");
+  return { ok: true, mode: "live" };
+}
+
+// The scheduled half of the outbox. Claims up to `limit` rows that are due —
+// failed with attempts left, or pending and abandoned by a restart — and sends
+// each again under its original idempotency key. FOR UPDATE SKIP LOCKED means
+// two instances never take the same row.
+export async function retryPendingEmails({ db = pool, fetchImpl = fetch, limit = 20, log = () => {} } = {}) {
+  if (emailMode !== "live") return { skipped: "log mode" };
+  let rows;
+  try {
+    rows = (await db.query(
+      `UPDATE email_log e SET status='pending', attempts = e.attempts + 1, updated_at = now()
+        WHERE e.id IN (
+          SELECT id FROM email_log
+           WHERE attempts < $1
+             AND (html IS NOT NULL OR text_body IS NOT NULL)
+             AND ((status = 'failed' AND next_attempt_at IS NOT NULL AND next_attempt_at <= now())
+               OR (status = 'pending' AND updated_at < now() - ($2::bigint * interval '1 millisecond')))
+           ORDER BY id
+           LIMIT $3
+           FOR UPDATE SKIP LOCKED)
+        RETURNING e.id, e.recipient, e.subject, e.html, e.text_body, e.attempts`,
+      [MAX_ATTEMPTS, STALE_PENDING_MS, limit])).rows;
+  } catch (e) {
+    if (e.code === "42703") return { skipped: "migration 042 not applied" };
+    throw e;
+  }
+  let sent = 0, failed = 0;
+  for (const row of rows) {
+    let r;
+    try {
+      r = await deliver({ to: row.recipient, subject: row.subject, html: row.html, text: row.text_body }, `sawa-email-${row.id}`, fetchImpl);
+    } catch (e) {
+      await outboxAbort(db, row.id, e);
+      throw e;
+    }
+    await outboxFinish(db, row.id, row.attempts, r);
+    if (r.ok) { sent++; recordSuccess("email"); } else { failed++; recordFailure("email", `retry #${row.attempts}: ${String(r.error).slice(0, 200)}`); }
+    log(`email ${row.id} attempt ${row.attempts}: ${r.ok ? "sent" : "failed"}`);
+  }
+  return { claimed: rows.length, sent, failed };
 }
 
 // AAA1.2 — the thirteen call sites, in one place.

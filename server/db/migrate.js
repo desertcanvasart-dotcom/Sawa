@@ -50,6 +50,7 @@ const MIGRATIONS = [
   { name: "039_drop_decorative_cutoff", file: "schema_039_drop_decorative_cutoff.sql" },
   { name: "040_cover_alt_caption", file: "schema_040_cover_alt_caption.sql" },
   { name: "041_restore_cairo_luxor_package", file: "schema_041_restore_cairo_luxor_package.sql" },
+  { name: "042_email_outbox", file: "schema_042_email_outbox.sql" },
 ];
 
 async function main() {
