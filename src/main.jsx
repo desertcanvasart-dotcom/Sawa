@@ -438,6 +438,24 @@ function App() {
   const [publicBooking, setPublicBooking] = useState(null);
   const [authToken, setAuthToken] = useState(null); // changes when login/logout happens -> reloads data
 
+  // E01 — after a client-side navigation, the <head> still described the page
+  // the visitor LANDED on: open a tour from /itineraries and the title and
+  // canonical still said /itineraries. The server's own buildHead() facts for
+  // the new route are applied instead. Skipped on first render (the server
+  // already rendered that head), on blog routes (they manage their own meta)
+  // and in the portal.
+  const headRendered = useRef(false);
+  useEffect(() => {
+    if (!headRendered.current) { headRendered.current = true; return undefined; }
+    if (/^\/(blog|admin|agency|portal|embed)(\/|$)/.test(path)) return undefined;
+    const ctl = new AbortController();
+    fetch(`${API_BASE}/public/route-head?path=${encodeURIComponent(path)}`, { signal: ctl.signal })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`route-head ${r.status}`))))
+      .then(applyRouteHead)
+      .catch((e) => { if (e.name !== "AbortError") warnOnce("route-head", "[head] couldn't update the page title —", e.message); });
+    return () => ctl.abort();
+  }, [path]);
+
   useEffect(() => {
     const handlePop = () => setPath(window.location.pathname);
     window.addEventListener("popstate", handlePop);
@@ -1314,7 +1332,12 @@ function SxFooter() {
           <div><a className="logo" href="/"><SxLogoMark /><span className="nm"><b>Sawa</b><i>Tours · Egypt</i></span></a><p className="fblurb">Shared departures, confirmed together. Sawa pools travelers across Ministry-licensed Egyptian operators so the tours you want actually run.</p></div>
           <div className="fcol"><h4>Travel</h4><a href="/itineraries">All itineraries</a><a href="/departures">Open departures</a><a href="/goahead">GoAhead departures</a><a href="/destinations">Destinations</a><a href="/how-it-works">How it works</a><a href="/trust">The GoAhead promise</a><a href="/faq">FAQ</a></div>
           <div className="fcol"><h4>Operators</h4><a href="/partners">Operating partners</a><a href="/operators">List a tour</a><a href="/verify">List with Sawa</a><a href="/widget">Get the widget</a></div>
-          <div className="fcol"><h4>Company</h4><a href="/about">About Sawa</a><a href="/contact">Support</a><a href="/privacy">Privacy Policy</a><a href="/cookies">Cookies</a><a href="/terms">Terms and Conditions</a></div>
+          <div className="fcol"><h4>Company</h4><a href="/about">About Sawa</a><a href="/contact">Support</a><a href="/privacy">Privacy Policy</a><a href="/cookies">Cookies</a><a href="/terms">Terms and Conditions</a>
+            {/* U05 — the static pages get this link from consent.js, which adds it
+                on load and on Back/Forward only; the SPA's own navigation never
+                re-added it, so it went missing on tour pages. Rendered here, with
+                the class consent.js looks for so it doesn't add a second one. */}
+            <a href="#" className="ck-link" onClick={(e) => { e.preventDefault(); window.sawaConsent?.open?.(); }}>Cookie settings</a></div>
         </div>
         <div className="fbot"><span>© 2026 Sawa Tours · Operated by Online Era · Registration 148500</span></div>
       </div>
@@ -1340,6 +1363,14 @@ const SxX = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" str
 
 // S04 — "send me a code", then "here it is". Twilio sends and checks the code;
 // the server hands back a token for this number, which the booking carries.
+// F06 — the departure a link asked for (?date=<id>), if it is one of this
+// tour's bookable dates. An unknown or stale id is ignored, not an error.
+function requestedDate(tour) {
+  const want = new URLSearchParams(window.location.search).get("date");
+  if (!want) return null;
+  return (tour.dates || []).find((d) => String(d.id) === want) || null;
+}
+
 function PhoneCodeStep({ phone, confirmed, onVerified }) {
   const [sentTo, setSentTo] = useState("");
   const [code, setCode] = useState("");
@@ -1426,7 +1457,9 @@ function TourDetailV2({ isSaving, navigate, phoneVerification = false, onBookPub
   }, [tourProp.id, tourProp.detailPending]);
 
   const lead = tour.dates[0];
-  const [depId, setDepId] = useState(lead?.id || "");
+  // F06 — a date card links here with ?date=<departure id>; open on that date
+  // when this tour has it, else on the earliest.
+  const [depId, setDepId] = useState(() => requestedDate(tour)?.id ?? lead?.id ?? "");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
@@ -1480,8 +1513,19 @@ function TourDetailV2({ isSaving, navigate, phoneVerification = false, onBookPub
     ? packagePriceFor(tour, dep, dep ? projected : goAhead, { roomingType, tierId })
     : dep ? livePriceFor({ ...tour, ...dep }, projected) : livePriceFor(tour, goAhead);
   const confirmed = !!dep && isGoAheadDeparture(dep);
-  const depositPct = Number(dep?.depositPercent || tour.depositPercent || 10);
-  const total = pp * nSeats;
+  // F07 — a NEW date is priced the way the server prices its seed booking
+  // (computePledgePricing on an empty date copied from the tour): the party's
+  // own size, the tour's rates and deposit — never the headcount or deposit of
+  // whichever existing date happens to be selected.
+  const requestCapacity = Math.max(1, Number(tour.maxSeats) || MAX_GROUP_SIZE);
+  const newDatePP = isPackage(tour)
+    ? packagePriceFor(tour, null, nSeats, { roomingType, tierId })
+    : livePriceFor(tour, nSeats);
+  const quotePP = reqMode ? newDatePP : pp;
+  const depositPct = reqMode
+    ? Number(tour.depositPercent || depositPctFor(tour))
+    : Number(dep?.depositPercent || tour.depositPercent || 10);
+  const total = quotePP * nSeats;
   const deposit = depositFor(total, depositPct);
   const balance = Math.max(0, total - deposit);
   const seatPct = goAhead ? Math.min(100, Math.round((booked / goAhead) * 100)) : 0;
@@ -1493,7 +1537,19 @@ function TourDetailV2({ isSaving, navigate, phoneVerification = false, onBookPub
   const related = allProducts.filter((p) => p.id !== tour.id && (p.dates || []).length).slice(0, 3);
   const cityLabel = isPackage(tour) ? (tour.cities || [tour.city]).join(" → ") : tour.city;
 
-  useEffect(() => { setDepId(lead?.id || ""); }, [lead?.id]);
+  useEffect(() => { setDepId(requestedDate(tour)?.id ?? lead?.id ?? ""); }, [lead?.id, tour.id]);
+  // Picking a date writes it into the address, so a refresh, a shared link or
+  // Back returns to the same date.
+  function pickDate(id) {
+    setDepId(id);
+    try {
+      const u = new URL(window.location.href);
+      u.searchParams.set("date", String(id));
+      window.history.replaceState(window.history.state, "", u.pathname + u.search + u.hash);
+    } catch (e) {
+      warnOnce("date-param", "[tour] couldn't keep the chosen date in the address —", e.message);
+    }
+  }
   useEffect(() => {
     const root = rootRef.current; if (!root) return;
     // Scroll first: which elements count as "already on screen" depends on
@@ -1589,6 +1645,10 @@ function TourDetailV2({ isSaving, navigate, phoneVerification = false, onBookPub
     if (name.trim().length < 2) return setReqErr("Enter the lead traveler's name.");
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return setReqErr("Enter a valid email — we'll confirm your date there.");
     if (!phoneConfirmed) return setReqErr("Confirm your phone number with the code we send you first.");
+    // F07 — the same limit the server applies (the tour's own capacity), and
+    // the browser's number-field limit is not enforced on a type="button".
+    if (!Number.isInteger(Number(seats)) || Number(seats) < 1) return setReqErr("Enter how many travelers are coming.");
+    if (Number(seats) > requestCapacity) return setReqErr(`${tour.title} takes up to ${requestCapacity} travelers per date.`);
     setReqBusy(true);
     try {
       const response = await fetch(`${API_BASE}/public/departure-requests`, {
@@ -1653,9 +1713,9 @@ function TourDetailV2({ isSaving, navigate, phoneVerification = false, onBookPub
                     stated source, per the amended acceptance criteria. */}
               </div>
             </div>
-            <div className="share-row">
-              <button className="icon-btn" aria-label="Save"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M19 14c1.5-1.5 3-3.4 3-5.5A4.5 4.5 0 0 0 12 5 4.5 4.5 0 0 0 2 8.5c0 2.1 1.5 4 3 5.5l7 7z" /></svg></button>
-            </div>
+            {/* U03 — a heart "Save" button sat here, alone in its row, with no
+                handler and no saved list behind it: a promise the page couldn't
+                keep. Removed with its row until saving exists. */}
           </header>
 
           <section className="gallery rv" aria-label="Tour photos">
@@ -1845,7 +1905,7 @@ function TourDetailV2({ isSaving, navigate, phoneVerification = false, onBookPub
                             type="button"
                             className={`date-opt${on ? " on" : ""}`}
                             key={d.id}
-                            onClick={() => setDepId(d.id)}
+                            onClick={() => pickDate(d.id)}
                             disabled={left <= 0}
                             aria-pressed={on}
                             aria-label={`${formatDate(d.date, { alwaysYear: true })}${d.time ? ` at ${d.time}` : ""} — ${s} of ${ga} joined${left <= 0 ? ", full" : ""}`}
@@ -1893,7 +1953,7 @@ function TourDetailV2({ isSaving, navigate, phoneVerification = false, onBookPub
                               {reqMatches.map((m) => {
                                 const ms = seatsTotal(m.pledges); const mga = goAheadSeatsFor(m);
                                 return (
-                                  <button type="button" className="date-opt" key={m.id} onClick={() => { setDepId(m.id); setReqMode(false); setReqMatches(null); }}>
+                                  <button type="button" className="date-opt" key={m.id} onClick={() => { pickDate(m.id); setReqMode(false); setReqMatches(null); }}>
                                     <div className="d-left"><b>{formatDate(m.date, { alwaysYear: true })}{m.time ? ` · ${m.time}` : ""}</b><span>{ms} of {mga} joined</span></div>
                                     <span className="d-right form">Join this date</span>
                                   </button>
@@ -1968,7 +2028,7 @@ function TourDetailV2({ isSaving, navigate, phoneVerification = false, onBookPub
                       )}
                       <label className="bk-field">
                         <span>Seats</span>
-                        <input type="number" min="1" max={Math.max(1, remaining)} value={seats} onChange={(e) => setSeats(e.target.value)} required aria-required="true" />
+                        <input type="number" min="1" max={reqMode ? requestCapacity : Math.max(1, remaining)} value={seats} onChange={(e) => setSeats(e.target.value)} required aria-required="true" />
                       </label>
                     </div>
                     {/* The glyph is carried by the code as well as the symbol in
@@ -1977,17 +2037,20 @@ function TourDetailV2({ isSaving, navigate, phoneVerification = false, onBookPub
                         (it read as CAD, AUD or SGD to a good share of the people
                         this page is for), but a figure someone is about to owe
                         is the wrong place to economise on words. */}
-                    {!reqMode && <div className="bk-sum">
-                      <div className="r"><span>{CURRENCY_SYMBOL}{pp} {CURRENCY} × {nSeats}</span><b>{CURRENCY_SYMBOL}{total} {CURRENCY}</b></div>
+                    {/* F07 — shown for a requested date too: the traveller used to
+                        lose the price, deposit and cancellation terms at the
+                        point of asking for a date that would carry them. */}
+                    {<div className="bk-sum">
+                      <div className="r"><span>{CURRENCY_SYMBOL}{quotePP} {CURRENCY} × {nSeats}</span><b>{CURRENCY_SYMBOL}{total} {CURRENCY}</b></div>
                       <div className="r key"><span>Deposit at GoAhead ({depositPct}%)</span><b>{CURRENCY_SYMBOL}{deposit} {CURRENCY}</b></div>
                       <div className="r"><span>Balance</span><b>{CURRENCY_SYMBOL}{balance} {CURRENCY}</b></div>
-                      <div className="nt">All amounts in {CURRENCY_PROSE}. Nothing is charged today. Balance due {dep ? balanceDueLabel(dep.startDate || dep.date, tour) : "before departure"}.</div>
+                      <div className="nt">All amounts in {CURRENCY_PROSE}. Nothing is charged today. Balance due {reqMode ? (reqDate ? balanceDueLabel(reqDate, tour) : "before departure") : dep ? balanceDueLabel(dep.startDate || dep.date, tour) : "before departure"}.</div>
                       {/* The deadline is the other half of the GoAhead promise:
                           the date by which this either confirms or is canceled
                           and everyone refunded. Showing it before someone
                           reserves is the point — a commitment nobody can see is
                           not one they can rely on. */}
-                      {dep?.confirmDeadline && (
+                      {!reqMode && dep?.confirmDeadline && (
                         <div className="nt">
                           This date confirms or cancels by <b>{formatDate(dep.confirmDeadline, { alwaysYear: true })}</b> — {dep.confirmDeadlineDays} days before departure. If it hasn't reached {goAheadSeatsFor(dep)} travelers by then it's canceled and you're charged nothing.
                         </div>
@@ -3277,6 +3340,28 @@ function PageCTA({ navigate, note }) {
       <button className="btn-pill primary lg" onClick={() => navigate("/itineraries")}>Browse itineraries <ArrowRight size={18} /></button>
     </section>
   );
+}
+
+// E01 — write a route's head facts (from /api/public/route-head) into the
+// document, updating the tags the server rendered rather than adding copies.
+function setHeadTag(attr, key, content) {
+  let el = document.head.querySelector(`meta[${attr}="${key}"]`);
+  if (!el) { el = document.createElement("meta"); el.setAttribute(attr, key); document.head.appendChild(el); }
+  el.setAttribute("content", content || "");
+}
+function applyRouteHead(m) {
+  if (!m?.title) return;
+  document.title = m.title;
+  setHeadTag("name", "description", m.description);
+  setHeadTag("name", "robots", m.noindex ? "noindex,nofollow" : "index,follow");
+  setHeadTag("property", "og:title", m.title);
+  setHeadTag("property", "og:description", m.description);
+  setHeadTag("property", "og:url", m.canonical);
+  setHeadTag("name", "twitter:title", m.title);
+  setHeadTag("name", "twitter:description", m.description);
+  let link = document.head.querySelector('link[rel="canonical"]');
+  if (!link) { link = document.createElement("link"); link.setAttribute("rel", "canonical"); document.head.appendChild(link); }
+  link.setAttribute("href", m.canonical);
 }
 
 // ---- Blog: SEO + GEO meta injection ----

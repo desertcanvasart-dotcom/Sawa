@@ -317,7 +317,9 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       var joined=seatsOf(d);
       var toGo=Math.max(0,min-joined);
       var pct=Math.max(12,Math.min(100,Math.round(joined/min*100)))+'%';
-      var link='/'+(isPkg?'package':'tour')+'/'+tourSlug(p);
+      /* F06 — the card is ONE date; the link says which, so the tour page opens
+         on it instead of the tour's first date. */
+      var link='/'+(isPkg?'package':'tour')+'/'+tourSlug(p)+'?date='+encodeURIComponent(d.id);
       var start=d.startDate||d.date;
       var dateTxt='Departs '+fmt(start)+(d.endDate?(' – '+fmt(d.endDate)):'');
       items.push({

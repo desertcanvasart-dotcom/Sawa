@@ -103,7 +103,8 @@ test("type decides the prefix, so retyping a product moves its URL", () => {
 test("a clean slug under the wrong prefix redirects to the canonical one", () => {
   const app = read("server/app.js");
   assert.match(app, /const canonical = await canonicalTourPath\(seg\)/);
-  assert.match(app, /return res\.redirect\(301, canonical\)/);
+  // The query rides along (F06): a ?date= link must not lose its date.
+  assert.match(app, /return res\.redirect\(301, canonical \+ queryOf\(req\)\)/);
   // Never to itself — a 301 loop is cached by the browser and outlives the fix.
   assert.match(app, /if \(!canonical \|\| canonical === req\.path\) return next\(\)/);
 });

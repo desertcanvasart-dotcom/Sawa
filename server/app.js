@@ -164,6 +164,9 @@ class AppError extends Error {
     this.status = status;
   }
 }
+// The request's query string, "?" included, or "" — for redirects that move
+// the path and must not drop what the link carried.
+const queryOf = (req) => { const i = req.originalUrl.indexOf("?"); return i === -1 ? "" : req.originalUrl.slice(i); };
 const h = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 
 // ---- Tenant-aware pledge visibility ----------------------------------------
@@ -1555,6 +1558,20 @@ app.get("/api/public/tour-products/:id", h(async (req, res) => {
   // operators, not by bookings, so this does not carry live seat counts.
   res.set("Cache-Control", "public, max-age=0, s-maxage=60, stale-while-revalidate=300");
   res.json({ product });
+}));
+
+// E01 — the <head> facts for a route, for the SPA to apply after a client-side
+// navigation. The same buildHead() the server renders pages with, so a title
+// can't differ between a direct load and a click. Only paths that buildHead
+// serves; portal, API and static /site pages never reach here.
+app.get("/api/public/route-head", h(async (req, res) => {
+  const path = String(req.query.path || "");
+  if (!/^\/[A-Za-z0-9\-/_.%]*$/.test(path) || path.length > 300 || /^\/(api|admin|agency|portal|embed)(\/|$)/.test(path)) {
+    throw new AppError(422, "Invalid path.");
+  }
+  const { meta, notFound } = await buildHead(path);
+  res.set("Cache-Control", "public, max-age=60, s-maxage=300");
+  res.json({ ...meta, notFound });
 }));
 
 app.get("/api/public/unavailable-dates", h(async (_req, res) => {
@@ -2957,7 +2974,8 @@ app.use(h(async (req, res, next) => {
     // this, which is the difference between a fix and a patch.
     const canonical = await canonicalTourPath(seg);
     if (!canonical || canonical === req.path) return next();
-    return res.redirect(301, canonical);
+    // Keep the query: ?date= (F06) and ?ref= must survive the move.
+    return res.redirect(301, canonical + queryOf(req));
   }
   const r = await pool.query("SELECT id, title, city, type FROM tour_products WHERE id=$1 AND active IS NOT FALSE LIMIT 1", [seg]);
   if (!r.rows.length) return next();
@@ -2967,7 +2985,7 @@ app.use(h(async (req, res, next) => {
   // but a 301 loop is cached by the browser and survives the server-side fix —
   // so the cheap guard stays regardless of what the slug logic does later.
   if (target === req.path) return next();
-  return res.redirect(301, target);
+  return res.redirect(301, target + queryOf(req));
 }));
 
 // ============================ STATIC SPA (production) ============================
