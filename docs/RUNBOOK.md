@@ -525,6 +525,23 @@ an unstated environmental condition is not a verdict.
 
 ---
 
+## Integration tests (real Postgres)
+
+`*.integration.test.js` run the real migrations on an empty database and drive
+the real server over HTTP — bookings, the capacity race, cutoff, cancel-by-code,
+GoAhead, date-request limits, and the email outbox. CI runs them against a
+throwaway Postgres service container (`.github/workflows/pr.yml`). Locally:
+
+```bash
+TEST_DATABASE_URL=postgres://postgres@127.0.0.1:5432/postgres npm test
+```
+
+Each test file creates and drops its own database there (`server/test-db.js`),
+which refuses a Supabase host. Never point it at production. Without
+`TEST_DATABASE_URL` they are skipped.
+
+---
+
 ## Schema migrations do not run on deploy
 
 `npm start` does **not** run the general migration runner. Every schema

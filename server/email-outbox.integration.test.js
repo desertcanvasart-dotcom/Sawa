@@ -1,11 +1,13 @@
 // O01 — the email outbox against a REAL Postgres. Runs only when
-// TEST_DATABASE_URL points at a disposable database (it creates and drops
-// email_log there); otherwise every test is skipped, so the normal suite needs
-// no database.
+// TEST_DATABASE_URL points at a disposable Postgres (it creates and drops its
+// own database there — see test-db.js); otherwise every test is skipped, so the
+// normal suite needs no database.
 //
 //   TEST_DATABASE_URL=postgres://postgres@127.0.0.1:55432/postgres npm test
-const URL = process.env.TEST_DATABASE_URL;
-if (URL) process.env.DATABASE_URL = URL;
+import { freshDatabase, dropDatabase, testDbSkip } from "./test-db.js";
+// Its own database (test-db.js), created before db/index.js reads DATABASE_URL.
+const DB_NAME = "sawa_it_email_outbox";
+if (!testDbSkip) process.env.DATABASE_URL = await freshDatabase(DB_NAME);
 process.env.DATABASE_URL ||= "postgres://unused@127.0.0.1:1/none";
 process.env.RESEND_API_KEY = "test-key-a-stub-answers";
 process.env.EMAIL_FROM = "Sawa Tours <test@example.com>";
@@ -16,7 +18,7 @@ import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const skip = !URL && "set TEST_DATABASE_URL to a disposable Postgres to run";
+const skip = testDbSkip;
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const sql = (f) => readFileSync(join(ROOT, "server", "db", f), "utf8");
 let pool, email;
@@ -30,7 +32,7 @@ before(async () => {
   await pool.query(sql("schema_003_ops.sql").split("CREATE TABLE IF NOT EXISTS audit_log")[0]);
   await pool.query(sql("schema_042_email_outbox.sql"));
 });
-after(async () => { if (!skip) { await pool.query("DROP TABLE IF EXISTS email_log"); await pool.end(); } });
+after(async () => { if (!skip) { await pool.end(); await dropDatabase(DB_NAME); } });
 
 const realFetch = globalThis.fetch;
 const stub = (impl) => { globalThis.fetch = impl; };
