@@ -429,3 +429,7 @@ section.block.tight{padding:84px 0}
 /* P3.3 State B — the gap and the reassurance, on the forming card. */
 .card .prog .gap{margin:10px 0 0;font-size:.9rem;font-weight:600;color:var(--teal);line-height:1.4}
 .card .prog .reassure{margin:4px 0 0;font-size:.8rem;color:var(--muted);line-height:1.45}
+
+/* The skip link shows when focused (it was an onfocus/onblur pair; the CSP
+   allows no inline handlers). !important outranks its inline left:-999px. */
+.skip-link:focus{left:12px!important}

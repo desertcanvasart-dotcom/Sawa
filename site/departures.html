@@ -28,7 +28,7 @@
 height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 <!-- End Google Tag Manager (noscript) -->
 <div class="grain"></div>
-<a href="#main" style="position:absolute;left:-999px;top:0;z-index:99;background:var(--teal);color:#fff;padding:10px 16px;border-radius:8px" onfocus="this.style.left='12px'" onblur="this.style.left='-999px'">Skip to content</a>
+<a href="#main" class="skip-link" style="position:absolute;left:-999px;top:0;z-index:99;background:var(--teal);color:#fff;padding:10px 16px;border-radius:8px">Skip to content</a>
 <div class="nav-shell">
   <nav class="nav" id="nav" aria-label="Primary">
     <a href="/" class="logo" aria-label="Sawa Tours home">
@@ -182,6 +182,13 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
    and images are real. Falls back to the static demo cards if the API fails. */
 (function(){
   var grid=document.querySelector('.grid.g-3.early');
+  /* Cards open their date. One listener on the grid rather than an onclick
+     attribute per card: the Content Security Policy does not allow inline
+     event handlers. */
+  if(grid)grid.addEventListener('click',function(e){
+    var card=e.target.closest&&e.target.closest('[data-href]');
+    if(card&&!e.target.closest('a,button'))location.href=card.getAttribute('data-href');
+  });
   if(!grid)return;
   var CAL='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>';
   var USR='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>';
@@ -329,7 +336,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         date: start || '9999-12-31',
         toGo: toGo,
         html:
-        '<article class="card rv in" data-region="'+esc(p.city)+'" onclick="location.href=\''+link+'\'" style="cursor:pointer">'
+        '<article class="card rv in" data-region="'+esc(p.city)+'" data-href="'+esc(link)+'" style="cursor:pointer">'
         +'<div class="core"><div class="media">'
         +'<img src="'+esc(img)+'" alt="'+esc(alt)+'" loading="lazy" />'
         +'<span class="badge form">'+(toGo===1?'Forming · 1 to go':'Forming · '+toGo+' to go')+'</span>'

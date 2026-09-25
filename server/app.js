@@ -52,7 +52,7 @@ import { dirname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   buildHead, buildBody, robotsTxt, sitemapXml, llmsTxt, llmsFullTxt,
-  inlineScriptJson, sliceBootstrapForRoute, clearSeoCaches, catalogueRoutes,
+  dataScript, sliceBootstrapForRoute, clearSeoCaches, catalogueRoutes,
   canonicalTourPath,
 } from "./seo.js";
 import { emitDepartureSync, unavailableDates, syncDivergences } from "./autoura-sync.js";
@@ -3104,7 +3104,7 @@ if (existsSync(distDir)) {
       const full = notFound ? null : builtPayload;
       const bootstrap = full ? sliceBootstrapForRoute(full, path) : null;
       const bootstrapTag = bootstrap
-        ? `<script>window.__SAWA_BOOTSTRAP__=${inlineScriptJson(bootstrap)}</script>`
+        ? dataScript("sawa-bootstrap", bootstrap)
         : "";
       const html = template
         .replace(/<title>[\s\S]*?<\/title>/, `<title>${title.replace(/</g, "&lt;")}</title>`)

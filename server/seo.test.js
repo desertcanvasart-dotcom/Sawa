@@ -6,7 +6,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 process.env.DATABASE_URL = process.env.DATABASE_URL || "postgres://u:p@127.0.0.1:1/none";
-const { robotsTxt, sitemapXml, llmsTxt, inlineScriptJson, sliceBootstrapForRoute, iso } = await import("./seo.js");
+const { robotsTxt, sitemapXml, llmsTxt, inlineScriptJson, dataScript, sliceBootstrapForRoute, iso } = await import("./seo.js");
 
 // ---- sliceBootstrapForRoute ------------------------------------------------
 // The payload is inlined into every rendered page, so it is sliced to what the
@@ -135,12 +135,11 @@ test("inlineScriptJson output still parses back to the original value", () => {
 
 test("inlineScriptJson round-trips through an actual script-tag extraction", () => {
   const payload = { title: "Nasty </script><script>alert(1)</script>" };
-  const html = `<script>window.__SAWA_BOOTSTRAP__=${inlineScriptJson(payload)}</script>`;
+  const html = dataScript("sawa-bootstrap", payload);
   // Mimic the parser: the block ends at the FIRST </script>. If escaping is
   // right, that is the closing tag we wrote, and the JSON is intact.
   const body = html.slice(html.indexOf(">") + 1, html.indexOf("</script>"));
-  const json = body.replace("window.__SAWA_BOOTSTRAP__=", "");
-  assert.deepEqual(JSON.parse(json), payload);
+  assert.deepEqual(JSON.parse(body), payload);
 });
 
 // ---- robots.txt ------------------------------------------------------------

@@ -21,7 +21,7 @@ test("published blog HTML includes safe, route-specific data for React", async (
   });
   const result = await buildHead(`/blog/${row.slug}`);
   assert.equal(result.notFound, false);
-  const match = result.head.match(/<script>window\.__SAWA_BLOG_POST__=(.*?)<\/script>/s);
+  const match = result.head.match(/<script type="application\/json" id="sawa-blog-post">(.*?)<\/script>/s);
   assert.ok(match, "article data must be in the HTML, not fetched only after mount");
   const post = JSON.parse(match[1]);
   assert.equal(post.slug, row.slug);
@@ -43,13 +43,13 @@ test("unknown or unpublished posts remain actual 404s without inline content", a
   const result = await buildHead("/blog/unpublished");
   assert.equal(result.notFound, true);
   assert.match(result.head, /noindex/);
-  assert.doesNotMatch(result.head, /__SAWA_BLOG_POST__/);
+  assert.doesNotMatch(result.head, /sawa-blog-post/);
   assert.equal(await buildBody("/blog/unpublished"), "");
 });
 
 test("non-article routes never inherit another page's article data", async () => {
-  assert.doesNotMatch((await buildHead("/blog")).head, /__SAWA_BLOG_POST__/);
-  assert.doesNotMatch((await buildHead("/admin")).head, /__SAWA_BLOG_POST__/);
+  assert.doesNotMatch((await buildHead("/blog")).head, /sawa-blog-post/);
+  assert.doesNotMatch((await buildHead("/admin")).head, /sawa-blog-post/);
 });
 
 test("API mapper preserves article fields and omits unlisted database fields", () => {

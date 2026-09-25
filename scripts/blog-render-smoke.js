@@ -11,7 +11,7 @@ import { mapPost } from "../server/blog-post.js";
 
 process.env.DATABASE_URL = "postgres://u:p@127.0.0.1:1/none";
 const { pool } = await import("../server/db/index.js");
-const { buildHead, buildBody, inlineScriptJson, sliceBootstrapForRoute } = await import("../server/seo.js");
+const { buildHead, buildBody, dataScript, sliceBootstrapForRoute } = await import("../server/seo.js");
 const fixture = {
   id: "blog_render_fixture", slug: "fayoum-in-a-day-from-cairo", status: "published",
   title: "Fayoum in a Day from Cairo", author: "Sawa Tours",
@@ -42,7 +42,7 @@ app.get(packagePath, (_req, res) => {
   }, packagePath);
   const html = template
     .replace(/<title>.*?<\/title>/s, `<title>${packageFixture.title} | Sawa Tours</title>`)
-    .replace('<div id="root"></div>', () => `<div id="root"><div data-server-rendered="true"><h1>${packageFixture.title}</h1></div></div><script>window.__SAWA_BOOTSTRAP__=${inlineScriptJson(payload)}</script>`);
+    .replace('<div id="root"></div>', () => `<div id="root"><div data-server-rendered="true"><h1>${packageFixture.title}</h1></div></div>${dataScript("sawa-bootstrap", payload)}`);
   res.status(200).type("html").send(html);
 });
 app.get("/api/blog", (_req, res) => res.json({ posts: [mapPost(fixture)] }));
@@ -53,7 +53,7 @@ app.use("/api", (_req, res) => res.status(503).json({ error: "Fixture catalogue 
 app.get(["/blog", "/blog/:slug"], async (req, res) => {
   const [{ title, head, notFound }, body] = await Promise.all([buildHead(req.path), buildBody(req.path)]);
   const pageHead = req.query["no-inline"]
-    ? head.replace(/<script>window\.__SAWA_BLOG_POST__=.*?<\/script>/s, "") : head;
+    ? head.replace(/<script type="application\/json" id="sawa-blog-post">.*?<\/script>/s, "") : head;
   const html = template.replace(/<title>.*?<\/title>/s, `<title>${title}</title>`)
     .replace("</head>", () => `${pageHead}</head>`)
     .replace('<div id="root"></div>', () => `<div id="root">${body}</div>`);
