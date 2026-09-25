@@ -285,7 +285,12 @@ section.block.tight{padding:84px 0}
 .cmp tr:last-child td{border-bottom:0}
 
 /* code block */
-.code{background:var(--teal);color:var(--cream);border-radius:var(--r-md);padding:22px 24px;font-family:'SFMono-Regular',ui-monospace,Menlo,Consolas,monospace;font-size:.84rem;line-height:1.7;overflow:auto;position:relative}
+/* A grid column grows to its widest line unless told otherwise, so a long
+   code line or URL pushed the whole page sideways on phones (the /widget and
+   /operators snippets). Columns may shrink; long tokens wrap in tables. */
+.two-col>*{min-width:0}
+.cmp code{overflow-wrap:anywhere}
+.code{max-width:100%;background:var(--teal);color:var(--cream);border-radius:var(--r-md);padding:22px 24px;font-family:'SFMono-Regular',ui-monospace,Menlo,Consolas,monospace;font-size:.84rem;line-height:1.7;overflow:auto;position:relative}
 .code .cm{color:#7fa6ad}
 .code .tg{color:var(--gold)}
 .code .at{color:#a9d3c0}
