@@ -19,7 +19,7 @@
 // the same render (a type picker handing over to the editor) would push the
 // new entry before the old one is gone, and the pop would then land on the
 // wrong side of it. Pushes wait until our own pops have landed.
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const KEY = "sawaPanel";
 
@@ -41,8 +41,11 @@ export function createPanelHistory(history) {
   }
 
   return {
-    open(close) {
-      const entry = { token: ++nextToken, close, pushed: false };
+    // `mayClose`, if given, is asked before Back closes the panel. Answering no
+    // keeps it open: the entry Back just took away is put back, so the next
+    // Back asks again rather than skipping past the panel.
+    open(close, mayClose) {
+      const entry = { token: ++nextToken, close, mayClose, pushed: false };
       stack.push(entry);
       if (ownPops === 0) push(entry);
       return function release() {
@@ -69,8 +72,13 @@ export function createPanelHistory(history) {
       // The user pressed Back (or Forward): close everything opened after the
       // entry they landed on, newest first.
       while (stack.length && stack[stack.length - 1].token > landed) {
-        const p = stack.pop();
-        p.close();
+        const top = stack[stack.length - 1];
+        if (top.mayClose && !top.mayClose()) {
+          push(top);
+          return;
+        }
+        stack.pop();
+        top.close();
       }
       if (landed > 0 && !isLive(landed)) popOurs();
     },
@@ -85,11 +93,76 @@ function panelHistory() {
   return shared;
 }
 
-export function useBackToClose(isOpen, close) {
+export function useBackToClose(isOpen, close, mayClose) {
   const closeRef = useRef(close);
   closeRef.current = close;
+  const mayCloseRef = useRef(mayClose);
+  mayCloseRef.current = mayClose;
   useEffect(() => {
     if (!isOpen) return undefined;
-    return panelHistory()?.open(() => closeRef.current?.());
+    return panelHistory()?.open(
+      () => closeRef.current?.(),
+      () => (mayCloseRef.current ? mayCloseRef.current() : true),
+    );
   }, [isOpen]);
+}
+
+// An editor that asks before throwing away what was typed into it.
+//
+// Back, ✕, Cancel and "Back to …" all close an editor, and a refresh or a
+// closed tab loses it too; none of them used to ask. Any typing inside the
+// editor (`dirtyProps` on its wrapper catches input and change events as they
+// bubble, including the rich-text editor's) marks it unsaved, and from then on
+// every one of those exits asks first. Saving closes through `close` directly,
+// so a successful save is never questioned.
+export const DISCARD_MESSAGE = "You have unsaved changes. Discard them?";
+
+// Editors open right now with unsaved changes, so that leaving the section
+// from the sidebar (portal-section.js) can ask too.
+const unsaved = new Set();
+export function confirmDiscardAll(message = DISCARD_MESSAGE) {
+  for (const isDirty of unsaved) if (isDirty()) return window.confirm(message);
+  return true;
+}
+
+export function useUnsavedGuard(isOpen, close, message = DISCARD_MESSAGE) {
+  const dirtyRef = useRef(false);
+  const [dirty, setDirty] = useState(false);
+  const markDirty = () => {
+    if (dirtyRef.current) return;
+    dirtyRef.current = true;
+    setDirty(true);
+  };
+  // Each opening starts clean.
+  useEffect(() => {
+    if (!isOpen) return;
+    dirtyRef.current = false;
+    setDirty(false);
+  }, [isOpen]);
+
+  const mayClose = () => !dirtyRef.current || window.confirm(message);
+  useBackToClose(isOpen, close, mayClose);
+
+  useEffect(() => {
+    if (!isOpen) return undefined;
+    const isDirty = () => dirtyRef.current;
+    unsaved.add(isDirty);
+    return () => unsaved.delete(isDirty);
+  }, [isOpen]);
+
+  // Refresh or closing the tab: the browser shows its own "Leave site?" prompt.
+  useEffect(() => {
+    if (!isOpen || !dirty) return undefined;
+    const warn = (e) => { e.preventDefault(); e.returnValue = ""; };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [isOpen, dirty]);
+
+  return {
+    // For ✕, Cancel and "Back to …".
+    requestClose: () => { if (mayClose()) close(); },
+    // Spread onto the element wrapping the editor. display:contents keeps the
+    // wrapper out of the layout.
+    dirtyProps: { onInput: markDirty, onChange: markDirty, style: { display: "contents" } },
+  };
 }

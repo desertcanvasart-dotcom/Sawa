@@ -8,6 +8,7 @@
 // /portal/* path (server/app.js, the "/*all" route), and a reload or a shared
 // link lands on the same section.
 import { useEffect, useState } from "react";
+import { confirmDiscardAll } from "./back-to-close.js";
 
 // "/portal/bookings" -> "bookings"; anything unknown -> the fallback, so an old
 // or mistyped link still opens the dashboard rather than an empty page.
@@ -38,6 +39,8 @@ export function usePortalSection(ids, fallback) {
 
   function go(id) {
     if (!ids.includes(id)) return;
+    // Leaving the section unmounts an open editor; ask before losing its edits.
+    if (id !== section && !confirmDiscardAll()) return;
     const to = pathForSection(window.location.pathname, id, fallback);
     if (to !== window.location.pathname) window.history.pushState({}, "", to);
     setSection(id);

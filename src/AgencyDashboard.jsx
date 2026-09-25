@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import { DashSidebar } from "./DashSidebar";
 import { usePortalSection } from "./portal-section.js";
-import { useBackToClose } from "./back-to-close.js";
+import { useBackToClose, useUnsavedGuard } from "./back-to-close.js";
 import { apiFetch } from "./supabaseClient";
 import { ProductEditor } from "./AdminDashboard";
 // Date-only departure values need a local-noon anchor or they render a day
@@ -195,7 +195,7 @@ function listingStatusTag(status) {
 function MyListingsSection() {
   const [products, setProducts] = useState(null);
   const [editor, setEditor] = useState(null); // {type} for new, {existing} for edit
-  useBackToClose(!!editor, () => setEditor(null));
+  const guard = useUnsavedGuard(!!editor, () => setEditor(null));
   const [picking, setPicking] = useState(false);
   useBackToClose(picking, () => setPicking(false));
   const [err, setErr] = useState("");
@@ -213,14 +213,16 @@ function MyListingsSection() {
 
   if (editor) {
     return (
-      <ProductEditor
-        type={editor.existing?.type || editor.type}
-        existing={editor.existing}
-        agencyMode
-        saveEndpoint="/agency/tour-products"
-        onClose={() => setEditor(null)}
-        onSaved={() => { setEditor(null); load(); }}
-      />
+      <div {...guard.dirtyProps}>
+        <ProductEditor
+          type={editor.existing?.type || editor.type}
+          existing={editor.existing}
+          agencyMode
+          saveEndpoint="/agency/tour-products"
+          onClose={guard.requestClose}
+          onSaved={() => { setEditor(null); load(); }}
+        />
+      </div>
     );
   }
 

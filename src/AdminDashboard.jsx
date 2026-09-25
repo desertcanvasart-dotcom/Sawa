@@ -8,7 +8,7 @@ import {
 import { apiFetch, supabase, uploadImage } from "./supabaseClient";
 import { DashSidebar } from "./DashSidebar";
 import { usePortalSection } from "./portal-section.js";
-import { useBackToClose } from "./back-to-close.js";
+import { useBackToClose, useUnsavedGuard } from "./back-to-close.js";
 import { RichText } from "./RichText";
 // Date-only departure values need a local-noon anchor or they render a day
 // early west of UTC — see src/dates.js.
@@ -234,7 +234,7 @@ function Empty({ label }) { return <div className="dash-empty">{label}</div>; }
 /* ---------------- Tours & Packages ---------------- */
 function ToursSection({ data, destinations = [], reload, flash }) {
   const [editor, setEditor] = useState(null); // null | {type}
-  useBackToClose(!!editor, () => setEditor(null));
+  const guard = useUnsavedGuard(!!editor, () => setEditor(null));
   // Only what's on sale. Archived listings live in their own sidebar section —
   // mixed into this list they read as clutter, and made it look as if a
   // cancelled tour was still being sold.
@@ -251,14 +251,16 @@ function ToursSection({ data, destinations = [], reload, flash }) {
   // Full-page editor takes over the section when adding/editing.
   if (editor) {
     return (
-      <ProductEditor
-        type={editor.type}
-        existing={editor.existing}
-        destinations={destinations}
-        departures={data.departures || []}
-        onClose={() => setEditor(null)}
-        onSaved={() => { setEditor(null); flash(editor.existing ? "Tour updated." : "Tour created."); reload(); }}
-      />
+      <div {...guard.dirtyProps}>
+        <ProductEditor
+          type={editor.type}
+          existing={editor.existing}
+          destinations={destinations}
+          departures={data.departures || []}
+          onClose={guard.requestClose}
+          onSaved={() => { setEditor(null); flash(editor.existing ? "Tour updated." : "Tour created."); reload(); }}
+        />
+      </div>
     );
   }
 
@@ -343,7 +345,7 @@ function ArchiveSection({ data, reload, flash }) {
 /* ---------------- Destinations ---------------- */
 function DestinationsSection({ destinations, reload, flash }) {
   const [editor, setEditor] = useState(null); // null | {} | { existing }
-  useBackToClose(!!editor, () => setEditor(null));
+  const guard = useUnsavedGuard(!!editor, () => setEditor(null));
 
   async function remove(d) {
     if (!window.confirm(`Delete "${d.name}"? Tours that already saved its meeting points keep them.`)) return;
@@ -378,11 +380,13 @@ function DestinationsSection({ destinations, reload, flash }) {
         </table>
       </div>
       {editor && (
-        <DestinationEditor
-          existing={editor.existing}
-          onClose={() => setEditor(null)}
-          onSaved={() => { setEditor(null); flash("Destination saved."); reload(); }}
-        />
+        <div {...guard.dirtyProps}>
+          <DestinationEditor
+            existing={editor.existing}
+            onClose={guard.requestClose}
+            onSaved={() => { setEditor(null); flash("Destination saved."); reload(); }}
+          />
+        </div>
       )}
     </>
   );
@@ -448,7 +452,7 @@ function DestinationEditor({ existing, onClose, onSaved }) {
 /* ---------------- Blog ---------------- */
 function BlogSection({ posts, reload, flash }) {
   const [editor, setEditor] = useState(null); // null | {} | { existing }
-  useBackToClose(!!editor, () => setEditor(null));
+  const guard = useUnsavedGuard(!!editor, () => setEditor(null));
 
   async function remove(p) {
     if (!window.confirm(`Delete "${p.title}"? This can't be undone.`)) return;
@@ -457,7 +461,11 @@ function BlogSection({ posts, reload, flash }) {
   }
 
   if (editor) {
-    return <BlogEditor existing={editor.existing} onClose={() => setEditor(null)} onSaved={() => { setEditor(null); flash("Post saved."); reload(); }} />;
+    return (
+      <div {...guard.dirtyProps}>
+        <BlogEditor existing={editor.existing} onClose={guard.requestClose} onSaved={() => { setEditor(null); flash("Post saved."); reload(); }} />
+      </div>
+    );
   }
 
   return (

@@ -43,10 +43,10 @@ function setup() {
   const b = fakeBrowser();
   const ph = createPanelHistory(b.history);
   b.attach(ph);
-  const panel = (name, log) => {
+  const panel = (name, log, mayClose) => {
     let release = null;
     return {
-      open() { release = ph.open(() => { log.push(`closed ${name}`); release = null; }); },
+      open() { release = ph.open(() => { log.push(`closed ${name}`); release = null; }, mayClose); },
       closeFromUi() { const r = release; release = null; r(); },
       get isOpen() { return !!release; },
     };
@@ -125,4 +125,31 @@ test("a panel lost to a section switch is stepped over on the way back", () => {
   b.userBack();
   assert.equal(b.url, "/portal/bookings");
   assert.equal(b.depth, 0, "one Back, past the dead entry, to the section itself");
+});
+
+test("an editor with unsaved changes can refuse Back — and stays reachable by Back", () => {
+  const { b, panel } = setup();
+  const log = [];
+  let answer = false;
+  const editor = panel("editor", log, () => answer);
+  editor.open();
+  b.userBack();                       // "Discard?" -> Cancel
+  assert.deepEqual(log, [], "the editor stays open");
+  assert.equal(b.depth, 1, "its entry is back, so Back asks again next time");
+  answer = true;
+  b.userBack();                       // "Discard?" -> OK
+  assert.deepEqual(log, ["closed editor"]);
+  assert.equal(b.depth, 0);
+});
+
+test("a refused Back leaves a dialog on top of the editor alone", () => {
+  const { b, panel } = setup();
+  const log = [];
+  const editor = panel("editor", log, () => false), dialog = panel("dialog", log);
+  editor.open(); dialog.open();
+  b.userBack();
+  assert.deepEqual(log, ["closed dialog"], "the dialog has no unsaved work; it just closes");
+  b.userBack();
+  assert.deepEqual(log, ["closed dialog"], "the editor refuses");
+  assert.equal(b.depth, 1);
 });
