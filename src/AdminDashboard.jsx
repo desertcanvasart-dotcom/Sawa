@@ -422,7 +422,7 @@ function DestinationEditor({ existing, onClose, onSaved }) {
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <h2>{existing ? "Edit destination" : "New destination"}</h2>
-          <button className="icon-btn" onClick={onClose}><X size={18} /></button>
+          <button data-keeps-clean className="icon-btn" onClick={onClose}><X size={18} /></button>
         </div>
         <div className="modal-body">
           <Field label="Destination name"><input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Alexandria" /></Field>
@@ -441,8 +441,8 @@ function DestinationEditor({ existing, onClose, onSaved }) {
           {err && <p className="dest-err">{err}</p>}
         </div>
         <div className="modal-foot">
-          <button type="button" className="btn-ghost" onClick={onClose}>Cancel</button>
-          <button type="button" className="btn-primary" disabled={busy} onClick={save}>{busy ? "Saving…" : "Save destination"}</button>
+          <button data-keeps-clean type="button" className="btn-ghost" onClick={onClose}>Cancel</button>
+          <button data-keeps-clean type="button" className="btn-primary" disabled={busy} onClick={save}>{busy ? "Saving…" : "Save destination"}</button>
         </div>
       </div>
     </div>
@@ -571,7 +571,7 @@ function BlogEditor({ existing, onClose, onSaved }) {
   return (
     <div className="editor-page">
       <div className="editor-page-head">
-        <button className="editor-back" onClick={onClose}><ArrowLeft size={16} />Back to Blog</button>
+        <button data-keeps-clean className="editor-back" onClick={onClose}><ArrowLeft size={16} />Back to Blog</button>
         <h1>{editing ? "Edit post" : "New post"}</h1>
       </div>
 
@@ -629,10 +629,10 @@ function BlogEditor({ existing, onClose, onSaved }) {
       </div>
 
       <div className="editor-page-foot">
-        <button type="button" className="btn-ghost" onClick={onClose}>Cancel</button>
+        <button data-keeps-clean type="button" className="btn-ghost" onClick={onClose}>Cancel</button>
         <div className="wiz-nav">
-          <button type="button" className="btn-ghost" disabled={busy} onClick={() => save("draft")}>{busy ? "Saving…" : "Save draft"}</button>
-          <button type="button" className="btn-primary" disabled={busy} onClick={() => save("published")}>{busy ? "Saving…" : "Publish"}</button>
+          <button data-keeps-clean type="button" className="btn-ghost" disabled={busy} onClick={() => save("draft")}>{busy ? "Saving…" : "Save draft"}</button>
+          <button data-keeps-clean type="button" className="btn-primary" disabled={busy} onClick={() => save("published")}>{busy ? "Saving…" : "Publish"}</button>
         </div>
       </div>
     </div>
@@ -883,11 +883,11 @@ export function ProductEditor({ type: typeProp, existing, destinations = [], dep
   return (
     <div className="editor-page">
       <div className="editor-page-head">
-        <button className="editor-back" onClick={onClose}><ArrowLeft size={16} />{agencyMode ? "Back to my listings" : "Back to Tours"}</button>
+        <button data-keeps-clean className="editor-back" onClick={onClose}><ArrowLeft size={16} />{agencyMode ? "Back to my listings" : "Back to Tours"}</button>
         <h1>{editing ? "Edit " : (agencyMode ? "List a new " : "New ")}{pkg ? "package" : "day tour"}</h1>
         <div className="wiz-steps">
           {steps.map((s, i) => (
-            <button key={s} className={`wiz-step ${i === step ? "active" : ""} ${i < step ? "done" : ""}`} onClick={() => setStep(i)}>
+            <button data-keeps-clean key={s} className={`wiz-step ${i === step ? "active" : ""} ${i < step ? "done" : ""}`} onClick={() => setStep(i)}>
               <span className="wiz-num">{i + 1}</span>{s}
             </button>
           ))}
@@ -1141,11 +1141,11 @@ export function ProductEditor({ type: typeProp, existing, destinations = [], dep
         </div>
 
         <div className="editor-page-foot">
-          <button type="button" className="btn-ghost" onClick={onClose}>Cancel</button>
+          <button data-keeps-clean type="button" className="btn-ghost" onClick={onClose}>Cancel</button>
           <div className="wiz-nav">
-            {step > 0 && <button type="button" className="btn-ghost" onClick={() => setStep(step - 1)}>Back</button>}
-            {step < last && <button type="button" className="btn-primary" onClick={() => setStep(step + 1)}>Next</button>}
-            {step === last && <button type="button" className="btn-primary" disabled={busy} onClick={save}>{busy ? "Saving…" : agencyMode ? (editing ? "Save & resubmit" : "Submit for review") : editing ? "Save changes" : (pkg ? "Create package" : "Create tour")}</button>}
+            {step > 0 && <button data-keeps-clean type="button" className="btn-ghost" onClick={() => setStep(step - 1)}>Back</button>}
+            {step < last && <button data-keeps-clean type="button" className="btn-primary" onClick={() => setStep(step + 1)}>Next</button>}
+            {step === last && <button data-keeps-clean type="button" className="btn-primary" disabled={busy} onClick={save}>{busy ? "Saving…" : agencyMode ? (editing ? "Save & resubmit" : "Submit for review") : editing ? "Save changes" : (pkg ? "Create package" : "Create tour")}</button>}
           </div>
         </div>
     </div>

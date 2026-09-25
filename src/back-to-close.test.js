@@ -153,3 +153,37 @@ test("a refused Back leaves a dialog on top of the editor alone", () => {
   assert.deepEqual(log, ["closed dialog"], "the editor refuses");
   assert.equal(b.depth, 1);
 });
+
+test("a button that edits marks the editor unsaved; close, save and step buttons do not", async () => {
+  const { clickEdits } = await import("./back-to-close.js");
+  const button = (keepsClean) => {
+    const b = { hasAttribute: (a) => keepsClean && a === "data-keeps-clean" };
+    b.closest = (sel) => (sel === "button" ? b : null);
+    return b;
+  };
+  const iconInside = (btn) => ({ closest: (sel) => (sel === "button" ? btn : null) });
+  assert.equal(clickEdits(button(false)), true, "Add day, remove photo, …");
+  assert.equal(clickEdits(iconInside(button(false))), true, "a click on the icon inside the button");
+  assert.equal(clickEdits(button(true)), false, "Cancel / Save / Next");
+  assert.equal(clickEdits({ closest: () => null }), false, "not a button at all");
+  assert.equal(clickEdits(null), false);
+});
+
+test("every way out of an editor is marked, and the sidebar's exits ask", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { join, dirname } = await import("node:path");
+  const { fileURLToPath } = await import("node:url");
+  const here = dirname(fileURLToPath(import.meta.url));
+  const admin = readFileSync(join(here, "AdminDashboard.jsx"), "utf8");
+  const from = admin.indexOf("function DestinationEditor");
+  const to = admin.indexOf("function PriceTierEditor");
+  const editors = admin.slice(from, to);
+  for (const line of editors.split("\n")) {
+    if (/<button[^>]*onClick=\{(onClose|save|\(\) => save\(|\(\) => setStep\()/.test(line)) {
+      assert.match(line, /data-keeps-clean/, `unmarked, so it would count as an edit: ${line.trim().slice(0, 90)}`);
+    }
+  }
+  const sidebar = readFileSync(join(here, "DashSidebar.jsx"), "utf8");
+  assert.match(sidebar, /if \(confirmDiscardAll\(\)\) navigate\("\/"\)/);
+  assert.match(sidebar, /if \(confirmDiscardAll\(\)\) signOut\(\)/);
+});

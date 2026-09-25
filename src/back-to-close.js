@@ -112,10 +112,20 @@ export function useBackToClose(isOpen, close, mayClose) {
 // Back, ✕, Cancel and "Back to …" all close an editor, and a refresh or a
 // closed tab loses it too; none of them used to ask. Any typing inside the
 // editor (`dirtyProps` on its wrapper catches input and change events as they
-// bubble, including the rich-text editor's) marks it unsaved, and from then on
-// every one of those exits asks first. Saving closes through `close` directly,
+// bubble, including the rich-text editor's), or any button that edits (see
+// clickEdits), marks it unsaved, and from then on every one of those exits
+// asks first. Saving closes through `close` directly,
 // so a successful save is never questioned.
 export const DISCARD_MESSAGE = "You have unsaved changes. Discard them?";
+
+// A button inside an editor changes its content — Add day, remove a photo,
+// move it, add a tier — unless it is marked `data-keeps-clean`: the buttons
+// that only close, save or step between the editor's pages. Counting every
+// other button errs toward asking once too often rather than losing work.
+export function clickEdits(target) {
+  const button = target && typeof target.closest === "function" ? target.closest("button") : null;
+  return !!button && !button.hasAttribute("data-keeps-clean");
+}
 
 // Editors open right now with unsaved changes, so that leaving the section
 // from the sidebar (portal-section.js) can ask too.
@@ -163,6 +173,11 @@ export function useUnsavedGuard(isOpen, close, message = DISCARD_MESSAGE) {
     requestClose: () => { if (mayClose()) close(); },
     // Spread onto the element wrapping the editor. display:contents keeps the
     // wrapper out of the layout.
-    dirtyProps: { onInput: markDirty, onChange: markDirty, style: { display: "contents" } },
+    dirtyProps: {
+      onInput: markDirty,
+      onChange: markDirty,
+      onClickCapture: (e) => { if (clickEdits(e.target)) markDirty(); },
+      style: { display: "contents" },
+    },
   };
 }

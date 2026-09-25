@@ -1,5 +1,6 @@
 import React from "react";
 import { LogOut, ExternalLink } from "lucide-react";
+import { confirmDiscardAll } from "./back-to-close.js";
 
 // Shopify-style grouped sidebar shared by the admin + agency dashboards.
 // groups: [{ title?: string, items: [{ id, label, icon, badge?(stats), alert?(stats) }] }]
@@ -44,8 +45,9 @@ export function DashSidebar({ subtitle, groups, active, onSelect, stats, roleLab
           </div>
         </div>
         <div className="acct-actions">
-          <button onClick={() => navigate("/")}><ExternalLink size={14} />Public site</button>
-          <button onClick={signOut}><LogOut size={14} />Sign out</button>
+          {/* Both leave the dashboard, unmounting any open editor — ask first. */}
+          <button onClick={() => { if (confirmDiscardAll()) navigate("/"); }}><ExternalLink size={14} />Public site</button>
+          <button onClick={() => { if (confirmDiscardAll()) signOut(); }}><LogOut size={14} />Sign out</button>
         </div>
       </div>
     </aside>
