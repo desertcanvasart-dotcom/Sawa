@@ -1,5 +1,6 @@
 import "dotenv/config";
 import pg from "pg";
+import { sslConfig } from "./ssl.js";
 
 const { Pool } = pg;
 
@@ -7,8 +8,9 @@ if (!process.env.DATABASE_URL) {
   throw new Error("DATABASE_URL is not set. Copy .env.example to .env and fill it in.");
 }
 
-// Railway requires SSL; local does not. Toggle via env.
-const ssl = process.env.PGSSL === "true" ? { rejectUnauthorized: false } : false;
+// Railway requires SSL; local does not. Toggle via env. Certificate
+// verification switches on with PGSSL_CA — see ./ssl.js (S07).
+const ssl = sslConfig();
 
 export const pool = new Pool({
   connectionString: process.env.DATABASE_URL,

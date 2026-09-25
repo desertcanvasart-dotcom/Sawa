@@ -20,6 +20,7 @@
 // it is in docs/RUNBOOK.md — but the guarantee should not be waiting on it.
 import "dotenv/config";
 import pg from "pg";
+import { sslConfig } from "./ssl.js";
 
 const { Pool } = pg;
 
@@ -37,7 +38,7 @@ export function readOnlyPool(env = process.env) {
   }
   return new Pool({
     connectionString,
-    ssl: env.PGSSL === "true" ? { rejectUnauthorized: false } : false,
+    ssl: sslConfig(env),
     // Auditors are not latency-sensitive and should not compete with the app.
     max: 2,
     idleTimeoutMillis: 10_000,
