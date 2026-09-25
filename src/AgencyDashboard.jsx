@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { DashSidebar } from "./DashSidebar";
 import { usePortalSection } from "./portal-section.js";
+import { useBackToClose } from "./back-to-close.js";
 import { apiFetch } from "./supabaseClient";
 import { ProductEditor } from "./AdminDashboard";
 // Date-only departure values need a local-noon anchor or they render a day
@@ -194,7 +195,9 @@ function listingStatusTag(status) {
 function MyListingsSection() {
   const [products, setProducts] = useState(null);
   const [editor, setEditor] = useState(null); // {type} for new, {existing} for edit
+  useBackToClose(!!editor, () => setEditor(null));
   const [picking, setPicking] = useState(false);
+  useBackToClose(picking, () => setPicking(false));
   const [err, setErr] = useState("");
 
   async function load() {
@@ -303,6 +306,7 @@ function MyListingsSection() {
 /* ---------------- Book seats: catalog -> tour detail -> book ---------------- */
 function BookTours({ tourProducts, departures, agencyId, agencyName, agencyPax = 0, onReload }) {
   const [openId, setOpenId] = useState(null);
+  useBackToClose(!!openId, () => setOpenId(null));
   const [q, setQ] = useState("");
   const [type, setType] = useState("all");
 

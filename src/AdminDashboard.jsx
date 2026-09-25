@@ -8,6 +8,7 @@ import {
 import { apiFetch, supabase, uploadImage } from "./supabaseClient";
 import { DashSidebar } from "./DashSidebar";
 import { usePortalSection } from "./portal-section.js";
+import { useBackToClose } from "./back-to-close.js";
 import { RichText } from "./RichText";
 // Date-only departure values need a local-noon anchor or they render a day
 // early west of UTC — see src/dates.js.
@@ -233,6 +234,7 @@ function Empty({ label }) { return <div className="dash-empty">{label}</div>; }
 /* ---------------- Tours & Packages ---------------- */
 function ToursSection({ data, destinations = [], reload, flash }) {
   const [editor, setEditor] = useState(null); // null | {type}
+  useBackToClose(!!editor, () => setEditor(null));
   // Only what's on sale. Archived listings live in their own sidebar section —
   // mixed into this list they read as clutter, and made it look as if a
   // cancelled tour was still being sold.
@@ -341,6 +343,7 @@ function ArchiveSection({ data, reload, flash }) {
 /* ---------------- Destinations ---------------- */
 function DestinationsSection({ destinations, reload, flash }) {
   const [editor, setEditor] = useState(null); // null | {} | { existing }
+  useBackToClose(!!editor, () => setEditor(null));
 
   async function remove(d) {
     if (!window.confirm(`Delete "${d.name}"? Tours that already saved its meeting points keep them.`)) return;
@@ -445,6 +448,7 @@ function DestinationEditor({ existing, onClose, onSaved }) {
 /* ---------------- Blog ---------------- */
 function BlogSection({ posts, reload, flash }) {
   const [editor, setEditor] = useState(null); // null | {} | { existing }
+  useBackToClose(!!editor, () => setEditor(null));
 
   async function remove(p) {
     if (!window.confirm(`Delete "${p.title}"? This can't be undone.`)) return;
@@ -1266,6 +1270,7 @@ const LISTING_TABS = [
 // Approve -> departure opens on the public board; decline -> cancelled + email.
 function DateRequestsSection({ data, reload, flash }) {
   const [declining, setDeclining] = useState(null); // departure being declined
+  useBackToClose(!!declining, () => setDeclining(null));
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState("");
   const [err, setErr] = useState("");
@@ -1372,10 +1377,12 @@ function statusTag(status) {
 function ListingRequestsSection({ data, reload, flash }) {
   const [tab, setTab] = useState("pending");
   const [rejecting, setRejecting] = useState(null); // product being rejected
+  useBackToClose(!!rejecting, () => setRejecting(null));
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState("");
   const [err, setErr] = useState("");
   const [preview, setPreview] = useState(null); // listing being viewed in full
+  useBackToClose(!!preview, () => setPreview(null));
 
   // Only agency-submitted listings enter this queue (agency_id present).
   const submitted = (data.tourProducts || []).filter((p) => p.agencyId);
@@ -1644,6 +1651,7 @@ function ListingPreviewModal({ p, agencyName, busy, onApprove, onReject, onClose
 function DeparturesSection({ data, reload, flash }) {
   const [filter, setFilter] = useState("all");
   const [pub, setPub] = useState(null); // {type}
+  useBackToClose(!!pub, () => setPub(null));
   const deps = data.departures || [];
   const shown = deps.filter((d) => {
     if (filter === "all") return true;
@@ -1821,6 +1829,7 @@ function BookingsSection({ data, stats }) {
   const [view, setView] = useState("list");   // list | tours
   const [filter, setFilter] = useState("all");
   const [open, setOpen] = useState(null); // selected booking
+  useBackToClose(!!open, () => setOpen(null));
 
   const [total, setTotal] = useState(0);
 
@@ -2226,7 +2235,9 @@ function AgenciesSection({ flash }) {
   // Which agency's operator record is open. One at a time: these are ten fields
   // and a verification decision, not a cell edit.
   const [editing, setEditing] = useState(null);
+  useBackToClose(!!editing, () => setEditing(null));
   const [creating, setCreating] = useState(false);
+  useBackToClose(creating, () => setCreating(false));
   const set = (k) => (e) => setForm((s) => ({ ...s, [k]: e.target.value }));
 
   async function load() {
