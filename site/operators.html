@@ -151,10 +151,14 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     </div>
     <div class="panel rv" data-d="1">
       <div class="panel-in" style="padding:18px">
-        <div class="code"><button class="copy" data-copy="#snippet">Copy</button><span id="snippet"><span class="cm">&lt;!-- Sawa departures widget --&gt;</span>
-<span class="tg">&lt;script</span> <span class="at">src=</span>"https://embed.sawatours.com/v1.js"<span class="tg">&gt;&lt;/script&gt;</span>
-<span class="tg">&lt;div</span> <span class="at">data-sawa-operator=</span>"your-id"
-     <span class="at">data-region=</span>"all"<span class="tg">&gt;&lt;/div&gt;</span></span></div>
+        <div class="code"><button class="copy" data-copy="#snippet">Copy</button><span id="snippet"><span class="cm">&lt;!-- Sawa widget: paste where it should appear --&gt;</span>
+&lt;iframe src="https://sawa.tours/embed?ref=YOUR-CODE" style="width:100%;border:0;border-radius:18px" loading="lazy" data-sawa-embed&gt;&lt;/iframe&gt;
+<span class="cm">&lt;!-- Sizes it to fit and matches your page's colours --&gt;</span>
+&lt;script&gt;
+(function(){function s(f){try{var c=getComputedStyle(document.body),a=document.querySelector('a');f.contentWindow.postMessage({type:'sawa-embed-theme',bg:c.backgroundColor,text:c.color,accent:a?getComputedStyle(a).color:''},'*');}catch(e){}}
+addEventListener('message',function(e){if(!e.data)return;if(e.data.type==='sawa-embed-height')document.querySelectorAll('iframe[data-sawa-embed]').forEach(function(f){f.style.height=e.data.height+'px';});if(e.data.type==='sawa-embed-ready')document.querySelectorAll('iframe[data-sawa-embed]').forEach(s);});
+addEventListener('load',function(){document.querySelectorAll('iframe[data-sawa-embed]').forEach(s);});})();
+&lt;/script&gt;</span></div>
       </div>
     </div>
   </div>
