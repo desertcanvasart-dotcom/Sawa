@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { apiFetch, supabase, uploadImage } from "./supabaseClient";
 import { DashSidebar } from "./DashSidebar";
+import { usePortalSection } from "./portal-section.js";
 import { RichText } from "./RichText";
 // Date-only departure values need a local-noon anchor or they render a day
 // early west of UTC — see src/dates.js.
@@ -56,9 +57,10 @@ const NAV_GROUPS = [
     ],
   },
 ];
+const SECTION_IDS = NAV_GROUPS.flatMap((g) => g.items.map((it) => it.id));
 
 export function AdminDashboard({ user, agency, signOut, navigate }) {
-  const [section, setSection] = useState("overview");
+  const [section, setSection] = usePortalSection(SECTION_IDS, "overview");
   const [data, setData] = useState(null);       // bootstrap
   const [stats, setStats] = useState(null);
   const [destinations, setDestinations] = useState([]);
