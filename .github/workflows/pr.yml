@@ -7,7 +7,8 @@
 #
 # No secrets. Nothing here needs production credentials — ci-gate supplies a
 # dummy DATABASE_URL that never connects, so modules building a pool at import
-# time still load. Verified: 390/390 with no .env present.
+# time still load. Verified: 390/390 with no .env present. The integration
+# tests use a disposable Postgres service container (below), never production.
 #
 # What cannot run here is reported UNVERIFIED, never absent and never green.
 name: Gate
@@ -31,6 +32,23 @@ jobs:
   gate:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    # O02 — a throwaway Postgres for the integration tests (*.integration.test.js):
+    # the real migrations, the real server, driven over HTTP. It lives only for
+    # this job and holds nothing but what the tests create; each test file makes
+    # and drops its own database (server/test-db.js). Still no secrets.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: ci
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgres://postgres:ci@127.0.0.1:5432/postgres
     steps:
       - uses: actions/checkout@v4
 
