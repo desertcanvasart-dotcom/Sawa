@@ -5,6 +5,7 @@ import { pool, withTransaction, withDepartureWrites } from "./db/index.js";
 import { pendingGoAheads, alertPayload } from "./goahead-alert.js";
 import { refreshStatus } from "./departure-status.js";
 import { publicOperator, operatorForDeparture, directOperatorId } from "./domain.js";
+import { cspHeader, cspHeaderName, describeViolation, firstSighting } from "./csp.js";
 import {
   phoneVerificationEnabled, normalizePhone, issuePhoneToken, phoneTokenValid,
   startVerification, checkVerification,
@@ -114,6 +115,31 @@ app.use((req, res, next) => {
   }
   next();
 });
+// S06 — the Content Security Policy (server/csp.js), report-only until
+// CSP_ENFORCE=true. Pages only: API responses are JSON and are never rendered
+// as a document. Set after the /embed rule above, so an ENFORCED policy
+// carries the embed's frame-ancestors * rather than dropping it.
+app.use((req, res, next) => {
+  if (!req.path.startsWith("/api/")) {
+    res.setHeader(cspHeaderName(), cspHeader(req.path));
+    res.setHeader("Reporting-Endpoints", 'csp="/api/csp-report"');
+  }
+  next();
+});
+
+// Where browsers send what the policy would block. Logged once per distinct
+// violation per process (see firstSighting) — that log is how the policy is
+// tuned before it is enforced. Always 204: a report is never an error the
+// browser can do anything about.
+app.post("/api/csp-report",
+  express.json({ type: ["application/csp-report", "application/reports+json", "application/json"], limit: "64kb" }),
+  (req, res) => {
+    for (const v of describeViolation(req.body)) {
+      if (firstSighting(v)) console.warn(`[csp] ${v.directive} blocked ${v.blocked} on ${v.page}`);
+    }
+    res.status(204).end();
+  });
+
 // 12mb allows base64-encoded image uploads (~9mb raw) through /api/admin/uploads.
 // (The route-level json parser ran too late because this global one parses first.)
 app.use(express.json({ limit: "12mb" }));
