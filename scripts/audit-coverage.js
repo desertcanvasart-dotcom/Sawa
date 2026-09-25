@@ -33,6 +33,11 @@ export const EXEMPT = {
     + "(there is none), changes no access, money or status, and fires on every "
     + "landing from a partner link — auditing it would bury the rows that "
     + "matter under traffic. The referral totals ARE the record of this.",
+  "POST /api/csp-report":
+    "a browser's automatic report of what the Content Security Policy would "
+    + "block. There is no actor and nothing changes: no access, money, booking "
+    + "or status. It fires on page views, so auditing it would bury the rows "
+    + "that matter; each distinct violation is logged once for tuning instead.",
 };
 
 // Deliberately line-based over app.js rather than a parser: the file is one
