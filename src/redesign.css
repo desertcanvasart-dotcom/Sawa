@@ -551,6 +551,15 @@
 .sx .book-cta .note svg{width:15px;height:15px;color:#2c7a57;flex:none}
 .sx .bk-ok{margin-top:14px;background:rgba(44,122,87,.1);border:1px solid rgba(44,122,87,.25);color:#1f5c3a;border-radius:12px;padding:12px 14px;font-size:.86rem;font-weight:600}
 .sx .bk-err{margin-top:14px;color:#a13a2c;font-size:.86rem;font-weight:600}
+/* S04 — the phone-code step. Wraps on narrow screens so the code field and
+   buttons never force a horizontal scroll. */
+.sx .bk-verify{margin-top:12px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--paper)}
+.sx .bk-verify-note{font-size:.84rem;color:var(--muted);margin:0 0 10px}
+.sx .bk-verify-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.sx .bk-verify-row input{flex:1 1 130px;min-width:0;padding:10px 12px;border:1px solid var(--line);border-radius:10px;font:inherit;letter-spacing:.18em}
+.sx .bk-verify-row .btn{padding:9px 14px;font-size:.84rem}
+.sx .bk-verify-msg{margin-top:10px;font-size:.84rem;color:#1f5c3a;font-weight:600}
+.sx .bk-verify .bk-ok,.sx .bk-verify .bk-err{margin-top:10px}
 /* Cancel is a real <button> for keyboard/AT reachability; strip the chrome so it
    still reads as the inline link it looks like inside the "seat held" notice. */
 .sx .bk-cancel{background:none;border:0;padding:0;font:inherit;color:inherit;text-decoration:underline;cursor:pointer}
