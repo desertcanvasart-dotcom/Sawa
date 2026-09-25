@@ -517,6 +517,63 @@ export function departureActionBuckets(rows = [], seatsFor = () => 0, nowMs = Da
 // and `verification_state` says whether anyone has actually checked. A card
 // reading "Verified operator" above a row nobody assessed is the defect the
 // product page's old operator card was deleted for.
+// ---- U01 — which company runs a date -------------------------------------
+//
+// The rule the client set on 25 Sep 2026:
+//
+//   - The company whose customers fill the most seats runs the date. It only
+//     changes hands when another company has strictly MORE — a tie stays with
+//     whoever booked first.
+//   - Travellers who book directly count as the direct-bookings operator's
+//     customers (DIRECT_BOOKINGS_OPERATOR in brand.js).
+//   - It is fixed once the date reaches GoAhead: the leader at the booking that
+//     took the date to its minimum is the operator from then on, whatever is
+//     booked afterwards.
+//   - A date nobody has booked yet is named after the agency that listed the
+//     tour, or the direct-bookings operator for tours Sawa listed.
+//
+// The lock is worked out by replaying the live bookings in the order they were
+// made, not stored: that needs no schema change, and every page computes the
+// same answer from the same rows. Its limit, stated plainly: if a booking made
+// BEFORE GoAhead is later cancelled (after GoAhead that goes through Sawa, per
+// the Terms), the replay no longer sees it and can name a different leader.
+export function operatorForDeparture(departure, { listingAgencyId = null, directAgencyId = null } = {}) {
+  const fallback = listingAgencyId || directAgencyId || null;
+  const live = (departure?.pledges || [])
+    .filter((p) => p && p.status !== "cancelled" && Number(p.seats) > 0)
+    .map((p, i) => ({ p, i }))
+    .sort((a, b) => String(a.p.createdAt || "").localeCompare(String(b.p.createdAt || "")) || a.i - b.i)
+    .map(({ p }) => p);
+  if (!live.length) return fallback;
+
+  const goAhead = goAheadSeatsFor(departure);
+  const seatsBy = new Map();
+  let total = 0;
+  let leader = null;
+  for (const p of live) {
+    const owner = p.agencyId || directAgencyId;
+    const seats = Number(p.seats) || 0;
+    total += seats;
+    if (owner) {
+      seatsBy.set(owner, (seatsBy.get(owner) || 0) + seats);
+      if (leader === null || (owner !== leader && seatsBy.get(owner) > seatsBy.get(leader))) leader = owner;
+    }
+    // GoAhead reached on this booking: the operator is fixed here.
+    if (total >= goAhead) return leader || fallback;
+  }
+  return leader || fallback;
+}
+
+// The agency id of the direct-bookings operator, by exact (case-insensitive)
+// name. Null when no such record exists — the page then names nobody rather
+// than guessing.
+export function directOperatorId(agencies = [], name = "") {
+  const want = String(name || "").trim().toLowerCase();
+  if (!want) return null;
+  const hit = agencies.find((a) => String(a?.name || "").trim().toLowerCase() === want);
+  return hit ? hit.id : null;
+}
+
 export function publicOperator(agency) {
   if (!agency || !agency.name) return null;
   const verified = agency.verificationState === "verified";

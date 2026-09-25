@@ -1401,7 +1401,10 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
   const goAhead = goAheadSeatsFor(tour);
   // Whitelisted server-side by publicOperator(): name, licensed-since year,
   // verified flag and date. Never the licence number.
-  const operator = operatorsByProduct[tour.agencyId] || null;
+  // U01 — the company that runs the SELECTED date (the one with the most
+  // travellers on it, fixed at GoAhead), else the listing's default: the agency
+  // that listed it, or the direct-bookings operator. Worked out on the server.
+  const operator = operatorsByProduct[dep?.operatorAgencyId || tour.operatorAgencyId || tour.agencyId] || null;
   const booked = dep ? seatsTotal(dep.pledges) : 0;
   const remaining = dep ? Math.max(0, dep.maxSeats - booked) : 0;
   const nSeats = Math.max(1, Number(seats || 1));
@@ -1700,6 +1703,11 @@ function TourDetailV2({ isSaving, navigate, onBookPublicDeparture, onCancelPubli
                           : "Licensed by the Egyptian Ministry of Tourism and Antiquities. "}
                         This is the company responsible for delivering your departure.
                       </p>
+                      {/* The operator can change hands until GoAhead, so say so
+                          rather than let a later change read as a switch. */}
+                      {!confirmed && (
+                        <p className="op-note">Until this date reaches GoAhead, it's run by the partner with the most travelers on it, so this can change. Once the date is confirmed, the operator is fixed.</p>
+                      )}
                     </div>
                   </div></div>
                 </section>

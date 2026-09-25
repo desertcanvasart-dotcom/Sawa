@@ -166,3 +166,9 @@ export function websiteSchema() {
     publisher: { "@id": ORG_ID },
   };
 }
+
+// Who runs a date booked by travellers directly, with no agency: the operator
+// record of this name (matched against agencies.name). U01, decided by the
+// client on 25 Sep 2026 — see operatorForDeparture() in domain.js for the rule.
+// Overridable per environment; an unmatched name simply names nobody.
+export const DIRECT_BOOKINGS_OPERATOR = process.env.DIRECT_BOOKINGS_OPERATOR || "Capital Travel Service";

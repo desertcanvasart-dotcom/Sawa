@@ -5,14 +5,14 @@
 // robots.txt, sitemap.xml and llms.txt.
 // ============================================================
 import { pool } from "./db/index.js";
-import { BRAND, ORG_ID, SITE_ID, travelAgencySchema, websiteSchema } from "./brand.js";
+import { BRAND, ORG_ID, SITE_ID, travelAgencySchema, websiteSchema, DIRECT_BOOKINGS_OPERATOR } from "./brand.js";
 // tourPath is the one definition of a product's public URL. It already existed
 // and was already tested, but nothing used it: the catalogue markup, the
 // sitemap and (nearly) the page warmer each rebuilt the same expression by
 // hand. Three hand-written copies of a URL is three chances for the warmer to
 // warm a URL the catalogue does not link to.
 import { tourSlug, tourPath } from "./slug.js";
-import { publicOperator } from "./domain.js";
+import { publicOperator, directOperatorId } from "./domain.js";
 import { mapAgency } from "./db/mappers.js";
 import { GROUP_MAX_WORD } from "../shared/group-size.js";
 import { CURRENCY, CURRENCY_SYMBOL } from "../shared/currency.js";
@@ -194,12 +194,15 @@ async function slugToId(slug) {
 // there is one whitelist and both sides use it. The licence number is not in it.
 let agencyCache = { at: 0, byId: null };
 async function operatorForProduct(product) {
-  if (!product?.agency_id) return null;
+  if (!product) return null;
   if (!agencyCache.byId || Date.now() - agencyCache.at > LOOKUP_TTL_MS) {
     const r = await pool.query("SELECT * FROM agencies");
     agencyCache = { at: Date.now(), byId: new Map(r.rows.map((row) => [row.id, row])) };
   }
-  const row = agencyCache.byId.get(product.agency_id);
+  // U01 — a tour Sawa listed is run, by default, by the direct-bookings
+  // operator; the same default the catalogue's operatorAgencyId carries.
+  const id = product.agency_id || directOperatorId([...agencyCache.byId.values()], DIRECT_BOOKINGS_OPERATOR);
+  const row = id ? agencyCache.byId.get(id) : null;
   return row ? publicOperator(mapAgency(row)) : null;
 }
 
