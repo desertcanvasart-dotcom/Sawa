@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
-import { supabase, apiFetch } from "./supabaseClient";
+import { apiFetch } from "./supabaseClient";
+import { supabase } from "./supabaseAuth.js";
 
 // Tokens in the URL fragment shouldn't outlive the exchange — they end up in
 // browser history and in anything the visitor pastes or shares.

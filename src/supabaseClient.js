@@ -1,21 +1,31 @@
-import { createClient } from "@supabase/supabase-js";
+import { warnOnce } from "./warn-once.js";
+import { mayHaveSession } from "./session-hint.js";
 
-const url = import.meta.env.VITE_SUPABASE_URL;
-const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-
-export const supabase = createClient(url, anonKey, {
-  auth: { persistSession: true, autoRefreshToken: true },
-});
+// The auth client lives in supabaseAuth.js and is loaded only when needed —
+// see the note there (P01).
 
 // In dev, point at the standalone API. In production the SPA is served by the
 // same Express process, so default to a same-origin relative path.
 export const API_BASE =
   import.meta.env.VITE_API_BASE || (import.meta.env.DEV ? "http://localhost:8787/api" : "/api");
 
-// Fetch wrapper that attaches the current Supabase access token.
+// Fetch wrapper that attaches the current Supabase access token — loading the
+// auth client only when there can be one (P01).
 export async function apiFetch(path, options = {}) {
-  const { data } = await supabase.auth.getSession();
-  const token = data?.session?.access_token;
+  let token = null;
+  if (mayHaveSession()) {
+    // A chunk that fails to load (a flaky mobile connection) must not take the
+    // request down with it: it goes out anonymously, which every public
+    // endpoint serves, and a portal endpoint answers 401 so the sign-in screen
+    // takes over.
+    try {
+      const { supabase } = await import("./supabaseAuth.js");
+      const { data } = await supabase.auth.getSession();
+      token = data?.session?.access_token;
+    } catch (e) {
+      warnOnce("auth-load", "[auth] couldn't load the sign-in session — continuing without it:", e.message);
+    }
+  }
   const headers = { ...(options.headers || {}) };
   if (token) headers.Authorization = `Bearer ${token}`;
   return fetch(`${API_BASE}${path}`, { ...options, headers });

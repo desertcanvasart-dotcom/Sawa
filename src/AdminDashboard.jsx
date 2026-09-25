@@ -5,7 +5,7 @@ import {
   TrendingUp, AlertTriangle, MapPin, Hotel, ArrowUpRight, ArrowLeft, Trash2, Pencil,
   Newspaper, Share2, Copy, Inbox, Eye, Clock3,
 } from "lucide-react";
-import { apiFetch, supabase, uploadImage } from "./supabaseClient";
+import { apiFetch, uploadImage } from "./supabaseClient";
 import { DashSidebar } from "./DashSidebar";
 import { usePortalSection } from "./portal-section.js";
 import { useBackToClose, useUnsavedGuard } from "./back-to-close.js";
