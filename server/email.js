@@ -725,6 +725,66 @@ export function goAheadEmail({ to, route, dateLabel, operator = null }) {
   return { to, subject, html, text, kind: "goahead" };
 }
 
+// 043 — the payment link, sent to the customer when ops paste one in.
+// Deadlines are shown in Egyptian time, the same clock every departure runs on.
+const cairoDeadline = (iso) => new Intl.DateTimeFormat("en-GB", {
+  weekday: "short", day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit",
+  timeZone: "Africa/Cairo", timeZoneName: "short",
+}).format(new Date(iso));
+const PAYMENT_WHAT = { deposit: "deposit", balance: "balance", full: "payment" };
+
+export function paymentLinkEmail({ to, customerName, route, dateLabel, kind, amount, dueAt, url, bookingCode }) {
+  const what = PAYMENT_WHAT[kind] || "payment";
+  const sum = `${CURRENCY_SYMBOL}${Number(amount).toLocaleString()} ${CURRENCY}`;
+  const deadline = cairoDeadline(dueAt);
+  const manageUrl = bookingCode ? `${APP_URL}/booking/${encodeURIComponent(bookingCode)}` : null;
+  const lead = kind === "balance"
+    ? `Here is the link for the balance on ${route}, ${dateLabel}.`
+    : `${route} on ${dateLabel} is confirmed to run. Here is the link for your ${what}.`;
+  const subject = `Your ${what} link — ${route}`;
+  const text =
+    `Hi ${customerName || ""},\n\n${lead}\n\n`
+    + `Amount: ${sum}\nPlease pay by: ${deadline}\n${bookingCode ? `Booking code: ${bookingCode}\n` : ""}\n`
+    + `Pay securely here (card payment through Tab, our payment provider):\n${url}\n\n`
+    + `If the link doesn't work, or you've already paid, just reply to this email.`
+    + (manageUrl ? `\n\nYour booking: ${manageUrl}` : "");
+  const html = shell(
+    `Your ${what} link`,
+    `<p style="margin:0 0 20px">${esc(lead)}</p>
+     ${panel(
+       `${row("Amount:", esc(sum))}<br/>
+        ${row("Please pay by:", esc(deadline))}
+        ${bookingCode ? `<br/>${row("Booking code:", esc(bookingCode))}` : ""}`
+     )}
+     ${button(esc(url), `Pay ${what} — ${sum}`)}
+     ${note("Card payment through Tab, our payment provider. If the link doesn't work, or you've already paid, just reply to this email.")}
+     ${manageUrl ? note(`<a href="${manageUrl}" style="color:${C.muted}">View your booking</a>`) : ""}`,
+    { eyebrow: kind === "balance" ? "Balance due" : "Confirmed — deposit due", preheader: `${sum} for ${route} — please pay by ${deadline}` }
+  );
+  return { to, subject, html, text, kind: "payment_link" };
+}
+
+export function paymentReceivedEmail({ to, customerName, route, dateLabel, amount, reference, outstanding, bookingCode }) {
+  const sum = `${CURRENCY_SYMBOL}${Number(amount).toLocaleString()} ${CURRENCY}`;
+  const left = Number(outstanding) > 0 ? `${CURRENCY_SYMBOL}${Number(outstanding).toLocaleString()} ${CURRENCY}` : "";
+  const manageUrl = bookingCode ? `${APP_URL}/booking/${encodeURIComponent(bookingCode)}` : null;
+  const subject = `Payment received — ${route}`;
+  const text =
+    `Hi ${customerName || ""},\n\nWe've received ${sum} for ${route} on ${dateLabel}. Thank you.\n`
+    + `Reference: ${reference}\n`
+    + (left ? `Still to pay: ${left} — we'll send the link before it's due.\n` : "Your booking is paid in full.\n")
+    + (manageUrl ? `\nYour booking: ${manageUrl}` : "");
+  const html = shell(
+    "Payment received",
+    `<p style="margin:0 0 20px">We've received your payment for <strong>${esc(route)}</strong> on ${esc(dateLabel)}. Thank you.</p>
+     ${panel(`${row("Received:", esc(sum))}<br/>${row("Reference:", esc(reference))}<br/>${row(left ? "Still to pay:" : "Balance:", esc(left || "Paid in full"))}`)}
+     ${left ? note("We'll send the link for the rest before it's due.") : ""}
+     ${manageUrl ? button(manageUrl, "View your booking") : ""}`,
+    { eyebrow: "Payment received", preheader: `${sum} received for ${route}` }
+  );
+  return { to, subject, html, text, kind: "payment_received" };
+}
+
 export function listingApprovedEmail({ to, fullName, title }) {
   const subject = `Approved: "${title}" is now live on Sawa`;
   const text =
