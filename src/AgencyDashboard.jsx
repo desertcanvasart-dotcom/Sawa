@@ -935,7 +935,7 @@ function MyDateRequests({ onChange }) {
 /* ---------------- Promote: self-serve tracked widget ---------------- */
 const EMBED_SCRIPT = `<script>
 (function(){function s(f){try{var c=getComputedStyle(document.body),a=document.querySelector('a');f.contentWindow.postMessage({type:'sawa-embed-theme',bg:c.backgroundColor,text:c.color,accent:a?getComputedStyle(a).color:''},'*');}catch(e){}}
-addEventListener('message',function(e){if(!e.data)return;if(e.data.type==='sawa-embed-height')document.querySelectorAll('iframe[data-sawa-embed]').forEach(function(f){f.style.height=e.data.height+'px';});if(e.data.type==='sawa-embed-ready')document.querySelectorAll('iframe[data-sawa-embed]').forEach(s);});
+addEventListener('message',function(e){if(!e.data)return;document.querySelectorAll('iframe[data-sawa-embed]').forEach(function(f){if(f.contentWindow!==e.source)return;if(e.data.type==='sawa-embed-height')f.style.height=e.data.height+'px';if(e.data.type==='sawa-embed-ready')s(f);if(e.data.type==='sawa-embed-top'&&f.getBoundingClientRect().top<0)f.scrollIntoView({behavior:'smooth',block:'start'});});});
 addEventListener('load',function(){document.querySelectorAll('iframe[data-sawa-embed]').forEach(s);});})();
 <\/script>`;
 
@@ -959,6 +959,10 @@ function WidgetSection({ tourProducts = [] }) {
   const iframe = (src) => `<iframe src="${SITE}${src}" style="width:100%;border:0;border-radius:18px" loading="lazy" data-sawa-embed></iframe>`;
   const brandSnippet = code ? `${iframe(`/embed?ref=${code}`)}\n${EMBED_SCRIPT}` : "";
   const prodSnippet = (code && prod) ? `${iframe(`/embed/${isPkg(prod) ? "package" : "tour"}/${prod.id}?ref=${code}`)}\n${EMBED_SCRIPT}` : "";
+  // Booking inside the widget: the visitor books without leaving the agency's
+  // site, and the booking carries this agency's code straight from the iframe.
+  const bookAllSnippet = code ? `${iframe(`/embed/book?ref=${code}`)}\n${EMBED_SCRIPT}` : "";
+  const bookProdSnippet = (code && prod) ? `${iframe(`/embed/book/${isPkg(prod) ? "package" : "tour"}/${prod.id}?ref=${code}`)}\n${EMBED_SCRIPT}` : "";
 
   const copy = async (text, key) => {
     try { await navigator.clipboard.writeText(text); setCopied(key); setTimeout(() => setCopied(""), 1800); }
@@ -980,7 +984,16 @@ function WidgetSection({ tourProducts = [] }) {
 
           <div className="dash-card">
             <div className="dash-card-head">
-              <h2>Website banner</h2>
+              <h2>Booking widget — all tours</h2>
+              <button className="btn-ghost sm" onClick={() => copy(bookAllSnippet, "bookAll")}><Copy size={14} />{copied === "bookAll" ? "Copied!" : "Copy code"}</button>
+            </div>
+            <p className="field-hint">Your customers browse every Sawa tour and book it <b>on your website</b> — they never leave your page. Each booking is credited to {info.name || "your agency"}, and the widget shows “Booked through {info.name || "your agency"}”.</p>
+            <textarea className="embed-snippet" readOnly rows={5} value={bookAllSnippet} onFocus={(e) => e.target.select()} />
+          </div>
+
+          <div className="dash-card">
+            <div className="dash-card-head">
+              <h2>Website banner <span className="field-hint" style={{ fontWeight: 500 }}>· opens sawa.tours</span></h2>
               <button className="btn-ghost sm" onClick={() => copy(brandSnippet, "brand")}><Copy size={14} />{copied === "brand" ? "Copied!" : "Copy code"}</button>
             </div>
             <p className="field-hint">Paste anywhere — your website, a WordPress “Custom HTML” block, or hand it to your designer or an AI website builder. It matches your site's colours automatically.</p>
@@ -990,13 +1003,26 @@ function WidgetSection({ tourProducts = [] }) {
           <div className="dash-card">
             <div className="dash-card-head">
               <h2>Promote a specific tour or package</h2>
-              {prod && <button className="btn-ghost sm" onClick={() => copy(prodSnippet, "prod")}><Copy size={14} />{copied === "prod" ? "Copied!" : "Copy code"}</button>}
             </div>
             <select className="embed-select" value={productId} onChange={(e) => setProductId(e.target.value)}>
               <option value="">Choose a tour or package…</option>
               {products.map((p) => <option key={p.id} value={p.id}>{isPkg(p) ? "Package" : "Tour"} — {p.title}</option>)}
             </select>
-            {prod && <textarea className="embed-snippet" readOnly rows={5} value={prodSnippet} onFocus={(e) => e.target.select()} />}
+            {prod && (
+              <>
+                <div className="dash-card-head" style={{ marginTop: 4 }}>
+                  <h3 style={{ margin: 0, fontSize: 14 }}>Book on your website</h3>
+                  <button className="btn-ghost sm" onClick={() => copy(bookProdSnippet, "bookProd")}><Copy size={14} />{copied === "bookProd" ? "Copied!" : "Copy code"}</button>
+                </div>
+                <p className="field-hint">Dates, prices and the booking form for this tour, inside your page.</p>
+                <textarea className="embed-snippet" readOnly rows={5} value={bookProdSnippet} onFocus={(e) => e.target.select()} />
+                <div className="dash-card-head" style={{ marginTop: 14 }}>
+                  <h3 style={{ margin: 0, fontSize: 14 }}>Compact card <span className="field-hint" style={{ fontWeight: 500 }}>· opens sawa.tours</span></h3>
+                  <button className="btn-ghost sm" onClick={() => copy(prodSnippet, "prod")}><Copy size={14} />{copied === "prod" ? "Copied!" : "Copy code"}</button>
+                </div>
+                <textarea className="embed-snippet" readOnly rows={5} value={prodSnippet} onFocus={(e) => e.target.select()} />
+              </>
+            )}
           </div>
         </>
       )}

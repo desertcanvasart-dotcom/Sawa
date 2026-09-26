@@ -134,7 +134,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 <span class="cm">&lt;!-- Sizes it to fit and matches your page's colours --&gt;</span>
 &lt;script&gt;
 (function(){function s(f){try{var c=getComputedStyle(document.body),a=document.querySelector('a');f.contentWindow.postMessage({type:'sawa-embed-theme',bg:c.backgroundColor,text:c.color,accent:a?getComputedStyle(a).color:''},'*');}catch(e){}}
-addEventListener('message',function(e){if(!e.data)return;if(e.data.type==='sawa-embed-height')document.querySelectorAll('iframe[data-sawa-embed]').forEach(function(f){f.style.height=e.data.height+'px';});if(e.data.type==='sawa-embed-ready')document.querySelectorAll('iframe[data-sawa-embed]').forEach(s);});
+addEventListener('message',function(e){if(!e.data)return;document.querySelectorAll('iframe[data-sawa-embed]').forEach(function(f){if(f.contentWindow!==e.source)return;if(e.data.type==='sawa-embed-height')f.style.height=e.data.height+'px';if(e.data.type==='sawa-embed-ready')s(f);if(e.data.type==='sawa-embed-top'&&f.getBoundingClientRect().top&lt;0)f.scrollIntoView({behavior:'smooth',block:'start'});});});
 addEventListener('load',function(){document.querySelectorAll('iframe[data-sawa-embed]').forEach(s);});})();
 &lt;/script&gt;</span></div>
         </div></div>

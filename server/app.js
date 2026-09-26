@@ -1927,6 +1927,22 @@ app.post("/api/track/referral", h(async (req, res) => {
   res.status(204).end();
 }));
 
+// Public: the display name behind a partner code, for the in-widget booking
+// view's "Booked through …" line. Only a named, active partner answers — the
+// booking route creates bare rows for any code it is sent, and those have no
+// name to show. Nothing else about the partner is returned.
+app.get("/api/public/referrals/:code", h(async (req, res) => {
+  const code = cleanRefCode(req.params.code);
+  if (!code) throw new AppError(404, "Unknown partner.");
+  const row = (await pool.query(
+    `SELECT COALESCE(a.name, r.name) AS name
+       FROM referrals r LEFT JOIN agencies a ON a.id = r.agency_id
+      WHERE r.code = $1 AND r.active`, [code])).rows[0];
+  if (!row?.name) throw new AppError(404, "Unknown partner.");
+  res.set("Cache-Control", "public, max-age=300");
+  res.json({ code, name: row.name });
+}));
+
 // Admin: per-partner performance (visits, bookings, revenue, commission).
 app.get("/api/admin/referrals", requireAuth, requireRole("super_admin", "ops_staff"), h(async (_req, res) => {
   const r = await pool.query(
