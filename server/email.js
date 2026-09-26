@@ -489,10 +489,10 @@ export function bookingConfirmationEmail({ to, customerName, route, dateLabel, s
   // already looks bookings up by, so one link answers "where is my date?" and
   // "let me out" both.
   const manageUrl = bookingCode ? `${APP_URL}/booking/${encodeURIComponent(bookingCode)}` : null;
-  // U01 — the partner running this date so far. Until GoAhead it is whichever
-  // partner has the most travellers on it, so it can still change.
+  // U01 — the partner running this date so far. Until bookings close it is
+  // whichever partner has the most confirmed travellers on it, so it can change.
   const operatorName = operator?.name ? String(operator.name) : "";
-  const operatorNote = "Until GoAhead, the date is run by the partner with the most travellers on it, so this can change.";
+  const operatorNote = "Until bookings close, the date is run by the partner with the most confirmed travellers on it, so this can change.";
   const text =
     `Hi ${customerName || ""},\n\nWe've recorded your booking for ${route} on ${dateLabel}.\n` +
     `Seats: ${seats}\n${bookingCode ? `Booking code: ${bookingCode}\n` : ""}` +
@@ -692,10 +692,11 @@ export function auditDriftEmail({ to, base, lines = [], stale }) {
 
 export function goAheadEmail({ to, route, dateLabel, operator = null }) {
   const subject = `Confirmed: ${route} is running`;
-  // U01 — the operator is fixed at GoAhead, so this email can name it.
+  // U01 — the operator running the date now. It is fixed when bookings close,
+  // not at GoAhead, so the email says it can still change until then.
   const operatorName = operator?.name ? String(operator.name) : "";
   const handover = operatorName
-    ? `${operatorName}${operator.verified ? " (verified operator)" : ""} runs this date and has been notified; they are confirming the guide and vehicle.`
+    ? `${operatorName}${operator.verified ? " (verified operator)" : ""} is running this date and has been notified; they are confirming the guide and vehicle. Until bookings close, the date can pass to another partner if they bring more confirmed travellers.`
     : "Your operator has been notified and is confirming the guide and vehicle.";
   const text = `Good news — ${route} on ${dateLabel} has reached its minimum travellers and is confirmed to run (GoAhead).\n\n${handover} We'll be in touch with your joining details and anything still outstanding on payment.`;
   // The GoAhead is the whole promise the brand is built on, so this is the one

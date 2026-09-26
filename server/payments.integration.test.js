@@ -251,6 +251,31 @@ test("a cancelled booking can't be sent a link", { skip }, async () => {
   assert.equal(r.status, 409);
 });
 
+// U01 — the operator rule reads the payments: once anyone on a date has paid
+// a deposit, only paid passengers count; a widget booking counts for the
+// agency whose code it carries.
+test("the operator follows widget bookings and paid deposits", { skip }, async () => {
+  const DEP2 = 910002;
+  await db.query(`INSERT INTO agencies (id, name) VALUES ('ag_it_cts', 'Capital Travel Service')`);
+  await db.query(`INSERT INTO referrals (code, name, agency_id) VALUES ('integration-agency', 'Integration Agency', 'ag_it')`);
+  await db.query(`INSERT INTO departures (id, type, tour_product_id, route, date, time, city, min_seats, max_seats, published_rate, break_price, status)
+                  VALUES ($1,'day_tour',$2,'Payment Tour',$3,'08:00','Cairo',4,12,100,80,'open')`, [DEP2, TOUR, cairoDay(25)]);
+  const operatorOf = async () => (await ops("GET", "/bootstrap")).body.departures.find((d) => d.id === DEP2).operatorAgencyId;
+
+  const direct2 = await call("POST", `/public/departures/${DEP2}/bookings`, { customerName: "Direct Dee", customerEmail: "dee@example.com", seats: 2 });
+  assert.equal(direct2.status, 201);
+  assert.equal(await operatorOf(), "ag_it_cts", "two direct seats: Capital Travel Service");
+  assert.equal((await call("POST", `/departures/${DEP2}/pledges`, { seats: 1, customers: "I-1", customerEmail: "c1@x.com", customerPhone: "+201000000001" }, "agency-token")).status, 201);
+  const widget = await call("POST", `/public/departures/${DEP2}/bookings`, { customerName: "Widget Wes", customerEmail: "wes@example.com", seats: 2, refCode: "integration-agency" });
+  assert.equal(widget.status, 201);
+  assert.equal(await operatorOf(), "ag_it", "1 agency seat + 2 through its widget beat 2 direct");
+
+  const link = await ops("POST", `/admin/bookings/${direct2.body.booking.id}/payment-links`, { kind: "deposit", url: "https://pay.tab.travel/dee" });
+  assert.equal(link.status, 201);
+  assert.equal((await ops("POST", `/admin/payments/${link.body.payment.id}/paid`, { reference: "TAB-OP-1" })).status, 200);
+  assert.equal(await operatorOf(), "ag_it_cts", "only the paid passengers count now");
+});
+
 // Last: it removes the table. Migrations do not run on deploy (B5), so this is
 // the state production is in between merging and `npm run db:migrate`.
 test("before migration 043: the screens say payments are off, and nothing else breaks", { skip }, async () => {
