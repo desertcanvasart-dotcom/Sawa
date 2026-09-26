@@ -937,6 +937,13 @@ function App() {
   if (embedPath === "/embed" || embedPath === "/embed/brand" || embedPath === "/embed/sawa") {
     return <BrandEmbed />;
   }
+  // Booking inside the widget: the whole catalogue, or one tour.
+  const embedBookMatch = embedPath.match(/^\/embed\/book(?:\/(tour|package)\/([^/?#]+))?$/);
+  if (embedBookMatch) {
+    if (isLoading) return null;
+    const bookId = embedBookMatch[2] ? decodeURIComponent(embedBookMatch[2]) : null;
+    return <EmbedBook products={customerCalendars} productId={bookId} phoneVerification={phoneVerification} />;
+  }
   const embedMatch = path.match(/^\/embed\/(tour|package)\/([^/?#]+)/);
   if (embedMatch) {
     if (isLoading) return null;
@@ -2666,6 +2673,9 @@ function embedThemeFromUrl() {
 
 function useEmbedAutoResize(dep) {
   useEffect(() => {
+    // The page's own background (set on <html>) showed as a grey box around
+    // the widget on the partner's site; the frame should be see-through.
+    document.documentElement.style.background = "transparent";
     document.body.style.background = "transparent";
     applyEmbedTheme(embedThemeFromUrl());
     const post = () => {
@@ -2747,6 +2757,279 @@ function EmbedWidget({ type, product }) {
         <span className="embed-brand">Powered by <b>Sawa&nbsp;Tours</b></span>
       </div>
     </a>
+  );
+}
+
+// ---- Book inside the widget (/embed/book, /embed/book/:type/:id) ----------
+// The card above is a link out: the visitor leaves the partner's site for
+// sawa.tours in a new tab, and the partner is credited only if the ?ref code
+// survives there — which it does only after the visitor accepts functional
+// cookies, since it is kept in localStorage. These views run the whole booking
+// inside the iframe instead: pick a date, add travellers, reserve. The partner
+// code is read from this iframe's own address and sent with the booking, so
+// attribution needs no storage and no consent, and cannot be lost on the way.
+const EMBED_TRACKED = new Set();
+function trackEmbedVisit(code) {
+  // One click-through per partner per page load: the same counter the link-out
+  // widget feeds, counted when a visitor actually opens a tour to book.
+  if (!code || EMBED_TRACKED.has(code)) return;
+  EMBED_TRACKED.add(code);
+  fetch(`${API_BASE}/track/referral`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ code }), keepalive: true,
+  }).catch((e) => warnOnce("embed-referral-beacon", "[embed] click-through not recorded —", e.message));
+}
+
+// The partner's display name, looked up from its code on the server — the
+// snippet carries only the code, so nobody can put another agency's name on it.
+function useEmbedPartner(code) {
+  const [name, setName] = useState("");
+  useEffect(() => {
+    if (!code) return undefined;
+    let live = true;
+    fetch(`${API_BASE}/public/referrals/${encodeURIComponent(code)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => { if (live && j?.name) setName(j.name); })
+      .catch((e) => warnOnce("embed-partner", "[embed] partner name not loaded —", e.message));
+    return () => { live = false; };
+  }, [code]);
+  return name;
+}
+
+function EmbedBook({ products = [], productId = null, phoneVerification = false }) {
+  const ref = refFromUrl();
+  const partner = useEmbedPartner(ref);
+  const [openId, setOpenId] = useState(productId);
+  const product = openId ? products.find((p) => p.id === openId) : null;
+  useEmbedAutoResize(openId);
+
+  useEffect(() => { if (productId) setOpenId(productId); }, [productId]);
+
+  // The frame grows to fit its content, so it has nothing to scroll: opening
+  // a tour from low in the list would leave the visitor looking at the bottom
+  // of the form. Ask the host page (the snippet's script) to bring the widget's
+  // top into view instead.
+  const scrollTop = () => {
+    try { window.parent?.postMessage({ type: "sawa-embed-top" }, "*"); }
+    catch (e) { warnOnce("embed-top", "[embed] scroll request not posted to host —", e.message); }
+  };
+  const footer = (
+    <div className="eb-foot">
+      {partner ? <span>Booked through <b>{partner}</b> · operated with <b>Sawa&nbsp;Tours</b></span> : <span>Powered by <b>Sawa&nbsp;Tours</b></span>}
+    </div>
+  );
+
+  if (productId && !product) {
+    return <div className="eb"><div className="embed-card embed-empty">This tour is no longer available.</div>{footer}</div>;
+  }
+
+  if (product) {
+    return (
+      <div className="eb">
+        {!productId && (
+          <button type="button" className="eb-back" onClick={() => { setOpenId(null); scrollTop(); }}>
+            <ArrowLeft size={14} />All tours
+          </button>
+        )}
+        <EmbedBookTour key={product.id} product={product} refCode={ref} phoneVerification={phoneVerification} />
+        {footer}
+      </div>
+    );
+  }
+
+  const list = products.filter((p) => p.active !== false);
+  return (
+    <div className="eb">
+      <div className="eb-grid">
+        {list.map((p) => {
+          const pkg = isPackage(p);
+          const open = openDates(p);
+          const lead = open[0];
+          const from = lead ? livePriceFor({ ...p, ...lead }, seatsTotal(lead.pledges)) : livePriceFor(p, goAheadSeatsFor(p));
+          return (
+            <button type="button" key={p.id} className="eb-card" onClick={() => { setOpenId(p.id); trackEmbedVisit(ref); scrollTop(); }}>
+              <span className="eb-card-media" style={{ backgroundImage: `url(${coverImage(p)})` }}>
+                <span className="embed-badge">{pkg ? <><Package size={12} />{p.nights ? `${p.nights}-night package` : "Package"}</> : p.city}</span>
+              </span>
+              <span className="eb-card-body">
+                <strong>{p.title}</strong>
+                <span className="eb-card-facts">{pkg ? (p.cities || [p.city]).join(" · ") : `${p.city}${p.duration ? ` · ${p.duration}` : ""}`}</span>
+                <span className="eb-card-foot">
+                  <span>from <b>{CURRENCY_SYMBOL}{from.toLocaleString()}</b>{pkg ? "/pp" : ""}</span>
+                  <em>{lead ? `Next: ${formatDate(lead.date)}` : "Request a date"}</em>
+                </span>
+              </span>
+            </button>
+          );
+        })}
+        {list.length === 0 && <div className="embed-card embed-empty">No tours to show right now.</div>}
+      </div>
+      {footer}
+    </div>
+  );
+}
+
+function EmbedBookTour({ product, refCode, phoneVerification }) {
+  const pkg = isPackage(product);
+  const dates = openDates(product);
+  const tiers = pkg ? (product.accommodationTiers || []) : [];
+  const [depId, setDepId] = useState(dates[0]?.id ?? "");
+  const [seats, setSeats] = useState(1);
+  const [tierId, setTierId] = useState(tiers[0]?.id || "");
+  const [roomingType, setRoomingType] = useState("double");
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [phoneToken, setPhoneToken] = useState(null);
+  const [verifiedPhone, setVerifiedPhone] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const [done, setDone] = useState(null);
+  const [liveDep, setLiveDep] = useState(null);
+
+  const dep0 = dates.find((d) => Number(d.id) === Number(depId)) || null;
+  // After a booking the server returns the date as it now stands; show that
+  // rather than the count the page loaded with.
+  const dep = dep0 && liveDep && liveDep.id === dep0.id ? { ...dep0, ...liveDep } : dep0;
+  const booked = dep ? seatsTotal(dep.pledges) : 0;
+  const remaining = dep ? Math.max(0, Number(dep.maxSeats || 0) - booked) : 0;
+  const nSeats = Math.max(1, Number(seats || 1));
+  const projected = dep ? Math.min(dep.maxSeats, booked + nSeats) : nSeats;
+  const pp = pkg
+    ? packagePriceFor(product, dep, projected, { roomingType, tierId })
+    : dep ? livePriceFor({ ...product, ...dep }, projected) : livePriceFor(product, goAheadSeatsFor(product));
+  const depositPct = Number(dep?.depositPercent || product.depositPercent || depositPctFor(product));
+  const total = pp * nSeats;
+  const deposit = depositFor(total, depositPct);
+  const phoneConfirmed = !phoneVerification || (!!phoneToken && verifiedPhone === phone.trim());
+  const sawaUrl = withEmbedRef(`${SITE_URL}/${pkg ? "package" : "tour"}/${product.id}`);
+
+  async function submit(e) {
+    e.preventDefault();
+    setErr("");
+    if (!dep) return setErr("Pick a date.");
+    if (name.trim().length < 2) return setErr("Enter the lead traveller's name.");
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return setErr("Enter a valid email.");
+    if (nSeats > remaining) return setErr(`Only ${remaining} seat${remaining === 1 ? "" : "s"} left on this date.`);
+    if (!phoneConfirmed) return setErr("Confirm your phone number with the code we send you first.");
+    setBusy(true);
+    try {
+      const r = await fetch(`${API_BASE}/public/departures/${dep.id}/bookings`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          customerName: name.trim(), customerEmail: email.trim(), customerPhone: phone.trim() || undefined,
+          phoneToken: phoneToken || undefined, seats: nSeats,
+          ...(pkg ? { roomingType, accommodationTier: tierId } : {}),
+          refCode: refCode || undefined,
+        }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.error || "Could not reserve seats.");
+      if (j.departure) setLiveDep(j.departure);
+      setDone(j.booking || {});
+    } catch (e2) {
+      setErr(e2 instanceof TypeError ? "We couldn't reach Sawa — check your connection and try again. Nothing was booked." : e2.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (done) {
+    return (
+      <div className="eb-panel eb-done" role="status">
+        <span className="eb-done-mark"><Check size={22} /></span>
+        <strong className="eb-title">Your seats are held</strong>
+        <p>{done.seats || nSeats} seat{Number(done.seats || nSeats) === 1 ? "" : "s"} on <b>{product.title}</b>{dep ? `, ${formatDate(dep.date, { alwaysYear: true })}` : ""}.</p>
+        {done.bookingCode && <p className="eb-code">Booking code <b>{done.bookingCode}</b></p>}
+        <p className="eb-muted">Nothing is charged now. We've emailed the details to {email || "you"}; the deposit link follows once this date reaches GoAhead.</p>
+        {done.bookingCode && <a className="eb-link" href={`${SITE_URL}/booking/${encodeURIComponent(done.bookingCode)}`} target="_blank" rel="noopener noreferrer">Manage this booking <ArrowRight size={14} /></a>}
+      </div>
+    );
+  }
+
+  return (
+    <div className="eb-panel">
+      <div className="eb-hero" style={{ backgroundImage: `url(${coverImage(product)})` }} />
+      <div className="eb-head">
+        <strong className="eb-title">{product.title}</strong>
+        <span className="eb-facts">{pkg ? (product.cities || [product.city]).join(" → ") : product.city}{product.duration ? ` · ${product.duration}` : ""}</span>
+        {product.description && <p className="eb-desc">{product.description}</p>}
+        <a className="eb-link" href={sawaUrl} target="_blank" rel="noopener noreferrer">Full itinerary &amp; what's included <ArrowRight size={14} /></a>
+      </div>
+
+      {dates.length === 0 ? (
+        <div className="eb-empty">
+          <p>No dates are open right now.</p>
+          <a className="embed-cta" href={sawaUrl} target="_blank" rel="noopener noreferrer">Request your own date<ArrowRight size={16} /></a>
+        </div>
+      ) : (
+        <form className="eb-form" onSubmit={submit} onFocusCapture={() => trackEmbedVisit(refCode)}>
+          <fieldset className="eb-dates">
+            <legend>{pkg ? "Start date" : "Date"}</legend>
+            {dates.map((d) => {
+              const n = seatsTotal(d.pledges);
+              const need = Math.max(0, goAheadSeatsFor(d) - n);
+              const go = isGoAheadDeparture(d);
+              const on = Number(d.id) === Number(depId);
+              return (
+                <button type="button" key={d.id} className={on ? "eb-date on" : "eb-date"} aria-pressed={on} onClick={() => { setDepId(d.id); setErr(""); }}>
+                  <span><b>{formatDate(d.date, { alwaysYear: true })}</b>{!pkg && d.time ? <em> · {d.time}</em> : null}</span>
+                  <span className={go ? "eb-tag go" : "eb-tag"}>{go ? "Confirmed" : `${need} more to confirm`}</span>
+                  <span className="eb-left">{Math.max(0, d.maxSeats - n)} seats left</span>
+                </button>
+              );
+            })}
+          </fieldset>
+
+          {pkg && tiers.length > 0 && (
+            <div className="eb-row">
+              <label>Hotel &amp; cruise tier
+                <select value={tierId} onChange={(e) => setTierId(e.target.value)}>
+                  {tiers.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                </select>
+              </label>
+              <label>Room
+                <select value={roomingType} onChange={(e) => setRoomingType(e.target.value)}>
+                  <option value="single">Single</option><option value="double">Double / twin</option><option value="triple">Triple</option>
+                </select>
+              </label>
+            </div>
+          )}
+
+          <div className="eb-row">
+            <label>Travellers
+              <input type="number" min="1" max={Math.max(1, remaining)} value={seats} onChange={(e) => setSeats(e.target.value)} />
+            </label>
+            <label>Lead traveller
+              <input value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" placeholder="Full name" />
+            </label>
+          </div>
+          <div className="eb-row">
+            <label>Email
+              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" placeholder="you@email.com" />
+            </label>
+            <label>{phoneVerification ? "Mobile" : "Phone (optional)"}
+              <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} autoComplete="tel" placeholder="+20 1XX XXX XXXX" />
+            </label>
+          </div>
+          {phoneVerification && (
+            <PhoneCodeStep phone={phone} confirmed={phoneConfirmed} onVerified={(token, num) => { setPhoneToken(token); setVerifiedPhone(num); }} />
+          )}
+
+          <div className="eb-sum">
+            <div><span>{CURRENCY_SYMBOL}{pp.toLocaleString()} × {nSeats} traveller{nSeats === 1 ? "" : "s"}</span><b>{CURRENCY_SYMBOL}{total.toLocaleString()}</b></div>
+            <div><span>Deposit once the date is confirmed ({depositPct}%)</span><b>{CURRENCY_SYMBOL}{deposit.toLocaleString()}</b></div>
+            <p>Nothing is charged today. The shared price drops as the group grows.</p>
+          </div>
+
+          {err && <div className="eb-err" role="alert">{err}</div>}
+          <button className="embed-cta eb-submit" type="submit" disabled={busy || remaining <= 0}>
+            {busy ? "Reserving…" : remaining <= 0 ? "Date full" : "Reserve seats"}{!busy && remaining > 0 && <ArrowRight size={16} />}
+          </button>
+        </form>
+      )}
+    </div>
   );
 }
 
