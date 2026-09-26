@@ -290,6 +290,24 @@ test("a loss waits for Sawa's decision", { skip }, async () => {
   assert.equal(v.blocker, null);
 });
 
+// A date confirmed to run, with nothing paid and no costs yet, is listed — so
+// its operator has somewhere to enter costs and upload receipts.
+test("a date at GoAhead is listed before any money or costs, with its cost sheet open", { skip }, async () => {
+  const DEP2 = 920002;
+  await db.query(`INSERT INTO departures (id, type, tour_product_id, route, date, time, city, min_seats, max_seats, published_rate, break_price, status)
+                  VALUES ($1,'day_tour',$2,'Settlement Tour',$3,'08:00','Cairo',4,12,250,250,'open')`, [DEP2, TOUR, day(30)]);
+  assert.equal((await ops("GET", "/admin/settlements")).body.items.some((i) => i.departure.id === DEP2), false, "not while forming");
+  const a = await call("POST", `/departures/${DEP2}/pledges`, { seats: 4, customers: "A-4", customerEmail: "a4@x.com", customerPhone: "+201000000004" }, "a-token");
+  assert.equal(a.status, 201, JSON.stringify(a.body));
+  const v = (await ops("GET", "/admin/settlements")).body.items.find((i) => i.departure.id === DEP2);
+  assert.ok(v, "listed once it reaches GoAhead");
+  assert.equal(v.settlement.revenue, 0);
+  const money = (await call("GET", "/agency/money", undefined, "a-token")).body.departures.find((d) => d.departure.id === DEP2);
+  assert.ok(money?.operating, "the operator sees it, with its cost sheet");
+  const cost = await call("POST", `/agency/departures/${DEP2}/costs`, { category: "transport", description: "Coach", amount: 900 }, "a-token");
+  assert.equal(cost.status, 201, "and can enter a cost straight away");
+});
+
 // Last: removes the tables — production's state between merging and migrating.
 test("before migration 044: the screens say settlements are off", { skip }, async () => {
   await db.query(`DROP TABLE payout_transfers, payout_lines, payout_runs, departure_settlements, settlement_adjustments, departure_costs`);

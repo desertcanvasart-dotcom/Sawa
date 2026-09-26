@@ -50,7 +50,7 @@ export function AgencyMoney() {
           </div>
 
           <h2 className="mn-h2">Departures</h2>
-          {data.departures.length === 0 && <div className="dash-empty">No departures with payments yet.</div>}
+          {data.departures.length === 0 && <div className="dash-empty">No departures yet. A date appears here once it's confirmed to run (GoAhead) — with your share, and, on dates you operate, your cost sheet for costs and receipts.</div>}
           {data.departures.map((d) => <DepartureCard key={d.departure.id} d={d} categories={data.categories} onChanged={load} />)}
 
           <h2 className="mn-h2">Payouts</h2>

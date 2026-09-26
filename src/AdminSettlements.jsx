@@ -69,7 +69,7 @@ function DeparturesTab({ flash }) {
   const changed = async (msg) => { await load(); if (msg) flash?.(msg); };
   return (
     <div className="dash-card pay-list">
-      {data.items.length === 0 && <div className="dash-empty">No departures with money collected or costs yet.</div>}
+      {data.items.length === 0 && <div className="dash-empty">No departures confirmed to run yet. A date appears here once it reaches GoAhead — then its operator can enter costs and receipts.</div>}
       {data.items.map((v) => (
         <div key={v.departure.id} className={openId === v.departure.id ? "pay-row open" : "pay-row"}>
           <button type="button" className="pay-row-head st-head" onClick={() => setOpenId(openId === v.departure.id ? null : v.departure.id)} aria-expanded={openId === v.departure.id}>

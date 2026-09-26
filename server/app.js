@@ -3155,13 +3155,19 @@ const groupBy = (rows, key) => {
 };
 
 // Everything the settlement of these departures needs, in one read. Without
-// `ids`: every departure with money collected, a cost line or a sign-off.
+// `ids`: every departure confirmed to run (GoAhead), and any other with money
+// collected, a cost line or a sign-off.
+//
+// GoAhead is what puts a date on the list. It used to take money collected or
+// a cost line — but cost lines (and their receipts) are only added from this
+// list, so a new tour never appeared and there was nowhere to enter its costs.
 async function loadSettlements(db, ids = null) {
   const depRows = (await db.query(
     ids
       ? `SELECT * FROM departures WHERE id = ANY($1::int[]) ORDER BY COALESCE(end_date, start_date, date) DESC, id DESC`
       : `SELECT * FROM departures d WHERE
-           EXISTS (SELECT 1 FROM pledges p JOIN booking_payments b ON b.pledge_id = p.id
+           d.status IN ('minimum_reached', 'supplier_confirmed')
+           OR EXISTS (SELECT 1 FROM pledges p JOIN booking_payments b ON b.pledge_id = p.id
                     WHERE p.departure_id = d.id AND b.state IN ('paid', 'refunded'))
            OR EXISTS (SELECT 1 FROM departure_costs c WHERE c.departure_id = d.id)
            OR EXISTS (SELECT 1 FROM departure_settlements s WHERE s.departure_id = d.id)
