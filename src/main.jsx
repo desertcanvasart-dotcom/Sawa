@@ -2873,7 +2873,13 @@ function EmbedBookTour({ product, refCode, phoneVerification }) {
   const pkg = isPackage(product);
   const dates = openDates(product);
   const tiers = pkg ? (product.accommodationTiers || []) : [];
+  // "join" an open date, or "request" a new one. A tour with nothing open
+  // starts on the request: sending the visitor to sawa.tours for it was the one
+  // step that still left the partner's site.
+  const [mode, setMode] = useState(dates.length ? "join" : "request");
   const [depId, setDepId] = useState(dates[0]?.id ?? "");
+  const [reqDate, setReqDate] = useState("");
+  const [matches, setMatches] = useState(null);
   const [seats, setSeats] = useState(1);
   const [tierId, setTierId] = useState(tiers[0]?.id || "");
   const [roomingType, setRoomingType] = useState("double");
@@ -2885,65 +2891,102 @@ function EmbedBookTour({ product, refCode, phoneVerification }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [done, setDone] = useState(null);
-  const [liveDep, setLiveDep] = useState(null);
 
-  const dep0 = dates.find((d) => Number(d.id) === Number(depId)) || null;
-  // After a booking the server returns the date as it now stands; show that
-  // rather than the count the page loaded with.
-  const dep = dep0 && liveDep && liveDep.id === dep0.id ? { ...dep0, ...liveDep } : dep0;
+  const requesting = mode === "request";
+  const dep = requesting ? null : dates.find((d) => Number(d.id) === Number(depId)) || null;
   const booked = dep ? seatsTotal(dep.pledges) : 0;
   const remaining = dep ? Math.max(0, Number(dep.maxSeats || 0) - booked) : 0;
+  const capacity = Math.max(1, Number(product.maxSeats) || MAX_GROUP_SIZE);
   const nSeats = Math.max(1, Number(seats || 1));
+  // A new date is priced the way the server prices its first booking: the
+  // party's own size on an empty date (see F07 on the tour page).
   const projected = dep ? Math.min(dep.maxSeats, booked + nSeats) : nSeats;
   const pp = pkg
     ? packagePriceFor(product, dep, projected, { roomingType, tierId })
-    : dep ? livePriceFor({ ...product, ...dep }, projected) : livePriceFor(product, goAheadSeatsFor(product));
+    : livePriceFor(dep ? { ...product, ...dep } : product, projected);
   const depositPct = Number(dep?.depositPercent || product.depositPercent || depositPctFor(product));
   const total = pp * nSeats;
   const deposit = depositFor(total, depositPct);
   const phoneConfirmed = !phoneVerification || (!!phoneToken && verifiedPhone === phone.trim());
   const sawaUrl = withEmbedRef(`${SITE_URL}/${pkg ? "package" : "tour"}/${product.id}`);
 
-  async function submit(e) {
-    e.preventDefault();
-    setErr("");
+  // The window this tour accepts new dates in — the same shared rule the
+  // server applies — and the weekdays it runs on.
+  const isoIn = (days) => { const d = new Date(); d.setDate(d.getDate() + days); return d.toISOString().slice(0, 10); };
+  const minReq = isoIn(minLeadDaysFor(product));
+  const maxReq = isoIn(maxHorizonDaysFor(product));
+  const opDays = Array.isArray(product.operatingDays) ? product.operatingDays : [];
+
+  function pickMode(next) { setMode(next); setErr(""); setMatches(null); }
+
+  function checkTraveller() {
+    if (name.trim().length < 2) return "Enter the lead traveller's name.";
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return "Enter a valid email.";
+    if (!phoneConfirmed) return "Confirm your phone number with the code we send you first.";
+    return "";
+  }
+
+  async function post(path, body) {
+    const r = await fetch(`${API_BASE}${path}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const j = await r.json().catch(() => ({}));
+    return { r, j };
+  }
+
+  const traveller = () => ({
+    customerName: name.trim(), customerEmail: email.trim(), customerPhone: phone.trim() || undefined,
+    phoneToken: phoneToken || undefined, seats: nSeats,
+    ...(pkg ? { roomingType, accommodationTier: tierId } : {}),
+    refCode: refCode || undefined,
+  });
+
+  async function book() {
     if (!dep) return setErr("Pick a date.");
-    if (name.trim().length < 2) return setErr("Enter the lead traveller's name.");
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return setErr("Enter a valid email.");
     if (nSeats > remaining) return setErr(`Only ${remaining} seat${remaining === 1 ? "" : "s"} left on this date.`);
-    if (!phoneConfirmed) return setErr("Confirm your phone number with the code we send you first.");
+    const problem = checkTraveller();
+    if (problem) return setErr(problem);
+    const { r, j } = await post(`/public/departures/${dep.id}/bookings`, traveller());
+    if (!r.ok) throw new Error(j.error || "Could not reserve seats.");
+    setDone({ kind: "booked", booking: j.booking || {}, date: dep.date });
+  }
+
+  async function request(ignoreMatches = false) {
+    if (!reqDate) return setErr("Pick the date you'd like.");
+    if (reqDate < minReq || reqDate > maxReq) return setErr(`Pick a date between ${formatDate(minReq, { alwaysYear: true })} and ${formatDate(maxReq, { alwaysYear: true })}.`);
+    if (opDays.length && !opDays.includes(new Date(`${reqDate}T12:00:00`).getDay())) return setErr(`This tour runs on ${operatingDaysLabel(opDays)} only.`);
+    if (nSeats > capacity) return setErr(`This tour takes up to ${capacity} travellers per date.`);
+    const problem = checkTraveller();
+    if (problem) return setErr(problem);
+    const { r, j } = await post("/public/departure-requests", { tourProductId: product.id, date: reqDate, ignoreMatches, ...traveller() });
+    // Join-first: open dates close by are offered before a new one is made.
+    if (r.status === 409 && j.code === "near_matches") { setMatches(j.nearMatches || []); return; }
+    if (!r.ok) throw new Error(j.error || "Could not request this date.");
+    setDone({ kind: "requested", booking: j.booking || {}, date: reqDate });
+  }
+
+  async function submit(e, opts) {
+    e?.preventDefault?.();
+    setErr("");
     setBusy(true);
-    try {
-      const r = await fetch(`${API_BASE}/public/departures/${dep.id}/bookings`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          customerName: name.trim(), customerEmail: email.trim(), customerPhone: phone.trim() || undefined,
-          phoneToken: phoneToken || undefined, seats: nSeats,
-          ...(pkg ? { roomingType, accommodationTier: tierId } : {}),
-          refCode: refCode || undefined,
-        }),
-      });
-      const j = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(j.error || "Could not reserve seats.");
-      if (j.departure) setLiveDep(j.departure);
-      setDone(j.booking || {});
-    } catch (e2) {
-      setErr(e2 instanceof TypeError ? "We couldn't reach Sawa — check your connection and try again. Nothing was booked." : e2.message);
-    } finally {
-      setBusy(false);
-    }
+    try { await (requesting ? request(opts?.ignoreMatches) : book()); }
+    catch (e2) { setErr(e2 instanceof TypeError ? "We couldn't reach Sawa — check your connection and try again. Nothing was booked." : e2.message); }
+    finally { setBusy(false); }
   }
 
   if (done) {
+    const b = done.booking;
+    const n = Number(b.seats || nSeats);
     return (
       <div className="eb-panel eb-done" role="status">
         <span className="eb-done-mark"><Check size={22} /></span>
-        <strong className="eb-title">Your seats are held</strong>
-        <p>{done.seats || nSeats} seat{Number(done.seats || nSeats) === 1 ? "" : "s"} on <b>{product.title}</b>{dep ? `, ${formatDate(dep.date, { alwaysYear: true })}` : ""}.</p>
-        {done.bookingCode && <p className="eb-code">Booking code <b>{done.bookingCode}</b></p>}
-        <p className="eb-muted">Nothing is charged now. We've emailed the details to {email || "you"}; the deposit link follows once this date reaches GoAhead.</p>
-        {done.bookingCode && <a className="eb-link" href={`${SITE_URL}/booking/${encodeURIComponent(done.bookingCode)}`} target="_blank" rel="noopener noreferrer">Manage this booking <ArrowRight size={14} /></a>}
+        <strong className="eb-title">{done.kind === "requested" ? "Your date is requested" : "Your seats are held"}</strong>
+        <p>{n} seat{n === 1 ? "" : "s"} on <b>{product.title}</b>, {formatDate(done.date, { alwaysYear: true })}.</p>
+        {b.bookingCode && <p className="eb-code">Booking code <b>{b.bookingCode}</b></p>}
+        <p className="eb-muted">
+          {done.kind === "requested"
+            ? `Nothing is charged now. Sawa reviews the date and emails ${email || "you"} once it opens for other travellers to join.`
+            : `Nothing is charged now. We've emailed the details to ${email || "you"}; the deposit link follows once this date reaches GoAhead.`}
+        </p>
+        {b.bookingCode && <a className="eb-link" href={`${SITE_URL}/booking/${encodeURIComponent(b.bookingCode)}`} target="_blank" rel="noopener noreferrer">Manage this booking <ArrowRight size={14} /></a>}
       </div>
     );
   }
@@ -2958,13 +3001,20 @@ function EmbedBookTour({ product, refCode, phoneVerification }) {
         <a className="eb-link" href={sawaUrl} target="_blank" rel="noopener noreferrer">Full itinerary &amp; what's included <ArrowRight size={14} /></a>
       </div>
 
-      {dates.length === 0 ? (
-        <div className="eb-empty">
-          <p>No dates are open right now.</p>
-          <a className="embed-cta" href={sawaUrl} target="_blank" rel="noopener noreferrer">Request your own date<ArrowRight size={16} /></a>
-        </div>
-      ) : (
-        <form className="eb-form" onSubmit={submit} onFocusCapture={() => trackEmbedVisit(refCode)}>
+      <form className="eb-form" onSubmit={submit} onFocusCapture={() => trackEmbedVisit(refCode)}>
+        {requesting ? (
+          <div className="eb-dates">
+            <span className="eb-label">{dates.length ? "Your own date" : "No dates are open yet — pick yours"}</span>
+            <label className="eb-row eb-one">
+              <input type="date" min={minReq} max={maxReq} value={reqDate} onChange={(e) => { setReqDate(e.target.value); setMatches(null); setErr(""); }} aria-label="Date you'd like" />
+            </label>
+            <p className="eb-note">
+              {opDays.length ? `Runs on ${operatingDaysLabel(opDays)}. ` : ""}
+              Sawa reviews the date, then it opens for other travellers to join. Nothing is charged unless it reaches GoAhead.
+            </p>
+            {dates.length > 0 && <button type="button" className="eb-switch" onClick={() => pickMode("join")}>Back to the open dates</button>}
+          </div>
+        ) : (
           <fieldset className="eb-dates">
             <legend>{pkg ? "Start date" : "Date"}</legend>
             {dates.map((d) => {
@@ -2980,55 +3030,82 @@ function EmbedBookTour({ product, refCode, phoneVerification }) {
                 </button>
               );
             })}
+            <button type="button" className="eb-switch" onClick={() => pickMode("request")}>None of these work? Request your own date</button>
           </fieldset>
+        )}
 
-          {pkg && tiers.length > 0 && (
-            <div className="eb-row">
-              <label>Hotel &amp; cruise tier
-                <select value={tierId} onChange={(e) => setTierId(e.target.value)}>
-                  {tiers.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-                </select>
-              </label>
-              <label>Room
-                <select value={roomingType} onChange={(e) => setRoomingType(e.target.value)}>
-                  <option value="single">Single</option><option value="double">Double / twin</option><option value="triple">Triple</option>
-                </select>
-              </label>
-            </div>
-          )}
+        {matches && (
+          <div className="eb-matches" role="status">
+            {matches.length ? (
+              <>
+                <p>There's already an open date close to that one — join it and your group confirms sooner:</p>
+                {matches.map((m) => {
+                  const known = dates.some((d) => Number(d.id) === Number(m.id));
+                  return (
+                    <div key={m.id} className="eb-match">
+                      <span><b>{formatDate(m.date, { alwaysYear: true })}</b> · {seatsTotal(m.pledges)} booked</span>
+                      {known && <button type="button" className="eb-switch" onClick={() => { setDepId(m.id); pickMode("join"); }}>Join this date</button>}
+                    </div>
+                  );
+                })}
+              </>
+            ) : <p>There's already an open date close to that one.</p>}
+            <button type="button" className="eb-switch" disabled={busy} onClick={(e) => submit(e, { ignoreMatches: true })}>No thanks — request {reqDate ? formatDate(reqDate, { alwaysYear: true }) : "my date"} anyway</button>
+          </div>
+        )}
 
+        {pkg && tiers.length > 0 && (
           <div className="eb-row">
-            <label>Travellers
-              <input type="number" min="1" max={Math.max(1, remaining)} value={seats} onChange={(e) => setSeats(e.target.value)} />
+            <label>Hotel &amp; cruise tier
+              <select value={tierId} onChange={(e) => setTierId(e.target.value)}>
+                {tiers.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+              </select>
             </label>
-            <label>Lead traveller
-              <input value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" placeholder="Full name" />
-            </label>
-          </div>
-          <div className="eb-row">
-            <label>Email
-              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" placeholder="you@email.com" />
-            </label>
-            <label>{phoneVerification ? "Mobile" : "Phone (optional)"}
-              <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} autoComplete="tel" placeholder="+20 1XX XXX XXXX" />
+            <label>Room
+              <select value={roomingType} onChange={(e) => setRoomingType(e.target.value)}>
+                <option value="single">Single</option><option value="double">Double / twin</option><option value="triple">Triple</option>
+              </select>
             </label>
           </div>
-          {phoneVerification && (
-            <PhoneCodeStep phone={phone} confirmed={phoneConfirmed} onVerified={(token, num) => { setPhoneToken(token); setVerifiedPhone(num); }} />
-          )}
+        )}
 
-          <div className="eb-sum">
-            <div><span>{CURRENCY_SYMBOL}{pp.toLocaleString()} × {nSeats} traveller{nSeats === 1 ? "" : "s"}</span><b>{CURRENCY_SYMBOL}{total.toLocaleString()}</b></div>
-            <div><span>Deposit once the date is confirmed ({depositPct}%)</span><b>{CURRENCY_SYMBOL}{deposit.toLocaleString()}</b></div>
-            <p>Nothing is charged today. The shared price drops as the group grows.</p>
-          </div>
+        <div className="eb-row">
+          <label>Travellers
+            <input type="number" min="1" max={dep ? Math.max(1, remaining) : capacity} value={seats} onChange={(e) => setSeats(e.target.value)} />
+          </label>
+          <label>Lead traveller
+            <input value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" placeholder="Full name" />
+          </label>
+        </div>
+        <div className="eb-row">
+          <label>Email
+            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" placeholder="you@email.com" />
+          </label>
+          <label>{phoneVerification ? "Mobile" : "Phone (optional)"}
+            <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} autoComplete="tel" placeholder="+20 1XX XXX XXXX" />
+          </label>
+        </div>
+        {phoneVerification && (
+          <PhoneCodeStep phone={phone} confirmed={phoneConfirmed} onVerified={(token, num) => { setPhoneToken(token); setVerifiedPhone(num); }} />
+        )}
 
-          {err && <div className="eb-err" role="alert">{err}</div>}
+        <div className="eb-sum">
+          <div><span>{CURRENCY_SYMBOL}{pp.toLocaleString()} × {nSeats} traveller{nSeats === 1 ? "" : "s"}</span><b>{CURRENCY_SYMBOL}{total.toLocaleString()}</b></div>
+          <div><span>Deposit once the date is confirmed ({depositPct}%)</span><b>{CURRENCY_SYMBOL}{deposit.toLocaleString()}</b></div>
+          <p>Nothing is charged today. The shared price drops as the group grows.</p>
+        </div>
+
+        {err && <div className="eb-err" role="alert">{err}</div>}
+        {requesting ? (
+          <button className="embed-cta eb-submit" type="submit" disabled={busy}>
+            {busy ? "Sending…" : "Request this date"}{!busy && <ArrowRight size={16} />}
+          </button>
+        ) : (
           <button className="embed-cta eb-submit" type="submit" disabled={busy || remaining <= 0}>
             {busy ? "Reserving…" : remaining <= 0 ? "Date full" : "Reserve seats"}{!busy && remaining > 0 && <ArrowRight size={16} />}
           </button>
-        </form>
-      )}
+        )}
+      </form>
     </div>
   );
 }
