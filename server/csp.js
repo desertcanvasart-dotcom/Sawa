@@ -26,7 +26,7 @@
 //   - images: this origin, data: (inline SVG backgrounds), blob:, the Supabase
 //     storage bucket, and Google Analytics' measurement pixels.
 //   - connections: this origin (the API), Supabase (auth), Google Analytics.
-//   - frames: GTM's <noscript> frame only.
+//   - frames: GTM's <noscript> frame, and our own pages (the widget preview).
 //   - never: plugins (object-src), a moved <base>, forms posting off-site
 //     (mailto: kept for the contact form), and being framed by another site —
 //     except /embed/*, which exists to be framed.
@@ -90,7 +90,8 @@ export const CSP_DIRECTIVES = {
   "font-src": ["'self'", "https://fonts.gstatic.com", "data:"],
   "img-src": ["'self'", "data:", "blob:", SUPABASE, ...GOOGLE_ANALYTICS],
   "connect-src": ["'self'", SUPABASE, "wss://*.supabase.co", ...GOOGLE_ANALYTICS],
-  "frame-src": ["https://www.googletagmanager.com"],
+  // 'self': the Promote page previews the agency's own widget (/embed/*).
+  "frame-src": ["'self'", "https://www.googletagmanager.com"],
   "object-src": ["'none'"],
   "base-uri": ["'self'"],
   "form-action": ["'self'", "mailto:"],

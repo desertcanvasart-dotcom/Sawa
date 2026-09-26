@@ -2630,9 +2630,16 @@ function getStoredRef() {
     return code && Date.now() - ts <= REF_TTL ? code : "";
   } catch (e) { return ""; }
 }
+// ?preview=1 — the Promote page showing an agency its own widget. Everything
+// renders and reacts as on a partner's site, but nothing is counted, no code
+// is texted and nothing is booked.
+function embedPreview() {
+  return new URLSearchParams(window.location.search).get("preview") === "1";
+}
 // Carry the embed's own ?ref through to the click-through link.
 function withEmbedRef(url) {
-  const code = refFromUrl();
+  // A preview's clicks are the agency trying its own widget, not a visitor.
+  const code = embedPreview() ? "" : refFromUrl();
   return code ? `${url}?ref=${encodeURIComponent(code)}` : url;
 }
 
@@ -2772,7 +2779,7 @@ const EMBED_TRACKED = new Set();
 function trackEmbedVisit(code) {
   // One click-through per partner per page load: the same counter the link-out
   // widget feeds, counted when a visitor actually opens a tour to book.
-  if (!code || EMBED_TRACKED.has(code)) return;
+  if (!code || EMBED_TRACKED.has(code) || embedPreview()) return;
   EMBED_TRACKED.add(code);
   fetch(`${API_BASE}/track/referral`, {
     method: "POST", headers: { "Content-Type": "application/json" },
@@ -2799,6 +2806,7 @@ function useEmbedPartner(code) {
 function EmbedBook({ products = [], productId = null, phoneVerification = false }) {
   const ref = refFromUrl();
   const partner = useEmbedPartner(ref);
+  const preview = embedPreview();
   const [openId, setOpenId] = useState(productId);
   const product = openId ? products.find((p) => p.id === openId) : null;
   useEmbedAutoResize(openId);
@@ -2819,6 +2827,8 @@ function EmbedBook({ products = [], productId = null, phoneVerification = false 
     </div>
   );
 
+  const ribbon = preview ? <div className="eb-preview">Preview — this is your widget as customers see it. Booking is switched off here.</div> : null;
+
   if (productId && !product) {
     return <div className="eb"><div className="embed-card embed-empty">This tour is no longer available.</div>{footer}</div>;
   }
@@ -2826,6 +2836,7 @@ function EmbedBook({ products = [], productId = null, phoneVerification = false 
   if (product) {
     return (
       <div className="eb">
+        {ribbon}
         {!productId && (
           <button type="button" className="eb-back" onClick={() => { setOpenId(null); scrollTop(); }}>
             <ArrowLeft size={14} />All tours
@@ -2840,6 +2851,7 @@ function EmbedBook({ products = [], productId = null, phoneVerification = false 
   const list = products.filter((p) => p.active !== false);
   return (
     <div className="eb">
+      {ribbon}
       <div className="eb-grid">
         {list.map((p) => {
           const pkg = isPackage(p);
@@ -2907,7 +2919,9 @@ function EmbedBookTour({ product, refCode, phoneVerification }) {
   const depositPct = Number(dep?.depositPercent || product.depositPercent || depositPctFor(product));
   const total = pp * nSeats;
   const deposit = depositFor(total, depositPct);
-  const phoneConfirmed = !phoneVerification || (!!phoneToken && verifiedPhone === phone.trim());
+  const preview = embedPreview();
+  // A preview never texts a real code: the step is shown as a note instead.
+  const phoneConfirmed = preview || !phoneVerification || (!!phoneToken && verifiedPhone === phone.trim());
   const sawaUrl = withEmbedRef(`${SITE_URL}/${pkg ? "package" : "tour"}/${product.id}`);
 
   // The window this tour accepts new dates in — the same shared rule the
@@ -2944,6 +2958,7 @@ function EmbedBookTour({ product, refCode, phoneVerification }) {
     if (nSeats > remaining) return setErr(`Only ${remaining} seat${remaining === 1 ? "" : "s"} left on this date.`);
     const problem = checkTraveller();
     if (problem) return setErr(problem);
+    if (preview) return setErr("Preview only — nothing was booked. On your website this reserves the seats and emails the customer.");
     const { r, j } = await post(`/public/departures/${dep.id}/bookings`, traveller());
     if (!r.ok) throw new Error(j.error || "Could not reserve seats.");
     setDone({ kind: "booked", booking: j.booking || {}, date: dep.date });
@@ -2956,6 +2971,7 @@ function EmbedBookTour({ product, refCode, phoneVerification }) {
     if (nSeats > capacity) return setErr(`This tour takes up to ${capacity} travellers per date.`);
     const problem = checkTraveller();
     if (problem) return setErr(problem);
+    if (preview) return setErr("Preview only — nothing was sent. On your website this sends the date request to Sawa.");
     const { r, j } = await post("/public/departure-requests", { tourProductId: product.id, date: reqDate, ignoreMatches, ...traveller() });
     // Join-first: open dates close by are offered before a new one is made.
     if (r.status === 409 && j.code === "near_matches") { setMatches(j.nearMatches || []); return; }
@@ -3085,8 +3101,9 @@ function EmbedBookTour({ product, refCode, phoneVerification }) {
             <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} autoComplete="tel" placeholder="+20 1XX XXX XXXX" />
           </label>
         </div>
-        {phoneVerification && (
-          <PhoneCodeStep phone={phone} confirmed={phoneConfirmed} onVerified={(token, num) => { setPhoneToken(token); setVerifiedPhone(num); }} />
+        {phoneVerification && (preview
+          ? <p className="eb-note">Customers confirm their mobile number with a one-time code here.</p>
+          : <PhoneCodeStep phone={phone} confirmed={phoneConfirmed} onVerified={(token, num) => { setPhoneToken(token); setVerifiedPhone(num); }} />
         )}
 
         <div className="eb-sum">
@@ -3095,7 +3112,7 @@ function EmbedBookTour({ product, refCode, phoneVerification }) {
           <p>Nothing is charged today. The shared price drops as the group grows.</p>
         </div>
 
-        {err && <div className="eb-err" role="alert">{err}</div>}
+        {err && <div className={preview && err.startsWith("Preview only") ? "eb-preview" : "eb-err"} role="alert">{err}</div>}
         {requesting ? (
           <button className="embed-cta eb-submit" type="submit" disabled={busy}>
             {busy ? "Sending…" : "Request this date"}{!busy && <ArrowRight size={16} />}

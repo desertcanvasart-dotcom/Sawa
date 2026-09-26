@@ -26,6 +26,10 @@ test("scripts and connections only from this site and the services it uses", () 
   assert.ok(!Object.values(CSP_DIRECTIVES).flat().includes("*"), "no wildcard source anywhere by default");
 });
 
+test("the portal may frame the site's own widget, and nothing else new", () => {
+  assert.equal(directive(cspHeader("/portal/widget"), "frame-src"), "frame-src 'self' https://www.googletagmanager.com");
+});
+
 test("only the widget may be framed by other sites", () => {
   assert.equal(directive(cspHeader("/"), "frame-ancestors"), "frame-ancestors 'self'");
   assert.equal(directive(cspHeader("/tour/x"), "frame-ancestors"), "frame-ancestors 'self'");

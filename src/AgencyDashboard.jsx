@@ -982,6 +982,8 @@ function WidgetSection({ tourProducts = [] }) {
             <Kpi icon={CalendarDays} label="Revenue" value={money(info.revenue)} foot="from your referrals" />
           </div>
 
+          <WidgetPreview code={code} products={products} productId={productId} setProductId={setProductId} />
+
           <div className="dash-card">
             <div className="dash-card-head">
               <h2>Booking widget — all tours</h2>
@@ -1028,6 +1030,70 @@ function WidgetSection({ tourProducts = [] }) {
       )}
       {!info && !err && <div className="dash-empty">Loading your widget…</div>}
     </>
+  );
+}
+
+// The agency's own widget, live, as its customers will see it: the real
+// /embed pages in a frame, in preview mode (?preview=1) so trying it books
+// nothing, texts no code and counts no click-through.
+const PREVIEW_KINDS = [
+  { id: "book", label: "Booking widget — all tours" },
+  { id: "bookProd", label: "Booking widget — one tour", needsTour: true },
+  { id: "banner", label: "Website banner" },
+  { id: "card", label: "Compact card", needsTour: true },
+];
+function WidgetPreview({ code, products, productId, setProductId }) {
+  const [kind, setKind] = useState("book");
+  const [device, setDevice] = useState("desktop");
+  const [height, setHeight] = useState(420);
+  const frameRef = React.useRef(null);
+  const prod = products.find((p) => p.id === productId);
+  const current = PREVIEW_KINDS.find((k) => k.id === kind);
+  const type = prod && (isPkg(prod) ? "package" : "tour");
+  const q = `?ref=${encodeURIComponent(code)}&preview=1`;
+  const src = current.needsTour
+    ? (prod ? (kind === "bookProd" ? `/embed/book/${type}/${prod.id}${q}` : `/embed/${type}/${prod.id}${q}`) : "")
+    : kind === "book" ? `/embed/book${q}` : `/embed${q}`;
+
+  // The widget reports its height, as it does to the snippet's script on a
+  // partner's site; only this frame's messages count.
+  useEffect(() => {
+    const onMsg = (e) => {
+      if (e.source !== frameRef.current?.contentWindow || !e.data) return;
+      if (e.data.type === "sawa-embed-height") setHeight(Math.max(120, Number(e.data.height) || 0));
+    };
+    window.addEventListener("message", onMsg);
+    return () => window.removeEventListener("message", onMsg);
+  }, []);
+
+  return (
+    <div className="dash-card">
+      <div className="dash-card-head">
+        <h2>Preview</h2>
+        <div className="seg" role="tablist" aria-label="Preview size">
+          {[["desktop", "Desktop"], ["phone", "Phone"]].map(([id, label]) => (
+            <button key={id} role="tab" aria-selected={device === id} className={device === id ? "active" : ""} onClick={() => setDevice(id)}>{label}</button>
+          ))}
+        </div>
+      </div>
+      <p className="field-hint">This is your live widget. Click around and fill in the form — in the preview nothing is booked and nothing is counted.</p>
+      <div className="wp-controls">
+        <select className="embed-select" value={kind} onChange={(e) => setKind(e.target.value)} aria-label="Widget to preview">
+          {PREVIEW_KINDS.map((k) => <option key={k.id} value={k.id}>{k.label}</option>)}
+        </select>
+        {current.needsTour && (
+          <select className="embed-select" value={productId} onChange={(e) => setProductId(e.target.value)} aria-label="Tour to preview">
+            <option value="">Choose a tour or package…</option>
+            {products.map((p) => <option key={p.id} value={p.id}>{isPkg(p) ? "Package" : "Tour"} — {p.title}</option>)}
+          </select>
+        )}
+      </div>
+      <div className={`wp-stage wp-${device}`}>
+        {src
+          ? <iframe key={src} ref={frameRef} src={src} title="Widget preview" className="wp-frame" style={{ height }} />
+          : <div className="dash-empty">Choose a tour to preview this widget.</div>}
+      </div>
+    </div>
   );
 }
 
