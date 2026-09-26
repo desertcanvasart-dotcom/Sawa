@@ -54,6 +54,16 @@ export function AgencyDashboard({ user, agency, signOut, refreshProfile, navigat
   // repeat click remounts the catalog, which closes the tour (and takes its
   // Back entry off history on unmount).
   const [bookKey, setBookKey] = useState(0);
+  // Payment status per booking (043), loaded when My bookings opens. The
+  // customer pays Sawa through a Tab link; the agency sees where each one
+  // stands and can pass the link on.
+  const [payments, setPayments] = useState(null);
+  useEffect(() => {
+    if (section !== "bookings") return;
+    apiFetch("/agency/payments").then((r) => (r.ok ? r.json() : null))
+      .then((j) => setPayments(j || { available: false, byPledge: {} }))
+      .catch(() => setPayments({ available: false, byPledge: {} }));
+  }, [section, departures]);
   const selectSection = (id) => {
     if (id === section && id === "book") { setBookKey((k) => k + 1); window.scrollTo({ top: 0 }); return; }
     setSection(id);
@@ -161,7 +171,7 @@ export function AgencyDashboard({ user, agency, signOut, refreshProfile, navigat
             <div className="dash-head"><div><h1>My bookings</h1><p>Every seat your agency has booked.</p></div></div>
             <div className="table-wrap">
               <table className="dash-table">
-                <thead><tr><th>Customer</th><th>Tour</th><th>When</th><th>Seats</th><th>Total</th><th>Deposit</th><th>Status</th><th aria-label="Actions" /></tr></thead>
+                <thead><tr><th>Customer</th><th>Tour</th><th>When</th><th>Seats</th><th>Total</th><th>Deposit</th><th>Status</th><th>Payment</th><th aria-label="Actions" /></tr></thead>
                 <tbody>
                   {myRows.map((r) => (
                     <tr key={r.id}>
@@ -178,10 +188,11 @@ export function AgencyDashboard({ user, agency, signOut, refreshProfile, navigat
                           : isGoAheadDeparture(r.departure)
                             ? <span className="tag tag-on">GoAhead</span>
                             : <span className="tag">Forming</span>}</td>
+                      <td><PaymentCell summary={payments?.byPledge?.[r.id]} available={payments?.available} /></td>
                       <td><BookingCancelCell row={r} onDone={onReload} /></td>
                     </tr>
                   ))}
-                  {myRows.length === 0 && <tr><td colSpan={8}><div className="dash-empty">No bookings yet. Head to "Book seats" to add your first.</div></td></tr>}
+                  {myRows.length === 0 && <tr><td colSpan={9}><div className="dash-empty">No bookings yet. Head to "Book seats" to add your first.</div></td></tr>}
                 </tbody>
               </table>
             </div>
@@ -896,6 +907,32 @@ function BookingCancelCell({ row, onDone }) {
       confirmText={`Cancel ${row.customers || "this booking"} (${row.seats} seat${Number(row.seats) === 1 ? "" : "s"}) on ${d.route}? The seat is released and nothing is charged.`}
       onDone={onDone}
     />
+  );
+}
+
+/* ---------------- Payment status (043) ---------------- */
+const PAY_TONE = { deposit_link_needed: "tag-warn", balance_link_needed: "tag-warn", overdue: "tag-alert", deposit_paid: "tag-on", paid_in_full: "tag-on", cancelled: "tag-off", not_due: "tag-off" };
+function PaymentCell({ summary, available }) {
+  const [copied, setCopied] = useState(false);
+  if (!available || !summary) return <span className="sub">—</span>;
+  // Before GoAhead nothing is owed; after it, a link needed is Sawa's to send,
+  // so the agency sees "Awaiting link" rather than an instruction.
+  const label = summary.stage === "deposit_link_needed" || summary.stage === "balance_link_needed" ? "Awaiting link" : summary.label;
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(summary.open.linkUrl); setCopied(true); setTimeout(() => setCopied(false), 1600); }
+    catch (e) { window.prompt("Copy the payment link:", summary.open.linkUrl); }
+  };
+  return (
+    <div className="pay-cell">
+      <span className={`tag ${PAY_TONE[summary.stage] || ""}`}>{label}</span>
+      {summary.paid > 0 && <div className="sub">{money(summary.paid)} paid</div>}
+      {summary.open && (
+        <div className="sub">
+          {money(summary.open.amount)} due {fmtDate(summary.open.dueAt)}{" "}
+          <button type="button" className="link-btn" onClick={copy}>{copied ? "Copied" : "Copy link"}</button>
+        </div>
+      )}
+    </div>
   );
 }
 

@@ -14,6 +14,7 @@ import { durationShapeError, cutoffUnitError } from "../shared/booking-policy.js
 import { operatingDayError } from "../shared/operating-days.js";
 import { minLeadDaysFor, maxHorizonDaysFor, requestWindowError } from "../shared/request-window.js";
 import { cleanRefCode } from "../shared/ref-code.js";
+import { CURRENCY, CURRENCY_SYMBOL } from "../shared/currency.js";
 import { mapAgency, mapCity, mapProduct, mapDeparture, mapPledge, isoDate } from "./db/mappers.js";
 import {
   enrichDeparture,
@@ -45,7 +46,12 @@ import {
   departureRequestReceivedEmail, departureRequestApprovedEmail, departureRequestDeclinedEmail,
   operatorApplicationEmail, operatorApplicationReceiptEmail, operatorApplicationText,
   opsNewBookingEmail, opsNewListingEmail, opsRecipient,
+  paymentLinkEmail, paymentReceivedEmail,
 } from "./email.js";
+import {
+  PAYMENT_KINDS, PAYMENT_PROVIDER, STAGE_LABEL, cleanLinkUrl, defaultAmount, isMissingPaymentsTable,
+  linkDueAt, mapPayment, paidTotal, paymentSummary, paymentsByPledge,
+} from "./payments.js";
 import { randomBytes, randomInt } from "node:crypto";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, resolve, sep } from "node:path";
@@ -1454,7 +1460,8 @@ app.get("/api/public/bookings/:code", h(async (req, res) => {
   const code = String(req.params.code || "").trim();
   if (!code) throw new AppError(422, "Booking code required.");
   const r = await pool.query(
-    `SELECT p.booking_code, p.seats, p.status AS pledge_status,
+    `SELECT p.id AS pledge_id, p.booking_code, p.seats, p.status AS pledge_status,
+            p.booking_total, p.deposit_due, p.balance_due, p.balance_due_date,
             d.id AS dep_id, d.route, d.date, d.start_date, d.end_date, d.city,
             d.status AS dep_status, d.min_seats,
             (SELECT COALESCE(SUM(seats), 0) FROM pledges WHERE departure_id = d.id AND status <> 'cancelled') AS seats_booked,
@@ -1500,9 +1507,30 @@ app.get("/api/public/bookings/:code", h(async (req, res) => {
     ? tourPath({ id: b.product_id, title: b.product_title, type: b.product_type, city: b.product_city })
     : null;
 
+  // 043 — where payment stands, and the open link if there is one: the same
+  // link the traveller was emailed, reached with the same booking code.
+  let payment = null;
+  try {
+    const rows = (await paymentsByPledge(pool, [b.pledge_id])).get(b.pledge_id) || [];
+    const s = paymentSummary({
+      pledge: {
+        status: b.pledge_status, bookingTotal: b.booking_total != null ? Number(b.booking_total) : 0,
+        depositDue: b.deposit_due != null ? Number(b.deposit_due) : 0, balanceDueDate: isoDate(b.balance_due_date),
+      },
+      payments: rows, goAhead: ["minimum_reached", "supplier_confirmed"].includes(b.dep_status),
+    });
+    payment = {
+      stage: s.stage, label: STAGE_LABEL[s.stage], paid: s.paid, outstanding: s.outstanding, total: s.total,
+      open: s.open ? { kind: s.open.kind, amount: s.open.amount, dueAt: s.open.dueAt, linkUrl: s.open.linkUrl, overdue: s.open.overdue } : null,
+    };
+  } catch (e) {
+    if (!isMissingPaymentsTable(e)) throw e;
+  }
+
   res.json({ booking: {
     code: b.booking_code,
     tourTitle: b.product_title || b.route,
+    payment,
     city: b.city || "",
     dateLabel,
     seats: Number(b.seats),
@@ -2842,6 +2870,228 @@ app.patch("/api/admin/bookings/:id", requireAuth, requireRole("super_admin", "op
   res.json({ ok: true, status });
 }));
 
+// ---- Payment links (043) ----------------------------------------------------
+//
+// Ops make a link in Tab, paste it here, and Sawa emails it to the customer.
+// The rules — when a link falls due, where a booking stands — are in
+// payments.js; these routes only read, write and tell people.
+//
+// Until migration 043 is applied every route here answers "payments are not
+// switched on yet" instead of failing, and the read-only views simply leave
+// payment status out.
+const GOAHEAD_STATES = ["minimum_reached", "supplier_confirmed"];
+const paymentsNotOn = () => Object.assign(
+  new AppError(503, "Payments aren't switched on yet — migration 043 has not been applied to this database."), { expose: true });
+
+function depDateLabel(d) {
+  const f = (s) => (s ? new Intl.DateTimeFormat("en", { weekday: "short", day: "numeric", month: "short", year: "numeric", timeZone: "UTC" })
+    .format(new Date(`${String(s).slice(0, 10)}T12:00:00Z`)) : "");
+  const start = f(d.startDate || d.date);
+  const end = f(d.endDate);
+  return end && end !== start ? `${start} – ${end}` : start;
+}
+
+function withStageLabel(summary) {
+  return { ...summary, label: STAGE_LABEL[summary.stage] || summary.stage };
+}
+
+// Everything a payment write needs, read under a lock on the booking so two
+// ops acting at once cannot both send a deposit link or both mark one paid.
+async function paymentContext(c, pledgeId) {
+  const p = (await c.query(`SELECT * FROM pledges WHERE id = $1 FOR UPDATE`, [pledgeId])).rows[0];
+  if (!p) throw new AppError(404, "Booking not found.");
+  const pledge = mapPledge(p);
+  const departure = await loadDeparture(c, p.departure_id);
+  const product = departure?.tourProductId ? await loadProduct(c, departure.tourProductId) : null;
+  const payments = (await paymentsByPledge(c, [pledgeId])).get(pledgeId) || [];
+  return { pledge, departure, product, payments };
+}
+
+async function withPayments(fn) {
+  try {
+    return await fn();
+  } catch (e) {
+    if (isMissingPaymentsTable(e)) throw paymentsNotOn();
+    throw e;
+  }
+}
+
+// The admin queue: every live booking on a date that reached GoAhead, and any
+// booking that has ever had a link, with where it stands.
+app.get("/api/admin/payments", requireAuth, requireRole("super_admin", "ops_staff"), h(async (req, res) => {
+  let rows;
+  try {
+    rows = (await pool.query(
+      `SELECT p.*, d.route, d.date, d.start_date, d.end_date, d.status AS dep_status, d.time AS dep_time,
+              d.tour_product_id
+         FROM pledges p JOIN departures d ON d.id = p.departure_id
+        WHERE (d.status = ANY($1::text[]) AND p.status <> 'cancelled')
+           OR EXISTS (SELECT 1 FROM booking_payments b WHERE b.pledge_id = p.id)
+        ORDER BY COALESCE(d.start_date, d.date) ASC, d.id ASC, p.created_at ASC`, [GOAHEAD_STATES])).rows;
+  } catch (e) {
+    if (isMissingPaymentsTable(e)) return res.json({ available: false, items: [] });
+    throw e;
+  }
+  const byPledge = await paymentsByPledge(pool, rows.map((r) => r.id));
+  const now = Date.now();
+  const items = rows.map((r) => {
+    const pledge = mapPledge(r);
+    const payments = byPledge.get(r.id) || [];
+    const departure = {
+      id: Number(r.departure_id), route: r.route, status: r.dep_status, time: r.dep_time,
+      date: isoDate(r.date), startDate: isoDate(r.start_date), endDate: isoDate(r.end_date),
+    };
+    return {
+      pledge, departure, dateLabel: depDateLabel(departure), payments,
+      summary: withStageLabel(paymentSummary({ pledge, payments, goAhead: GOAHEAD_STATES.includes(r.dep_status), nowMs: now })),
+      defaults: Object.fromEntries(PAYMENT_KINDS.map((k) => [k, defaultAmount(k, pledge, payments)])),
+    };
+  });
+  res.json({ available: true, items });
+}));
+
+const paymentLinkSchema = z.object({
+  kind: z.enum(["deposit", "balance", "full"]),
+  url: z.string().trim().min(1, "Paste the Tab payment link."),
+  amount: z.coerce.number().positive("Enter the amount on the link.").optional(),
+});
+
+app.post("/api/admin/bookings/:pledgeId/payment-links", requireAuth, requireRole("super_admin", "ops_staff"), writeLimiter, h(async (req, res) => {
+  const input = parse(paymentLinkSchema, req.body);
+  const url = cleanLinkUrl(input.url);
+  if (!url) throw new AppError(422, "That isn't a valid https payment link.");
+  const result = await withPayments(() => withTransaction(async (c) => {
+    const { pledge, departure, product, payments } = await paymentContext(c, req.params.pledgeId);
+    if (pledge.status === "cancelled") throw new AppError(409, "This booking is cancelled — there is nothing to collect.");
+    if (payments.some((p) => p.state === "link_sent" && p.kind === input.kind)) {
+      throw new AppError(409, `A ${input.kind} link is already out for this booking. Void it before sending another.`);
+    }
+    const outstanding = Math.max(0, Math.round(((Number(pledge.bookingTotal) || 0) - paidTotal(payments)) * 100) / 100);
+    const amount = Math.round((input.amount ?? defaultAmount(input.kind, pledge, payments)) * 100) / 100;
+    if (!(amount > 0)) throw new AppError(422, "There is nothing left to collect on this booking.");
+    if (amount > outstanding + 0.005) {
+      throw new AppError(422, `That is more than is outstanding on this booking (${CURRENCY_SYMBOL}${outstanding}).`);
+    }
+    const sentAt = Date.now();
+    const { dueAt, boundBy } = linkDueAt({ kind: input.kind, sentAtMs: sentAt, departure, product, balanceDueDate: pledge.balanceDueDate });
+    const row = (await c.query(
+      `INSERT INTO booking_payments
+         (pledge_id, kind, amount, currency, provider, link_url, link_sent_at, due_at, due_bound_by, emailed_to, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
+      [pledge.id, input.kind, amount, CURRENCY, PAYMENT_PROVIDER, url, new Date(sentAt), new Date(dueAt), boundBy,
+        pledge.customerEmail || null, req.user.email || null])).rows[0];
+    return { pledge, departure, payment: mapPayment(row) };
+  }));
+  const { pledge, departure, payment } = result;
+  await logAudit(req, {
+    action: "payment.link_sent", entity: "pledge", entityId: pledge.id,
+    detail: { paymentId: payment.id, kind: payment.kind, amount: payment.amount, dueAt: payment.dueAt, dueBoundBy: payment.dueBoundBy, emailedTo: payment.emailedTo },
+  });
+  if (pledge.customerEmail) {
+    sendEmailInBackground(paymentLinkEmail({
+      to: pledge.customerEmail, customerName: pledge.customers, route: departure?.route || "your tour",
+      dateLabel: departure ? depDateLabel(departure) : "", kind: payment.kind, amount: payment.amount,
+      dueAt: payment.dueAt, url: payment.linkUrl, bookingCode: pledge.bookingCode,
+    }));
+  }
+  res.status(201).json({ payment, emailed: !!pledge.customerEmail });
+}));
+
+// Change one link's state. Each transition names the only state it may start
+// from, so a double click or a stale screen cannot mark a void link paid.
+async function transitionPayment(req, { from, apply }) {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) throw new AppError(404, "Payment not found.");
+  return withPayments(() => withTransaction(async (c) => {
+    const cur = (await c.query(`SELECT * FROM booking_payments WHERE id = $1`, [id])).rows[0];
+    if (!cur) throw new AppError(404, "Payment not found.");
+    const ctx = await paymentContext(c, cur.pledge_id);
+    const locked = (await c.query(`SELECT * FROM booking_payments WHERE id = $1 FOR UPDATE`, [id])).rows[0];
+    if (locked.state !== from) throw new AppError(409, `This link is ${locked.state.replace("_", " ")}, not ${from.replace("_", " ")}.`);
+    const row = (await apply(c, id)).rows[0];
+    const payments = (await paymentsByPledge(c, [cur.pledge_id])).get(cur.pledge_id) || [];
+    // 030's `paid` flag: the agreed price received in full.
+    const inFull = (Number(ctx.pledge.bookingTotal) || 0) > 0 && paidTotal(payments) >= Number(ctx.pledge.bookingTotal);
+    await c.query(`UPDATE pledges SET paid = $1 WHERE id = $2`, [inFull, cur.pledge_id]);
+    return { ...ctx, payments, payment: mapPayment(row), before: mapPayment(cur) };
+  }));
+}
+
+const referenceSchema = z.object({ reference: z.string().trim().min(1, "Enter Tab's payment reference.").max(120) });
+const reasonSchema = z.object({ reason: z.string().trim().max(300).optional() });
+
+app.post("/api/admin/payments/:id/paid", requireAuth, requireRole("super_admin", "ops_staff"), writeLimiter, h(async (req, res) => {
+  const { reference } = parse(referenceSchema, req.body);
+  const r = await transitionPayment(req, {
+    from: "link_sent",
+    apply: (c, id) => c.query(
+      `UPDATE booking_payments SET state = 'paid', paid_at = now(), provider_reference = $2 WHERE id = $1 RETURNING *`, [id, reference]),
+  });
+  await logAudit(req, {
+    action: "payment.paid", entity: "pledge", entityId: r.pledge.id,
+    detail: { paymentId: r.payment.id, kind: r.payment.kind, amount: r.payment.amount, reference },
+  });
+  if (r.pledge.customerEmail) {
+    sendEmailInBackground(paymentReceivedEmail({
+      to: r.pledge.customerEmail, customerName: r.pledge.customers, route: r.departure?.route || "your tour",
+      dateLabel: r.departure ? depDateLabel(r.departure) : "", amount: r.payment.amount, reference,
+      outstanding: Math.max(0, (Number(r.pledge.bookingTotal) || 0) - paidTotal(r.payments)), bookingCode: r.pledge.bookingCode,
+    }));
+  }
+  res.json({ payment: r.payment });
+}));
+
+app.post("/api/admin/payments/:id/void", requireAuth, requireRole("super_admin", "ops_staff"), writeLimiter, h(async (req, res) => {
+  const { reason } = parse(reasonSchema, req.body || {});
+  const r = await transitionPayment(req, {
+    from: "link_sent",
+    apply: (c, id) => c.query(
+      `UPDATE booking_payments SET state = 'void', voided_at = now(), void_reason = $2 WHERE id = $1 RETURNING *`, [id, reason || null]),
+  });
+  await logAudit(req, {
+    action: "payment.void", entity: "pledge", entityId: r.pledge.id,
+    detail: { paymentId: r.payment.id, kind: r.payment.kind, amount: r.payment.amount, reason: reason || null },
+  });
+  res.json({ payment: r.payment });
+}));
+
+app.post("/api/admin/payments/:id/refund", requireAuth, requireRole("super_admin", "ops_staff"), writeLimiter, h(async (req, res) => {
+  const { reference } = parse(referenceSchema, req.body);
+  const r = await transitionPayment(req, {
+    from: "paid",
+    apply: (c, id) => c.query(
+      `UPDATE booking_payments SET state = 'refunded', refunded_at = now(), refund_reference = $2 WHERE id = $1 RETURNING *`, [id, reference]),
+  });
+  await logAudit(req, {
+    action: "payment.refund", entity: "pledge", entityId: r.pledge.id,
+    detail: { paymentId: r.payment.id, kind: r.payment.kind, amount: r.payment.amount, reference },
+  });
+  res.json({ payment: r.payment });
+}));
+
+// The agency's own bookings, with where each one stands on payment and the
+// open link, so the agency can chase its own customer.
+app.get("/api/agency/payments", requireAuth, requireRole("agency_owner", "agency_agent"), h(async (req, res) => {
+  if (!req.user.agencyId) throw new AppError(403, "This account is not linked to an agency.");
+  const rows = (await pool.query(
+    `SELECT p.*, d.status AS dep_status FROM pledges p JOIN departures d ON d.id = p.departure_id WHERE p.agency_id = $1`,
+    [req.user.agencyId])).rows;
+  let byPledge;
+  try {
+    byPledge = await paymentsByPledge(pool, rows.map((r) => r.id));
+  } catch (e) {
+    if (isMissingPaymentsTable(e)) return res.json({ available: false, byPledge: {} });
+    throw e;
+  }
+  const now = Date.now();
+  const out = {};
+  for (const r of rows) {
+    const summary = paymentSummary({ pledge: mapPledge(r), payments: byPledge.get(r.id) || [], goAhead: GOAHEAD_STATES.includes(r.dep_status), nowMs: now });
+    out[r.id] = withStageLabel(summary);
+  }
+  res.json({ available: true, byPledge: out });
+}));
+
 // Admin: archive / unarchive a tour product (platform staff).
 app.patch("/api/admin/tour-products/:id", requireAuth, requireRole("super_admin", "ops_staff"), h(async (req, res) => {
   const active = req.body?.active;
@@ -3344,10 +3594,12 @@ app.use((err, _req, res, _next) => {
     return res.status(422).json({ error: err.issues[0]?.message || "Invalid request." });
   }
   const status = err.status || 500;
-  if (status >= 500) console.error(err);
+  if (status >= 500 && !err.expose) console.error(err);
   // Never surface raw internal error text (e.g. Postgres messages) to clients.
-  // 4xx errors are our own AppError/AuthError with safe, user-facing messages.
-  const message = status >= 500 ? "Server error." : (err.message || "Request failed.");
+  // 4xx errors are our own AppError/AuthError with safe, user-facing messages;
+  // a 5xx is shown only when it was written to be (`expose`), like the
+  // "payments aren't switched on yet" answer.
+  const message = status >= 500 && !err.expose ? "Server error." : (err.message || "Request failed.");
   res.status(status).json({ error: message });
 });
 

@@ -10,6 +10,7 @@ import { DashSidebar } from "./DashSidebar";
 import { usePortalSection } from "./portal-section.js";
 import { useBackToClose, useUnsavedGuard } from "./back-to-close.js";
 import { RichText } from "./RichText";
+import { PaymentsSection } from "./AdminPayments.jsx";
 // Date-only departure values need a local-noon anchor or they render a day
 // early west of UTC — see src/dates.js.
 import { fmtDate, fmtReceived } from "./dates.js";
@@ -51,6 +52,7 @@ const NAV_GROUPS = [
       { id: "blog", label: "Blog", icon: Newspaper },
       { id: "departures", label: "Departures", icon: CalendarDays, alert: (s) => s?.departureStatus?.readyToConfirm || 0 },
       { id: "bookings", label: "Bookings", icon: ClipboardList },
+      { id: "payments", label: "Payments", icon: Euro },
       { id: "referrals", label: "Referrals", icon: Share2 },
       { id: "agencies", label: "Agencies", icon: Users },
       { id: "team", label: "Operations team", icon: ShieldCheck },
@@ -121,6 +123,7 @@ export function AdminDashboard({ user, agency, signOut, navigate }) {
             {section === "blog" && <BlogSection posts={posts} reload={loadAll} flash={flash} />}
             {section === "departures" && <DeparturesSection data={data} reload={loadAll} flash={flash} />}
             {section === "bookings" && <BookingsSection data={data} stats={stats} />}
+            {section === "payments" && <PaymentsSection flash={flash} />}
             {section === "referrals" && <ReferralsSection flash={flash} />}
             {section === "agencies" && <AgenciesSection flash={flash} />}
             {section === "team" && <OpsTeamSection flash={flash} currentUserId={user.id} />}

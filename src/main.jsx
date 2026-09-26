@@ -3554,6 +3554,39 @@ const TERMS_SECTIONS = [
 ];
 
 // ---- /booking : look up a booking by code ----
+// 043 — the payment part of a booking: the open Tab link to pay, or what has
+// been received. Nothing is shown before anything is owed.
+function BookingPayment({ payment }) {
+  if (!payment || payment.stage === "not_due" || payment.stage === "cancelled") return null;
+  const m = (n) => `${CURRENCY_SYMBOL}${Number(n || 0).toLocaleString()}`;
+  const due = (iso) => new Intl.DateTimeFormat("en-GB", {
+    weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Africa/Cairo", timeZoneName: "short",
+  }).format(new Date(iso));
+  const what = { deposit: "deposit", balance: "balance", full: "payment" };
+  return (
+    <div className={`booking-pay ${payment.open?.overdue ? "is-late" : ""}`}>
+      <div className="booking-pay-row">
+        <span>Payment</span>
+        <b>{payment.stage === "paid_in_full" ? "Paid in full" : `${m(payment.paid)} of ${m(payment.total)} paid`}</b>
+      </div>
+      {payment.open ? (
+        <>
+          <p>
+            Your {what[payment.open.kind] || "payment"} of <b>{m(payment.open.amount)}</b> is due by {due(payment.open.dueAt)}
+            {payment.open.overdue ? " — this is now overdue. Please pay as soon as you can, or reply to our email if something is wrong." : "."}
+          </p>
+          <a className="btn gold booking-pay-btn" href={payment.open.linkUrl} target="_blank" rel="noopener noreferrer">
+            Pay {m(payment.open.amount)} securely
+          </a>
+          <small>Card payment through Tab, our payment provider.</small>
+        </>
+      ) : payment.stage === "paid_in_full" ? null : (
+        <p>{payment.paid > 0 ? "Thank you — your deposit is in. We'll email the link for the rest before it's due." : "We'll email your payment link shortly."}</p>
+      )}
+    </div>
+  );
+}
+
 function BookingLookupPage({ navigate, path }) {
   const initial = decodeURIComponent((path.match(/^\/booking\/([^/]+)/) || [])[1] || "");
   const [code, setCode] = useState(initial);
@@ -3649,6 +3682,7 @@ function BookingLookupPage({ navigate, path }) {
                 alone, which is how a cancelled date came to read "the guide and
                 transport are booked". */}
             <p className="booking-note">{b.note}</p>
+            <BookingPayment payment={b.payment} />
             {/* Whether this is offered at all comes from the server (canCancel),
                 for the same reason the note does: only it knows the state, and
                 a page that decided for itself is how a cancelled date came to
