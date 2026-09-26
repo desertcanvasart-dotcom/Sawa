@@ -10,7 +10,7 @@ import {
   phoneVerificationEnabled, normalizePhone, issuePhoneToken, phoneTokenValid,
   startVerification, checkVerification,
 } from "./phone-verify.js";
-import { durationShapeError, cutoffUnitError } from "../shared/booking-policy.js";
+import { durationShapeError, cutoffUnitError, normalizeDuration } from "../shared/booking-policy.js";
 import { operatingDayError } from "../shared/operating-days.js";
 import { minLeadDaysFor, maxHorizonDaysFor, requestWindowError } from "../shared/request-window.js";
 import { cleanRefCode } from "../shared/ref-code.js";
@@ -888,6 +888,9 @@ export async function upsertTourProduct(c, body, review) {
   // using it. Every listing save threw ReferenceError from then on, and the
   // green suite never noticed because nothing executes this function.
   // upsert-execution.test.js now does.
+  // Read what was typed generously ("8 hours" → "Full day · about 8 hours")
+  // and store it in the house format; only what can't be read is refused.
+  if (typeof body.duration === "string") body.duration = normalizeDuration(type, body.duration);
   const durationProblem = durationShapeError(type, body.duration);
   if (durationProblem) throw new AppError(422, durationProblem);
 
@@ -958,7 +961,7 @@ export async function upsertTourProduct(c, body, review) {
       id, type, title, body.city || "Cairo",
       type === "package" ? JSON.stringify(body.cities || [body.city || "Cairo"]) : null,
       type === "package" ? Number(body.nights || 3) : null,
-      body.duration || (type === "package" ? `${Number(body.nights || 3) + 1} days · ${body.nights || 3} nights` : "4 hours"),
+      body.duration || (type === "package" ? `${Number(body.nights || 3) + 1} days · ${body.nights || 3} nights` : "Full day · about 4 hours"),
       body.defaultTime || "08:00", body.guide || "Licensed Egyptologist",
       body.vehicle || (type === "package" ? "Private van + flights" : "Van, 12 seats"),
       Number(body.minSeats || 4), Number(body.maxSeats || 12),
