@@ -442,12 +442,16 @@
 .sx .inc.no li .ck{background:rgba(23,50,58,.07);color:var(--muted)}
 .sx .inc li .ck svg{width:13px;height:13px}
 .sx .op-card{margin-top:24px;background:var(--paper);padding:8px;border-radius:var(--r-lg);border:1px solid rgba(255,255,255,.7);box-shadow:var(--shadow-card)}
-.sx .op-inner{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:22px;align-items:center;background:var(--paper);border-radius:calc(var(--r-lg) - 8px);padding:22px 24px}
+.sx .op-inner{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:22px;align-items:center;background:var(--paper);border-radius:calc(var(--r-lg) - 8px);padding:22px 24px}
 .sx .op-logo{width:66px;height:66px;border-radius:18px;background:var(--teal);color:var(--gold);display:grid;place-items:center;font-family:'Fraunces',serif;font-weight:600;font-size:1.5rem;flex:0 0 auto}
 .sx .op-meta .vr{display:inline-flex;align-items:center;gap:6px;font-size:.7rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#2c7a57;background:rgba(44,122,87,.1);padding:4px 10px;border-radius:999px}
 .sx .op-meta .vr svg{width:12px;height:12px}
 .sx .op-meta h3{font-family:'Fraunces',serif;font-weight:500;font-size:1.3rem;color:var(--teal);margin-top:8px}
 .sx .op-meta p{font-size:.88rem;color:var(--muted);margin-top:3px}
+/* Without a size the check SVG fills the card width — a card-sized tick. */
+.sx .op-meta .op-verified{display:inline-flex;align-items:center;gap:6px;font-size:.7rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#2c7a57;background:rgba(44,122,87,.1);padding:4px 10px;border-radius:999px;margin-top:8px}
+.sx .op-meta .op-verified svg{width:12px;height:12px;flex:0 0 auto}
+.sx .op-meta .op-note{font-size:.8rem;margin-top:10px}
 .sx .rev-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:24px}
 .sx .review{background:var(--paper);border:1px solid var(--line);border-radius:var(--r-lg);padding:24px}
 .sx .review .top{display:flex;align-items:center;gap:13px}
@@ -609,7 +613,7 @@
   .sx .gallery .gcell.big{grid-column:span 2;grid-row:span 1;aspect-ratio:16/10}
   .sx .gallery .gcell.hide-sm{display:none}
   .sx .hl,.sx .inc-grid,.sx .rev-grid,.sx .faq{grid-template-columns:1fr}
-  .sx .op-inner{grid-template-columns:auto minmax(0,1fr);gap:16px}
+  .sx .op-inner{grid-template-columns:minmax(0,1fr);gap:16px}
   /* The button wraps to row 2 but still sizes the auto column it lands in,
      which squeezed the operator name to 70px against its 124px of text. Give
      it a row of its own so column 1 is only ever as wide as the logo. */

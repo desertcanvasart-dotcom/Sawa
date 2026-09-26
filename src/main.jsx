@@ -1846,7 +1846,7 @@ function TourDetailV2({ isSaving, navigate, phoneVerification = false, onBookPub
                   <div className="op-card"><div className="op-inner">
                     <div className="op-meta">
                       <h3>{tour.guide}</h3>
-                      <p>Every Sawa departure is run by an Egyptian travel company licensed by the Ministry of Tourism and Antiquities. The company responsible for this departure is named before you book.</p>
+                      <p>Every Sawa departure is run by an Egyptian travel company licensed by the Ministry of Tourism and Antiquities. {operator ? "The company responsible for this departure is named above." : "The company responsible for this departure is named before you book."}</p>
                     </div>
                     <SpaLink navigate={navigate} to="/about" className="btn plain">About Sawa<span className="chip" aria-hidden="true"><SxArrow /></span></SpaLink>
                   </div></div>
