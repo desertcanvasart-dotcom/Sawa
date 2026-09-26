@@ -6,9 +6,10 @@ import { CURRENCY_SYMBOL } from "../shared/currency.js";
 import {
   LayoutDashboard, Ticket, ClipboardList, Users as UsersIcon, ShieldCheck, ArrowUpRight,
   Check, ChevronDown, AlertTriangle, CalendarDays, MapPin, Package, Hotel, ArrowLeft, Search, Clock3,
-  Share2, Copy,
+  Share2, Copy, Settings as SettingsIcon,
 } from "lucide-react";
 import { DashSidebar } from "./DashSidebar";
+import { AgencySettings } from "./AgencySettings.jsx";
 import { usePortalSection } from "./portal-section.js";
 import { useBackToClose, useUnsavedGuard } from "./back-to-close.js";
 import { apiFetch } from "./supabaseClient";
@@ -43,11 +44,11 @@ function livePrice(item, seats) {
   return Math.round(start - (start - brk) * Math.min(1, Math.max(0, eff - ga) / steps));
 }
 
-export function AgencyDashboard({ user, agency, signOut, navigate, departures, tourProducts = [], onReload, agencyDeskProps, AgencyDesk, StaffPanel }) {
+export function AgencyDashboard({ user, agency, signOut, refreshProfile, navigate, departures, tourProducts = [], onReload, agencyDeskProps, AgencyDesk, StaffPanel }) {
   const agencyId = agency?.id;
   const isOwner = user.role === "agency_owner";
   const [section, setSection] = usePortalSection(
-    ["overview", "book", "listings", "bookings", "widget", ...(isOwner ? ["team"] : [])], "overview");
+    ["overview", "book", "listings", "bookings", "widget", ...(isOwner ? ["team"] : []), "settings"], "overview");
   // Clicking "Book seats" while a tour is open inside it used to do nothing:
   // the section was already active, so the open tour stayed on screen. A
   // repeat click remounts the catalog, which closes the tour (and takes its
@@ -83,16 +84,24 @@ export function AgencyDashboard({ user, agency, signOut, navigate, departures, t
     return { bookings: live.length, seats, confirmed, needsMore, value, departures: myDeps.length };
   }, [departures, myRows, agencyId]);
 
+  // Three groups, divided by a thin rule: the overview; selling (book seats
+  // and the bookings that come of it); and running the agency.
   const navGroups = [
+    { title: "Home", items: [{ id: "overview", label: "Overview", icon: LayoutDashboard }] },
     {
-      title: null,
+      title: "Sell",
       items: [
-        { id: "overview", label: "Overview", icon: LayoutDashboard },
         { id: "book", label: "Book seats", icon: Ticket },
-        { id: "listings", label: "List a tour", icon: Package },
         { id: "bookings", label: "My bookings", icon: ClipboardList },
+      ],
+    },
+    {
+      title: "Agency",
+      items: [
+        { id: "listings", label: "List a tour", icon: Package },
         { id: "widget", label: "Promote", icon: Share2 },
         ...(isOwner ? [{ id: "team", label: "Team", icon: UsersIcon }] : []),
+        { id: "settings", label: "Settings", icon: SettingsIcon },
       ],
     },
   ];
@@ -183,6 +192,10 @@ export function AgencyDashboard({ user, agency, signOut, navigate, departures, t
         {section === "listings" && <MyListingsSection />}
 
         {section === "widget" && <WidgetSection tourProducts={tourProducts} />}
+
+        {section === "settings" && (
+          <AgencySettings user={user} agency={agency} isOwner={isOwner} onSaved={refreshProfile} />
+        )}
 
         {section === "team" && isOwner && (
           <>

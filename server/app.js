@@ -506,6 +506,47 @@ app.get("/api/me", requireAuth, h(async (req, res) => {
   res.json({ user: req.user, agency });
 }));
 
+// Settings: a signed-in user corrects the name shown on their account and in
+// the team list. Email and role are not theirs to change here: the email is
+// the login, and roles are set by the agency owner or Sawa.
+const profileSchema = z.object({
+  fullName: z.string().trim().min(1, "Enter your name.").max(120),
+});
+app.patch("/api/me", requireAuth, writeLimiter, h(async (req, res) => {
+  const { fullName } = parse(profileSchema, req.body);
+  const before = req.user.fullName || null;
+  await pool.query(`UPDATE app_users SET full_name = $1 WHERE id = $2`, [fullName, req.user.id]);
+  await logAudit(req, {
+    action: "profile.update", entity: "user", entityId: req.user.id,
+    detail: { from: { fullName: before }, to: { fullName } },
+  });
+  res.json({ user: { ...req.user, fullName } });
+}));
+
+// Settings: the agency owner keeps the agency's contact person and phone up to
+// date. The company name, licence and ETAA numbers are part of the verified
+// operator record and change only through Sawa, so they are not accepted here.
+const agencyProfileSchema = z.object({
+  contactName: z.string().trim().max(120).optional(),
+  phone: z.string().trim().max(40).optional(),
+});
+app.patch("/api/agency/profile", requireAuth, requireRole("agency_owner"), writeLimiter, h(async (req, res) => {
+  if (!req.user.agencyId) throw new AppError(403, "This account is not linked to an agency.");
+  const input = parse(agencyProfileSchema, req.body);
+  const before = (await pool.query(`SELECT * FROM agencies WHERE id=$1`, [req.user.agencyId])).rows[0];
+  if (!before) throw new AppError(404, "Agency not found.");
+  const contactName = input.contactName === undefined ? before.contact_name : (input.contactName || null);
+  const phone = input.phone === undefined ? before.phone : (input.phone || null);
+  const row = (await pool.query(
+    `UPDATE agencies SET contact_name = $1, phone = $2 WHERE id = $3 RETURNING *`,
+    [contactName, phone, req.user.agencyId])).rows[0];
+  await logAudit(req, {
+    action: "agency.profile.update", entity: "agency", entityId: req.user.agencyId,
+    detail: { from: { contactName: before.contact_name, phone: before.phone }, to: { contactName, phone } },
+  });
+  res.json({ agency: mapAgency(row) });
+}));
+
 // Anonymous visitors all get the identical, fully-redacted public catalogue, but
 // building it hits the DB for every product/departure/pledge (2–4s). Cache that
 // one payload briefly so tour pages open instantly instead of sitting on the

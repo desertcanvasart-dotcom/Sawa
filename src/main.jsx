@@ -1000,11 +1000,12 @@ function App() {
   return (
     <Suspense fallback={<LoadingScreen />}>
     <LoginGate onSession={(token) => setAuthToken(token)}>
-      {({ user, agency, signOut }) => (
+      {({ user, agency, signOut, refreshProfile }) => (
         <Portal
           user={user}
           agency={agency}
           signOut={signOut}
+          refreshProfile={refreshProfile}
           navigate={navigate}
           notice={notice}
           cityStats={cityStats}
@@ -1035,7 +1036,7 @@ function App() {
 }
 
 // ---- Authenticated portal shell: role decides which desk shows ----
-function Portal({ user, agency, signOut, navigate, notice, cityStats, departures, selectedCity, setSelectedCity, selectedCityStats, agencyDeskProps, adminDeskProps }) {
+function Portal({ user, agency, signOut, refreshProfile, navigate, notice, cityStats, departures, selectedCity, setSelectedCity, selectedCityStats, agencyDeskProps, adminDeskProps }) {
   const isPlatform = user.role === "super_admin" || user.role === "ops_staff";
   const selected = agencyDeskProps.selected;
 
@@ -1051,6 +1052,7 @@ function Portal({ user, agency, signOut, navigate, notice, cityStats, departures
       user={user}
       agency={agency}
       signOut={signOut}
+      refreshProfile={refreshProfile}
       navigate={navigate}
       departures={departures}
       tourProducts={agencyDeskProps.tourProducts}
