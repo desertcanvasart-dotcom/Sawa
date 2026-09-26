@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { priceFromTiers } from "../shared/pricing.js";
 import { depositPctFor, balanceDueDate } from "../shared/booking-policy.js";
-import { isGoAheadDeparture } from "../shared/departure-state.js";
+import { isGoAheadDeparture, isBookingOpen } from "../shared/departure-state.js";
 import { CURRENCY_SYMBOL } from "../shared/currency.js";
 import {
   LayoutDashboard, Ticket, ClipboardList, Users as UsersIcon, ShieldCheck, ArrowUpRight,
@@ -48,6 +48,15 @@ export function AgencyDashboard({ user, agency, signOut, navigate, departures, t
   const isOwner = user.role === "agency_owner";
   const [section, setSection] = usePortalSection(
     ["overview", "book", "listings", "bookings", "widget", ...(isOwner ? ["team"] : [])], "overview");
+  // Clicking "Book seats" while a tour is open inside it used to do nothing:
+  // the section was already active, so the open tour stayed on screen. A
+  // repeat click remounts the catalog, which closes the tour (and takes its
+  // Back entry off history on unmount).
+  const [bookKey, setBookKey] = useState(0);
+  const selectSection = (id) => {
+    if (id === section && id === "book") { setBookKey((k) => k + 1); window.scrollTo({ top: 0 }); return; }
+    setSection(id);
+  };
 
   // built after `stats` so badges can read live counts (see below)
 
@@ -95,7 +104,7 @@ export function AgencyDashboard({ user, agency, signOut, navigate, departures, t
         subtitle="Agency portal"
         groups={navGroups}
         active={section}
-        onSelect={setSection}
+        onSelect={selectSection}
         stats={stats}
         roleLabel={isOwner ? "Owner" : "Agent"}
         user={user}
@@ -135,7 +144,7 @@ export function AgencyDashboard({ user, agency, signOut, navigate, departures, t
         )}
 
         {section === "book" && (
-          <BookTours tourProducts={tourProducts} departures={departures} agencyId={agencyId} agencyName={agency?.name} agencyPax={stats.seats} onReload={onReload} />
+          <BookTours key={bookKey} tourProducts={tourProducts} departures={departures} agencyId={agencyId} agencyName={agency?.name} agencyPax={stats.seats} onReload={onReload} />
         )}
 
         {section === "bookings" && (
@@ -401,7 +410,7 @@ function BookTours({ tourProducts, departures, agencyId, agencyName, agencyPax =
 function TourBooking({ product, agencyId, agencyName, agencyPax = 0, onBack, onReload }) {
   const pkg = isPkg(product);
   const tiers = product.accommodationTiers || [];
-  const bookable = product.dates.filter((d) => seatsOf(d) < d.maxSeats);
+  const bookable = product.dates.filter((d) => seatsOf(d) < d.maxSeats && isBookingOpen(d));
   const [depId, setDepId] = useState(bookable[0]?.id || product.dates[0]?.id || "");
   const [seats, setSeats] = useState(1);
   const [tierId, setTierId] = useState(tiers[0]?.id || "");
@@ -479,6 +488,49 @@ function TourBooking({ product, agencyId, agencyName, agencyPax = 0, onBack, onR
           <h1 className="tb-title">{product.title} {pkg && <span className="tag tag-pkg">Package</span>}</h1>
           <p className="tb-meta"><MapPin size={14} />{pkg ? (product.cities || [product.city]).join(" → ") : product.city}{product.duration ? ` · ${product.duration}` : ""}{product.guide ? ` · ${product.guide}` : ""}</p>
 
+          {/* The dates the catalog card counts ("2 dates") used to exist only
+              as options in the booking panel's dropdown, so an agent opening
+              the tour saw no dates anywhere on the page. List them here, with
+              how full each one is, and let a click pick one for the form. */}
+          <div className="tb-dates">
+            <h3><CalendarDays size={15} />{product.dates.length ? `Scheduled dates (${product.dates.length})` : "Scheduled dates"}</h3>
+            {product.dates.length ? (
+              <ul>
+                {product.dates.map((d) => {
+                  const n = seatsOf(d);
+                  const left = Math.max(0, d.maxSeats - n);
+                  const closed = !isBookingOpen(d);
+                  const go = isGoAheadDeparture(d);
+                  const need = Math.max(0, goAheadOf(d) - n);
+                  const chosen = mode === "join" && Number(d.id) === Number(depId);
+                  const can = left > 0 && !closed;
+                  return (
+                    <li key={d.id}>
+                      <button type="button" className={chosen ? "tb-date active" : "tb-date"} disabled={!can}
+                        aria-pressed={chosen}
+                        onClick={() => { setDepId(d.id); setMode("join"); setErr(""); setMsg(""); document.getElementById("tb-book")?.scrollIntoView({ block: "nearest", behavior: "smooth" }); }}>
+                        <span className="tb-date-when">
+                          <strong>{fmtDate(d.startDate || d.date)}</strong>
+                          {!pkg && d.time ? <em>{d.time}</em> : null}
+                        </span>
+                        <span className="tb-date-fill">
+                          <span>{n}/{d.maxSeats} booked</span>
+                          <i><b style={{ width: `${d.maxSeats ? Math.min(100, Math.round((n / d.maxSeats) * 100)) : 0}%` }} /></i>
+                        </span>
+                        <span className={go ? "tb-date-tag go" : "tb-date-tag"}>
+                          {closed ? "Booking closed" : left <= 0 ? "Full" : go ? "GoAhead ✓" : `${need} to GoAhead`}
+                        </span>
+                        <span className="tb-date-act">{!can ? "—" : chosen ? "Selected" : "Book this date"}</span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <p className="muted-line">No dates scheduled yet. Request one in the booking panel and it opens for other travellers to join.</p>
+            )}
+          </div>
+
           {hasHtml(product.overviewHtml)
             ? <div className="rich" dangerouslySetInnerHTML={{ __html: product.overviewHtml }} />
             : product.description ? <p className="tb-desc">{product.description}</p> : null}
@@ -532,7 +584,7 @@ function TourBooking({ product, agencyId, agencyName, agencyPax = 0, onBack, onR
           )}
         </div>
 
-        <aside className="tb-book">
+        <aside className="tb-book" id="tb-book">
           <div className="tb-price">
             <span className="tb-price-cap">Live shared price</span>
             <div className="tb-price-now"><strong>{CURRENCY_SYMBOL}{pp}</strong><em>per person</em></div>
