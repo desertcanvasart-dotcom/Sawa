@@ -81,16 +81,22 @@ export async function uploadReceipt(file) {
   return json;
 }
 
+// A short-lived signed link to an uploaded receipt: { url, name }.
+export async function receiptLink(costId) {
+  const res = await apiFetch(`/cost-receipts/${costId}`);
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(json.error || "Couldn't open the receipt.");
+  return json;
+}
+
 // Open an uploaded receipt in a new tab through a short-lived signed link.
 // The tab is opened first, synchronously, so a pop-up blocker doesn't stop it
 // for having been opened after a network request.
 export async function openReceipt(costId) {
   const tab = window.open("", "_blank");
   try {
-    const res = await apiFetch(`/cost-receipts/${costId}`);
-    const json = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(json.error || "Couldn't open the receipt.");
-    if (tab) tab.location.href = json.url; else window.location.href = json.url;
+    const { url } = await receiptLink(costId);
+    if (tab) tab.location.href = url; else window.location.href = url;
   } catch (e) {
     tab?.close();
     throw e;

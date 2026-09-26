@@ -6879,6 +6879,10 @@ button:disabled {
 .st-cost-row { display: grid; grid-template-columns: 170px minmax(0, 1.4fr) 130px minmax(0, 1fr); gap: 10px; }
 .st-cost-row input[type=file] { font-size: 13px; padding: 7px 8px; min-height: 38px; }
 .st-receipt-link { display: grid; gap: 5px; font-size: 12px; font-weight: 700; color: var(--d-ink-soft, #5c5f62); max-width: 520px; }
+.rc-thumb { width: 64px; height: 64px; border-radius: 8px; border: 1px solid var(--d-line, #ddd); background: #f6f6f4; padding: 0; overflow: hidden; cursor: zoom-in; display: grid; place-items: center; color: var(--d-ink-soft, #5c5f62); flex: 0 0 auto; }
+.rc-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.rc-pdf { display: inline-flex; align-items: center; gap: 5px; height: 30px; padding: 0 10px; border-radius: 8px; border: 1px solid #efc9bb; background: #fdf3ef; color: #a3341a; font: inherit; font-size: 12px; font-weight: 800; cursor: pointer; }
+.rc-frame { flex: 1 0 100%; width: 100%; height: 520px; border: 1px solid var(--d-line, #ddd); border-radius: 10px; background: #fff; margin-top: 4px; }
 .pay-link.link-btn { background: none; border: 0; padding: 0; cursor: pointer; font: inherit; font-size: 12.5px; font-weight: 700; }
 .st-inline-label { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; }
 .st-inline-label input { width: 110px; }

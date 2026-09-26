@@ -95,8 +95,9 @@ export function AgencyDashboard({ user, agency, signOut, refreshProfile, navigat
     return { bookings: live.length, seats, confirmed, needsMore, value, departures: myDeps.length };
   }, [departures, myRows, agencyId]);
 
-  // Three groups, divided by a thin rule: the overview; selling (book seats
-  // and the bookings that come of it); and running the agency.
+  // Four groups, divided by a thin rule: the overview; selling (book seats,
+  // the bookings that come of it, the money they earn); growing the agency
+  // (its own tours, the widget); and the account (settings, the team).
   const navGroups = [
     { title: "Home", items: [{ id: "overview", label: "Overview", icon: LayoutDashboard }] },
     {
@@ -108,12 +109,17 @@ export function AgencyDashboard({ user, agency, signOut, refreshProfile, navigat
       ],
     },
     {
-      title: "Agency",
+      title: "Grow",
       items: [
         { id: "listings", label: "List a tour", icon: Package },
         { id: "widget", label: "Promote", icon: Share2 },
-        ...(isOwner ? [{ id: "team", label: "Team", icon: UsersIcon }] : []),
+      ],
+    },
+    {
+      title: "Account",
+      items: [
         { id: "settings", label: "Settings", icon: SettingsIcon },
+        ...(isOwner ? [{ id: "team", label: "Team", icon: UsersIcon }] : []),
       ],
     },
   ];
