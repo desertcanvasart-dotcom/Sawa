@@ -131,7 +131,7 @@ function SettlementDetail({ v, data, onChanged }) {
           {v.costs.map((c) => <CostLine key={c.id} c={c} categories={data.categories} final={!!v.costsFinalAt} onChanged={onChanged} />)}
           {v.costs.length === 0 && <li className="muted-line">No costs yet. The operator submits them from its portal, or add them here.</li>}
         </ul>
-        {!v.costsFinalAt && <AddCost depId={v.departure.id} categories={data.categories} onChanged={onChanged} />}
+        {!v.costsFinalAt && <AddCost depId={v.departure.id} categories={data.categories} travellers={v.travellers} onChanged={onChanged} />}
       </div>
 
       {s.loss && (
@@ -177,7 +177,7 @@ function CostLine({ c, categories, final, onChanged }) {
     <li className={`pay-line ${c.state === "rejected" ? "pay-void" : ""}`}>
       <div className="pay-line-main">
         <span><strong>{label}</strong> — {c.description}</span>
-        <span>{money(c.amount)}{c.state === "approved" && c.approvedAmount !== c.amount ? ` → approved ${money(c.approvedAmount)}` : ""}</span>
+        <span>{costBreakdown(c)}{money(c.amount)}{c.state === "approved" && c.approvedAmount !== c.amount ? ` → approved ${money(c.approvedAmount)}` : ""}</span>
         <span className={`tag ${c.state === "approved" ? "tag-on" : c.state === "rejected" ? "tag-off" : "tag-warn"}`}>{c.state === "submitted" ? "To review" : c.state === "approved" ? "Approved" : "Rejected"}</span>
         <span className="muted-line">{c.submittedByAgencyId ? "operator" : "Sawa"}{c.reviewNote ? ` · ${c.reviewNote}` : ""}</span>
         <Receipt c={c} />
@@ -247,49 +247,98 @@ export function Receipt({ c }) {
   return null;
 }
 
-export function CostForm({ categories, onSubmit, submitLabel }) {
+// Transport and a guide cost the same whatever the headcount; meals, entrance
+// fees and the like are paid per traveller. The type suggests one; either can
+// be chosen.
+const PER_PERSON_BY_DEFAULT = new Set(["meals", "entrance", "activities", "accommodation"]);
+
+export function CostForm({ categories, onSubmit, submitLabel, travellers = null }) {
   const [category, setCategory] = useState(categories[0]?.id || "transport");
+  const [basis, setBasis] = useState(PER_PERSON_BY_DEFAULT.has(categories[0]?.id) ? "person" : "group");
+  const [basisTouched, setBasisTouched] = useState(false);
   const [description, setDescription] = useState("");
   const [amount, setAmount] = useState("");
+  const [unit, setUnit] = useState("");
+  const [people, setPeople] = useState(travellers ? String(travellers) : "");
   const [receiptUrl, setReceiptUrl] = useState("");
   const [file, setFile] = useState(null);
   const [fileKey, setFileKey] = useState(0);   // resets the file input
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  const person = basis === "person";
+  const total = person ? Math.round(Number(unit) * Number(people) * 100) / 100 : Number(amount);
+  const ready = description.trim() && total > 0 && (!person || (Number(unit) > 0 && Number.isInteger(Number(people)) && Number(people) >= 1));
+
+  function pickCategory(id) {
+    setCategory(id);
+    if (!basisTouched) setBasis(PER_PERSON_BY_DEFAULT.has(id) ? "person" : "group");
+  }
   async function submit(e) {
     e.preventDefault();
     setErr(""); setBusy(true);
     try {
       // The file goes up first; the cost line then points at it.
       const receipt = file ? (await uploadReceipt(file)).ref : receiptUrl || undefined;
-      await onSubmit({ category, description, amount: Number(amount), receiptUrl: receipt });
-      setDescription(""); setAmount(""); setReceiptUrl(""); setFile(null); setFileKey((k) => k + 1);
+      await onSubmit(person
+        ? { category, description, basis, unitAmount: Number(unit), quantity: Number(people), receiptUrl: receipt }
+        : { category, description, basis, amount: Number(amount), receiptUrl: receipt });
+      setDescription(""); setAmount(""); setUnit(""); setReceiptUrl(""); setFile(null); setFileKey((k) => k + 1); setBasisTouched(false);
     } catch (e2) { setErr(e2.message); } finally { setBusy(false); }
   }
   return (
     <form className="pay-new st-costform" onSubmit={submit}>
-      <div className="st-cost-row">
-        <label>Type<select value={category} onChange={(e) => setCategory(e.target.value)}>{categories.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}</select></label>
+      <div className="cf-row cf-what">
+        <label>Type<select value={category} onChange={(e) => pickCategory(e.target.value)}>{categories.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}</select></label>
         <label>What<input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="e.g. Coach and driver, full day" /></label>
-        <label>Amount ({CURRENCY_SYMBOL})<input type="number" min="0.01" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} /></label>
+      </div>
+      <div className="cf-row cf-price">
+        <div className="cf-field">
+          <span className="cf-label">Charged</span>
+          <div className="seg cf-basis" role="radiogroup" aria-label="Charged per group or per person">
+            {[["group", "Per group"], ["person", "Per person"]].map(([id, label]) => (
+              <button key={id} type="button" role="radio" aria-checked={basis === id} className={basis === id ? "active" : ""}
+                onClick={() => { setBasis(id); setBasisTouched(true); }}>{label}</button>
+            ))}
+          </div>
+        </div>
+        {person ? (
+          <>
+            <label>Price per person ({CURRENCY_SYMBOL})<input type="number" min="0.01" step="0.01" value={unit} onChange={(e) => setUnit(e.target.value)} /></label>
+            <div className="cf-people">
+              <span className="cf-times" aria-hidden="true">×</span>
+              <label>People<input type="number" min="1" step="1" value={people} onChange={(e) => setPeople(e.target.value)} /></label>
+            </div>
+            <div className="cf-field cf-total"><span className="cf-label">Total</span><b>{total > 0 ? `${CURRENCY_SYMBOL}${total.toLocaleString()}` : "—"}</b></div>
+          </>
+        ) : (
+          <label>Total for the group ({CURRENCY_SYMBOL})<input type="number" min="0.01" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} /></label>
+        )}
+      </div>
+      {person && travellers != null && <p className="field-hint cf-hint">{travellers} traveller{travellers === 1 ? "" : "s"} booked on this date — change the number if it differs.</p>}
+      <div className="cf-row cf-receipt">
         <label>Receipt (PDF or photo)
           <input key={fileKey} type="file" accept="application/pdf,image/jpeg,image/png,image/webp,image/heic,image/heif"
             onChange={(e) => { const f = e.target.files?.[0] || null; setErr(f && f.size > 8 * 1024 * 1024 ? "That file is larger than 8MB." : ""); setFile(f && f.size <= 8 * 1024 * 1024 ? f : null); }} />
         </label>
+        {!file && (
+          <label>…or paste a link instead
+            <input type="url" value={receiptUrl} onChange={(e) => setReceiptUrl(e.target.value)} placeholder="https://… (optional)" />
+          </label>
+        )}
       </div>
-      {!file && (
-        <label className="st-receipt-link">…or paste a link instead
-          <input type="url" value={receiptUrl} onChange={(e) => setReceiptUrl(e.target.value)} placeholder="https://… (optional)" />
-        </label>
-      )}
       {err && <p className="pay-err">{err}</p>}
-      <button className="btn-primary sm" type="submit" disabled={busy || !description.trim() || !(Number(amount) > 0)}><Plus size={14} />{busy ? (file ? "Uploading…" : "Saving…") : submitLabel}</button>
+      <button className="btn-primary sm" type="submit" disabled={busy || !ready}><Plus size={14} />{busy ? (file ? "Uploading…" : "Saving…") : submitLabel}</button>
     </form>
   );
 }
 
-function AddCost({ depId, categories, onChanged }) {
-  return <CostForm categories={categories} submitLabel="Add cost (approved)"
+// "€15 × 12 people" beside a per-person line's total.
+export const costBreakdown = (c) => (c.basis === "person" && c.unitAmount && c.quantity
+  ? `${CURRENCY_SYMBOL}${Number(c.unitAmount).toLocaleString()} × ${c.quantity} ${c.quantity === 1 ? "person" : "people"} = `
+  : "");
+
+function AddCost({ depId, categories, travellers, onChanged }) {
+  return <CostForm categories={categories} travellers={travellers} submitLabel="Add cost (approved)"
     onSubmit={async (body) => { await send(`/admin/settlements/${depId}/costs`, body); await onChanged("Cost added."); }} />;
 }
 

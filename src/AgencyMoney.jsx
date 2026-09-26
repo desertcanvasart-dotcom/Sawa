@@ -10,7 +10,7 @@ import React, { useEffect, useState } from "react";
 import { apiFetch } from "./supabaseClient";
 import { fmtDate } from "./dates.js";
 import { CURRENCY_SYMBOL } from "../shared/currency.js";
-import { CostForm, Receipt } from "./AdminSettlements.jsx";
+import { CostForm, Receipt, costBreakdown } from "./AdminSettlements.jsx";
 
 const money = (n) => (n == null ? "—" : `${Number(n) < 0 ? "−" : ""}${CURRENCY_SYMBOL}${Math.abs(Number(n)).toLocaleString(undefined, { maximumFractionDigits: 2 })}`);
 const pct = (p) => `${Math.round(p * 1000) / 10}%`;
@@ -106,7 +106,7 @@ function DepartureCard({ d, categories, onChanged }) {
             {d.costs.map((c) => (
               <li key={c.id} className={`pay-line ${c.state === "rejected" ? "pay-void" : ""}`}><div className="pay-line-main">
                 <span><strong>{categories.find((x) => x.id === c.category)?.label || c.category}</strong> — {c.description}</span>
-                <span>{money(c.amount)}{c.state === "approved" && c.approvedAmount !== c.amount ? ` → approved ${money(c.approvedAmount)}` : ""}</span>
+                <span>{costBreakdown(c)}{money(c.amount)}{c.state === "approved" && c.approvedAmount !== c.amount ? ` → approved ${money(c.approvedAmount)}` : ""}</span>
                 <span className={`tag ${c.state === "approved" ? "tag-on" : c.state === "rejected" ? "tag-off" : "tag-warn"}`}>{c.state === "submitted" ? "With Sawa" : c.state === "approved" ? "Approved" : "Rejected"}</span>
                 {c.reviewNote && <span className="muted-line">{c.reviewNote}</span>}
                 <Receipt c={c} />
@@ -115,7 +115,7 @@ function DepartureCard({ d, categories, onChanged }) {
             {d.costs.length === 0 && <li className="muted-line">No costs entered yet.</li>}
           </ul>
           {!d.costsFinal && (
-            <CostForm categories={categories} submitLabel="Submit cost to Sawa"
+            <CostForm categories={categories} travellers={d.travellers} submitLabel="Submit cost to Sawa"
               onSubmit={async (body) => {
                 const r = await apiFetch(`/agency/departures/${d.departure.id}/costs`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
                 const j = await r.json().catch(() => ({}));

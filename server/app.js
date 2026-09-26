@@ -3138,6 +3138,9 @@ const mapCost = (r) => ({
   receiptUrl: isReceiptRef(r.receipt_url) ? null : r.receipt_url || null,
   receiptFile: isReceiptRef(r.receipt_url) ? receiptDisplayName(r.receipt_url) : null,
   receiptKind: receiptKind(r.receipt_url),
+  basis: r.basis === "person" ? "person" : "group",
+  unitAmount: r.unit_amount != null ? Number(r.unit_amount) : null,
+  quantity: r.quantity != null ? Number(r.quantity) : null,
   submittedByAgencyId: r.submitted_by_agency_id || null,
   submittedBy: r.submitted_by || null, state: r.state, approvedAmount: r.approved_amount != null ? Number(r.approved_amount) : null,
   reviewNote: r.review_note || null, reviewedBy: r.reviewed_by || null,
@@ -3232,6 +3235,9 @@ function settlementView(d, L, { asOfMs = Infinity, endedByDay = cairoDay(Date.no
     operatorAgencyId, operatorName: operatorAgencyId ? name(operatorAgencyId) : null,
     settlement: { ...s, shares: s.shares.map((x) => ({ ...x, name: name(x.agencyId), paidOut: Math.round(paidOut.filter((p) => p.agencyId === x.agencyId).reduce((n, p) => n + p.amount, 0) * 100) / 100 })) },
     costs, adjustments: adjustments.map((a) => ({ ...a, name: name(a.agencyId) })),
+    // Travellers booked on the date (paid or not) — the default head count
+    // for a per-person cost line.
+    travellers: pledges.filter((p) => p.status !== "cancelled").reduce((n, p) => n + (Number(p.seats) || 0), 0),
     costsFinalAt: sign?.costs_final_at || null, lossDecidedAt: sign?.loss_decided_at || null, lossNote: sign?.loss_note || null,
     blocker, blockerLabel: blocker ? BLOCKER_LABEL[blocker] : null,
     paidOut,
@@ -3253,12 +3259,49 @@ app.get("/api/admin/settlements", requireAuth, requireRole("super_admin", "ops_s
   });
 }));
 
+// A cost is priced per group (transport, a guide: `amount` is the total) or
+// per person (meals, entrance fees: `unitAmount` × `quantity` people). The
+// line's total is what the settlement reads either way.
 const costSchema = z.object({
   category: z.enum(COST_CATEGORIES),
   description: z.string().trim().min(1, "Describe the cost.").max(300),
-  amount: z.coerce.number().positive("Enter the amount."),
+  basis: z.enum(["group", "person"]).default("group"),
+  amount: z.coerce.number().positive("Enter the amount.").optional(),
+  unitAmount: z.coerce.number().positive("Enter the price per person.").optional(),
+  quantity: z.coerce.number().int().min(1, "Enter how many people.").max(500).optional(),
   receiptUrl: z.string().trim().max(1000).optional(),
+}).superRefine((c, ctx) => {
+  if (c.basis === "person" && (c.unitAmount == null || c.quantity == null)) {
+    ctx.addIssue({ code: "custom", message: "A per-person cost needs the price per person and the number of people." });
+  }
+  if (c.basis === "group" && c.amount == null) ctx.addIssue({ code: "custom", message: "Enter the amount." });
 });
+const cents = (n) => Math.round(Number(n) * 100) / 100;
+
+// Write one cost line. Before migration 045 the basis columns don't exist; a
+// per-person line then keeps its breakdown in the description, so nothing
+// entered is lost and the total is right.
+async function insertCost(db, depId, input, { receipt, agencyId = null, email = null, approved = false }) {
+  const person = input.basis === "person";
+  const total = person ? cents(input.unitAmount * input.quantity) : cents(input.amount);
+  const base = [depId, input.category, input.description, total, receipt, agencyId, email];
+  const review = approved ? ", state, approved_amount, reviewed_by, reviewed_at" : "";
+  const reviewVals = approved ? ", 'approved', $4, $7, now()" : "";
+  try {
+    return (await db.query(
+      `INSERT INTO departure_costs (departure_id, category, description, amount, receipt_url, submitted_by_agency_id, submitted_by, basis, unit_amount, quantity${review})
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10${reviewVals}) RETURNING *`,
+      [...base, input.basis, person ? cents(input.unitAmount) : null, person ? input.quantity : null])).rows[0];
+  } catch (e) {
+    if (e?.code !== "42703") throw e;
+    const note = person ? ` — ${CURRENCY_SYMBOL}${cents(input.unitAmount)} × ${input.quantity} people` : "";
+    const legacy = [...base];
+    legacy[2] = `${input.description}${note}`.slice(0, 300);
+    return (await db.query(
+      `INSERT INTO departure_costs (departure_id, category, description, amount, receipt_url, submitted_by_agency_id, submitted_by${review})
+       VALUES ($1, $2, $3, $4, $5, $6, $7${reviewVals}) RETURNING *`, legacy)).rows[0];
+  }
+}
 // A cost line's receipt: a pasted https link, or a file uploaded through
 // POST /api/cost-receipts — which an agency may attach only if it uploaded it.
 const receiptUrlOf = (raw, user) => {
@@ -3331,10 +3374,8 @@ app.post("/api/admin/settlements/:depId/costs", requireAuth, requireRole("super_
   const input = parse(costSchema, req.body);
   const depId = Number(req.params.depId);
   await departureExists(depId);
-  const row = await withSettlements(async () => (await pool.query(
-    `INSERT INTO departure_costs (departure_id, category, description, amount, receipt_url, submitted_by, state, approved_amount, reviewed_by, reviewed_at)
-     VALUES ($1, $2, $3, $4, $5, $6, 'approved', $4, $6, now()) RETURNING *`,
-    [depId, input.category, input.description, Math.round(input.amount * 100) / 100, receiptUrlOf(input.receiptUrl, req.user), req.user.email || null])).rows[0]);
+  const row = await withSettlements(() =>
+    insertCost(pool, depId, input, { receipt: receiptUrlOf(input.receiptUrl, req.user), email: req.user.email || null, approved: true }));
   await logAudit(req, { action: "settlement.cost_added", entity: "departure", entityId: String(depId), detail: { costId: Number(row.id), category: input.category, amount: Number(row.amount) } });
   res.status(201).json({ cost: mapCost(row) });
 }));
@@ -3350,10 +3391,7 @@ app.post("/api/agency/departures/:depId/costs", requireAuth, requireRole("agency
     const view = settlementView(d, L);
     if (view.operatorAgencyId !== req.user.agencyId) throw new AppError(403, "Only the agency operating this date can submit its costs.");
     if (view.costsFinalAt) throw new AppError(409, "Sawa has closed this cost sheet. Contact Sawa to add a cost.");
-    return (await pool.query(
-      `INSERT INTO departure_costs (departure_id, category, description, amount, receipt_url, submitted_by_agency_id, submitted_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
-      [depId, input.category, input.description, Math.round(input.amount * 100) / 100, receiptUrlOf(input.receiptUrl, req.user), req.user.agencyId, req.user.email || null])).rows[0];
+    return insertCost(pool, depId, input, { receipt: receiptUrlOf(input.receiptUrl, req.user), agencyId: req.user.agencyId, email: req.user.email || null });
   });
   await logAudit(req, { action: "settlement.cost_submitted", entity: "departure", entityId: String(depId), detail: { costId: Number(row.id), category: input.category, amount: Number(row.amount) } });
   res.status(201).json({ cost: mapCost(row) });
@@ -3571,6 +3609,7 @@ app.get("/api/agency/money", requireAuth, requireRole("agency_owner", "agency_ag
       mine: mine ? { seats: mine.seats, pct: mine.pct, share: mine.share, adjustments: mine.adjustments, total: mine.total, paidOut: mine.paidOut } : null,
       adjustments: v.adjustments.filter((a) => a.agencyId === me),
       costs: operating ? v.costs : [],
+      travellers: operating ? v.travellers : null,
       costsFinal: !!v.costsFinalAt,
       blockerLabel: v.blockerLabel,
     });
