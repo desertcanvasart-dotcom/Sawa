@@ -18,12 +18,12 @@ const booking = {
 };
 const cts = { name: "Capital Travel Service", verified: true };
 
-test("the booking confirmation names the operator, and says it can change until GoAhead", () => {
+test("the booking confirmation names the operator, and says it can change until bookings close", () => {
   const mail = bookingConfirmationEmail({ ...booking, operator: cts });
   for (const part of [mail.html, mail.text]) {
     assert.match(part, /Run by:/);
     assert.match(part, /Capital Travel Service/);
-    assert.match(part, /Until GoAhead, the date is run by the partner with the most travellers/);
+    assert.match(part, /Until bookings close, the date is run by the partner with the most confirmed travellers/);
   }
   assert.match(mail.text, /\(verified operator\)/);
 });
@@ -31,12 +31,15 @@ test("the booking confirmation names the operator, and says it can change until 
 test("without an operator the confirmation reads as before", () => {
   const mail = bookingConfirmationEmail(booking);
   assert.ok(!/Run by:/.test(mail.html) && !/Run by:/.test(mail.text));
-  assert.ok(!/most travellers on it/.test(mail.text));
+  assert.ok(!/most confirmed travellers on it/.test(mail.text));
 });
 
-test("the GoAhead email names the operator, now fixed", () => {
+test("the GoAhead email names the operator running it, and says it can still change until bookings close", () => {
   const mail = goAheadEmail({ to: "a@b.c", route: "Giza", dateLabel: "2026-10-12", operator: cts });
-  for (const part of [mail.html, mail.text]) assert.match(part, /Capital Travel Service \(verified operator\) runs this date/);
+  for (const part of [mail.html, mail.text]) {
+    assert.match(part, /Capital Travel Service \(verified operator\) is running this date/);
+    assert.match(part, /Until bookings close, the date can pass to another partner/);
+  }
   const plain = goAheadEmail({ to: "a@b.c", route: "Giza", dateLabel: "2026-10-12" });
   assert.match(plain.html, /Your operator has been notified/);
 });
@@ -48,7 +51,7 @@ test("an operator name is escaped in the HTML", () => {
   }
 });
 
-// A stand-in for the pool: answers the four queries operatorFor makes.
+// A stand-in for the pool: answers the queries operatorFor makes.
 function fakeDb({ pledges, agencies, listing = null, fail = null }) {
   return {
     async query(sql) {
@@ -57,6 +60,8 @@ function fakeDb({ pledges, agencies, listing = null, fail = null }) {
       if (/FROM pledges/.test(sql)) return { rows: pledges };
       if (/FROM tour_products/.test(sql)) return { rows: listing ? [{ agency_id: listing }] : [] };
       if (/FROM agencies/.test(sql)) return { rows: agencies };
+      if (/FROM referrals/.test(sql)) return { rows: [] };
+      if (/FROM booking_payments/.test(sql)) return { rows: [] };
       throw new Error(`unexpected query: ${sql}`);
     },
   };

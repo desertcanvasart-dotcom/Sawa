@@ -519,54 +519,74 @@ export function departureActionBuckets(rows = [], seatsFor = () => 0, nowMs = Da
 // product page's old operator card was deleted for.
 // ---- U01 — which company runs a date -------------------------------------
 //
-// The rule the client set on 25 Sep 2026:
+// The rule, as the client set it on 26 Sep 2026 (replacing the 25 Sep rule,
+// which fixed the operator at GoAhead and broke ties by who booked first):
 //
-//   - The company whose customers fill the most seats runs the date. It only
-//     changes hands when another company has strictly MORE — a tie stays with
-//     whoever booked first.
-//   - Travellers who book directly count as the direct-bookings operator's
-//     customers (DIRECT_BOOKINGS_OPERATOR in brand.js).
-//   - It is fixed once the date reaches GoAhead: the leader at the booking that
-//     took the date to its minimum is the operator from then on, whatever is
-//     booked afterwards.
-//   - A date nobody has booked yet is named after the agency that listed the
-//     tour, or the direct-bookings operator for tours Sawa listed.
+//   1. The company whose CONFIRMED passengers fill the most seats runs the
+//      date. Confirmed means the deposit is paid (043). Until anyone on the
+//      date has paid, every live booking counts, so a forming date still names
+//      a provisional operator.
+//   2. A tie goes to the agency that CREATED the departure: the agency that
+//      requested the date, Capital Travel Service for a date a traveller
+//      requested directly, and for a date Sawa published, the agency that
+//      listed the tour or else the direct-bookings operator.
+//      (Tied, and the creator not among them: whoever booked first.)
+//   3. Travellers who book directly count as the direct-bookings operator's
+//      (DIRECT_BOOKINGS_OPERATOR in brand.js) — unless they came through an
+//      agency's widget: a booking carrying an agency's referral code counts as
+//      that agency's.
+//   4. It follows the passengers "throughout the booking period", and is
+//      fixed when bookings close (the date's own cutoff, bookingClosesAtMs):
+//      after that, only bookings made and deposits paid before the cutoff
+//      count.
 //
-// The lock is worked out by replaying the live bookings in the order they were
-// made, not stored: that needs no schema change, and every page computes the
-// same answer from the same rows. Its limit, stated plainly: if a booking made
-// BEFORE GoAhead is later cancelled (after GoAhead that goes through Sawa, per
-// the Terms), the replay no longer sees it and can name a different leader.
+// Worked out from the rows on every read, not stored — the same approach as
+// before, and the same limit, stated plainly: a booking cancelled after the
+// cutoff (which goes through Sawa, per the Terms) is no longer counted.
+//
 // What a direct booking stores as its agency (app.js, the public and admin
 // booking routes): not an agency record, so it counts as the direct-bookings
 // operator's, exactly as a missing one does.
 export const DIRECT_CUSTOMER = "direct_customer";
 
-export function operatorForDeparture(departure, { listingAgencyId = null, directAgencyId = null } = {}) {
+export function operatorForDeparture(departure, {
+  listingAgencyId = null, directAgencyId = null, referralAgencies = null, lockAtMs = NaN, nowMs = Date.now(),
+} = {}) {
   const fallback = listingAgencyId || directAgencyId || null;
-  const live = (departure?.pledges || [])
-    .filter((p) => p && p.status !== "cancelled" && Number(p.seats) > 0)
-    .map((p, i) => ({ p, i }))
-    .sort((a, b) => String(a.p.createdAt || "").localeCompare(String(b.p.createdAt || "")) || a.i - b.i)
-    .map(({ p }) => p);
-  if (!live.length) return fallback;
+  const all = departure?.pledges || [];
+  const asOf = Number.isFinite(lockAtMs) && nowMs >= lockAtMs ? lockAtMs : Infinity;
+  const at = (v) => { const t = Date.parse(v || ""); return Number.isNaN(t) ? -Infinity : t; };
 
-  const goAhead = goAheadSeatsFor(departure);
-  const seatsBy = new Map();
-  let total = 0;
-  let leader = null;
-  for (const p of live) {
-    const owner = p.agencyId && p.agencyId !== DIRECT_CUSTOMER ? p.agencyId : directAgencyId;
-    const seats = Number(p.seats) || 0;
-    total += seats;
-    if (owner) {
-      seatsBy.set(owner, (seatsBy.get(owner) || 0) + seats);
-      if (leader === null || (owner !== leader && seatsBy.get(owner) > seatsBy.get(leader))) leader = owner;
-    }
-    // GoAhead reached on this booking: the operator is fixed here.
-    if (total >= goAhead) return leader || fallback;
+  const ownerOf = (p) => {
+    if (p.agencyId && p.agencyId !== DIRECT_CUSTOMER) return p.agencyId;
+    const viaWidget = p.refCode ? referralAgencies?.get?.(p.refCode) : null;
+    return viaWidget || directAgencyId;
+  };
+
+  // Who opened the date. Read from its first booking's source, cancelled or
+  // not: the seed booking identifies the requester even after it is withdrawn.
+  const seed = all.find((p) => p.source === "agency_request" || p.source === "public_request");
+  const creator = seed ? ownerOf(seed) : fallback;
+
+  const live = all.filter((p) => p && p.status !== "cancelled" && Number(p.seats) > 0 && at(p.createdAt) <= asOf);
+  const confirmed = live.filter((p) => p.depositPaidAt && at(p.depositPaidAt) <= asOf);
+  const basis = confirmed.length ? confirmed : live;
+  if (!basis.length) return creator || fallback;
+
+  const seats = new Map();
+  const firstAt = new Map();
+  for (const p of basis) {
+    const owner = ownerOf(p);
+    if (!owner) continue;
+    seats.set(owner, (seats.get(owner) || 0) + (Number(p.seats) || 0));
+    firstAt.set(owner, Math.min(firstAt.get(owner) ?? Infinity, at(p.createdAt)));
   }
-  return leader || fallback;
+  if (!seats.size) return creator || fallback;
+  const most = Math.max(...seats.values());
+  const tied = [...seats.keys()].filter((o) => seats.get(o) === most);
+  if (tied.length === 1) return tied[0];
+  if (creator && tied.includes(creator)) return creator;
+  return tied.sort((a, b) => firstAt.get(a) - firstAt.get(b) || String(a).localeCompare(String(b)))[0];
 }
 
 // The agency id of the direct-bookings operator, by exact (case-insensitive)

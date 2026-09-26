@@ -135,6 +135,9 @@ export function mapPledge(r) {
   if (r.balance_due_date) out.balanceDueDate = isoDate(r.balance_due_date);
   if (r.source) out.source = r.source;
   if (r.booking_code) out.bookingCode = r.booking_code;
+  // The partner whose widget the booking came through — it decides which
+  // agency the passenger counts for when the operator is worked out (U01).
+  if (r.ref_code) out.refCode = r.ref_code;
   if (r.rooming_type) out.roomingType = r.rooming_type;
   if (r.accommodation_tier) out.accommodationTier = r.accommodation_tier;
   if (r.accommodation_tier_name) out.accommodationTierName = r.accommodation_tier_name;

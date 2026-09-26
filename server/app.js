@@ -75,7 +75,7 @@ import { mapPost } from "./blog-post.js";
 import { cancelDepartureAndPledges, reportNotifications, CANCEL_REASONS } from "./departure-cancel.js";
 
 import { BRAND, DIRECT_BOOKINGS_OPERATOR } from "./brand.js";
-import { operatorFor } from "./operator-lookup.js";
+import { operatorFor, loadOperatorInputs, withDepositTimes } from "./operator-lookup.js";
 import { startJobScheduler, jobSchedulerEnabled, cancelJobDryRun, goAheadNotifyDryRun, goAheadAlertDryRun } from "./jobs/scheduler.js";
 import { TOUR_TIMEZONE } from "./tz.js";
 import { cleanHtml, cleanItinerary } from "./sanitize.js";
@@ -633,7 +633,7 @@ async function buildBootstrap(user) {
   // payload, so any pledge outside that set is loaded and dropped. Scoped with
   // a subquery rather than by feeding the ids back in, so this still runs
   // alongside the departures query instead of waiting a round trip for it.
-  const [agencies, cities, products, departures, pledges] = await Promise.all([
+  const [agencies, cities, products, departures, pledges, operatorInputs] = await Promise.all([
     pool.query("SELECT * FROM agencies ORDER BY id"),
     pool.query("SELECT * FROM cities ORDER BY id"),
     pool.query(productsSql),
@@ -643,6 +643,8 @@ async function buildBootstrap(user) {
         WHERE departure_id IN (SELECT id FROM departures WHERE ${departureScope})
         ORDER BY created_at ASC, id ASC`
     ),
+    // U01 — widget codes' agencies and deposit times, for the operator rule.
+    loadOperatorInputs(pool),
   ]);
 
   const byDep = new Map();
@@ -694,9 +696,12 @@ async function buildBootstrap(user) {
         const enriched = enrichDeparture(d, product);
         // Worked out here, from the full pledge list, before presentDeparture
         // strips it for the viewer.
-        enriched.operatorAgencyId = operatorForDeparture(enriched, {
-          listingAgencyId: product?.agencyId || null, directAgencyId,
-        });
+        enriched.operatorAgencyId = operatorForDeparture(
+          { ...enriched, pledges: withDepositTimes(enriched.pledges, operatorInputs.depositPaidAt) }, {
+            listingAgencyId: product?.agencyId || null, directAgencyId,
+            referralAgencies: operatorInputs.referralAgencies,
+            lockAtMs: Date.parse(enriched.bookingClosesAt || ""),
+          });
         return presentDeparture(enriched, user);
       }),
   };

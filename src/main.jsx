@@ -1509,7 +1509,7 @@ function TourDetailV2({ isSaving, navigate, phoneVerification = false, onBookPub
   // Whitelisted server-side by publicOperator(): name, licensed-since year,
   // verified flag and date. Never the licence number.
   // U01 — the company that runs the SELECTED date (the one with the most
-  // travellers on it, fixed at GoAhead), else the listing's default: the agency
+  // confirmed travellers on it, fixed when bookings close), else the listing's default: the agency
   // that listed it, or the direct-bookings operator. Worked out on the server.
   const operator = operatorsByProduct[dep?.operatorAgencyId || tour.operatorAgencyId || tour.agencyId] || null;
   const booked = dep ? seatsTotal(dep.pledges) : 0;
@@ -1839,10 +1839,10 @@ function TourDetailV2({ isSaving, navigate, phoneVerification = false, onBookPub
                           : "Licensed by the Egyptian Ministry of Tourism and Antiquities. "}
                         This is the company responsible for delivering your departure.
                       </p>
-                      {/* The operator can change hands until GoAhead, so say so
+                      {/* The operator can change hands until bookings close, so say so
                           rather than let a later change read as a switch. */}
-                      {!confirmed && (
-                        <p className="op-note">Until this date reaches GoAhead, it's run by the partner with the most travelers on it, so this can change. Once the date is confirmed, the operator is fixed.</p>
+                      {dep && isBookingOpen(dep) && (
+                        <p className="op-note">Until bookings close, this date is run by the partner with the most confirmed travelers on it — those who have paid their deposit — so this can change. Once bookings close, the operator is fixed.</p>
                       )}
                     </div>
                   </div></div>
