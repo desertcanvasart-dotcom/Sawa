@@ -4,8 +4,8 @@
 // approves and pays each Wednesday's run. The arithmetic is server-side
 // (server/settlement.js); this screen shows it and records decisions.
 import React, { useEffect, useState } from "react";
-import { Check, X, ChevronDown, Plus, ExternalLink, Lock, Unlock } from "lucide-react";
-import { apiFetch } from "./supabaseClient";
+import { Check, X, ChevronDown, Plus, ExternalLink, Lock, Unlock, Paperclip } from "lucide-react";
+import { apiFetch, uploadReceipt, openReceipt } from "./supabaseClient";
 import { fmtDate } from "./dates.js";
 import { CURRENCY_SYMBOL } from "../shared/currency.js";
 
@@ -180,7 +180,7 @@ function CostLine({ c, categories, final, onChanged }) {
         <span>{money(c.amount)}{c.state === "approved" && c.approvedAmount !== c.amount ? ` → approved ${money(c.approvedAmount)}` : ""}</span>
         <span className={`tag ${c.state === "approved" ? "tag-on" : c.state === "rejected" ? "tag-off" : "tag-warn"}`}>{c.state === "submitted" ? "To review" : c.state === "approved" ? "Approved" : "Rejected"}</span>
         <span className="muted-line">{c.submittedByAgencyId ? "operator" : "Sawa"}{c.reviewNote ? ` · ${c.reviewNote}` : ""}</span>
-        {c.receiptUrl && <a className="pay-link" href={c.receiptUrl} target="_blank" rel="noopener noreferrer"><ExternalLink size={13} />receipt</a>}
+        <Receipt c={c} />
         {!final && c.state === "submitted" && !mode && (
           <span className="pay-acts"><button type="button" className="btn-ghost sm" onClick={() => setMode("review")}>Review</button></span>
         )}
@@ -199,19 +199,42 @@ function CostLine({ c, categories, final, onChanged }) {
   );
 }
 
+// A cost line's receipt: an uploaded file (opened through a short-lived
+// signed link) or a pasted link.
+export function Receipt({ c }) {
+  const [err, setErr] = useState("");
+  if (c.receiptFile) {
+    return (
+      <>
+        <button type="button" className="pay-link link-btn" title={c.receiptFile}
+          onClick={() => { setErr(""); openReceipt(c.id).catch((e) => setErr(e.message)); }}>
+          <Paperclip size={13} />{c.receiptFile}
+        </button>
+        {err && <span className="pay-err">{err}</span>}
+      </>
+    );
+  }
+  if (c.receiptUrl) return <a className="pay-link" href={c.receiptUrl} target="_blank" rel="noopener noreferrer"><ExternalLink size={13} />receipt</a>;
+  return null;
+}
+
 export function CostForm({ categories, onSubmit, submitLabel }) {
   const [category, setCategory] = useState(categories[0]?.id || "transport");
   const [description, setDescription] = useState("");
   const [amount, setAmount] = useState("");
   const [receiptUrl, setReceiptUrl] = useState("");
+  const [file, setFile] = useState(null);
+  const [fileKey, setFileKey] = useState(0);   // resets the file input
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   async function submit(e) {
     e.preventDefault();
     setErr(""); setBusy(true);
     try {
-      await onSubmit({ category, description, amount: Number(amount), receiptUrl: receiptUrl || undefined });
-      setDescription(""); setAmount(""); setReceiptUrl("");
+      // The file goes up first; the cost line then points at it.
+      const receipt = file ? (await uploadReceipt(file)).ref : receiptUrl || undefined;
+      await onSubmit({ category, description, amount: Number(amount), receiptUrl: receipt });
+      setDescription(""); setAmount(""); setReceiptUrl(""); setFile(null); setFileKey((k) => k + 1);
     } catch (e2) { setErr(e2.message); } finally { setBusy(false); }
   }
   return (
@@ -220,10 +243,18 @@ export function CostForm({ categories, onSubmit, submitLabel }) {
         <label>Type<select value={category} onChange={(e) => setCategory(e.target.value)}>{categories.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}</select></label>
         <label>What<input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="e.g. Coach and driver, full day" /></label>
         <label>Amount ({CURRENCY_SYMBOL})<input type="number" min="0.01" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} /></label>
-        <label>Receipt link<input type="url" value={receiptUrl} onChange={(e) => setReceiptUrl(e.target.value)} placeholder="https://… (optional)" /></label>
+        <label>Receipt (PDF or photo)
+          <input key={fileKey} type="file" accept="application/pdf,image/jpeg,image/png,image/webp,image/heic,image/heif"
+            onChange={(e) => { const f = e.target.files?.[0] || null; setErr(f && f.size > 8 * 1024 * 1024 ? "That file is larger than 8MB." : ""); setFile(f && f.size <= 8 * 1024 * 1024 ? f : null); }} />
+        </label>
       </div>
+      {!file && (
+        <label className="st-receipt-link">…or paste a link instead
+          <input type="url" value={receiptUrl} onChange={(e) => setReceiptUrl(e.target.value)} placeholder="https://… (optional)" />
+        </label>
+      )}
       {err && <p className="pay-err">{err}</p>}
-      <button className="btn-primary sm" type="submit" disabled={busy || !description.trim() || !(Number(amount) > 0)}><Plus size={14} />{busy ? "Saving…" : submitLabel}</button>
+      <button className="btn-primary sm" type="submit" disabled={busy || !description.trim() || !(Number(amount) > 0)}><Plus size={14} />{busy ? (file ? "Uploading…" : "Saving…") : submitLabel}</button>
     </form>
   );
 }

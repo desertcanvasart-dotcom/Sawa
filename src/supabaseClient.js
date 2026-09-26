@@ -61,3 +61,39 @@ export async function uploadImage(file) {
   }
   return json.url;
 }
+
+// Upload a receipt for a tour cost line (a PDF or a photo) to the PRIVATE
+// receipts store; returns { ref, name } — send `ref` as the cost's receiptUrl.
+export async function uploadReceipt(file) {
+  if (file.size > 8 * 1024 * 1024) throw new Error("That file is larger than 8MB.");
+  const dataUrl = await fileToDataUrl(file);
+  const res = await apiFetch("/cost-receipts", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ filename: file.name, dataUrl }),
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    if (res.status === 401) throw new Error("Your session has expired — please sign in again.");
+    if (res.status === 413) throw new Error("That file is too large. Please use one under 8MB.");
+    throw new Error(json.error || "The receipt didn't upload. Please try again.");
+  }
+  return json;
+}
+
+// Open an uploaded receipt in a new tab through a short-lived signed link.
+// The tab is opened first, synchronously, so a pop-up blocker doesn't stop it
+// for having been opened after a network request.
+export async function openReceipt(costId) {
+  const tab = window.open("", "_blank");
+  try {
+    const res = await apiFetch(`/cost-receipts/${costId}`);
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(json.error || "Couldn't open the receipt.");
+    if (tab) tab.location.href = json.url; else window.location.href = json.url;
+  } catch (e) {
+    tab?.close();
+    throw e;
+  }
+}
+
