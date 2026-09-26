@@ -30,7 +30,7 @@ const seatsOf = (d) => (d.pledges || []).reduce((s, p) => (p?.status === "cancel
 // empty slug and was stored at /blog/post.
 import { blogSlug } from "../shared/blog-slug.js";
 import { CURRENCY, CURRENCY_SYMBOL } from "../shared/currency.js";
-import { depositPctFor, cutoffLabel } from "../shared/booking-policy.js";
+import { depositPctFor, cutoffLabel, normalizeDuration, durationShapeError } from "../shared/booking-policy.js";
 import {
   requestWindowError, minLeadDaysFor, maxHorizonDaysFor,
   DEFAULT_MIN_LEAD_DAYS, DEFAULT_MAX_HORIZON_DAYS,
@@ -907,7 +907,21 @@ export function ProductEditor({ type: typeProp, existing, destinations = [], dep
               {!pkg && <Field label="Destination"><select value={f.city} onChange={set("city")}>{cityOptions.map((c) => <option key={c} value={c}>{c}</option>)}</select></Field>}
               {pkg && <Field label="Cities (comma-separated)" full><input value={f.cities} onChange={set("cities")} placeholder="Cairo, Luxor" /></Field>}
               {pkg && <Field label="Nights"><input type="number" min="1" value={f.nights} onChange={set("nights")} /></Field>}
-              <Field label="Duration label"><input value={f.duration} onChange={set("duration")} placeholder={pkg ? "4 days · 3 nights" : "4 hours"} /></Field>
+              {/* Typed freely, stored in the house format (normalizeDuration):
+                  "8 hours" becomes "Full day · about 8 hours". The preview
+                  shows exactly what will be saved; only text that can't be
+                  read at all is refused, with the reason under the field. */}
+              <Field label="Duration">
+                <input value={f.duration} onChange={set("duration")}
+                  onBlur={() => { const n = normalizeDuration(type, f.duration); if (n !== f.duration) setF((s) => ({ ...s, duration: n })); }}
+                  placeholder={pkg ? "e.g. 5 days 4 nights" : "e.g. 8 hours"} />
+                {f.duration.trim() && (() => {
+                  const n = normalizeDuration(type, f.duration);
+                  const problem = durationShapeError(type, n);
+                  if (problem) return <span className="field-error">{problem}</span>;
+                  return n !== f.duration.trim() ? <span className="field-hint">Saved as “{n}”</span> : null;
+                })()}
+              </Field>
               <Field label="Guide"><input value={f.guide} onChange={set("guide")} /></Field>
               <Field label="Vehicle"><input value={f.vehicle} onChange={set("vehicle")} /></Field>
               <Field label="Min seats (GoAhead)"><input type="number" min="4" max="12" value={f.minSeats} onChange={set("minSeats")} /></Field>
@@ -927,10 +941,10 @@ export function ProductEditor({ type: typeProp, existing, destinations = [], dep
               <Field label="Deposit %"><input type="number" min="0" max="100" value={f.depositPercent} onChange={set("depositPercent")} /></Field>
               <Field label="Booking cutoff (before departure)">
                 <div style={{ display: "flex", gap: 6 }}>
-                  <input type="number" min="0" value={f.bookingCutoffValue} onChange={set("bookingCutoffValue")} style={{ flex: 1 }} />
+                  <input type="number" min="0" value={f.bookingCutoffValue} onChange={set("bookingCutoffValue")} style={{ flex: "1 1 auto", minWidth: 0 }} aria-label="Booking cutoff" />
                   {/* Hours suit a day tour; a package commits flights and
                       cabins days out, so its cutoff is a number of days. */}
-                  <select value={f.bookingCutoffUnit} onChange={set("bookingCutoffUnit")} aria-label="Cutoff unit">
+                  <select value={f.bookingCutoffUnit} onChange={set("bookingCutoffUnit")} aria-label="Cutoff unit" style={{ flex: "0 0 110px", width: 110 }}>
                     <option value="hours">hours</option>
                     <option value="days">days</option>
                   </select>

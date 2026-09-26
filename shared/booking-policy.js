@@ -210,6 +210,43 @@ export function durationShapeError(type, duration) {
   return null;
 }
 
+// The house format, reached from what people actually type.
+//
+// The field is free text, the format above is exact, and its separator is a
+// middle dot nobody can find on a keyboard — so "8 hours" (the field's own
+// placeholder said "4 hours") was refused with an error at the foot of the
+// form, and a new tour could not be saved. The rule stays; the input is read
+// generously and rewritten into the format:
+//
+//   day tour   "8 hours", "8h", "8 hrs", "about 8 hours", "Full day - 8 hours"
+//              → "Full day · about 8 hours"; over eight → "Extended day · …"
+//   package    "5 days 4 nights", "5d/4n", "5 days, 4 nights" → "5 days · 4 nights"
+//              "5 days" alone → "5 days · 4 nights" (one fewer night than days);
+//              "4 nights" alone → "5 days · 4 nights"
+//
+// Anything it cannot read is returned unchanged, so durationShapeError still
+// explains what is wrong with it.
+export function normalizeDuration(type, raw) {
+  const d = String(raw ?? "").trim();
+  if (!d) return d;
+  const num = "(\\d+(?:[.,]\\d+)?)";
+  if (isPackage({ type })) {
+    const days = new RegExp(`${num}\\s*(?:days?|d)\\b`, "i").exec(d);
+    const nights = new RegExp(`${num}\\s*(?:nights?|n)\\b`, "i").exec(d);
+    const nd = days ? Math.round(Number(days[1].replace(",", "."))) : null;
+    const nn = nights ? Math.round(Number(nights[1].replace(",", "."))) : null;
+    const D = nd ?? (nn != null ? nn + 1 : null);
+    const N = nn ?? (nd != null ? Math.max(0, nd - 1) : null);
+    if (!D || N == null) return d;
+    return `${D} day${D === 1 ? "" : "s"} · ${N} night${N === 1 ? "" : "s"}`;
+  }
+  const hours = new RegExp(`${num}\\s*(?:hours?|hrs?|h)\\b`, "i").exec(d) || new RegExp(`^${num}$`).exec(d);
+  if (!hours) return d;
+  const h = Number(hours[1].replace(",", "."));
+  if (!(h > 0) || h > 24) return d;
+  return `${h > EXTENDED_DAY_HOURS ? "Extended day" : "Full day"} · about ${h} hour${h === 1 ? "" : "s"}`;
+}
+
 // ---------------------------------------------------------------------------
 // The booking cutoff's unit (038). The stored number is ALWAYS hours —
 // bookingClosed() reads it and nothing else may reinterpret it. The unit

@@ -276,6 +276,23 @@ test("the operator follows widget bookings and paid deposits", { skip }, async (
   assert.equal(await operatorOf(), "ag_it_cts", "only the paid passengers count now");
 });
 
+// Not payments, but this file has a signed-in admin: a new day tour typed the
+// way people type it ("8 hours") saves, stored in the house format.
+test("a new day tour with a duration of \"8 hours\" saves", { skip }, async () => {
+  const r = await ops("POST", "/admin/tour-products", {
+    type: "day_tour", title: "Giza Uncovered: Pyramids, Sphinx & Stories", city: "Cairo", duration: "8 hours",
+    guide: "Licensed Egyptologist", vehicle: "Van, 12 seats", minSeats: 4, maxSeats: 12, publishedRate: 43, breakPrice: 37,
+    depositPercent: 10, bookingCutoffHours: 24, bookingCutoffUnit: "hours",
+    description: "Explore the Pyramids of Giza, the Great Sphinx and the Valley Temple with an Egyptologist.",
+  });
+  assert.equal(r.status, 201, JSON.stringify(r.body));
+  const saved = (await db.query("SELECT duration FROM tour_products WHERE title LIKE 'Giza Uncovered%'")).rows[0];
+  assert.equal(saved.duration, "Full day · about 8 hours");
+  const bad = await ops("POST", "/admin/tour-products", { type: "day_tour", title: "Bad", city: "Cairo", duration: "half a day", minSeats: 4, maxSeats: 12, publishedRate: 43, breakPrice: 37 });
+  assert.equal(bad.status, 422, "unreadable text is still refused, with the reason");
+  assert.match(bad.body.error, /Full day · about 8 hours/);
+});
+
 // Last: it removes the table. Migrations do not run on deploy (B5), so this is
 // the state production is in between merging and `npm run db:migrate`.
 test("before migration 043: the screens say payments are off, and nothing else breaks", { skip }, async () => {

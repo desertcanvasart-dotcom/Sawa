@@ -130,3 +130,34 @@ test("the seats meter is not rendered without a departure", () => {
   const src = read("src/main.jsx");
   assert.match(src, /\{!reqMode && dep && <div className="seats-block">/);
 });
+
+// A new day tour typed "8 hours" (the field's own placeholder said "4 hours")
+// was refused and could not be saved. What people type is now read into the
+// house format; only what can't be read is still refused.
+test("durations are read from what people type into the house format", async () => {
+  const { normalizeDuration: n, durationShapeError: e } = await import("../shared/booking-policy.js");
+  const day = [
+    ["8 hours", "Full day · about 8 hours"], ["8h", "Full day · about 8 hours"], ["8 hrs", "Full day · about 8 hours"],
+    ["about 5 hours", "Full day · about 5 hours"], ["Full day - about 8 hours", "Full day · about 8 hours"],
+    ["10 hours", "Extended day · about 10 hours"], ["Full day · about 15 hours", "Extended day · about 15 hours"],
+    ["7.5 hours", "Full day · about 7.5 hours"], ["8", "Full day · about 8 hours"],
+    ["Full day · about 8 hours", "Full day · about 8 hours"],
+  ];
+  const pkg = [
+    ["5 days 4 nights", "5 days · 4 nights"], ["5d/4n", "5 days · 4 nights"], ["5 days, 4 nights", "5 days · 4 nights"],
+    ["5 days", "5 days · 4 nights"], ["4 nights", "5 days · 4 nights"], ["5 days · 4 nights", "5 days · 4 nights"],
+  ];
+  for (const [typed, want] of day) {
+    assert.equal(n("day_tour", typed), want, typed);
+    assert.equal(e("day_tour", n("day_tour", typed)), null, typed);
+  }
+  for (const [typed, want] of pkg) {
+    assert.equal(n("package", typed), want, typed);
+    assert.equal(e("package", n("package", typed)), null, typed);
+  }
+  assert.ok(day.length > 0 && pkg.length > 0);
+  // Unreadable text is left as typed, so the error can say what is wrong.
+  assert.equal(n("day_tour", "half a day"), "half a day");
+  assert.match(e("day_tour", "half a day"), /Full day · about 8 hours/);
+  assert.equal(n("day_tour", ""), "");
+});
