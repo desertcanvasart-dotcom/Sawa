@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sawa widget test page</title>
+<style>
+  body { margin: 0; font-family: Georgia, "Times New Roman", serif; background: #fbf6ec; color: #3a2a18; }
+  header { background: #3a2a18; color: #fbf6ec; padding: 18px 24px; }
+  header h1 { margin: 0; font-size: 22px; }
+  header p { margin: 4px 0 0; opacity: .75; font-size: 14px; }
+  main { max-width: 980px; margin: 0 auto; padding: 24px 16px 60px; }
+  .panel { font-family: system-ui, sans-serif; font-size: 14px; background: #fff; border: 1px solid #e6dccb; border-radius: 12px; padding: 16px; margin-bottom: 28px; display: grid; gap: 12px; }
+  .panel h2 { margin: 0; font-size: 15px; }
+  .row { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+  label { display: grid; gap: 4px; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: #6b5a44; }
+  input, select { font: inherit; font-size: 14px; text-transform: none; letter-spacing: 0; font-weight: 400; color: #222; padding: 8px 10px; border: 1px solid #d8ccb8; border-radius: 8px; background: #fff; min-width: 0; }
+  .check { display: flex; gap: 8px; align-items: center; text-transform: none; letter-spacing: 0; font-size: 13px; font-weight: 400; color: #3a2a18; }
+  button { font: inherit; font-weight: 700; padding: 9px 16px; border: 0; border-radius: 8px; background: #3a2a18; color: #fff; cursor: pointer; justify-self: start; }
+  pre { margin: 0; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; white-space: pre-wrap; word-break: break-all; background: #f6f1e7; border-radius: 8px; padding: 10px; }
+  .note { margin: 0; color: #6b5a44; }
+  .spacer { height: 320px; display: grid; place-items: center; border: 2px dashed #e0d4bf; border-radius: 12px; margin: 24px 0; color: #9a8a70; font-family: system-ui, sans-serif; font-size: 13px; }
+  a { color: #b5651d; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Agency website — widget test</h1>
+  <p>A stand-in for an agency's own site, with the Sawa widget embedded the way the Promote page's code does it.</p>
+</header>
+<main>
+  <form class="panel" id="cfg">
+    <h2>Test settings</h2>
+    <div class="row">
+      <label>Agency code (ref)
+        <input id="ref" value="life-trend" placeholder="Portal, Promote, Your code">
+      </label>
+      <label>Widget
+        <select id="kind">
+          <option value="book">In-page booking — all tours (new)</option>
+          <option value="book/package/pkg_egypt_end_to_end_cairo_nile_crui_msj33v2z">In-page booking — Package: Egypt End to End — Cairo, Nile Cruise &amp; Hurghada | 12 Days</option>
+          <option value="book/package/pkg_egypt_nile_cruise_9d">In-page booking — Package: Egypt in Depth — 9-Day Nile Cruise &amp; Cairo</option>
+          <option value="book/package/pkg_nile_majesty_luxor_5d">In-page booking — Package: Nile Majesty — 5-Day River Cruise from Luxor</option>
+          <option value="book/tour/tour_aswan_highlights_unfinished_obel_mq40h29k">In-page booking — Tour: Aswan Highlights — Unfinished Obelisk, High Dam &amp; Philae</option>
+          <option value="book/tour/tour_aswan_to_abu_simbel_temples_of_r_mq40h4p7">In-page booking — Tour: Aswan to Abu Simbel — Temples of Ramses II &amp; Nefertari</option>
+          <option value="book/tour/tour_cairo_to_alexandria_the_mediterr_mq41k6qb">In-page booking — Tour: Cairo to Alexandria — the Mediterranean Day Tour</option>
+          <option value="book/tour/tour_dendera_abydos_the_far_temples_n_mq41kc7l">In-page booking — Tour: Dendera &amp; Abydos — the Far Temples North of Luxor</option>
+          <option value="book/tour/tour_giza_pyramids_sphinx_the_grand_e_mq41k335">In-page booking — Tour: Giza Pyramids, Sphinx &amp; the Grand Egyptian Museum</option>
+          <option value="book/tour/tour_kom_ombo_edfu_esna_downriver_fro_ms4fly0m">In-page booking — Tour: Kom Ombo, Edfu &amp; Esna — Downriver from Aswan to Luxor</option>
+          <option value="book/tour/tour_luxor_in_depth_east_west_bank_fu_mq41k8ks">In-page booking — Tour: Luxor in Depth — East &amp; West Bank Full Day</option>
+          <option value="book/tour/tour_luxor_to_aswan_edfu_kom_ombo_tem_mq40h77c">In-page booking — Tour: Luxor to Aswan — Edfu &amp; Kom Ombo Temple Road</option>
+          <option value="book/tour/tour_luxor_to_aswan_esna_edfu_kom_omb_mq41ke7h">In-page booking — Tour: Luxor to Aswan — Esna, Edfu &amp; Kom Ombo Temple Road</option>
+          <option value="book/tour/tour_memphis_saqqara_dahshur_birth_of_mq41k505">In-page booking — Tour: Memphis, Saqqara &amp; Dahshur — Birth of the Pyramid</option>
+          <option value="book/tour/tour_the_grand_west_bank_tombs_temple_mq41kaab">In-page booking — Tour: The Grand West Bank — Tombs, Temples &amp; Deir el-Medina</option>
+          <option value="">Link-out banner (old, opens sawa.tours)</option>
+        </select>
+      </label>
+      <label>Sawa site
+        <input id="base" value="https://sawa.tours">
+      </label>
+    </div>
+    <label class="check"><input type="checkbox" id="second"> Add a second widget lower on the page (checks each one sizes on its own)</label>
+    <button type="submit">Load widget</button>
+    <p class="note">The code must be the agency's own code from its Promote page. The tour list comes from sample data, so a tour that no longer exists shows "no longer available"; use "all tours" in that case.</p>
+    <pre id="snippet"></pre>
+  </form>
+
+  <h2 style="margin:0 0 6px">Book your Egypt tour</h2>
+  <p style="margin:0 0 18px">Browse our shared tours below and <a href="#">reserve</a> without leaving this page.</p>
+  <div id="slot1"></div>
+  <div id="slot2"></div>
+</main>
+
+<script>
+(function () {
+  function frame(src) {
+    return '<iframe src="' + src + '" style="width:100%;border:0;border-radius:18px" loading="lazy" data-sawa-embed></iframe>';
+  }
+  function load() {
+    var ref = encodeURIComponent(document.getElementById("ref").value.trim());
+    var kind = document.getElementById("kind").value;
+    var base = document.getElementById("base").value.trim().replace(/\/+$/, "");
+    var src = base + "/embed" + (kind ? "/" + kind : "") + "?ref=" + ref;
+    document.getElementById("slot1").innerHTML = frame(src);
+    document.getElementById("slot2").innerHTML = document.getElementById("second").checked
+      ? '<div class="spacer">Other content on the agency page</div>' + frame(base + "/embed/book?ref=" + ref)
+      : "";
+    document.getElementById("snippet").textContent = frame(src);
+  }
+  document.getElementById("cfg").addEventListener("submit", function (e) { e.preventDefault(); load(); });
+  load();
+})();
+</script>
+
+<!-- The widget script, exactly as the Promote page hands it out. -->
+<script>
+(function(){function s(f){try{var c=getComputedStyle(document.body),a=document.querySelector('a');f.contentWindow.postMessage({type:'sawa-embed-theme',bg:c.backgroundColor,text:c.color,accent:a?getComputedStyle(a).color:''},'*');}catch(e){}}
+addEventListener('message',function(e){if(!e.data)return;document.querySelectorAll('iframe[data-sawa-embed]').forEach(function(f){if(f.contentWindow!==e.source)return;if(e.data.type==='sawa-embed-height')f.style.height=e.data.height+'px';if(e.data.type==='sawa-embed-ready')s(f);if(e.data.type==='sawa-embed-top'&&f.getBoundingClientRect().top<0)f.scrollIntoView({behavior:'smooth',block:'start'});});});
+addEventListener('load',function(){document.querySelectorAll('iframe[data-sawa-embed]').forEach(s);});})();
+</script>
+</body>
+</html>
