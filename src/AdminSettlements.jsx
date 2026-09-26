@@ -95,6 +95,13 @@ function SettlementDetail({ v, data, onChanged }) {
     setErr(""); setBusy(true);
     try { await fn(); await onChanged(msg); } catch (e) { setErr(e.message); } finally { setBusy(false); }
   };
+  // A sheet with nothing approved on it is usually one nobody has filled in
+  // yet: closing it shares the whole revenue as profit. Ask first.
+  function markFinal() {
+    const approved = v.costs.filter((c) => c.state === "approved").length;
+    if (!approved && !window.confirm(`This cost sheet has no approved lines — no costs and no extra income. The whole revenue (${money(s.revenue)}) would be shared as profit.\n\nMark it final anyway?`)) return;
+    act(() => send(`/admin/settlements/${v.departure.id}/costs-final`, { final: true }), "Cost sheet is final.");
+  }
   return (
     <div className="pay-body st-body">
       <div className="st-figures">
@@ -126,7 +133,7 @@ function SettlementDetail({ v, data, onChanged }) {
           <strong>Cost sheet</strong>
           {v.costsFinalAt
             ? <><span className="tag tag-on"><Lock size={12} />Final</span><button type="button" className="btn-ghost sm" disabled={busy} onClick={() => act(() => send(`/admin/settlements/${v.departure.id}/costs-final`, { final: false }), "Cost sheet reopened.")}><Unlock size={14} />Reopen</button></>
-            : <button type="button" className="btn-primary sm" disabled={busy || pending > 0} title={pending ? "Review every line first" : ""} onClick={() => act(() => send(`/admin/settlements/${v.departure.id}/costs-final`, { final: true }), "Cost sheet is final.")}><Lock size={14} />Mark cost sheet final</button>}
+            : <button type="button" className="btn-primary sm" disabled={busy || pending > 0} title={pending ? "Review every line first" : ""} onClick={markFinal}><Lock size={14} />Mark cost sheet final</button>}
         </div>
         <ul className="pay-history">
           {sheetOrder(v.costs).map((c) => <CostLine key={c.id} c={c} categories={data.categories} final={!!v.costsFinalAt} onChanged={onChanged} />)}
