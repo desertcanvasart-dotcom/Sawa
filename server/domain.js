@@ -549,6 +549,17 @@ export function departureActionBuckets(rows = [], seatsFor = () => 0, nowMs = Da
 // operator's, exactly as a missing one does.
 export const DIRECT_CUSTOMER = "direct_customer";
 
+// Whose passenger a booking is — the one answer both the operator rule and the
+// profit split (settlement.js) use, so the two cannot count people differently.
+// An agency's own booking is the agency's; a booking that came through an
+// agency's widget (its referral code) is that agency's; anything else is a
+// direct traveller and counts as the direct-bookings operator's.
+export function passengerOwner(p, { directAgencyId = null, referralAgencies = null } = {}) {
+  if (p?.agencyId && p.agencyId !== DIRECT_CUSTOMER) return p.agencyId;
+  const viaWidget = p?.refCode ? referralAgencies?.get?.(p.refCode) : null;
+  return viaWidget || directAgencyId;
+}
+
 export function operatorForDeparture(departure, {
   listingAgencyId = null, directAgencyId = null, referralAgencies = null, lockAtMs = NaN, nowMs = Date.now(),
 } = {}) {
@@ -557,11 +568,7 @@ export function operatorForDeparture(departure, {
   const asOf = Number.isFinite(lockAtMs) && nowMs >= lockAtMs ? lockAtMs : Infinity;
   const at = (v) => { const t = Date.parse(v || ""); return Number.isNaN(t) ? -Infinity : t; };
 
-  const ownerOf = (p) => {
-    if (p.agencyId && p.agencyId !== DIRECT_CUSTOMER) return p.agencyId;
-    const viaWidget = p.refCode ? referralAgencies?.get?.(p.refCode) : null;
-    return viaWidget || directAgencyId;
-  };
+  const ownerOf = (p) => passengerOwner(p, { directAgencyId, referralAgencies });
 
   // Who opened the date. Read from its first booking's source, cancelled or
   // not: the seed booking identifies the requester even after it is withdrawn.

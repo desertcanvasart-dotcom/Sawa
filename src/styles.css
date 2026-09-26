@@ -6860,6 +6860,45 @@ button:disabled {
   .pay-url { grid-column: 1 / -1; }
 }
 
+/* Admin — Settlements, Agency — Money (044) */
+.st-head { grid-template-columns: minmax(0,1.6fr) minmax(150px,.9fr) minmax(110px,.6fr) minmax(150px,.8fr) 18px; }
+.st-body { gap: 16px; }
+.st-figures { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+.st-figures > div { background: #fff; border: 1px solid var(--d-line, #eee); border-radius: 10px; padding: 10px 12px; display: grid; gap: 3px; }
+.st-figures span { font-size: 12px; color: var(--d-ink-soft, #5c5f62); font-weight: 600; }
+.st-figures b { font-size: 17px; }
+.st-figures em { font-style: normal; font-size: 12px; color: var(--d-ink-soft, #5c5f62); }
+.st-figures .mn-mine { border-color: var(--d-accent, #1f7a52); background: rgba(31,122,82,.05); }
+.st-neg { color: #a3341a; }
+.st-table { background: #fff; border-radius: 10px; }
+.st-op { margin-left: 8px; }
+.st-block { display: grid; gap: 10px; }
+.st-block-head { display: flex; align-items: center; gap: 10px; }
+.st-loss { background: #fdf3ef; border: 1px solid #efc9bb; border-radius: 12px; padding: 12px 14px; }
+.st-loss p { margin: 0; font-size: 13.5px; }
+.st-cost-row { display: grid; grid-template-columns: 170px minmax(0, 1.4fr) 130px minmax(0, 1fr); gap: 10px; }
+.st-inline-label { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; }
+.st-inline-label input { width: 110px; }
+.st-adjust select, .st-adjust input { font: inherit; font-size: 14px; min-height: 38px; padding: 0 10px; border: 1px solid var(--d-line, #ddd); border-radius: 8px; background: #fff; }
+.st-adjust input[type=number] { width: 120px; flex: 0 0 auto; }
+.st-build { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px 24px; align-items: center; padding: 16px 18px; margin-bottom: 14px; }
+.st-build > div:first-child { flex: 1 1 380px; }
+.st-build p { margin: 4px 0 0; }
+.st-build input[type=date] { font: inherit; min-height: 38px; padding: 0 10px; border: 1px solid var(--d-line, #ddd); border-radius: 8px; }
+.st-run { display: grid; gap: 12px; padding: 16px 18px; margin-bottom: 14px; }
+.st-run .dash-card-head h2 { display: flex; align-items: center; gap: 8px; }
+.st-run .pay-acts input { font: inherit; font-size: 13px; min-height: 34px; padding: 0 8px; border: 1px solid var(--d-line, #ddd); border-radius: 8px; }
+.mn-how { padding: 14px 18px; margin: 14px 0 6px; display: grid; gap: 4px; }
+.mn-how p { margin: 0; font-size: 13.5px; color: var(--d-ink-soft, #5c5f62); line-height: 1.55; }
+.mn-h2 { font-size: 17px; margin: 22px 0 10px; }
+.mn-dep { display: grid; gap: 14px; padding: 16px 18px; margin-bottom: 12px; }
+.mn-dep .dash-card-head { margin-bottom: 0; align-items: flex-start; }
+.mn-dep h2 { font-size: 16px; margin: 0; }
+@media (max-width: 900px) {
+  .st-head { grid-template-columns: 1fr auto; }
+  .st-cost-row { grid-template-columns: 1fr 1fr; }
+}
+
 /* Agency portal — Settings */
 .set-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 18px; align-items: start; }
 .set-card { display: grid; gap: 14px; padding: 20px; }

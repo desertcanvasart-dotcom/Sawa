@@ -52,6 +52,7 @@ const MIGRATIONS = [
   { name: "041_restore_cairo_luxor_package", file: "schema_041_restore_cairo_luxor_package.sql" },
   { name: "042_email_outbox", file: "schema_042_email_outbox.sql" },
   { name: "043_booking_payments", file: "schema_043_booking_payments.sql" },
+  { name: "044_settlements", file: "schema_044_settlements.sql" },
 ];
 
 async function main() {
