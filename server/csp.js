@@ -91,7 +91,8 @@ export const CSP_DIRECTIVES = {
   "img-src": ["'self'", "data:", "blob:", SUPABASE, ...GOOGLE_ANALYTICS],
   "connect-src": ["'self'", SUPABASE, "wss://*.supabase.co", ...GOOGLE_ANALYTICS],
   // 'self': the Promote page previews the agency's own widget (/embed/*).
-  "frame-src": ["'self'", "https://www.googletagmanager.com"],
+  // Supabase: a PDF receipt previewed inline on a cost line (signed link).
+  "frame-src": ["'self'", SUPABASE, "https://www.googletagmanager.com"],
   "object-src": ["'none'"],
   "base-uri": ["'self'"],
   "form-action": ["'self'", "mailto:"],

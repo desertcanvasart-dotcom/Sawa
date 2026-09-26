@@ -4,8 +4,8 @@
 // approves and pays each Wednesday's run. The arithmetic is server-side
 // (server/settlement.js); this screen shows it and records decisions.
 import React, { useEffect, useState } from "react";
-import { Check, X, ChevronDown, Plus, ExternalLink, Lock, Unlock, Paperclip } from "lucide-react";
-import { apiFetch, uploadReceipt, openReceipt } from "./supabaseClient";
+import { Check, X, ChevronDown, Plus, ExternalLink, Lock, Unlock, Paperclip, FileText, Eye, EyeOff } from "lucide-react";
+import { apiFetch, uploadReceipt, openReceipt, receiptLink } from "./supabaseClient";
 import { fmtDate } from "./dates.js";
 import { CURRENCY_SYMBOL } from "../shared/currency.js";
 
@@ -199,18 +199,47 @@ function CostLine({ c, categories, final, onChanged }) {
   );
 }
 
-// A cost line's receipt: an uploaded file (opened through a short-lived
-// signed link) or a pasted link.
+// A cost line's receipt: an uploaded file, previewed on the line — a photo
+// as a thumbnail, a PDF in an inline viewer that opens under the line — or a
+// pasted link. Previews load through the same short-lived signed link; the
+// file name still opens the full file in a new tab.
 export function Receipt({ c }) {
   const [err, setErr] = useState("");
+  const [url, setUrl] = useState(null);
+  const [showPdf, setShowPdf] = useState(false);
+  const kind = c.receiptKind;
+  useEffect(() => {
+    if (!c.receiptFile || kind !== "image") return undefined;
+    let live = true;
+    receiptLink(c.id).then((j) => { if (live) setUrl(j.url); }).catch((e) => { if (live) setErr(e.message); });
+    return () => { live = false; };
+  }, [c.id, c.receiptFile, kind]);
+  async function togglePdf() {
+    setErr("");
+    if (showPdf) { setShowPdf(false); return; }
+    try { setUrl((await receiptLink(c.id)).url); setShowPdf(true); } catch (e) { setErr(e.message); }
+  }
   if (c.receiptFile) {
+    const open = () => { setErr(""); openReceipt(c.id).catch((e) => setErr(e.message)); };
     return (
       <>
-        <button type="button" className="pay-link link-btn" title={c.receiptFile}
-          onClick={() => { setErr(""); openReceipt(c.id).catch((e) => setErr(e.message)); }}>
+        {kind === "image" && (
+          <button type="button" className="rc-thumb" onClick={open} title={`Open ${c.receiptFile}`} aria-label={`Open receipt ${c.receiptFile}`}>
+            {url ? <img src={url} alt={`Receipt: ${c.receiptFile}`} /> : <Paperclip size={16} />}
+          </button>
+        )}
+        {kind === "pdf" && (
+          <button type="button" className="rc-pdf" onClick={togglePdf} aria-expanded={showPdf}>
+            <FileText size={15} />PDF{showPdf ? <EyeOff size={13} /> : <Eye size={13} />}
+          </button>
+        )}
+        <button type="button" className="pay-link link-btn" title={c.receiptFile} onClick={open}>
           <Paperclip size={13} />{c.receiptFile}
         </button>
         {err && <span className="pay-err">{err}</span>}
+        {kind === "pdf" && showPdf && url && (
+          <iframe className="rc-frame" src={url} title={`Receipt: ${c.receiptFile}`} />
+        )}
       </>
     );
   }

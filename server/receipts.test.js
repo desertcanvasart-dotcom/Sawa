@@ -38,3 +38,12 @@ test("an agency attaches only its own uploads; staff attach any", () => {
   }
   assert.equal(isReceiptRef("https://drive.example.com/r"), false);
 });
+
+test("previews: a PDF inline, a photo as a thumbnail, HEIC as a file to open", async () => {
+  const { receiptKind } = await import("./receipts.js");
+  assert.equal(receiptKind("receipts:sawa/1-a-x.pdf"), "pdf");
+  for (const ext of ["jpg", "png", "webp"]) assert.equal(receiptKind(`receipts:sawa/1-a-x.${ext}`), "image", ext);
+  assert.equal(receiptKind("receipts:sawa/1-a-x.heic"), "file");
+  assert.equal(receiptKind("https://drive.example.com/r"), null);
+  assert.equal(receiptKind(null), null);
+});

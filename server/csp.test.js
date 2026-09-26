@@ -27,7 +27,7 @@ test("scripts and connections only from this site and the services it uses", () 
 });
 
 test("the portal may frame the site's own widget, and nothing else new", () => {
-  assert.equal(directive(cspHeader("/portal/widget"), "frame-src"), "frame-src 'self' https://www.googletagmanager.com");
+  assert.equal(directive(cspHeader("/portal/widget"), "frame-src"), "frame-src 'self' https://*.supabase.co https://www.googletagmanager.com");
 });
 
 test("only the widget may be framed by other sites", () => {

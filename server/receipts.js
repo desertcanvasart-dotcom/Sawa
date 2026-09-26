@@ -63,6 +63,16 @@ export function mayAttachReceipt(ref, { agencyId = null, staff = false } = {}) {
   return !!agencyId && key.startsWith(`agency/${agencyId}/`);
 }
 
+// How the page can preview it: a PDF inline, a photo as a thumbnail. HEIC
+// photos are stored as uploaded, but most browsers can't draw them, so they
+// are offered as a file to open.
+export function receiptKind(ref) {
+  const ext = (receiptRefKey(ref) || "").split(".").pop();
+  if (ext === "pdf") return "pdf";
+  if (["jpg", "png", "webp"].includes(ext)) return "image";
+  return ref && isReceiptRef(ref) ? "file" : null;
+}
+
 // The file name shown beside a cost line: "coach-contract.pdf".
 export function receiptDisplayName(ref) {
   const key = receiptRefKey(ref);

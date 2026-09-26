@@ -54,7 +54,7 @@ import {
 } from "./payments.js";
 import {
   RECEIPT_BUCKET, RECEIPT_PREFIX, RECEIPT_MAX_BYTES, RECEIPT_MIME_TYPES, SIGNED_LINK_SECONDS,
-  parseReceiptDataUrl, receiptKey, isReceiptRef, receiptRefKey, mayAttachReceipt, receiptDisplayName,
+  parseReceiptDataUrl, receiptKey, isReceiptRef, receiptRefKey, mayAttachReceipt, receiptDisplayName, receiptKind,
 } from "./receipts.js";
 import {
   settleDeparture, payoutBlocker, payoutLines, BLOCKER_LABEL, endedBy, runWindow, payDateOnOrAfter, cairoDay,
@@ -3137,6 +3137,7 @@ const mapCost = (r) => ({
   // opened through GET /api/cost-receipts/:id, which issues a signed link.
   receiptUrl: isReceiptRef(r.receipt_url) ? null : r.receipt_url || null,
   receiptFile: isReceiptRef(r.receipt_url) ? receiptDisplayName(r.receipt_url) : null,
+  receiptKind: receiptKind(r.receipt_url),
   submittedByAgencyId: r.submitted_by_agency_id || null,
   submittedBy: r.submitted_by || null, state: r.state, approvedAmount: r.approved_amount != null ? Number(r.approved_amount) : null,
   reviewNote: r.review_note || null, reviewedBy: r.reviewed_by || null,
