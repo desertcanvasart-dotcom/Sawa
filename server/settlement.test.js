@@ -3,7 +3,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   settleDeparture, netPaidAsOf, approvedCostTotal, runWindow, payDateOnOrAfter, endedBy,
-  payoutLines, payoutBlocker, SAWA_SHARE,
+  payoutLines, payoutBlocker, SAWA_SHARE, approvedIncomeTotal, lineKind, LINE_CATEGORIES,
 } from "./settlement.js";
 
 const CTS = "ag_cts", A = "ag_a", B = "ag_b";
@@ -90,6 +90,34 @@ test("a loss shares nothing out; Sawa's decision is an adjustment", () => {
   const covered = settleDeparture({ ...example(), adjustments: [{ agencyId: A, amount: 40, reason: "non-refundable ticket" }, { agencyId: null, amount: -40, reason: "Sawa covers" }] });
   assert.equal(covered.shares.find((x) => x.agencyId === A).total, 490);
   assert.equal(covered.sawa.total, 110);
+});
+
+// 046: money in — a shop's commission, optional tours the guide sold — adds
+// to the profit that is shared; a commission we pay is a cost.
+test("extra income adds to gross profit and is shared by headcount", () => {
+  const ex = example();
+  ex.costs = [...ex.costs,
+    { kind: "income", state: "approved", amount: 300, approvedAmount: 300 },    // shop commission
+    { kind: "income", state: "approved", amount: 200, approvedAmount: 150 },    // optional tours, approved less
+    { kind: "income", state: "submitted", amount: 999 },
+    { kind: "cost", state: "approved", amount: 50, approvedAmount: 50 },        // commission we pay
+  ];
+  const s = settleDeparture(ex);
+  assert.equal(s.income, 450, "approved money-in only");
+  assert.equal(s.cost, 1550, "money-in never lowers the costs");
+  assert.equal(s.gross, 3000 + 450 - 1550);
+  assert.equal(s.sawaCut, 190);
+  assert.deepEqual(s.shares.map((x) => [x.agencyId, x.total]), [[CTS, 798], [A, 570], [B, 342]]);
+  assert.equal(approvedIncomeTotal(ex.costs), 450);
+  assert.equal(settleDeparture(example()).income, 0, "no lines of income: nothing changes");
+});
+test("each category is money out or money in", () => {
+  assert.equal(lineKind("shop_commission"), "income");
+  assert.equal(lineKind("optional_tours"), "income");
+  assert.equal(lineKind("commission_received"), "income");
+  assert.equal(lineKind("commission_paid"), "cost");
+  assert.equal(lineKind("transport"), "cost");
+  assert.ok(LINE_CATEGORIES.every((c) => c.label && (c.kind === "cost" || c.kind === "income")));
 });
 
 test("net paid counts payments and refunds by their own dates", () => {

@@ -2,7 +2,12 @@
 //
 // The client's model (26 Sep 2026), per departure:
 //
-//   revenue collected − approved net tour cost = gross profit
+//   revenue collected + extra income − approved net tour cost = gross profit
+//
+// Extra income (046) is money the tour brings in beyond the bookings: a
+// commission from a shop, optional tours the guide sells. It sits on the cost
+// sheet as "money in", is approved by Sawa like a cost, and is shared the same
+// way. A commission Sawa's side PAYS (to a guide, a hotel) is a cost.
 //   Sawa takes 10% of the gross profit
 //   the other 90% is shared by the participating agencies by headcount
 //
@@ -25,12 +30,18 @@ import { passengerOwner } from "./domain.js";
 import { zonedDateTimeToUtc } from "./tz.js";
 
 export const SAWA_SHARE = 0.10;
-export const COST_CATEGORIES = ["transport", "guide", "entrance", "meals", "activities", "accommodation", "permits", "local_services", "other"];
+export const COST_CATEGORIES = ["transport", "guide", "entrance", "meals", "activities", "accommodation", "permits", "local_services", "commission_paid", "other"];
+export const INCOME_CATEGORIES = ["shop_commission", "optional_tours", "commission_received"];
 export const COST_LABEL = {
   transport: "Transportation", guide: "Tour guide", entrance: "Entrance fees", meals: "Meals",
   activities: "Activities", accommodation: "Accommodation", permits: "Permits",
-  local_services: "Local services", other: "Other",
+  local_services: "Local services", commission_paid: "Commission we pay", other: "Other",
+  shop_commission: "Shop commission", optional_tours: "Optional tours sold", commission_received: "Other commission received",
 };
+// A line's kind follows from its category: money out (a cost) or money in.
+export const lineKind = (category) => (INCOME_CATEGORIES.includes(category) ? "income" : "cost");
+// The categories as the screens list them.
+export const LINE_CATEGORIES = [...COST_CATEGORIES, ...INCOME_CATEGORIES].map((id) => ({ id, label: COST_LABEL[id], kind: lineKind(id) }));
 
 const round2 = (n) => Math.round(Number(n || 0) * 100) / 100;
 const at = (v) => { const t = Date.parse(v || ""); return Number.isNaN(t) ? NaN : t; };
@@ -81,8 +92,10 @@ export function netPaidAsOf(payments = [], asOfMs = Infinity) {
   return round2(n);
 }
 
-export const approvedCostTotal = (costs = []) =>
-  round2(costs.filter((c) => c.state === "approved").reduce((s, c) => s + Number(c.approvedAmount ?? c.amount), 0));
+const approvedTotal = (lines, kind) =>
+  round2(lines.filter((c) => c.state === "approved" && (c.kind || "cost") === kind).reduce((s, c) => s + Number(c.approvedAmount ?? c.amount), 0));
+export const approvedCostTotal = (lines = []) => approvedTotal(lines, "cost");
+export const approvedIncomeTotal = (lines = []) => approvedTotal(lines, "income");
 
 // One departure's settlement as of an instant.
 //
@@ -105,7 +118,8 @@ export function settleDeparture({
   }
   revenue = round2(revenue);
   const cost = approvedCostTotal(costs);
-  const gross = round2(revenue - cost);
+  const income = approvedIncomeTotal(costs);
+  const gross = round2(revenue + income - cost);
   const loss = gross < 0;
   const totalSeats = [...seats.values()].reduce((s, n) => s + n, 0);
   const sawaCut = loss ? 0 : round2(gross * SAWA_SHARE);
@@ -125,7 +139,7 @@ export function settleDeparture({
   const shares = [...byAgency.values()].map((a) => ({ ...a, total: round2(a.share + a.adjustments) }))
     .sort((x, y) => y.seats - x.seats || String(x.agencyId).localeCompare(String(y.agencyId)));
   return {
-    revenue, cost, gross, loss, sawaCut, pool, totalSeats,
+    revenue, income, cost, gross, loss, sawaCut, pool, totalSeats,
     // The pennies the floor left, and the whole pool when nobody is left to
     // share it (every passenger refunded), stay with Sawa.
     sawa: { cut: sawaCut, remainder: round2(pool - shared), adjustments: round2(sawaAdjust), total: round2(sawaCut + pool - shared + sawaAdjust) },

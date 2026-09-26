@@ -4,7 +4,7 @@
 // approves and pays each Wednesday's run. The arithmetic is server-side
 // (server/settlement.js); this screen shows it and records decisions.
 import React, { useEffect, useState } from "react";
-import { Check, X, ChevronDown, Plus, ExternalLink, Lock, Unlock, Paperclip, FileText, Eye, EyeOff } from "lucide-react";
+import { Check, X, ChevronDown, Plus, ExternalLink, Lock, Unlock, Paperclip, FileText, Eye, EyeOff, ArrowDownLeft, ArrowUpRight } from "lucide-react";
 import { apiFetch, uploadReceipt, openReceipt, receiptLink } from "./supabaseClient";
 import { fmtDate } from "./dates.js";
 import { CURRENCY_SYMBOL } from "../shared/currency.js";
@@ -26,7 +26,7 @@ export function SettlementsSection({ flash }) {
       <div className="dash-head">
         <div>
           <h1>Settlements</h1>
-          <p>Revenue collected − approved costs = gross profit. Sawa takes 10%; the rest is shared by headcount. Paid every Wednesday for tours ended by the Saturday before.</p>
+          <p>Revenue collected + extra income − approved costs = gross profit. Sawa takes 10%; the rest is shared by headcount. Paid every Wednesday for tours ended by the Saturday before.</p>
         </div>
       </div>
       <div className="seg pay-tabs" role="tablist" aria-label="Settlements">
@@ -99,6 +99,7 @@ function SettlementDetail({ v, data, onChanged }) {
     <div className="pay-body st-body">
       <div className="st-figures">
         <div><span>Revenue collected</span><b>{money(s.revenue)}</b></div>
+        <div><span>Extra income</span><b>{money(s.income || 0)}</b></div>
         <div><span>Approved costs</span><b>{money(s.cost)}</b></div>
         <div><span>Gross profit</span><b className={s.loss ? "st-neg" : ""}>{money(s.gross)}</b></div>
         <div><span>Sawa 10%</span><b>{money(s.sawaCut)}</b></div>
@@ -128,10 +129,10 @@ function SettlementDetail({ v, data, onChanged }) {
             : <button type="button" className="btn-primary sm" disabled={busy || pending > 0} title={pending ? "Review every line first" : ""} onClick={() => act(() => send(`/admin/settlements/${v.departure.id}/costs-final`, { final: true }), "Cost sheet is final.")}><Lock size={14} />Mark cost sheet final</button>}
         </div>
         <ul className="pay-history">
-          {v.costs.map((c) => <CostLine key={c.id} c={c} categories={data.categories} final={!!v.costsFinalAt} onChanged={onChanged} />)}
+          {sheetOrder(v.costs).map((c) => <CostLine key={c.id} c={c} categories={data.categories} final={!!v.costsFinalAt} onChanged={onChanged} />)}
           {v.costs.length === 0 && <li className="muted-line">No costs yet. The operator submits them from its portal, or add them here.</li>}
         </ul>
-        {!v.costsFinalAt && <AddCost depId={v.departure.id} categories={data.categories} onChanged={onChanged} />}
+        {!v.costsFinalAt && <AddCost depId={v.departure.id} categories={data.categories} travellers={v.travellers} onChanged={onChanged} />}
       </div>
 
       {s.loss && (
@@ -176,8 +177,8 @@ function CostLine({ c, categories, final, onChanged }) {
   return (
     <li className={`pay-line ${c.state === "rejected" ? "pay-void" : ""}`}>
       <div className="pay-line-main">
-        <span><strong>{label}</strong> — {c.description}</span>
-        <span>{money(c.amount)}{c.state === "approved" && c.approvedAmount !== c.amount ? ` → approved ${money(c.approvedAmount)}` : ""}</span>
+        <span><LineKind c={c} /><strong>{label}</strong> — {c.description}</span>
+        <span>{costBreakdown(c)}{c.kind === "income" ? "+" : ""}{money(c.amount)}{c.state === "approved" && c.approvedAmount !== c.amount ? ` → approved ${money(c.approvedAmount)}` : ""}</span>
         <span className={`tag ${c.state === "approved" ? "tag-on" : c.state === "rejected" ? "tag-off" : "tag-warn"}`}>{c.state === "submitted" ? "To review" : c.state === "approved" ? "Approved" : "Rejected"}</span>
         <span className="muted-line">{c.submittedByAgencyId ? "operator" : "Sawa"}{c.reviewNote ? ` · ${c.reviewNote}` : ""}</span>
         <Receipt c={c} />
@@ -247,50 +248,127 @@ export function Receipt({ c }) {
   return null;
 }
 
-export function CostForm({ categories, onSubmit, submitLabel }) {
+// Transport and a guide cost the same whatever the headcount; meals, entrance
+// fees and the like are paid per traveller. The type suggests one; either can
+// be chosen.
+const PER_PERSON_BY_DEFAULT = new Set(["meals", "entrance", "activities", "accommodation", "optional_tours"]);
+const kindOf = (c) => c?.kind || "cost";
+
+// One line on a cost sheet: money out (a cost, or a commission we pay) or
+// money in (a shop commission, optional tours sold by the guide).
+export function CostForm({ categories, onSubmit, submitLabel, travellers = null }) {
+  const [kind, setKind] = useState("cost");
+  const listed = categories.filter((c) => kindOf(c) === kind);
   const [category, setCategory] = useState(categories[0]?.id || "transport");
+  const [basis, setBasis] = useState(PER_PERSON_BY_DEFAULT.has(categories[0]?.id) ? "person" : "group");
+  const [basisTouched, setBasisTouched] = useState(false);
   const [description, setDescription] = useState("");
   const [amount, setAmount] = useState("");
+  const [unit, setUnit] = useState("");
+  const [people, setPeople] = useState(travellers ? String(travellers) : "");
   const [receiptUrl, setReceiptUrl] = useState("");
   const [file, setFile] = useState(null);
   const [fileKey, setFileKey] = useState(0);   // resets the file input
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  const person = basis === "person";
+  const total = person ? Math.round(Number(unit) * Number(people) * 100) / 100 : Number(amount);
+  const ready = description.trim() && total > 0 && (!person || (Number(unit) > 0 && Number.isInteger(Number(people)) && Number(people) >= 1));
+
+  function pickCategory(id) {
+    setCategory(id);
+    if (!basisTouched) setBasis(PER_PERSON_BY_DEFAULT.has(id) ? "person" : "group");
+  }
+  function pickKind(k) {
+    setKind(k);
+    pickCategory(categories.find((c) => kindOf(c) === k)?.id || category);
+  }
+  const income = kind === "income";
   async function submit(e) {
     e.preventDefault();
     setErr(""); setBusy(true);
     try {
       // The file goes up first; the cost line then points at it.
       const receipt = file ? (await uploadReceipt(file)).ref : receiptUrl || undefined;
-      await onSubmit({ category, description, amount: Number(amount), receiptUrl: receipt });
-      setDescription(""); setAmount(""); setReceiptUrl(""); setFile(null); setFileKey((k) => k + 1);
+      await onSubmit(person
+        ? { category, description, basis, unitAmount: Number(unit), quantity: Number(people), receiptUrl: receipt }
+        : { category, description, basis, amount: Number(amount), receiptUrl: receipt });
+      setDescription(""); setAmount(""); setUnit(""); setReceiptUrl(""); setFile(null); setFileKey((k) => k + 1); setBasisTouched(false);
     } catch (e2) { setErr(e2.message); } finally { setBusy(false); }
   }
   return (
-    <form className="pay-new st-costform" onSubmit={submit}>
-      <div className="st-cost-row">
-        <label>Type<select value={category} onChange={(e) => setCategory(e.target.value)}>{categories.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}</select></label>
-        <label>What<input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="e.g. Coach and driver, full day" /></label>
-        <label>Amount ({CURRENCY_SYMBOL})<input type="number" min="0.01" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} /></label>
-        <label>Receipt (PDF or photo)
+    <form className={`pay-new st-costform ${income ? "cf-in" : ""}`} onSubmit={submit}>
+      {categories.some((c) => kindOf(c) === "income") && (
+        <div className="seg cf-kind" role="radiogroup" aria-label="Money out or money in">
+          {[["cost", "Money out", "a cost, or a commission we pay"], ["income", "Money in", "a commission we receive, optional tours"]].map(([id, label, hint]) => (
+            <button key={id} type="button" role="radio" aria-checked={kind === id} className={kind === id ? "active" : ""} onClick={() => pickKind(id)}>
+              {id === "income" ? <ArrowDownLeft size={14} /> : <ArrowUpRight size={14} />}{label}<span className="cf-kind-hint">{hint}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      <div className="cf-row cf-what">
+        <label>Type<select value={category} onChange={(e) => pickCategory(e.target.value)}>{listed.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}</select></label>
+        <label>What<input value={description} onChange={(e) => setDescription(e.target.value)} placeholder={income ? "e.g. Papyrus shop, 10% of sales" : "e.g. Coach and driver, full day"} /></label>
+      </div>
+      <div className="cf-row cf-price">
+        <div className="cf-field">
+          <span className="cf-label">{income ? "Received" : "Charged"}</span>
+          <div className="seg cf-basis" role="radiogroup" aria-label={income ? "Received per group or per person" : "Charged per group or per person"}>
+            {[["group", "Per group"], ["person", "Per person"]].map(([id, label]) => (
+              <button key={id} type="button" role="radio" aria-checked={basis === id} className={basis === id ? "active" : ""}
+                onClick={() => { setBasis(id); setBasisTouched(true); }}>{label}</button>
+            ))}
+          </div>
+        </div>
+        {person ? (
+          <>
+            <label>{income ? "Amount" : "Price"} per person ({CURRENCY_SYMBOL})<input type="number" min="0.01" step="0.01" value={unit} onChange={(e) => setUnit(e.target.value)} /></label>
+            <div className="cf-people">
+              <span className="cf-times" aria-hidden="true">×</span>
+              <label>People<input type="number" min="1" step="1" value={people} onChange={(e) => setPeople(e.target.value)} /></label>
+            </div>
+            <div className="cf-field cf-total"><span className="cf-label">Total</span><b>{total > 0 ? `${CURRENCY_SYMBOL}${total.toLocaleString()}` : "—"}</b></div>
+          </>
+        ) : (
+          <label>{income ? "Amount received" : "Total for the group"} ({CURRENCY_SYMBOL})<input type="number" min="0.01" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} /></label>
+        )}
+      </div>
+      {person && travellers != null && <p className="field-hint cf-hint">{travellers} traveller{travellers === 1 ? "" : "s"} booked on this date — change the number if it differs.</p>}
+      <div className="cf-row cf-receipt">
+        <label>{income ? "Proof (statement, invoice — optional)" : "Receipt (PDF or photo)"}
           <input key={fileKey} type="file" accept="application/pdf,image/jpeg,image/png,image/webp,image/heic,image/heif"
             onChange={(e) => { const f = e.target.files?.[0] || null; setErr(f && f.size > 8 * 1024 * 1024 ? "That file is larger than 8MB." : ""); setFile(f && f.size <= 8 * 1024 * 1024 ? f : null); }} />
         </label>
+        {!file && (
+          <label>…or paste a link instead
+            <input type="url" value={receiptUrl} onChange={(e) => setReceiptUrl(e.target.value)} placeholder="https://… (optional)" />
+          </label>
+        )}
       </div>
-      {!file && (
-        <label className="st-receipt-link">…or paste a link instead
-          <input type="url" value={receiptUrl} onChange={(e) => setReceiptUrl(e.target.value)} placeholder="https://… (optional)" />
-        </label>
-      )}
       {err && <p className="pay-err">{err}</p>}
-      <button className="btn-primary sm" type="submit" disabled={busy || !description.trim() || !(Number(amount) > 0)}><Plus size={14} />{busy ? (file ? "Uploading…" : "Saving…") : submitLabel}</button>
+      <button className="btn-primary sm" type="submit" disabled={busy || !ready}><Plus size={14} />{busy ? (file ? "Uploading…" : "Saving…") : typeof submitLabel === "function" ? submitLabel(kind) : submitLabel}</button>
     </form>
   );
 }
 
-function AddCost({ depId, categories, onChanged }) {
-  return <CostForm categories={categories} submitLabel="Add cost (approved)"
-    onSubmit={async (body) => { await send(`/admin/settlements/${depId}/costs`, body); await onChanged("Cost added."); }} />;
+// Money out first, then money in; each in the order entered.
+export const sheetOrder = (lines) => [...lines].sort((a, b) => (a.kind === "income") - (b.kind === "income"));
+// The arrow in front of a line: money out, or money in.
+export function LineKind({ c }) {
+  return c.kind === "income"
+    ? <span className="cf-dir cf-dir-in" title="Money in"><ArrowDownLeft size={13} />In</span>
+    : <span className="cf-dir cf-dir-out" title="Money out"><ArrowUpRight size={13} />Out</span>;
+}
+
+// "€15 × 12 people" beside a per-person line's total.
+export const costBreakdown = (c) => (c.basis === "person" && c.unitAmount && c.quantity
+  ? `${CURRENCY_SYMBOL}${Number(c.unitAmount).toLocaleString()} × ${c.quantity} ${c.quantity === 1 ? "person" : "people"} = `
+  : "");
+
+function AddCost({ depId, categories, travellers, onChanged }) {
+  return <CostForm categories={categories} travellers={travellers} submitLabel={(k) => (k === "income" ? "Add income (approved)" : "Add cost (approved)")}
+    onSubmit={async (body) => { await send(`/admin/settlements/${depId}/costs`, body); await onChanged(categories.find((c) => c.id === body.category)?.kind === "income" ? "Income added." : "Cost added."); }} />;
 }
 
 function AddAdjustment({ depId, parties, agencies, onChanged }) {

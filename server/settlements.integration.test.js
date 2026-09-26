@@ -308,6 +308,84 @@ test("a date at GoAhead is listed before any money or costs, with its cost sheet
   assert.equal(cost.status, 201, "and can enter a cost straight away");
 });
 
+// Mixed pricing (045): a coach is priced for the group, a lunch per person.
+test("per-person costs: price × people makes the total; group costs stay a total", { skip }, async () => {
+  const DEP2 = 920002;
+  const money = (await call("GET", "/agency/money", undefined, "a-token")).body.departures.find((d) => d.departure.id === DEP2);
+  assert.equal(money.travellers, 4, "the form suggests the travellers on the date");
+  const lunch = await call("POST", `/agency/departures/${DEP2}/costs`, { category: "meals", description: "Lunch", basis: "person", unitAmount: 15, quantity: 12 }, "a-token");
+  assert.equal(lunch.status, 201, JSON.stringify(lunch.body));
+  assert.equal(lunch.body.cost.basis, "person");
+  assert.equal(lunch.body.cost.unitAmount, 15);
+  assert.equal(lunch.body.cost.quantity, 12);
+  assert.equal(lunch.body.cost.amount, 180);
+  const coach = await call("POST", `/agency/departures/${DEP2}/costs`, { category: "transport", description: "Coach", basis: "group", amount: 700 }, "a-token");
+  assert.equal(coach.body.cost.basis, "group");
+  assert.equal(coach.body.cost.amount, 700);
+  assert.equal(coach.body.cost.unitAmount, null);
+  assert.equal((await call("POST", `/agency/departures/${DEP2}/costs`, { category: "meals", description: "Lunch", basis: "person", unitAmount: 15 }, "a-token")).status, 422, "people are needed");
+  assert.equal((await call("POST", `/agency/departures/${DEP2}/costs`, { category: "transport", description: "Coach", basis: "group" }, "a-token")).status, 422, "a total is needed");
+  const staff = await ops("POST", `/admin/settlements/${DEP2}/costs`, { category: "entrance", description: "Tickets", basis: "person", unitAmount: 12.5, quantity: 4 });
+  assert.equal(staff.status, 201, JSON.stringify(staff.body));
+  assert.equal(staff.body.cost.amount, 50);
+  assert.equal(staff.body.cost.state, "approved");
+});
+
+// Money in (046): a shop's commission is approved like a cost and adds to the
+// profit; a commission we pay is a cost.
+test("extra income: the operator records money in; once approved it adds to gross profit", { skip }, async () => {
+  const DEP2 = 920002;
+  const shop = await call("POST", `/agency/departures/${DEP2}/costs`, { category: "shop_commission", description: "Papyrus shop, 10% of sales", amount: 120 }, "a-token");
+  assert.equal(shop.status, 201, JSON.stringify(shop.body));
+  assert.equal(shop.body.cost.kind, "income");
+  const tours = await call("POST", `/agency/departures/${DEP2}/costs`, { category: "optional_tours", description: "Felucca ride", basis: "person", unitAmount: 20, quantity: 3 }, "a-token");
+  assert.equal(tours.body.cost.kind, "income");
+  assert.equal(tours.body.cost.amount, 60);
+  const paidOut = await call("POST", `/agency/departures/${DEP2}/costs`, { category: "commission_paid", description: "Hotel concierge", amount: 15 }, "a-token");
+  assert.equal(paidOut.body.cost.kind, "cost");
+  const before = (await ops("GET", "/admin/settlements")).body.items.find((i) => i.departure.id === DEP2).settlement;
+  assert.equal(before.income, 0, "not until Sawa approves it");
+  assert.equal((await ops("POST", `/admin/departure-costs/${shop.body.cost.id}/review`, { decision: "approve" })).status, 200);
+  const after = (await ops("GET", "/admin/settlements")).body.items.find((i) => i.departure.id === DEP2).settlement;
+  assert.equal(after.income, 120);
+  assert.equal(after.cost, before.cost, "money in never counts as a cost");
+  assert.equal(after.gross, Math.round((after.revenue + 120 - after.cost) * 100) / 100);
+  const mine = (await call("GET", "/agency/money", undefined, "a-token")).body;
+  assert.equal(mine.departures.find((d) => d.departure.id === DEP2).income, 120, "the agency sees it too");
+  assert.ok(mine.categories.some((c) => c.id === "shop_commission" && c.kind === "income"));
+  const staff = await ops("POST", `/admin/settlements/${DEP2}/costs`, { category: "commission_received", description: "Perfume palace", amount: 40 });
+  assert.equal(staff.body.cost.kind, "income");
+  assert.equal(staff.body.cost.state, "approved");
+  assert.ok((await db.query(`SELECT 1 FROM audit_log WHERE action = 'settlement.cost_submitted' AND detail->>'kind' = 'income'`)).rowCount >= 1);
+});
+
+// Production between merging and running 045: per-person lines still save, as
+// a total with the price written into the description.
+test("before migration 045: a per-person cost saves as its total", { skip }, async () => {
+  const DEP2 = 920002;
+  await db.query(`ALTER TABLE departure_costs DROP CONSTRAINT departure_costs_basis_chk, DROP COLUMN basis, DROP COLUMN unit_amount, DROP COLUMN quantity`);
+  const r = await call("POST", `/agency/departures/${DEP2}/costs`, { category: "meals", description: "Dinner", basis: "person", unitAmount: 20, quantity: 12 }, "a-token");
+  assert.equal(r.status, 201, JSON.stringify(r.body));
+  assert.equal(r.body.cost.amount, 240);
+  assert.match(r.body.cost.description, /× 12 people/);
+  assert.equal((await ops("GET", "/admin/settlements")).status, 200, "the sheet still loads");
+});
+
+// Production between merging and running 046: a commission we pay still
+// saves (as "Other"); income is refused rather than counted as a cost.
+test("before migration 046: income is refused, commission we pay saves as Other", { skip }, async () => {
+  const DEP2 = 920002;
+  await db.query(`ALTER TABLE departure_costs DROP CONSTRAINT departure_costs_kind_chk, DROP COLUMN kind`);
+  const inc = await call("POST", `/agency/departures/${DEP2}/costs`, { category: "shop_commission", description: "Shop", amount: 50 }, "a-token");
+  assert.equal(inc.status, 503);
+  assert.match(inc.body.error, /migration 046/);
+  const out = await call("POST", `/agency/departures/${DEP2}/costs`, { category: "commission_paid", description: "Concierge", amount: 10 }, "a-token");
+  assert.equal(out.status, 201, JSON.stringify(out.body));
+  assert.equal(out.body.cost.category, "other");
+  assert.match(out.body.cost.description, /^Commission we pay: Concierge/);
+  assert.equal(out.body.cost.kind, "cost");
+});
+
 // Last: removes the tables — production's state between merging and migrating.
 test("before migration 044: the screens say settlements are off", { skip }, async () => {
   await db.query(`DROP TABLE payout_transfers, payout_lines, payout_runs, departure_settlements, settlement_adjustments, departure_costs`);

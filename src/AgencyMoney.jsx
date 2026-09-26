@@ -2,7 +2,8 @@
 // been paid and when, and — on a date it operates — its cost sheet.
 //
 // The model, stated on the page because it decides what the agency earns:
-// revenue collected − approved costs = gross profit; Sawa takes 10%; the rest
+// revenue collected + extra income (shop commissions, optional tours) −
+// approved costs = gross profit; Sawa takes 10%; the rest
 // is shared by headcount (paid passengers). Paid every Wednesday for tours
 // that ended by the Saturday before; money that arrives later is topped up on
 // a following Wednesday. Sawa approves every cost.
@@ -10,7 +11,7 @@ import React, { useEffect, useState } from "react";
 import { apiFetch } from "./supabaseClient";
 import { fmtDate } from "./dates.js";
 import { CURRENCY_SYMBOL } from "../shared/currency.js";
-import { CostForm, Receipt } from "./AdminSettlements.jsx";
+import { CostForm, Receipt, costBreakdown, sheetOrder, LineKind } from "./AdminSettlements.jsx";
 
 const money = (n) => (n == null ? "—" : `${Number(n) < 0 ? "−" : ""}${CURRENCY_SYMBOL}${Math.abs(Number(n)).toLocaleString(undefined, { maximumFractionDigits: 2 })}`);
 const pct = (p) => `${Math.round(p * 1000) / 10}%`;
@@ -46,7 +47,7 @@ export function AgencyMoney() {
           </div>
           <div className="dash-card mn-how">
             <strong>How your share is worked out</strong>
-            <p>For each departure: revenue collected − costs approved by Sawa = gross profit. Sawa takes 10%, and the other 90% is shared by headcount — each agency's share of the paid passengers (refunded passengers don't count). Payouts go out every Wednesday for tours that ended by the Saturday before; money that arrives later is added on a following Wednesday.</p>
+            <p>For each departure: revenue collected + extra income (commissions from shops, optional tours sold) − costs approved by Sawa = gross profit. Sawa takes 10%, and the other 90% is shared by headcount — each agency's share of the paid passengers (refunded passengers don't count). Payouts go out every Wednesday for tours that ended by the Saturday before; money that arrives later is added on a following Wednesday.</p>
           </div>
 
           <h2 className="mn-h2">Departures</h2>
@@ -89,6 +90,7 @@ function DepartureCard({ d, categories, onChanged }) {
       </div>
       <div className="st-figures">
         <div><span>Revenue collected</span><b>{money(d.revenue)}</b></div>
+        <div><span>Extra income</span><b>{money(d.income || 0)}</b></div>
         <div><span>Approved costs</span><b>{money(d.cost)}</b></div>
         <div><span>Gross profit</span><b className={d.loss ? "st-neg" : ""}>{money(d.gross)}</b></div>
         <div><span>Sawa 10%</span><b>{money(d.sawaCut)}</b></div>
@@ -101,12 +103,12 @@ function DepartureCard({ d, categories, onChanged }) {
       {d.operating && (
         <div className="st-block">
           <strong>Your cost sheet {d.costsFinal && <span className="tag tag-on">Final</span>}</strong>
-          <p className="field-hint">Enter the real cost of running this date, and attach the receipt (a PDF or a photo) where you have one. Sawa reviews every line before the profit is shared.</p>
+          <p className="field-hint">Enter the real cost of running this date — including any commission you pay — and any extra money it brought in: a commission from a shop, optional tours the guide sold. Attach the receipt (a PDF or a photo) where you have one. Sawa reviews every line before the profit is shared.</p>
           <ul className="pay-history">
-            {d.costs.map((c) => (
+            {sheetOrder(d.costs).map((c) => (
               <li key={c.id} className={`pay-line ${c.state === "rejected" ? "pay-void" : ""}`}><div className="pay-line-main">
-                <span><strong>{categories.find((x) => x.id === c.category)?.label || c.category}</strong> — {c.description}</span>
-                <span>{money(c.amount)}{c.state === "approved" && c.approvedAmount !== c.amount ? ` → approved ${money(c.approvedAmount)}` : ""}</span>
+                <span><LineKind c={c} /><strong>{categories.find((x) => x.id === c.category)?.label || c.category}</strong> — {c.description}</span>
+                <span>{costBreakdown(c)}{c.kind === "income" ? "+" : ""}{money(c.amount)}{c.state === "approved" && c.approvedAmount !== c.amount ? ` → approved ${money(c.approvedAmount)}` : ""}</span>
                 <span className={`tag ${c.state === "approved" ? "tag-on" : c.state === "rejected" ? "tag-off" : "tag-warn"}`}>{c.state === "submitted" ? "With Sawa" : c.state === "approved" ? "Approved" : "Rejected"}</span>
                 {c.reviewNote && <span className="muted-line">{c.reviewNote}</span>}
                 <Receipt c={c} />
@@ -115,11 +117,11 @@ function DepartureCard({ d, categories, onChanged }) {
             {d.costs.length === 0 && <li className="muted-line">No costs entered yet.</li>}
           </ul>
           {!d.costsFinal && (
-            <CostForm categories={categories} submitLabel="Submit cost to Sawa"
+            <CostForm categories={categories} travellers={d.travellers} submitLabel={(k) => (k === "income" ? "Submit income to Sawa" : "Submit cost to Sawa")}
               onSubmit={async (body) => {
                 const r = await apiFetch(`/agency/departures/${d.departure.id}/costs`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
                 const j = await r.json().catch(() => ({}));
-                if (!r.ok) throw new Error(j.error || "Could not submit the cost.");
+                if (!r.ok) throw new Error(j.error || "Could not submit the line.");
                 await onChanged();
               }} />
           )}
