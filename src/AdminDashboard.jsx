@@ -3,7 +3,7 @@ import {
   LayoutDashboard, Package, CalendarDays, Users, ClipboardList, ScrollText,
   Plus, Check, X, Search, Archive, ArchiveRestore, Euro, ShieldCheck,
   TrendingUp, AlertTriangle, MapPin, Hotel, ArrowUpRight, ArrowLeft, Trash2, Pencil,
-  Newspaper, Share2, Copy, Inbox, Eye, Clock3,
+  Newspaper, Share2, Copy, Inbox, Eye, Clock3, Download,
 } from "lucide-react";
 import { apiFetch, uploadImage } from "./supabaseClient";
 import { DashSidebar } from "./DashSidebar";
@@ -15,6 +15,7 @@ import { SettlementsSection } from "./AdminSettlements.jsx";
 // Date-only departure values need a local-noon anchor or they render a day
 // early west of UTC — see src/dates.js.
 import { fmtDate, fmtReceived } from "./dates.js";
+import { toursCsv } from "./tour-export.js";
 
 const money = (n) => (n == null ? "—" : CURRENCY_SYMBOL + Number(n).toLocaleString());
 const isPkg = (x) => x?.type === "package";
@@ -254,6 +255,14 @@ function ToursSection({ data, destinations = [], reload, flash }) {
     if (r.ok) { flash("Tour archived — find it under Archive in the sidebar."); reload(); }
   }
 
+  function exportCsv() {
+    const blob = new Blob([toursCsv(products, window.location.origin)], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `sawa-tours-${new Date().toISOString().slice(0, 10)}.csv`; a.click();
+    URL.revokeObjectURL(url);
+  }
+
   // Full-page editor takes over the section when adding/editing.
   if (editor) {
     return (
@@ -275,6 +284,7 @@ function ToursSection({ data, destinations = [], reload, flash }) {
       <PageHead title="Tours & Packages" sub="Create and manage the products agencies and travelers can book."
         action={
           <div className="head-actions">
+            <button className="btn-ghost" onClick={exportCsv} disabled={!products.length}><Download size={16} />Export CSV</button>
             <button className="btn-ghost" onClick={() => setEditor({ type: "day_tour" })}><Plus size={16} />Add tour</button>
             <button className="btn-primary" onClick={() => setEditor({ type: "package" })}><Plus size={16} />Add package</button>
           </div>
