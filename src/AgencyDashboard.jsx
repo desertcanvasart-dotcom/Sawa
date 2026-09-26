@@ -6,10 +6,11 @@ import { CURRENCY_SYMBOL } from "../shared/currency.js";
 import {
   LayoutDashboard, Ticket, ClipboardList, Users as UsersIcon, ShieldCheck, ArrowUpRight,
   Check, ChevronDown, AlertTriangle, CalendarDays, MapPin, Package, Hotel, ArrowLeft, Search, Clock3,
-  Share2, Copy, Settings as SettingsIcon,
+  Share2, Copy, Settings as SettingsIcon, Wallet,
 } from "lucide-react";
 import { DashSidebar } from "./DashSidebar";
 import { AgencySettings } from "./AgencySettings.jsx";
+import { AgencyMoney } from "./AgencyMoney.jsx";
 import { usePortalSection } from "./portal-section.js";
 import { useBackToClose, useUnsavedGuard } from "./back-to-close.js";
 import { apiFetch } from "./supabaseClient";
@@ -48,7 +49,7 @@ export function AgencyDashboard({ user, agency, signOut, refreshProfile, navigat
   const agencyId = agency?.id;
   const isOwner = user.role === "agency_owner";
   const [section, setSection] = usePortalSection(
-    ["overview", "book", "listings", "bookings", "widget", ...(isOwner ? ["team"] : []), "settings"], "overview");
+    ["overview", "book", "listings", "bookings", "money", "widget", ...(isOwner ? ["team"] : []), "settings"], "overview");
   // Clicking "Book seats" while a tour is open inside it used to do nothing:
   // the section was already active, so the open tour stayed on screen. A
   // repeat click remounts the catalog, which closes the tour (and takes its
@@ -103,6 +104,7 @@ export function AgencyDashboard({ user, agency, signOut, refreshProfile, navigat
       items: [
         { id: "book", label: "Book seats", icon: Ticket },
         { id: "bookings", label: "My bookings", icon: ClipboardList },
+        { id: "money", label: "Money", icon: Wallet },
       ],
     },
     {
@@ -203,6 +205,8 @@ export function AgencyDashboard({ user, agency, signOut, refreshProfile, navigat
         {section === "listings" && <MyListingsSection />}
 
         {section === "widget" && <WidgetSection tourProducts={tourProducts} />}
+
+        {section === "money" && <AgencyMoney />}
 
         {section === "settings" && (
           <AgencySettings user={user} agency={agency} isOwner={isOwner} onSaved={refreshProfile} />
