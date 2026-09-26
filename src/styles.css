@@ -6886,7 +6886,7 @@ button:disabled {
 .cf-row > label, .cf-row > .cf-field { display: grid; gap: 5px; min-width: 0; font-size: 12px; font-weight: 700; color: var(--d-ink-soft, #5c5f62); }
 .cf-row input, .cf-row select { width: 100%; min-width: 0; box-sizing: border-box; }
 .cf-row input[type=file] { font-size: 13px; padding: 7px 8px; min-height: 38px; background: #fff; border: 1px solid var(--d-line, #ddd); border-radius: 8px; }
-.cf-what > :first-child { flex: 1 1 160px; max-width: 240px; }
+.cf-what > :first-child { flex: 1 1 220px; max-width: 290px; }
 .cf-what > :last-child { flex: 999 1 240px; }
 .cf-price > :first-child { flex: 0 0 auto; }
 .cf-price > label { flex: 1 1 120px; max-width: 200px; }
@@ -7034,3 +7034,12 @@ button:disabled {
 .bk-tour-side div { display: flex; flex-direction: column; font-size: 11.5px; color: #8a8172; text-align: right; }
 .bk-tour-side span { font-size: 16px; font-weight: 700; color: #17323a; font-variant-numeric: tabular-nums; }
 @media (max-width: 720px) { .bk-tour { flex-direction: column; align-items: stretch; } .bk-tour-main { grid-template-columns: 1fr; gap: 8px; } .bk-tour-side { border-left: 0; padding-left: 0; } }
+/* Money out / money in on a cost sheet (046). */
+.cf-kind { margin: 0; justify-self: start; flex-wrap: wrap; }
+.cf-kind button { display: inline-flex; align-items: center; gap: 6px; }
+.cf-kind-hint { font-weight: 500; font-size: 12px; opacity: 0.75; }
+.cf-in { border-color: #9fd3b8; background: #f7fcf9; }
+.cf-dir { display: inline-flex; align-items: center; gap: 2px; margin-right: 6px; padding: 1px 6px 1px 4px; border-radius: 999px; font-size: 11px; font-weight: 800; vertical-align: 1px; }
+.cf-dir-out { background: #f3f3f1; color: #6b6f73; }
+.cf-dir-in { background: #e3f4ea; color: #1f7a52; }
+@media (max-width: 600px) { .cf-kind-hint { display: none; } }

@@ -58,7 +58,7 @@ import {
 } from "./receipts.js";
 import {
   settleDeparture, payoutBlocker, payoutLines, BLOCKER_LABEL, endedBy, runWindow, payDateOnOrAfter, cairoDay,
-  COST_CATEGORIES, COST_LABEL, isMissingSettlementTables,
+  COST_CATEGORIES, INCOME_CATEGORIES, COST_LABEL, LINE_CATEGORIES, lineKind, isMissingSettlementTables,
 } from "./settlement.js";
 import { randomBytes, randomInt } from "node:crypto";
 import { existsSync, readFileSync, statSync } from "node:fs";
@@ -3138,6 +3138,7 @@ const mapCost = (r) => ({
   receiptUrl: isReceiptRef(r.receipt_url) ? null : r.receipt_url || null,
   receiptFile: isReceiptRef(r.receipt_url) ? receiptDisplayName(r.receipt_url) : null,
   receiptKind: receiptKind(r.receipt_url),
+  kind: r.kind === "income" ? "income" : "cost",
   basis: r.basis === "person" ? "person" : "group",
   unitAmount: r.unit_amount != null ? Number(r.unit_amount) : null,
   quantity: r.quantity != null ? Number(r.quantity) : null,
@@ -3254,17 +3255,19 @@ app.get("/api/admin/settlements", requireAuth, requireRole("super_admin", "ops_s
     available: true,
     items: L.departures.map((d) => settlementView(d, L)),
     agencies: Object.fromEntries(L.agencyName),
-    categories: COST_CATEGORIES.map((id) => ({ id, label: COST_LABEL[id] })),
+    categories: LINE_CATEGORIES,
     nextPayDate: payDateOnOrAfter(cairoDay(Date.now())),
   });
 }));
 
-// A cost is priced per group (transport, a guide: `amount` is the total) or
-// per person (meals, entrance fees: `unitAmount` × `quantity` people). The
-// line's total is what the settlement reads either way.
+// A line on the cost sheet is money out (a cost, or a commission we pay) or
+// money in (a shop commission, optional tours sold) — its category says which.
+// It is priced per group (transport, a guide: `amount` is the total) or per
+// person (meals, entrance fees: `unitAmount` × `quantity` people). The line's
+// total is what the settlement reads either way.
 const costSchema = z.object({
-  category: z.enum(COST_CATEGORIES),
-  description: z.string().trim().min(1, "Describe the cost.").max(300),
+  category: z.enum([...COST_CATEGORIES, ...INCOME_CATEGORIES]),
+  description: z.string().trim().min(1, "Describe the line.").max(300),
   basis: z.enum(["group", "person"]).default("group"),
   amount: z.coerce.number().positive("Enter the amount.").optional(),
   unitAmount: z.coerce.number().positive("Enter the price per person.").optional(),
@@ -3278,29 +3281,38 @@ const costSchema = z.object({
 });
 const cents = (n) => Math.round(Number(n) * 100) / 100;
 
-// Write one cost line. Before migration 045 the basis columns don't exist; a
-// per-person line then keeps its breakdown in the description, so nothing
-// entered is lost and the total is right.
+// Write one line. Migrations 045 (per-person pricing) and 046 (kind) may not
+// have run yet: before 045 a per-person line keeps its breakdown in the
+// description; before 046 a commission we pay is saved as "Other", and income
+// is refused — stored as a cost it would be taken off the profit instead.
+async function costColumns(db) {
+  const r = await db.query(`SELECT column_name FROM information_schema.columns WHERE table_name = 'departure_costs' AND table_schema = current_schema()`);
+  return new Set(r.rows.map((x) => x.column_name));
+}
 async function insertCost(db, depId, input, { receipt, agencyId = null, email = null, approved = false }) {
   const person = input.basis === "person";
+  const kind = lineKind(input.category);
   const total = person ? cents(input.unitAmount * input.quantity) : cents(input.amount);
-  const base = [depId, input.category, input.description, total, receipt, agencyId, email];
-  const review = approved ? ", state, approved_amount, reviewed_by, reviewed_at" : "";
-  const reviewVals = approved ? ", 'approved', $4, $7, now()" : "";
-  try {
-    return (await db.query(
-      `INSERT INTO departure_costs (departure_id, category, description, amount, receipt_url, submitted_by_agency_id, submitted_by, basis, unit_amount, quantity${review})
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10${reviewVals}) RETURNING *`,
-      [...base, input.basis, person ? cents(input.unitAmount) : null, person ? input.quantity : null])).rows[0];
-  } catch (e) {
-    if (e?.code !== "42703") throw e;
-    const note = person ? ` — ${CURRENCY_SYMBOL}${cents(input.unitAmount)} × ${input.quantity} people` : "";
-    const legacy = [...base];
-    legacy[2] = `${input.description}${note}`.slice(0, 300);
-    return (await db.query(
-      `INSERT INTO departure_costs (departure_id, category, description, amount, receipt_url, submitted_by_agency_id, submitted_by${review})
-       VALUES ($1, $2, $3, $4, $5, $6, $7${reviewVals}) RETURNING *`, legacy)).rows[0];
+  const has = await costColumns(db);
+  let category = input.category;
+  let description = input.description;
+  if (!has.has("kind")) {
+    if (kind === "income") throw Object.assign(new AppError(503, "Extra income can't be recorded yet — migration 046 has not been applied to this database."), { expose: true });
+    if (category === "commission_paid") { category = "other"; description = `Commission we pay: ${description}`; }
   }
+  const cols = ["departure_id", "category", "description", "amount", "receipt_url", "submitted_by_agency_id", "submitted_by"];
+  const vals = [depId, category, description, total, receipt, agencyId, email];
+  if (has.has("basis")) {
+    cols.push("basis", "unit_amount", "quantity");
+    vals.push(input.basis, person ? cents(input.unitAmount) : null, person ? input.quantity : null);
+  } else if (person) {
+    vals[2] = `${description} — ${CURRENCY_SYMBOL}${cents(input.unitAmount)} × ${input.quantity} people`;
+  }
+  vals[2] = String(vals[2]).slice(0, 300);
+  if (has.has("kind")) { cols.push("kind"); vals.push(kind); }
+  if (approved) { cols.push("state", "approved_amount", "reviewed_by", "reviewed_at"); vals.push("approved", total, email, new Date()); }
+  return (await db.query(
+    `INSERT INTO departure_costs (${cols.join(", ")}) VALUES (${cols.map((_, i) => `$${i + 1}`).join(", ")}) RETURNING *`, vals)).rows[0];
 }
 // A cost line's receipt: a pasted https link, or a file uploaded through
 // POST /api/cost-receipts — which an agency may attach only if it uploaded it.
@@ -3376,7 +3388,7 @@ app.post("/api/admin/settlements/:depId/costs", requireAuth, requireRole("super_
   await departureExists(depId);
   const row = await withSettlements(() =>
     insertCost(pool, depId, input, { receipt: receiptUrlOf(input.receiptUrl, req.user), email: req.user.email || null, approved: true }));
-  await logAudit(req, { action: "settlement.cost_added", entity: "departure", entityId: String(depId), detail: { costId: Number(row.id), category: input.category, amount: Number(row.amount) } });
+  await logAudit(req, { action: "settlement.cost_added", entity: "departure", entityId: String(depId), detail: { costId: Number(row.id), kind: lineKind(input.category), category: input.category, amount: Number(row.amount) } });
   res.status(201).json({ cost: mapCost(row) });
 }));
 
@@ -3393,7 +3405,7 @@ app.post("/api/agency/departures/:depId/costs", requireAuth, requireRole("agency
     if (view.costsFinalAt) throw new AppError(409, "Sawa has closed this cost sheet. Contact Sawa to add a cost.");
     return insertCost(pool, depId, input, { receipt: receiptUrlOf(input.receiptUrl, req.user), agencyId: req.user.agencyId, email: req.user.email || null });
   });
-  await logAudit(req, { action: "settlement.cost_submitted", entity: "departure", entityId: String(depId), detail: { costId: Number(row.id), category: input.category, amount: Number(row.amount) } });
+  await logAudit(req, { action: "settlement.cost_submitted", entity: "departure", entityId: String(depId), detail: { costId: Number(row.id), kind: lineKind(input.category), category: input.category, amount: Number(row.amount) } });
   res.status(201).json({ cost: mapCost(row) });
 }));
 
@@ -3534,7 +3546,7 @@ app.post("/api/admin/payout-runs", requireAuth, requireRole("super_admin", "ops_
       inScope.add(d.id);
       for (const x of v.settlement.shares) {
         entitled.push({ departureId: d.id, agencyId: x.agencyId, amount: x.total,
-          detail: { seats: x.seats, pct: x.pct, share: x.share, adjustments: x.adjustments, revenue: v.settlement.revenue, cost: v.settlement.cost, gross: v.settlement.gross, sawaCut: v.settlement.sawaCut } });
+          detail: { seats: x.seats, pct: x.pct, share: x.share, adjustments: x.adjustments, revenue: v.settlement.revenue, income: v.settlement.income, cost: v.settlement.cost, gross: v.settlement.gross, sawaCut: v.settlement.sawaCut } });
       }
     }
     const alreadyPaid = new Map();
@@ -3604,7 +3616,7 @@ app.get("/api/agency/money", requireAuth, requireRole("agency_owner", "agency_ag
     // agencies' shares, and cost lines only on a date it operates.
     departures.push({
       departure: v.departure, dateLabel: v.dateLabel, operating, operatorName: v.operatorName,
-      revenue: v.settlement.revenue, cost: v.settlement.cost, gross: v.settlement.gross, sawaCut: v.settlement.sawaCut,
+      revenue: v.settlement.revenue, income: v.settlement.income, cost: v.settlement.cost, gross: v.settlement.gross, sawaCut: v.settlement.sawaCut,
       loss: v.settlement.loss, totalSeats: v.settlement.totalSeats,
       mine: mine ? { seats: mine.seats, pct: mine.pct, share: mine.share, adjustments: mine.adjustments, total: mine.total, paidOut: mine.paidOut } : null,
       adjustments: v.adjustments.filter((a) => a.agencyId === me),
@@ -3619,7 +3631,7 @@ app.get("/api/agency/money", requireAuth, requireRole("agency_owner", "agency_ag
     `SELECT t.*, r.pay_date FROM payout_transfers t JOIN payout_runs r ON r.id = t.run_id WHERE t.agency_id = $1 ORDER BY r.pay_date DESC`, [me])).rows
     .map((t) => ({ id: Number(t.id), payDate: isoDate(t.pay_date), amount: Number(t.amount), state: t.state, paidAt: t.paid_at, bankReference: t.bank_reference || null }));
   res.json({ available: true, agencyName: agencyName.get(me) || null, departures, transfers,
-    nextPayDate: payDateOnOrAfter(cairoDay(Date.now())), categories: COST_CATEGORIES.map((id) => ({ id, label: COST_LABEL[id] })) });
+    nextPayDate: payDateOnOrAfter(cairoDay(Date.now())), categories: LINE_CATEGORIES });
 }));
 
 // Admin: archive / unarchive a tour product (platform staff).
