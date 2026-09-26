@@ -272,7 +272,7 @@ function ToursSection({ data, destinations = [], reload, flash }) {
 
   return (
     <>
-      <PageHead title="Tours & Packages" sub="Create and manage the products agencies and travellers can book."
+      <PageHead title="Tours & Packages" sub="Create and manage the products agencies and travelers can book."
         action={
           <div className="head-actions">
             <button className="btn-ghost" onClick={() => setEditor({ type: "day_tour" })}><Plus size={16} />Add tour</button>
@@ -322,7 +322,7 @@ function ArchiveSection({ data, reload, flash }) {
 
   return (
     <>
-      <PageHead title="Archive" sub="Retired and cancelled listings. Nothing here is visible to customers or agencies — restore one to put it back on sale." />
+      <PageHead title="Archive" sub="Retired and canceled listings. Nothing here is visible to customers or agencies — restore one to put it back on sale." />
       <div className="table-wrap">
         <table className="dash-table">
           <thead><tr><th>Name</th><th>Type</th><th>City</th><th>GoAhead</th><th>Break</th><th>Min</th><th></th></tr></thead>
@@ -363,7 +363,7 @@ function DestinationsSection({ destinations, reload, flash }) {
     <>
       <PageHead
         title="Destinations"
-        sub="Cities travellers can book in. Each destination owns its meeting points — tours pick a destination and inherit them."
+        sub="Cities travelers can book in. Each destination owns its meeting points — tours pick a destination and inherit them."
         action={<button className="btn-primary" onClick={() => setEditor({})}><Plus size={16} />Add destination</button>}
       />
       <div className="table-wrap">
@@ -434,7 +434,7 @@ function DestinationEditor({ existing, onClose, onSaved }) {
           <Field label="Destination name"><input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Alexandria" /></Field>
           <label className="dest-toggle">
             <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} />
-            <span>Visible to travellers</span>
+            <span>Visible to travelers</span>
           </label>
           <div className="modal-subhead dest-mp-head"><h3>Meeting points</h3><button type="button" className="btn-ghost sm" onClick={() => setPoints((p) => [...p, { point: "", note: "" }])}><Plus size={14} />Add meeting point</button></div>
           {points.map((p, i) => (
@@ -719,7 +719,7 @@ export function ProductEditor({ type: typeProp, existing, destinations = [], dep
   // the traveller will actually get, resolved through the same functions the
   // server and the calendar use.
   const windowNote = requestWindowError(f.requestMinLeadDays, f.requestMaxHorizonDays)
-    || `Travellers can request from ${minLeadDaysFor({ requestMinLeadDays: f.requestMinLeadDays === "" ? null : Number(f.requestMinLeadDays) })} `
+    || `Travelers can request from ${minLeadDaysFor({ requestMinLeadDays: f.requestMinLeadDays === "" ? null : Number(f.requestMinLeadDays) })} `
       + `to ${maxHorizonDaysFor({ requestMaxHorizonDays: f.requestMaxHorizonDays === "" ? null : Number(f.requestMaxHorizonDays) })} days ahead.`;
 
   const [meetingPoints, setMeetingPoints] = useState(() => {
@@ -810,7 +810,7 @@ export function ProductEditor({ type: typeProp, existing, destinations = [], dep
     for (const r of wantDates) {
       if (!r.date || !r.name.trim() || !(r.email.trim() || r.phone.trim())) {
         setStep(steps.length - 1);
-        return setErr("Each new date needs a date, the first traveller's name, and an email or phone — a date is created by its first booking.");
+        return setErr("Each new date needs a date, the first traveler's name, and an email or phone — a date is created by its first booking.");
       }
     }
     setBusy(true);
@@ -1024,7 +1024,7 @@ export function ProductEditor({ type: typeProp, existing, destinations = [], dep
                   </label>
                 </div>
               </Field>
-              <Field label="Overview" full asDiv><RichText value={overviewHtml} onChange={setOverviewHtml} placeholder="Describe the experience — what makes it special, what travellers will see and do." /></Field>
+              <Field label="Overview" full asDiv><RichText value={overviewHtml} onChange={setOverviewHtml} placeholder="Describe the experience — what makes it special, what travelers will see and do." /></Field>
               <RowList label="What's included" rows={included} setRows={setIncluded} placeholder="e.g. Licensed Egyptologist guide" />
               <RowList label="Not included" rows={notIncluded} setRows={setNotIncluded} placeholder="e.g. Entrance tickets" />
               <RowList label="What to bring" rows={whatToBring} setRows={setWhatToBring} placeholder="e.g. Sun hat, comfortable shoes" />
@@ -1117,7 +1117,7 @@ export function ProductEditor({ type: typeProp, existing, destinations = [], dep
                             const seats = seatsOf(d);
                             const min = Number(d.minSeats || f.minSeats) || 4;
                             const past = new Date(`${d.startDate || d.date}T23:59:59`) < new Date();
-                            const tag = d.status === "cancelled" ? <span className="tag tag-off">Cancelled</span>
+                            const tag = d.status === "cancelled" ? <span className="tag tag-off">Canceled</span>
                               : past ? <span className="tag tag-off">Departed</span>
                               : d.status === "supplier_confirmed" ? <span className="tag tag-on">Confirmed</span>
                               : d.status === "pending_review" ? <span className="tag tag-off">Pending review</span>
@@ -1143,11 +1143,11 @@ export function ProductEditor({ type: typeProp, existing, destinations = [], dep
                 <h3>Create a date</h3>
                 <button type="button" className="btn-ghost sm" onClick={() => setDates((d) => [...d, newDateRow()])}><Plus size={14} />Add date</button>
               </div>
-              <p className="field-hint">A date is created together with its <strong>first booking</strong> — record the traveller it belongs to (bookings that arrive by phone or WhatsApp; email or phone, at least one). Travellers on the website create dates themselves from the itinerary page, so leave this empty unless someone has actually booked. Each date holds up to {f.maxSeats} travellers.</p>
+              <p className="field-hint">A date is created together with its <strong>first booking</strong> — record the traveler it belongs to (bookings that arrive by phone or WhatsApp; email or phone, at least one). Travelers on the website create dates themselves from the itinerary page, so leave this empty unless someone has actually booked. Each date holds up to {f.maxSeats} travelers.</p>
               {dates.map((r, i) => (
                 <div className="date-row" key={i}>
                   <input type="date" value={r.date} onChange={setDateRow(i, "date")} />
-                  <input type="text" placeholder="Traveller name" value={r.name} onChange={setDateRow(i, "name")} />
+                  <input type="text" placeholder="Traveler name" value={r.name} onChange={setDateRow(i, "name")} />
                   <input type="email" placeholder="Email" value={r.email} onChange={setDateRow(i, "email")} />
                   <input type="tel" placeholder="Phone / WhatsApp" value={r.phone} onChange={setDateRow(i, "phone")} />
                   <input type="number" min={1} max={f.maxSeats} title="Seats" value={r.seats} onChange={setDateRow(i, "seats")} />
@@ -1220,7 +1220,7 @@ function PriceTierEditor({ on, setOn, rows, setRows, minSeats, maxSeats, publish
       {!on ? (
         <div className="tier-off">
           <p>
-            Prices slide evenly from <b>{CURRENCY_SYMBOL}{publishedRate || 0}</b> at {minSeats} travellers to{" "}
+            Prices slide evenly from <b>{CURRENCY_SYMBOL}{publishedRate || 0}</b> at {minSeats} travelers to{" "}
             <b>{CURRENCY_SYMBOL}{breakPrice || Math.round((publishedRate || 0) * 0.8)}</b> at {maxSeats}.
           </p>
           <button type="button" className="btn-ghost sm" onClick={enable}>Set a price for each group size</button>
@@ -1230,14 +1230,14 @@ function PriceTierEditor({ on, setOn, rows, setRows, minSeats, maxSeats, publish
           <div className="tier-grid">
             {sizes.map((s) => (
               <label className="tier-cell" key={s}>
-                <span>{s} {s === 1 ? "traveller" : "travellers"}{s === minSeats ? " · GoAhead" : ""}</span>
+                <span>{s} {s === 1 ? "traveler" : "travelers"}{s === minSeats ? " · GoAhead" : ""}</span>
                 <div className="tier-input">
                   <i>{CURRENCY_SYMBOL}</i>
                   <input
                     type="number" min="1" inputMode="numeric"
                     value={priceAt(s)}
                     onChange={(e) => setPriceAt(s, e.target.value)}
-                    aria-label={`Price per person for ${s} travellers`}
+                    aria-label={`Price per person for ${s} travelers`}
                   />
                 </div>
               </label>
@@ -1245,11 +1245,11 @@ function PriceTierEditor({ on, setOn, rows, setRows, minSeats, maxSeats, publish
           </div>
           {rising && (
             <p className="tier-warn" role="alert">
-              The price goes up at {rising.seats} travellers. It has to fall, or stay level, as the group grows — that's the promise on every page of the site.
+              The price goes up at {rising.seats} travelers. It has to fall, or stay level, as the group grows — that's the promise on every page of the site.
             </p>
           )}
           <div className="tier-actions">
-            <span className="tier-note">Per person, {CURRENCY}. A traveller pays the price for the group size their booking reaches.</span>
+            <span className="tier-note">Per person, {CURRENCY}. A traveler pays the price for the group size their booking reaches.</span>
             <button type="button" className="btn-ghost sm" onClick={() => { setOn(false); setRows([]); }}>
               Use the sliding price instead
             </button>
@@ -1319,17 +1319,17 @@ function DateRequestsSection({ data, reload, flash }) {
       const j = await r.json();
       if (!r.ok) throw new Error(j.error || `Could not ${action} this request.`);
       flash(action === "approve"
-        ? `"${dep.route}" on ${fmtDate(dep.startDate || dep.date)} is now open — traveller emailed.`
-        : `Request declined — traveller emailed.`);
+        ? `"${dep.route}" on ${fmtDate(dep.startDate || dep.date)} is now open — traveler emailed.`
+        : `Request declined — traveler emailed.`);
       setDeclining(null); setReason(""); reload();
     } catch (e) { setErr(e.message); } finally { setBusy(""); }
   }
 
   return (
     <>
-      <PageHead title="Date requests" sub="New dates asked for by travellers on the public site and by operators from their dashboard. Nothing shows on the board until you approve it." />
+      <PageHead title="Date requests" sub="New dates asked for by travelers on the public site and by operators from their dashboard. Nothing shows on the board until you approve it." />
       {err && !declining && <div className="auth-error" role="alert">{err}</div>}
-      {!pending.length && <div className="dash-empty">No traveller-requested dates awaiting review right now.</div>}
+      {!pending.length && <div className="dash-empty">No traveler-requested dates awaiting review right now.</div>}
 
       <div className="listing-grid">
         {pending.map((d) => {
@@ -1350,10 +1350,10 @@ function DateRequestsSection({ data, reload, flash }) {
                   <strong>{fmtDate(d.startDate || d.date)}</strong>{d.time ? ` · ${d.time}` : ""} · {d.city}
                 </p>
                 <p className="field-hint"><Clock3 size={12} /> Requested {fmtReceived(seed.createdAt)}
-                  {seed.source === "agency_request" ? <> · by operator <strong>{seed.agency}</strong></> : " · by the traveller"}</p>
+                  {seed.source === "agency_request" ? <> · by operator <strong>{seed.agency}</strong></> : " · by the traveler"}</p>
                 <div className="listing-facts">
                   <span><Users size={13} />{seed.seats || 1} seat{(seed.seats || 1) > 1 ? "s" : ""} pledged · min {d.minSeats} · max {d.maxSeats}</span>
-                  <span><ClipboardList size={13} />{seed.customers || "Traveller"}</span>
+                  <span><ClipboardList size={13} />{seed.customers || "Traveler"}</span>
                 </div>
                 <p className="listing-desc">
                   {seed.customerEmail || "no email"}{seed.customerPhone ? ` · ${seed.customerPhone}` : ""}
@@ -1380,8 +1380,8 @@ function DateRequestsSection({ data, reload, flash }) {
               <h3>Decline "{declining.route}" on {fmtDate(declining.startDate || declining.date)}?</h3>
             </div>
             <div className="modal-body">
-              <p>The traveller is emailed that the date couldn't be opened. A short reason helps them pick another date.</p>
-              <textarea value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Reason (optional, sent to the traveller)" rows={3} />
+              <p>The traveler is emailed that the date couldn't be opened. A short reason helps them pick another date.</p>
+              <textarea value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Reason (optional, sent to the traveler)" rows={3} />
               {err && <div className="auth-error" role="alert">{err}</div>}
               <div className="listing-actions">
                 <button className="btn-ghost" onClick={() => setDeclining(null)}>Keep request</button>
@@ -1693,12 +1693,12 @@ function DeparturesSection({ data, reload, flash }) {
   async function confirm(d) {
     const r = await apiFetch(`/admin/departures/${d.id}/confirm`, { method: "POST" });
     const j = await r.json();
-    if (r.ok) { flash("Departure confirmed — travellers notified."); reload(); } else flash(j.error || "Could not confirm.");
+    if (r.ok) { flash("Departure confirmed — travelers notified."); reload(); } else flash(j.error || "Could not confirm.");
   }
   async function cancel(d) {
-    if (!window.confirm(`Cancel "${d.route}" on ${fmtDate(d.startDate || d.date)}? Travellers with an email will be notified.`)) return;
+    if (!window.confirm(`Cancel "${d.route}" on ${fmtDate(d.startDate || d.date)}? Travelers with an email will be notified.`)) return;
     const r = await apiFetch(`/admin/departures/${d.id}/cancel`, { method: "POST" });
-    if (r.ok) { flash("Departure cancelled."); reload(); }
+    if (r.ok) { flash("Departure canceled."); reload(); }
   }
 
   return (
@@ -1753,7 +1753,7 @@ function DeparturesSection({ data, reload, flash }) {
 
 function StatusTag({ d }) {
   const seats = seatsOf(d), min = d.minSeats || 4;
-  if (d.status === "cancelled") return <span className="tag tag-off">Cancelled</span>;
+  if (d.status === "cancelled") return <span className="tag tag-off">Canceled</span>;
   if (d.status === "supplier_confirmed") return <span className="tag tag-on">GoAhead</span>;
   if (seats >= min) return <span className="tag tag-ready">Ready</span>;
   return <span className="tag">Forming</span>;
@@ -1775,8 +1775,8 @@ function PublishModal({ type, data, onClose, onDone }) {
     e.preventDefault();
     if (!productId) return setErr("Pick a product.");
     if (!date) return setErr("Pick a date.");
-    if (!name.trim()) return setErr("A date is created by its first booking — record the traveller's name.");
-    if (!email.trim() && !phone.trim()) return setErr("Record how to reach the traveller — an email or phone number.");
+    if (!name.trim()) return setErr("A date is created by its first booking — record the traveler's name.");
+    if (!email.trim() && !phone.trim()) return setErr("Record how to reach the traveler — an email or phone number.");
     setBusy(true); setErr("");
     try {
       const body = {
@@ -1797,14 +1797,14 @@ function PublishModal({ type, data, onClose, onDone }) {
         <div className="modal-head"><h2>{pkg ? "Create a package date" : "Create a tour date"}</h2><button className="icon-btn" onClick={onClose}><X size={18} /></button></div>
         <form onSubmit={go}>
           <div className="modal-body">
-            <p className="field-hint">A date is created together with its first booking — use this for bookings that arrive by phone or WhatsApp. Travellers on the website start dates themselves from the itinerary page.</p>
+            <p className="field-hint">A date is created together with its first booking — use this for bookings that arrive by phone or WhatsApp. Travelers on the website start dates themselves from the itinerary page.</p>
             <Field label={pkg ? "Package" : "Tour"} full>
               <select value={productId} onChange={(e) => setProductId(e.target.value)}>
                 {products.map((p) => <option key={p.id} value={p.id}>{p.title}</option>)}
               </select>
             </Field>
             <Field label={pkg ? "Start date" : "Date"} full><input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></Field>
-            <Field label="First traveller" full><input type="text" placeholder="Full name" value={name} onChange={(e) => setName(e.target.value)} /></Field>
+            <Field label="First traveler" full><input type="text" placeholder="Full name" value={name} onChange={(e) => setName(e.target.value)} /></Field>
             <Field label="Email"><input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} /></Field>
             <Field label="Phone / WhatsApp"><input type="tel" placeholder="+20 …" value={phone} onChange={(e) => setPhone(e.target.value)} /></Field>
             <Field label="Seats"><input type="number" min={1} value={seats} onChange={(e) => setSeats(e.target.value)} /></Field>
@@ -1842,11 +1842,11 @@ const BOOKING_FILTERS = [
   { id: "pending", label: "Requests" },
   { id: "confirmed", label: "Confirmed" },
   { id: "paid", label: "Paid" },
-  { id: "cancelled", label: "Cancelled" },
+  { id: "cancelled", label: "Canceled" },
 ];
 function depFillStatus(d) {
   const seats = seatsOf(d), min = Math.max(1, d.minSeats || 4);
-  if (d.status === "cancelled") return { key: "cancelled", label: "Cancelled", tone: "off", seats, min };
+  if (d.status === "cancelled") return { key: "cancelled", label: "Canceled", tone: "off", seats, min };
   if (d.status === "supplier_confirmed") return { key: "confirmed", label: "Confirmed · running", tone: "on", seats, min };
   if (seats >= min) return { key: "ready", label: "Ready to confirm", tone: "ready", seats, min };
   return { key: "forming", label: `${min - seats} more to GoAhead`, tone: "warn", seats, min };
@@ -1926,7 +1926,7 @@ function BookingsSection({ data, stats }) {
 
   return (
     <>
-      <PageHead title="Bookings" sub="Every seat booked across agencies and direct travellers."
+      <PageHead title="Bookings" sub="Every seat booked across agencies and direct travelers."
         action={
           <div className="head-actions">
             <div className="search-box"><Search size={16} /><input placeholder="Search name, email, route…" value={q} onChange={(e) => setQ(e.target.value)} /></div>
@@ -1939,9 +1939,9 @@ function BookingsSection({ data, stats }) {
         <>
           <div className="bk-summary">
             <div className="bk-kpi"><span>Bookings</span><strong>{bookingCount}</strong><i>{counts.pending || 0} awaiting confirmation</i></div>
-            <div className="bk-kpi"><span>Seats booked</span><strong>{totals.seats}</strong><i>excludes cancelled</i></div>
+            <div className="bk-kpi"><span>Seats booked</span><strong>{totals.seats}</strong><i>excludes canceled</i></div>
             <div className="bk-kpi"><span>Booking value</span><strong>{money(totals.revenue)}</strong><i>{money(totals.deposits)} deposits due</i></div>
-            <div className="bk-kpi"><span>Confirmed</span><strong>{counts.confirmed || 0}</strong><i>{counts.paid || 0} paid · {cancelledTotal} cancelled</i></div>
+            <div className="bk-kpi"><span>Confirmed</span><strong>{counts.confirmed || 0}</strong><i>{counts.paid || 0} paid · {cancelledTotal} canceled</i></div>
           </div>
           {truncated && (
             <p className="bk-trunc" role="status">
@@ -2034,17 +2034,17 @@ function BookingDrawer({ booking: b, onClose, onStatus }) {
             </div>
           </div>
           {b.departureStatus === "pending_review" && (
-            <p className="field-hint">This date was requested by the traveller and is awaiting review. Approve or decline it under <strong>Date requests</strong> — that opens the date and updates this booking.</p>
+            <p className="field-hint">This date was requested by the traveler and is awaiting review. Approve or decline it under <strong>Date requests</strong> — that opens the date and updates this booking.</p>
           )}
           <dl className="drawer-dl">
             <div><dt>Tour</dt><dd>{b.route}{b.type === "package" && <span className="tag tag-pkg">Package</span>}</dd></div>
             <div><dt>Date</dt><dd>{fmtDate(b.date)}{b.endDate ? ` – ${fmtDate(b.endDate)}` : ""}{b.time ? ` · ${b.time}` : ""}</dd></div>
             <div><dt>City</dt><dd>{b.city || "—"}</dd></div>
-            <div><dt>Travellers</dt><dd>{b.seats} {b.seats === 1 ? "person" : "people"}</dd></div>
+            <div><dt>Travelers</dt><dd>{b.seats} {b.seats === 1 ? "person" : "people"}</dd></div>
             <div><dt>Lead name</dt><dd>{b.customers || "—"}</dd></div>
             <div><dt>Email</dt><dd>{b.customerEmail || "—"}</dd></div>
             <div><dt>Phone</dt><dd>{b.customerPhone || "—"}</dd></div>
-            <div><dt>Booked by</dt><dd>{b.source === "public" ? "Direct traveller" : b.agency}</dd></div>
+            <div><dt>Booked by</dt><dd>{b.source === "public" ? "Direct traveler" : b.agency}</dd></div>
             {b.roomingType && <div><dt>Room</dt><dd>{b.roomingType}{b.accommodationTierName ? ` · ${b.accommodationTierName}` : ""}</dd></div>}
           </dl>
           <div className="drawer-money">
@@ -2207,13 +2207,13 @@ function OperatorRecord({ agency, onSaved }) {
   return (
     <form className="op-record" onSubmit={save}>
       <div className="op-grid">
-        <label className="field"><span>Tourism licence no.</span>
-          <input value={f.tourismLicenseNo} onChange={set("tourismLicenseNo")} placeholder="Ministry licence" />
+        <label className="field"><span>Tourism license no.</span>
+          <input value={f.tourismLicenseNo} onChange={set("tourismLicenseNo")} placeholder="Ministry license" />
           <em className="field-hint">Never published. Used only to confirm registration.</em>
         </label>
         <label className="field"><span>Registered (year)</span>
           <input value={f.tourismLicenseYear} onChange={set("tourismLicenseYear")} inputMode="numeric" placeholder="e.g. 2011" />
-          <em className="field-hint">An Egyptian tourism licence has no expiry.</em>
+          <em className="field-hint">An Egyptian tourism license has no expiry.</em>
         </label>
         <label className="field"><span>ETAA registration no.</span>
           <input value={f.etaaRegistrationNo} onChange={set("etaaRegistrationNo")} />

@@ -341,7 +341,7 @@ export function CostForm({ categories, onSubmit, submitLabel, travellers = null 
           <label>{income ? "Amount received" : "Total for the group"} ({CURRENCY_SYMBOL})<input type="number" min="0.01" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} /></label>
         )}
       </div>
-      {person && travellers != null && <p className="field-hint cf-hint">{travellers} traveller{travellers === 1 ? "" : "s"} booked on this date — change the number if it differs.</p>}
+      {person && travellers != null && <p className="field-hint cf-hint">{travellers} traveler{travellers === 1 ? "" : "s"} booked on this date — change the number if it differs.</p>}
       <div className="cf-row cf-receipt">
         <label>{income ? "Proof (statement, invoice — optional)" : "Receipt (PDF or photo)"}
           <input key={fileKey} type="file" accept="application/pdf,image/jpeg,image/png,image/webp,image/heic,image/heif"

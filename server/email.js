@@ -492,14 +492,14 @@ export function bookingConfirmationEmail({ to, customerName, route, dateLabel, s
   // U01 — the partner running this date so far. Until bookings close it is
   // whichever partner has the most confirmed travellers on it, so it can change.
   const operatorName = operator?.name ? String(operator.name) : "";
-  const operatorNote = "Until bookings close, the date is run by the partner with the most confirmed travellers on it, so this can change.";
+  const operatorNote = "Until bookings close, the date is run by the partner with the most confirmed travelers on it, so this can change.";
   const text =
     `Hi ${customerName || ""},\n\nWe've recorded your booking for ${route} on ${dateLabel}.\n` +
     `Seats: ${seats}\n${bookingCode ? `Booking code: ${bookingCode}\n` : ""}` +
     (operatorName ? `Run by: ${operatorName}${operator.verified ? " (verified operator)" : ""}\n${operatorNote}\n` : "") +
     `Deposit at GoAhead: ${CURRENCY_SYMBOL}${depositDue} ${CURRENCY}\nBalance: ${CURRENCY_SYMBOL}${balanceDue} ${CURRENCY} (due ${balanceDueDate})\n\n` +
     `Nothing has been charged. Your seat is held free — the deposit only falls due once this ` +
-    `date reaches its minimum travellers (GoAhead), and we'll email you when that happens.` +
+    `date reaches its minimum travelers (GoAhead), and we'll email you when that happens.` +
     (manageUrl
       ? `\n\nCheck your date or cancel your seat, free, any time before GoAhead:\n${manageUrl}`
       : "") +
@@ -521,7 +521,7 @@ export function bookingConfirmationEmail({ to, customerName, route, dateLabel, s
         ${row("Balance:", `${CURRENCY_SYMBOL}${esc(balanceDue)} ${CURRENCY}`)} <span style="color:${C.muted}">(due ${esc(balanceDueDate)})</span>`
      )}
      ${operatorName ? note(esc(operatorNote)) : ""}
-     ${note(`<strong style="color:${C.ink}">Nothing has been charged.</strong> Your seat is held free — the deposit only falls due once this date reaches its minimum travellers, and we'll email you when it's GoAhead.`)}
+     ${note(`<strong style="color:${C.ink}">Nothing has been charged.</strong> Your seat is held free — the deposit only falls due once this date reaches its minimum travelers, and we'll email you when it's GoAhead.`)}
      ${manageUrl ? `${button(manageUrl, "Check or cancel your booking")}` : ""}
      <p style="margin:0 0 8px;font-family:${SANS};font-size:13px;font-weight:700;color:${C.ink}">Cancellation</p>
      ${note(esc(CANCELLATION_BEFORE_GOAHEAD))}
@@ -555,16 +555,16 @@ export function departureRequestReceivedEmail({ to, customerName, route, dateLab
 export function departureRequestApprovedEmail({ to, customerName, route, dateLabel, bookingCode }) {
   const subject = `Your date is live — ${route} on ${dateLabel}`;
   const text =
-    `Hi ${customerName || ""},\n\nGood news — your requested departure for ${route} on ${dateLabel} is approved and now open for other travellers to join.\n` +
+    `Hi ${customerName || ""},\n\nGood news — your requested departure for ${route} on ${dateLabel} is approved and now open for other travelers to join.\n` +
     `${bookingCode ? `Booking code: ${bookingCode}\n` : ""}` +
-    `It's confirmed to run (GoAhead) once it reaches its minimum travellers — share the date to fill it faster.`;
+    `It's confirmed to run (GoAhead) once it reaches its minimum travelers — share the date to fill it faster.`;
   const html = shell(
     "Your requested date is live",
-    `<p style="margin:0 0 20px">Good news — your requested departure for <strong>${esc(route)}</strong> on ${esc(dateLabel)} is <strong>approved</strong> and now open for other travellers to join.</p>
+    `<p style="margin:0 0 20px">Good news — your requested departure for <strong>${esc(route)}</strong> on ${esc(dateLabel)} is <strong>approved</strong> and now open for other travelers to join.</p>
      ${bookingCode ? panel(row("Booking code:", esc(bookingCode))) : ""}
      ${button(`${APP_URL}/departures`, "See your departure")}
-     ${note("It's confirmed to run (GoAhead) once it reaches its minimum travellers — share the date to fill it faster.")}`,
-    { eyebrow: "Date approved", preheader: `${route} on ${dateLabel} is open for travellers to join` }
+     ${note("It's confirmed to run (GoAhead) once it reaches its minimum travelers — share the date to fill it faster.")}`,
+    { eyebrow: "Date approved", preheader: `${route} on ${dateLabel} is open for travelers to join` }
   );
   return { to, subject, html, text, kind: "departure_request_approved" };
 }
@@ -573,12 +573,12 @@ export function departureRequestDeclinedEmail({ to, customerName, route, dateLab
   const subject = `About your requested date — ${route}`;
   const text =
     `Hi ${customerName || ""},\n\nWe couldn't open your requested departure for ${route} on ${dateLabel}.` +
-    `${reason ? `\nReason: ${reason}` : ""}\n\nNothing was charged. Browse other departures at ${APP_URL}/departures — nearby dates for the same tour often need just a few more travellers.`;
+    `${reason ? `\nReason: ${reason}` : ""}\n\nNothing was charged. Browse other departures at ${APP_URL}/departures — nearby dates for the same tour often need just a few more travelers.`;
   const html = shell(
     "We couldn't open this date",
     `<p style="margin:0 0 20px">We couldn't open your requested departure for <strong>${esc(route)}</strong> on ${esc(dateLabel)}.</p>
      ${reason ? panel(`<strong style="color:${C.alert}">Why</strong><br/>${esc(reason).replace(/\n/g, "<br/>")}`, { tone: "alert" }) : ""}
-     <p style="margin:0 0 4px">Nearby dates for the same tour often need just a few more travellers.</p>
+     <p style="margin:0 0 4px">Nearby dates for the same tour often need just a few more travelers.</p>
      ${button(`${APP_URL}/departures`, "Browse open departures")}
      ${note("<strong>Nothing was charged.</strong> No seat was held and no payment was taken at any point.")}`,
     { eyebrow: "Date not opened", preheader: `We couldn't open ${dateLabel} — nothing was charged` }
@@ -612,7 +612,7 @@ export function goAheadPaymentLinkEmail({ to, payload }) {
     `${p.route}\n${p.date}\n\n`
     + `Confirmed with ${p.seatsConfirmed} of ${p.minSeats ?? "?"} seats.\n`
     + `Operator: ${p.operator || "NOT RECORDED"}${p.operatorContact ? ` (${p.operatorContact})` : ""}\n\n`
-    + `Travellers:\n${rows}\n\n`
+    + `Travelers:\n${rows}\n\n`
     + `Total deposits due: ${money(p.depositTotal)}\n`
     + (p.portalLink ? `\nDeparture: ${p.portalLink}\n` : "")
     // Never silently. A missing operator or an uncaptured total changes what
@@ -644,13 +644,13 @@ export function opsNewBookingEmail({ to, isRequest, route, dateLabel, seats, sea
   const text =
     `${what}\n\n${route}\n${dateLabel}\n\n`
     + (bookedBy ? `Booked by: ${bookedBy} (operator dashboard)\n` : "")
-    + `Traveller: ${customerName || "(no name)"}\n`
+    + `Traveler: ${customerName || "(no name)"}\n`
     + `Email: ${customerEmail || "(none)"}\n`
     + `Phone: ${customerPhone || "(none)"}\n`
     + `Seats: ${seats}${bookingCode ? ` · booking ${bookingCode}` : ""}\n`
     + (note ? `Note: ${note}\n` : "")
     + (isRequest
-      ? `\nThis date is not open yet. Approve or decline it under Date requests — ${bookedBy ? "the operator sees it as under review" : "the traveller has been told it is under review"}.\n`
+      ? `\nThis date is not open yet. Approve or decline it under Date requests — ${bookedBy ? "the operator sees it as under review" : "the traveler has been told it is under review"}.\n`
       : `\nSeats on this date now: ${seatsNow ?? "?"} of ${minSeats ?? "?"} needed for GoAhead.\n`)
     + (portalLink ? `\n${portalLink}\n` : "");
   return { to, subject, text, html: `<pre style="font:14px/1.5 ui-monospace,monospace">${
@@ -696,14 +696,14 @@ export function goAheadEmail({ to, route, dateLabel, operator = null }) {
   // not at GoAhead, so the email says it can still change until then.
   const operatorName = operator?.name ? String(operator.name) : "";
   const handover = operatorName
-    ? `${operatorName}${operator.verified ? " (verified operator)" : ""} is running this date and has been notified; they are confirming the guide and vehicle. Until bookings close, the date can pass to another partner if they bring more confirmed travellers.`
+    ? `${operatorName}${operator.verified ? " (verified operator)" : ""} is running this date and has been notified; they are confirming the guide and vehicle. Until bookings close, the date can pass to another partner if they bring more confirmed travelers.`
     : "Your operator has been notified and is confirming the guide and vehicle.";
-  const text = `Good news — ${route} on ${dateLabel} has reached its minimum travellers and is confirmed to run (GoAhead).\n\n${handover} We'll be in touch with your joining details and anything still outstanding on payment.`;
+  const text = `Good news — ${route} on ${dateLabel} has reached its minimum travelers and is confirmed to run (GoAhead).\n\n${handover} We'll be in touch with your joining details and anything still outstanding on payment.`;
   // The GoAhead is the whole promise the brand is built on, so this is the one
   // email that gets the gold treatment rather than the standard paper panel.
   const html = shell(
     "Your tour is confirmed",
-    `<p style="margin:0 0 20px"><strong>${esc(route)}</strong> on ${esc(dateLabel)} has reached its minimum travellers.</p>
+    `<p style="margin:0 0 20px"><strong>${esc(route)}</strong> on ${esc(dateLabel)} has reached its minimum travelers.</p>
      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:0 0 22px">
        <tr>
          <td style="background:${C.teal};border-radius:14px;padding:22px 24px;text-align:center">
@@ -790,7 +790,7 @@ export function listingApprovedEmail({ to, fullName, title }) {
   const subject = `Approved: "${title}" is now live on Sawa`;
   const text =
     `Hi ${fullName || ""},\n\nGood news — your tour listing "${title}" has been reviewed and approved. ` +
-    `It's now live on Sawa and open for travellers to book.\n\nManage it any time at ${APP_URL}/agency`;
+    `It's now live on Sawa and open for travelers to book.\n\nManage it any time at ${APP_URL}/agency`;
   const html = shell(
     "Your listing is approved",
     `<p style="margin:0 0 20px">Good news — your tour listing <strong>&ldquo;${esc(title)}&rdquo;</strong> has been reviewed and <strong>approved</strong>. It's now live on Sawa and open for bookings.</p>
@@ -839,7 +839,7 @@ export function operatorApplicationText(app) {
     `City / base: ${app.city}`,
     `Email: ${app.email}`,
     `WhatsApp / phone: ${app.phone || "—"}`,
-    `Tourism licence: ${app.licence}`,
+    `Tourism license: ${app.licence}`,
     `Regions: ${app.regions || "—"}`,
     "",
     "About their tours:",
@@ -854,7 +854,7 @@ const applicationRows = (app) => `
      ${row("City / base:", esc(app.city))}<br/>
      ${row("Email:", esc(app.email))}<br/>
      ${row("WhatsApp / phone:", esc(app.phone || "—"))}<br/>
-     ${row("Tourism licence:", esc(app.licence))}<br/>
+     ${row("Tourism license:", esc(app.licence))}<br/>
      ${row("Regions:", esc(app.regions || "—"))}`
   )}
   <p style="margin:0 0 6px;font-size:14px;font-weight:700;color:${C.ink}">About their tours</p>
@@ -875,12 +875,12 @@ export function operatorApplicationReceiptEmail({ to, reference, ...app }) {
   const subject = `We've got your Sawa operator application (${reference})`;
   const text =
     `Hi ${app.contactName || ""},\n\nThanks — we've received your application to list on Sawa Tours. ` +
-    `Your reference is ${reference}. We verify licences with the Ministry of Tourism & Antiquities and ` +
+    `Your reference is ${reference}. We verify licenses with the Ministry of Tourism & Antiquities and ` +
     `usually come back within 2–4 business days.\n\nHere's what you sent us:\n\n${operatorApplicationText(app)}\n\n` +
     `If anything is wrong, just reply to this email.`;
   const html = shell(
     "Application received",
-    `<p style="margin:0 0 20px">Thanks — we've received your application to list on Sawa Tours. We verify licences with the Ministry of Tourism &amp; Antiquities and usually come back within <strong>2&ndash;4 business days</strong>.</p>
+    `<p style="margin:0 0 20px">Thanks — we've received your application to list on Sawa Tours. We verify licenses with the Ministry of Tourism &amp; Antiquities and usually come back within <strong>2&ndash;4 business days</strong>.</p>
      <p style="margin:0 0 6px;font-size:14px;font-weight:700;color:${C.ink}">Here's what you sent us</p>
      ${applicationRows(app)}
      ${note("If anything is wrong, just reply to this email and we'll correct it.")}`,
@@ -891,13 +891,13 @@ export function operatorApplicationReceiptEmail({ to, reference, ...app }) {
 
 export function cancellationEmail({ to, route, dateLabel }) {
   const subject = `Cancellation — ${route}`;
-  const text = `This confirms your booking for ${route} on ${dateLabel} has been cancelled.`;
+  const text = `This confirms your booking for ${route} on ${dateLabel} has been canceled.`;
   const html = shell(
-    "Booking cancelled",
-    `<p style="margin:0 0 20px">This confirms your booking for <strong>${esc(route)}</strong> on ${esc(dateLabel)} has been cancelled.</p>
+    "Booking canceled",
+    `<p style="margin:0 0 20px">This confirms your booking for <strong>${esc(route)}</strong> on ${esc(dateLabel)} has been canceled.</p>
      ${button(`${APP_URL}/departures`, "Find another departure")}
      ${note("If you were charged anything for this booking, it is refunded in full. If this cancellation wasn't expected, reply to this email and we'll look into it.")}`,
-    { eyebrow: "Cancelled", preheader: `Your booking for ${route} on ${dateLabel} has been cancelled` }
+    { eyebrow: "Canceled", preheader: `Your booking for ${route} on ${dateLabel} has been canceled` }
   );
   return { to, subject, html, text, kind: "cancellation" };
 }

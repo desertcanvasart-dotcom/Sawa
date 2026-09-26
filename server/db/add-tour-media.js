@@ -40,7 +40,7 @@ const MAP = [
     itinerary: [
       { title: "Catacombs of Kom el-Shoqafa", description: "Descend into the largest Roman-era burial site in Egypt, blending Egyptian and Greco-Roman art." },
       { title: "Pompey's Pillar & the Serapeum", description: "Stand beneath the towering granite column of the ancient acropolis." },
-      { title: "The Bibliotheca Alexandrina", description: "Visit the modern library that revives the legendary centre of learning." },
+      { title: "The Bibliotheca Alexandrina", description: "Visit the modern library that revives the legendary center of learning." },
       { title: "The Corniche & Qaitbay", description: "Drive the Mediterranean seafront past the fort built on the site of the ancient lighthouse." },
     ],
   },
@@ -79,7 +79,7 @@ const MAP = [
       { title: "Valley of the Kings", description: "Enter the painted tombs of the New Kingdom pharaohs." },
       { title: "Valley of the Queens", description: "Visit the tombs of royal wives and princes, including the finest painted chambers." },
       { title: "Deir el-Medina", description: "Walk the village of the artisans who built the royal tombs." },
-      { title: "Medinet Habu", description: "End at the vivid mortuary temple of Ramses III, still bright with colour." },
+      { title: "Medinet Habu", description: "End at the vivid mortuary temple of Ramses III, still bright with color." },
     ],
   },
   {
@@ -95,7 +95,7 @@ const MAP = [
     frag: "luxor_to_aswan_esna_edfu_kom_omb", key: "esna-edfu-komombo",
     folders: ["esna/esna-temple", "edfu/edfu-temple", "kom-ombo/kom-ombo-temple", "aswan/aswan-nile-river"],
     itinerary: [
-      { title: "Esna — Temple of Khnum", description: "Visit the temple sunk below the modern town, its ceiling freshly cleaned to original colour." },
+      { title: "Esna — Temple of Khnum", description: "Visit the temple sunk below the modern town, its ceiling freshly cleaned to original color." },
       { title: "Edfu — Temple of Horus", description: "Continue to the great falcon temple, the best preserved in Egypt." },
       { title: "Kom Ombo", description: "Finish at the double temple of Sobek and Horus above the Nile." },
     ],
@@ -104,7 +104,7 @@ const MAP = [
     frag: "dendera_abydos", key: "dendera-abydos",
     folders: ["dendera/dendera-temple", "abydos/abydos-temple"],
     itinerary: [
-      { title: "Dendera — Temple of Hathor", description: "Explore the temple famous for its astronomical ceiling and well-preserved colour." },
+      { title: "Dendera — Temple of Hathor", description: "Explore the temple famous for its astronomical ceiling and well-preserved color." },
       { title: "Abydos — Temple of Seti I", description: "See the precise relief carving and the famous king list of Abydos." },
       { title: "The road north of Luxor", description: "Travel through the farmland of the Nile valley to these far temples." },
     ],

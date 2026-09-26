@@ -84,16 +84,16 @@ export function cancelDeparture(departureId) {
 // Returns true when the outcome is clean, so a caller can exit non-zero.
 export function reportNotifications({ intended, sent, context, log = console.log, error = console.error }) {
   if (intended === 0) {
-    log(`${context}: no travellers to notify (nobody held a seat with an email address)`);
+    log(`${context}: no travelers to notify (nobody held a seat with an email address)`);
     return true;
   }
   if (sent === intended) {
-    log(`${context}: ${sent} of ${intended} traveller(s) notified`);
+    log(`${context}: ${sent} of ${intended} traveler(s) notified`);
     return true;
   }
   error(
-    `${context}: NOTIFICATION SHORTFALL — ${sent} of ${intended} traveller(s) reached. `
-    + `${intended - sent} person(s) were told nothing about a departure that was cancelled under them.`
+    `${context}: NOTIFICATION SHORTFALL — ${sent} of ${intended} traveler(s) reached. `
+    + `${intended - sent} person(s) were told nothing about a departure that was canceled under them.`
   );
   return false;
 }

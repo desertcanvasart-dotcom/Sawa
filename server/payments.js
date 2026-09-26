@@ -173,7 +173,7 @@ export const STAGE_LABEL = {
   deposit_paid: "Deposit paid",
   balance_link_needed: "Balance link needed",
   paid_in_full: "Paid in full",
-  cancelled: "Cancelled",
+  cancelled: "Canceled",
 };
 
 // A pasted link must be a real https URL. Tab is the provider, but its link

@@ -35,7 +35,7 @@ export function AgencyMoney() {
 
   return (
     <>
-      <div className="dash-head"><div><h1>Money</h1><p>Your share of every departure your travellers joined, and your Wednesday payouts.</p></div></div>
+      <div className="dash-head"><div><h1>Money</h1><p>Your share of every departure your travelers joined, and your Wednesday payouts.</p></div></div>
       {err && <div className="auth-error">{err}</div>}
       {data && !data.available && <div className="dash-card pay-off"><strong>Payouts aren't switched on yet.</strong><p>Sawa is setting this up — your figures will appear here.</p></div>}
       {data?.available && (

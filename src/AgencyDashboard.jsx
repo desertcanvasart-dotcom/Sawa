@@ -149,10 +149,10 @@ export function AgencyDashboard({ user, agency, signOut, refreshProfile, navigat
               <Kpi icon={ClipboardList} label="Your bookings" value={stats.bookings} foot={`${stats.seats} seats total`} />
               <Kpi icon={ShieldCheck} label="Confirmed dates" value={stats.confirmed} foot="GoAhead — running" accent />
               <Kpi icon={CalendarDays} label="Dates joined" value={stats.departures} foot="across all tours" />
-              <Kpi icon={AlertTriangle} label="Still forming" value={stats.needsMore.length} foot="need more travellers" />
+              <Kpi icon={AlertTriangle} label="Still forming" value={stats.needsMore.length} foot="need more travelers" />
             </div>
             <div className="dash-card">
-              <div className="dash-card-head"><h2>Dates still forming</h2><button className="link-btn" onClick={() => setSection("book")}>Add travellers <ArrowUpRight size={14} /></button></div>
+              <div className="dash-card-head"><h2>Dates still forming</h2><button className="link-btn" onClick={() => setSection("book")}>Add travelers <ArrowUpRight size={14} /></button></div>
               <div className="mini-list">
                 {stats.needsMore.slice(0, 6).map((d) => {
                   const seats = seatsOf(d), min = d.minSeats || 4;
@@ -190,7 +190,7 @@ export function AgencyDashboard({ user, agency, signOut, refreshProfile, navigat
                       <td>{money(r.bookingTotal)}</td>
                       <td>{money(r.depositDue)}</td>
                       <td>{r.status === "cancelled" || r.departure.status === "cancelled"
-                        ? <span className="tag tag-off">Cancelled</span>
+                        ? <span className="tag tag-off">Canceled</span>
                         : r.departure.status === "supplier_confirmed"
                           ? <span className="tag tag-on">Confirmed</span>
                           : isGoAheadDeparture(r.departure)
@@ -384,7 +384,7 @@ function BookTours({ tourProducts, departures, agencyId, agencyName, agencyPax =
           description squeezed the controls until "Day tours" wrapped onto two
           lines inside its pill, and the two controls sat at different heights. */}
       <div className="dash-head">
-        <div><h1>Book seats</h1><p>Browse tours and packages, open one to see full details, then add your travellers.</p></div>
+        <div><h1>Book seats</h1><p>Browse tours and packages, open one to see full details, then add your travelers.</p></div>
       </div>
 
       <div className="catalog-toolbar">
@@ -561,7 +561,7 @@ function TourBooking({ product, agencyId, agencyName, agencyPax = 0, onBack, onR
                 })}
               </ul>
             ) : (
-              <p className="muted-line">No dates scheduled yet. Request one in the booking panel and it opens for other travellers to join.</p>
+              <p className="muted-line">No dates scheduled yet. Request one in the booking panel and it opens for other travelers to join.</p>
             )}
           </div>
 
@@ -700,7 +700,7 @@ function TourBooking({ product, agencyId, agencyName, agencyPax = 0, onBack, onR
               </div>
 
               <div className="tb-summary">
-                <div className="tb-sum-row"><span>{CURRENCY_SYMBOL}{pp} × {nSeats} traveller{nSeats > 1 ? "s" : ""}</span><b>{CURRENCY_SYMBOL}{total}</b></div>
+                <div className="tb-sum-row"><span>{CURRENCY_SYMBOL}{pp} × {nSeats} traveler{nSeats > 1 ? "s" : ""}</span><b>{CURRENCY_SYMBOL}{total}</b></div>
                 <div className="tb-sum-row tb-sum-key"><span>Deposit at GoAhead ({depositPct}%)</span><b>{CURRENCY_SYMBOL}{deposit}</b></div>
                 <div className="tb-sum-row"><span>Balance</span><b>{CURRENCY_SYMBOL}{balance}</b></div>
                 <p className="tb-sum-note">Deposit falls due once the date reaches GoAhead. Balance due {balanceDue}.</p>
@@ -898,7 +898,7 @@ function CancelButton({ pledgeId, label, confirmText, onDone }) {
   }
   return (
     <>
-      <button type="button" className="link-btn link-danger" onClick={run} disabled={busy}>{busy ? "Cancelling…" : label}</button>
+      <button type="button" className="link-btn link-danger" onClick={run} disabled={busy}>{busy ? "Canceling…" : label}</button>
       {err && <div className="sub cancel-err" role="alert">{err}</div>}
     </>
   );
@@ -1058,7 +1058,7 @@ function WidgetSection({ tourProducts = [] }) {
               <h2>Website banner <span className="field-hint" style={{ fontWeight: 500 }}>· opens sawa.tours</span></h2>
               <button className="btn-ghost sm" onClick={() => copy(brandSnippet, "brand")}><Copy size={14} />{copied === "brand" ? "Copied!" : "Copy code"}</button>
             </div>
-            <p className="field-hint">Paste anywhere — your website, a WordPress “Custom HTML” block, or hand it to your designer or an AI website builder. It matches your site's colours automatically.</p>
+            <p className="field-hint">Paste anywhere — your website, a WordPress “Custom HTML” block, or hand it to your designer or an AI website builder. It matches your site's colors automatically.</p>
             <textarea className="embed-snippet" readOnly rows={5} value={brandSnippet} onFocus={(e) => e.target.select()} />
           </div>
 

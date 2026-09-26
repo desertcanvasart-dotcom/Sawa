@@ -23,7 +23,7 @@ test("the booking confirmation names the operator, and says it can change until 
   for (const part of [mail.html, mail.text]) {
     assert.match(part, /Run by:/);
     assert.match(part, /Capital Travel Service/);
-    assert.match(part, /Until bookings close, the date is run by the partner with the most confirmed travellers/);
+    assert.match(part, /Until bookings close, the date is run by the partner with the most confirmed travelers/);
   }
   assert.match(mail.text, /\(verified operator\)/);
 });

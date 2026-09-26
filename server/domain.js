@@ -62,11 +62,11 @@ export function capacityError(minSeats, maxSeats) {
   const max = Number(maxSeats);
   if (!Number.isInteger(min)) return "Minimum group size must be a whole number.";
   if (min < MIN_GROUP_SIZE) {
-    return `Minimum group size is ${MIN_GROUP_SIZE} travellers — that is what the booking conditions promise a departure confirms at. Set ${min} higher, or change the terms first.`;
+    return `Minimum group size is ${MIN_GROUP_SIZE} travelers — that is what the booking conditions promise a departure confirms at. Set ${min} higher, or change the terms first.`;
   }
   if (!Number.isInteger(max) || max < 1) return "Maximum group size must be a whole number of at least 1.";
   if (max > MAX_GROUP_SIZE) {
-    return `Maximum group size is ${MAX_GROUP_SIZE} travellers — that is the limit stated in the booking conditions. Set ${max} lower, or change the terms first.`;
+    return `Maximum group size is ${MAX_GROUP_SIZE} travelers — that is the limit stated in the booking conditions. Set ${max} lower, or change the terms first.`;
   }
   if (max < min) return `Maximum group size (${max}) cannot be below the minimum (${min}).`;
   return null;
@@ -103,7 +103,7 @@ export function validatePriceTiers(raw, { minSeats, maxSeats } = {}) {
     const price = Number(t?.price);
     if (!Number.isInteger(seats)) return { error: `Group size "${t?.seats}" must be a whole number.` };
     if (seats < min || seats > max) return { error: `Group size ${seats} is outside this tour's ${min}–${max} range.` };
-    if (!Number.isFinite(price) || price <= 0) return { error: `Price for ${seats} travellers must be greater than zero.` };
+    if (!Number.isFinite(price) || price <= 0) return { error: `Price for ${seats} travelers must be greater than zero.` };
     if (rows.some((r) => r.seats === seats)) return { error: `Group size ${seats} appears twice.` };
     rows.push({ seats, price: Math.round(price) });
   }
@@ -114,13 +114,13 @@ export function validatePriceTiers(raw, { minSeats, maxSeats } = {}) {
   // recruited someone else specifically to bring the price down.
   for (let i = 1; i < rows.length; i += 1) {
     if (rows[i].price > rows[i - 1].price) {
-      return { error: `Price rises from ${rows[i - 1].seats} to ${rows[i].seats} travellers. It must never go up as the group grows.` };
+      return { error: `Price rises from ${rows[i - 1].seats} to ${rows[i].seats} travelers. It must never go up as the group grows.` };
     }
   }
   // Without a row at the minimum there is no defined GoAhead price, and the
   // first booking would silently pay a larger group's rate.
   if (rows[0].seats !== min) {
-    return { error: `The table must start at ${min} travellers — that is the group size a date confirms at.` };
+    return { error: `The table must start at ${min} travelers — that is the group size a date confirms at.` };
   }
   return { tiers: rows };
 }
@@ -362,8 +362,8 @@ export function bookingLookupState({ departureStatus, pledgeStatus, seatsBooked 
 }
 
 const BOOKING_STATE_LABEL = {
-  date_cancelled: "Date cancelled",
-  booking_cancelled: "Booking cancelled",
+  date_cancelled: "Date canceled",
+  booking_cancelled: "Booking canceled",
   confirmed: "Confirmed — GoAhead",
   under_review: "Under review",
   forming: "Forming",
@@ -378,7 +378,7 @@ function bookingStateNote(state, goAhead) {
       return `This date didn't reach the ${numberWord(goAhead)} travelers it needed, so it isn't running. `
         + "That's the GoAhead promise doing its job — you were never charged, so there's nothing to refund.";
     case "booking_cancelled":
-      return "This booking was cancelled. Nothing was charged for it.";
+      return "This booking was canceled. Nothing was charged for it.";
     case "confirmed":
       return "Your date is confirmed — the guide and transport are booked. See your confirmation email for the meeting point and time.";
     case "under_review":

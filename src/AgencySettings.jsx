@@ -156,7 +156,7 @@ function AgencyCard({ agency, isOwner, onSaved }) {
         <label className="set-field">Company name
           <input value={agency?.name || ""} readOnly disabled />
         </label>
-        <label className="set-field">Ministry of Tourism licence
+        <label className="set-field">Ministry of Tourism license
           <input value={agency?.tourismLicenseNo || "—"} readOnly disabled />
         </label>
         <label className="set-field">Contact person
@@ -167,7 +167,7 @@ function AgencyCard({ agency, isOwner, onSaved }) {
         </label>
       </div>
       <p className="field-hint">
-        The company name and licence are part of your verified operator record; to change them, contact Sawa.
+        The company name and license are part of your verified operator record; to change them, contact Sawa.
         {isOwner ? "" : " Only the agency owner can change the contact details."}
       </p>
       <Status ok={ok} err={err} />

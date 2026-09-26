@@ -334,16 +334,16 @@ export function startJobScheduler(env = process.env) {
   console.log(`[jobs] scheduler on — cancel-unconfirmed in ${FIRST_RUN_DELAY_MS / 1000}s, then every 24h`);
   console.log(dryRun
     ? "[jobs] cancel-unconfirmed is DRY-RUN — it will log what it would cancel and email, and do neither. Set CANCEL_JOB_DRY_RUN=0 to go live."
-    : "[jobs] cancel-unconfirmed is LIVE — it will cancel departures and email travellers.");
+    : "[jobs] cancel-unconfirmed is LIVE — it will cancel departures and email travelers.");
   console.log(`[jobs] email-retry in ${(FIRST_RUN_DELAY_MS * 3) / 1000}s, then every 15 min — re-sends failed or interrupted emails`);
   console.log(`[jobs] audit-watch in ${(FIRST_RUN_DELAY_MS * 5) / 1000}s, then every 24h, against ${auditWatchBase(env)} — read-only, writes nothing`);
   console.log(goAheadDry
     ? "[jobs] goahead-alert is DRY-RUN — it will log which confirmed departures need a payment link and email nobody. Set GOAHEAD_ALERT_DRY_RUN=0 to go live."
     : `[jobs] goahead-alert is LIVE — hourly, to ${env.GOAHEAD_ALERT_TO || "hello@sawa.tours"}.`);
   console.log(noticeDry
-    ? "[jobs] goahead-notify is DRY-RUN — it will log which travellers would be told their date is confirmed and email nobody. "
+    ? "[jobs] goahead-notify is DRY-RUN — it will log which travelers would be told their date is confirmed and email nobody. "
       + "The booking confirmation promises this email. Set GOAHEAD_NOTIFY_DRY_RUN=0 to go live, after checking the dry-run backlog."
-    : "[jobs] goahead-notify is LIVE — hourly, to the travellers on each confirmed departure.");
+    : "[jobs] goahead-notify is LIVE — hourly, to the travelers on each confirmed departure.");
   return () => {
     clearTimeout(first); clearInterval(repeat);
     clearTimeout(auditFirst); clearInterval(auditRepeat);

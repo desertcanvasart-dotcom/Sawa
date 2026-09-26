@@ -51,7 +51,7 @@ const sign = (secret, t, body) => createHmac("sha256", secret).update(`${t}.${bo
 // prints when a sync is withheld, so a silence is legible in production too.
 export const NOT_MIRRORED = {
   pending_review:
-    "traveller-requested and not yet approved by ops — it is not inventory "
+    "traveler-requested and not yet approved by ops — it is not inventory "
     + "until a human says so, and a partner must not be able to sell it",
 };
 

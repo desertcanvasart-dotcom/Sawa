@@ -38,7 +38,7 @@ async function run() {
   const products = await pool.query("SELECT id, title, active FROM tour_products");
   const testProducts = products.rows.filter((p) => p.active === false && TEST_TITLE.test(p.title || ""));
 
-  console.log(`Departures: ${deps.rows.length} total — ${empty.length} with no traveller (to remove), ${kept} with live bookings (kept).`);
+  console.log(`Departures: ${deps.rows.length} total — ${empty.length} with no traveler (to remove), ${kept} with live bookings (kept).`);
   for (const d of empty) console.log(`  - #${d.id} ${d.route} on ${String(d.start).slice(0, 10)} [${d.status}]`);
   console.log(`Test listings to remove: ${testProducts.length}`);
   for (const p of testProducts) console.log(`  - ${p.id} "${p.title}" (archived)`);
@@ -62,7 +62,7 @@ async function run() {
       await c.query("DELETE FROM tour_products WHERE id = $1", [p.id]);
     }
   });
-  console.log("\nDone. The catalogue keeps only real itineraries; every remaining date has a traveller aboard.");
+  console.log("\nDone. The catalog keeps only real itineraries; every remaining date has a traveler aboard.");
 }
 
 run().then(() => pool.end()).catch((e) => { console.error(e); process.exit(1); });
