@@ -24,6 +24,7 @@ const DB_NAME = "sawa_it_settlements";
 const PORT = 20000 + Math.floor(Math.random() * 1000);
 const BASE = `http://127.0.0.1:${PORT}/api`;
 let server, db, fakeAuth;
+const storage = { buckets: new Map(), objects: new Map() };
 
 const day = (n) => cairoDay(Date.now() + n * 86400000);
 const TOUR = "tour_it_settle";
@@ -39,9 +40,39 @@ const WED2 = payDateOnOrAfter(day(11));
 
 before(async () => {
   if (skip) return;
-  fakeAuth = createServer((req, res) => {
-    const u = USERS[(req.headers.authorization || "").replace(/^Bearer /, "")];
+  // Stands in for Supabase: sign-in (/auth/v1/user) and the four storage
+  // calls receipts make — bucket lookup, bucket creation, upload, signed link.
+  fakeAuth = createServer(async (req, res) => {
     res.setHeader("Content-Type", "application/json");
+    const url = req.url.split("?")[0];
+    if (url.startsWith("/storage/v1/")) {
+      const chunks = [];
+      for await (const c of req) chunks.push(c);
+      const body = Buffer.concat(chunks);
+      const path = url.slice("/storage/v1".length);
+      if (req.method === "GET" && path.startsWith("/bucket/")) {
+        const id = path.slice("/bucket/".length);
+        if (!storage.buckets.has(id)) { res.statusCode = 404; res.end(JSON.stringify({ statusCode: "404", error: "Bucket not found", message: "Bucket not found" })); return; }
+        res.end(JSON.stringify({ id, name: id, public: false })); return;
+      }
+      if (req.method === "POST" && path === "/bucket") {
+        const b = JSON.parse(body.toString());
+        storage.buckets.set(b.id || b.name, b);
+        res.end(JSON.stringify({ name: b.name })); return;
+      }
+      if (req.method === "POST" && path.startsWith("/object/sign/")) {
+        const key = decodeURIComponent(path.slice("/object/sign/".length));
+        if (!storage.objects.has(key)) { res.statusCode = 404; res.end(JSON.stringify({ message: "Object not found" })); return; }
+        res.end(JSON.stringify({ signedURL: `/object/sign/${key}?token=t` })); return;
+      }
+      if (req.method === "POST" && path.startsWith("/object/")) {
+        const key = decodeURIComponent(path.slice("/object/".length));
+        storage.objects.set(key, { body, type: req.headers["content-type"] });
+        res.end(JSON.stringify({ Key: key })); return;
+      }
+      res.statusCode = 404; res.end("{}"); return;
+    }
+    const u = USERS[(req.headers.authorization || "").replace(/^Bearer /, "")];
     if (!u) { res.statusCode = 401; res.end("{}"); return; }
     res.end(JSON.stringify({ id: u.id, email: u.email, aud: "authenticated" }));
   });
@@ -158,6 +189,35 @@ test("only the operator submits costs; Sawa approves a different amount", { skip
   assert.deepEqual([shareOf(v, "ag_a").total, shareOf(v, "ag_cts").total, shareOf(v, "ag_b").total], [675, 450, 225]);
 });
 
+test("receipts: the operator uploads a file privately; only staff and the uploader can open it", { skip }, async () => {
+  const pdf = `data:application/pdf;base64,${Buffer.from("%PDF-1.4 coach contract").toString("base64")}`;
+  const up = await call("POST", "/cost-receipts", { filename: "Coach contract.pdf", dataUrl: pdf }, "a-token");
+  assert.equal(up.status, 201, JSON.stringify(up.body));
+  assert.match(up.body.ref, /^receipts:agency\/ag_a\/\d+-[a-z0-9]+-coach-contract\.pdf$/);
+  assert.equal(storage.buckets.get("cost-receipts")?.public, false, "a private bucket, created on first use");
+  assert.equal((await call("POST", "/cost-receipts", { filename: "x.html", dataUrl: "data:text/html;base64,PGI+" }, "a-token")).status, 422);
+
+  // The operator can't attach a file another agency uploaded, even knowing its reference.
+  const theirs = await call("POST", "/cost-receipts", { filename: "b.pdf", dataUrl: pdf }, "b-token");
+  assert.equal(theirs.status, 201);
+  const stolen = await call("POST", `/agency/departures/${DEP}/costs`, { category: "guide", description: "Guide", amount: 1, receiptUrl: theirs.body.ref }, "a-token");
+  assert.equal(stolen.status, 422, JSON.stringify(stolen.body));
+  const cost = await call("POST", `/agency/departures/${DEP}/costs`, { category: "permits", description: "Site permit", amount: 25, receiptUrl: up.body.ref }, "a-token");
+  assert.equal(cost.status, 201, JSON.stringify(cost.body));
+  assert.equal(cost.body.cost.receiptFile, "coach-contract.pdf");
+  assert.equal(cost.body.cost.receiptUrl, null, "the storage reference is never shown as a link");
+
+  const open = await call("GET", `/cost-receipts/${cost.body.cost.id}`, undefined, "a-token");
+  assert.equal(open.status, 200, JSON.stringify(open.body));
+  assert.match(open.body.url, /\/storage\/v1\/object\/sign\/cost-receipts\/agency\/ag_a\//);
+  assert.equal(open.body.expiresInSeconds, 120);
+  assert.equal((await ops("GET", `/cost-receipts/${cost.body.cost.id}`)).status, 200, "staff can open it");
+  assert.equal((await call("GET", `/cost-receipts/${cost.body.cost.id}`, undefined, "b-token")).status, 403, "another agency can't");
+
+  // Sawa rejects it (it was only for this test), so the figures below are unchanged.
+  assert.equal((await ops("POST", `/admin/departure-costs/${cost.body.cost.id}/review`, { decision: "reject", note: "test line" })).status, 200);
+});
+
 test("a Wednesday run pays signed-off tours; approving it creates the transfers", { skip }, async () => {
   const early = await ops("POST", "/admin/payout-runs", { payDate: WED1 });
   assert.equal(early.status, 201, JSON.stringify(early.body));
@@ -197,7 +257,7 @@ test("each agency sees its own share and transfers — never another agency's", 
   const dep = a.body.departures.find((d) => d.departure.id === DEP);
   assert.equal(dep.operating, true);
   assert.deepEqual([dep.mine.seats, dep.mine.total, dep.mine.paidOut], [6, 675, 675]);
-  assert.equal(dep.costs.length, 1, "the operator sees its cost sheet");
+  assert.equal(dep.costs.length, 2, "the operator sees its cost sheet (the coach, and the rejected test line)");
   assert.ok(!("shares" in dep) && !JSON.stringify(dep).includes("ag_b"), "no other agency's figures");
   assert.deepEqual(a.body.transfers.map((t) => [t.amount, t.state, t.bankReference]), [[675, "paid", "BANK-001"]]);
 

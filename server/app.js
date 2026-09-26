@@ -53,6 +53,10 @@ import {
   linkDueAt, mapPayment, paidTotal, paymentSummary, paymentsByPledge,
 } from "./payments.js";
 import {
+  RECEIPT_BUCKET, RECEIPT_PREFIX, RECEIPT_MAX_BYTES, RECEIPT_MIME_TYPES, SIGNED_LINK_SECONDS,
+  parseReceiptDataUrl, receiptKey, isReceiptRef, receiptRefKey, mayAttachReceipt, receiptDisplayName,
+} from "./receipts.js";
+import {
   settleDeparture, payoutBlocker, payoutLines, BLOCKER_LABEL, endedBy, runWindow, payDateOnOrAfter, cairoDay,
   COST_CATEGORIES, COST_LABEL, isMissingSettlementTables,
 } from "./settlement.js";
@@ -175,6 +179,8 @@ app.use((req, res, next) => {
 });
 
 // --- Rate limiting: general cap + stricter cap on booking/write paths ---
+// Uploads (tour images, cost receipts): generous, but not unlimited.
+const uploadLimiter = rateLimit({ windowMs: 60_000, max: 40, standardHeaders: true, legacyHeaders: false });
 const generalLimiter = rateLimit({ windowMs: 60_000, max: 300, standardHeaders: true, legacyHeaders: false });
 const writeLimiter = rateLimit({
   windowMs: 60_000, max: 30, standardHeaders: true, legacyHeaders: false,
@@ -3126,7 +3132,12 @@ async function withSettlements(fn) {
 
 const mapCost = (r) => ({
   id: Number(r.id), departureId: Number(r.departure_id), category: r.category, description: r.description,
-  amount: Number(r.amount), receiptUrl: r.receipt_url || null, submittedByAgencyId: r.submitted_by_agency_id || null,
+  amount: Number(r.amount),
+  // A pasted link is shown as a link; an uploaded file only by name — it is
+  // opened through GET /api/cost-receipts/:id, which issues a signed link.
+  receiptUrl: isReceiptRef(r.receipt_url) ? null : r.receipt_url || null,
+  receiptFile: isReceiptRef(r.receipt_url) ? receiptDisplayName(r.receipt_url) : null,
+  submittedByAgencyId: r.submitted_by_agency_id || null,
   submittedBy: r.submitted_by || null, state: r.state, approvedAmount: r.approved_amount != null ? Number(r.approved_amount) : null,
   reviewNote: r.review_note || null, reviewedBy: r.reviewed_by || null,
   reviewedAt: r.reviewed_at instanceof Date ? r.reviewed_at.toISOString() : r.reviewed_at || null,
@@ -3241,12 +3252,68 @@ const costSchema = z.object({
   amount: z.coerce.number().positive("Enter the amount."),
   receiptUrl: z.string().trim().max(1000).optional(),
 });
-const receiptUrlOf = (raw) => {
+// A cost line's receipt: a pasted https link, or a file uploaded through
+// POST /api/cost-receipts — which an agency may attach only if it uploaded it.
+const receiptUrlOf = (raw, user) => {
   if (!raw) return null;
+  if (isReceiptRef(raw)) {
+    if (!mayAttachReceipt(raw, { agencyId: user?.agencyId || null, staff: isPlatform(user) })) {
+      throw new AppError(422, "That receipt file can't be attached — upload it again.");
+    }
+    return raw;
+  }
   const u = cleanLinkUrl(raw);
   if (!u) throw new AppError(422, "The receipt link must be an https link.");
   return u;
 };
+
+// The private bucket receipts go in, created the first time it is needed.
+let receiptBucketReady = null;
+function ensureReceiptBucket() {
+  receiptBucketReady ??= (async () => {
+    const { data } = await supabaseAdmin.storage.getBucket(RECEIPT_BUCKET);
+    if (data) return;
+    const { error } = await supabaseAdmin.storage.createBucket(RECEIPT_BUCKET, {
+      public: false, fileSizeLimit: RECEIPT_MAX_BYTES, allowedMimeTypes: RECEIPT_MIME_TYPES,
+    });
+    if (error && !/already exists/i.test(error.message || "")) throw new Error(error.message);
+  })().catch((e) => { receiptBucketReady = null; throw e; });
+  return receiptBucketReady;
+}
+
+// Upload a receipt: JSON { filename, dataUrl }. Staff, and agencies (who
+// submit costs for dates they operate). Returns the reference to send as the
+// cost line's receiptUrl.
+app.post("/api/cost-receipts", requireAuth, requireRole("super_admin", "ops_staff", "agency_owner", "agency_agent"), uploadLimiter, h(async (req, res) => {
+  if (!supabaseAdmin) throw new AppError(500, "Storage is not configured.");
+  const { filename, dataUrl } = req.body || {};
+  const file = parseReceiptDataUrl(dataUrl);
+  if (file.error) throw new AppError(422, file.error);
+  const key = receiptKey({ agencyId: isPlatform(req.user) ? null : req.user.agencyId, filename, ext: file.ext });
+  try {
+    await ensureReceiptBucket();
+  } catch (e) {
+    throw new AppError(500, "Receipt storage isn't available: " + e.message);
+  }
+  const { error } = await supabaseAdmin.storage.from(RECEIPT_BUCKET).upload(key, file.buffer, { contentType: file.contentType, upsert: false });
+  if (error) throw new AppError(500, "Upload failed: " + error.message);
+  const ref = `${RECEIPT_PREFIX}${key}`;
+  await logAudit(req, { action: "receipt.upload", entity: "cost_receipt", entityId: key, detail: { bytes: file.buffer.length, type: file.contentType } });
+  res.status(201).json({ ref, name: receiptDisplayName(ref) });
+}));
+
+// Open an uploaded receipt: a signed link valid for two minutes, for Sawa
+// staff or the agency that submitted the cost line.
+app.get("/api/cost-receipts/:costId", requireAuth, requireRole("super_admin", "ops_staff", "agency_owner", "agency_agent"), h(async (req, res) => {
+  const row = await withSettlements(async () =>
+    (await pool.query(`SELECT receipt_url, submitted_by_agency_id FROM departure_costs WHERE id = $1`, [Number(req.params.costId)])).rows[0]);
+  if (!row || !isReceiptRef(row.receipt_url)) throw new AppError(404, "No receipt file on this cost line.");
+  if (!isPlatform(req.user) && row.submitted_by_agency_id !== req.user.agencyId) throw new AppError(403, "This receipt isn't yours to open.");
+  if (!supabaseAdmin) throw new AppError(500, "Storage is not configured.");
+  const { data, error } = await supabaseAdmin.storage.from(RECEIPT_BUCKET).createSignedUrl(receiptRefKey(row.receipt_url), SIGNED_LINK_SECONDS);
+  if (error || !data?.signedUrl) throw new AppError(502, "Couldn't open the receipt. Please try again.");
+  res.json({ url: data.signedUrl, name: receiptDisplayName(row.receipt_url), expiresInSeconds: SIGNED_LINK_SECONDS });
+}));
 async function departureExists(id) {
   const d = (await pool.query(`SELECT id FROM departures WHERE id = $1`, [id])).rows[0];
   if (!d) throw new AppError(404, "Departure not found.");
@@ -3260,7 +3327,7 @@ app.post("/api/admin/settlements/:depId/costs", requireAuth, requireRole("super_
   const row = await withSettlements(async () => (await pool.query(
     `INSERT INTO departure_costs (departure_id, category, description, amount, receipt_url, submitted_by, state, approved_amount, reviewed_by, reviewed_at)
      VALUES ($1, $2, $3, $4, $5, $6, 'approved', $4, $6, now()) RETURNING *`,
-    [depId, input.category, input.description, Math.round(input.amount * 100) / 100, receiptUrlOf(input.receiptUrl), req.user.email || null])).rows[0]);
+    [depId, input.category, input.description, Math.round(input.amount * 100) / 100, receiptUrlOf(input.receiptUrl, req.user), req.user.email || null])).rows[0]);
   await logAudit(req, { action: "settlement.cost_added", entity: "departure", entityId: String(depId), detail: { costId: Number(row.id), category: input.category, amount: Number(row.amount) } });
   res.status(201).json({ cost: mapCost(row) });
 }));
@@ -3279,7 +3346,7 @@ app.post("/api/agency/departures/:depId/costs", requireAuth, requireRole("agency
     return (await pool.query(
       `INSERT INTO departure_costs (departure_id, category, description, amount, receipt_url, submitted_by_agency_id, submitted_by)
        VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
-      [depId, input.category, input.description, Math.round(input.amount * 100) / 100, receiptUrlOf(input.receiptUrl), req.user.agencyId, req.user.email || null])).rows[0];
+      [depId, input.category, input.description, Math.round(input.amount * 100) / 100, receiptUrlOf(input.receiptUrl, req.user), req.user.agencyId, req.user.email || null])).rows[0];
   });
   await logAudit(req, { action: "settlement.cost_submitted", entity: "departure", entityId: String(depId), detail: { costId: Number(row.id), category: input.category, amount: Number(row.amount) } });
   res.status(201).json({ cost: mapCost(row) });
@@ -3582,7 +3649,6 @@ app.post("/api/admin/departures/:id/cancel", requireAuth, requireRole("super_adm
 // upload photos for their own tour listings via the shared product editor.
 // Accepts JSON { filename, dataUrl } where dataUrl is a base64 data URI and
 // returns the public URL.
-const uploadLimiter = rateLimit({ windowMs: 60_000, max: 40, standardHeaders: true, legacyHeaders: false });
 app.post("/api/admin/uploads", requireAuth, requireRole("super_admin", "ops_staff", "agency_owner", "agency_agent"), uploadLimiter, express.json({ limit: "8mb" }), h(async (req, res) => {
   if (!supabaseAdmin) throw new AppError(500, "Storage is not configured.");
   const { filename, dataUrl } = req.body || {};

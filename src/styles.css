@@ -6877,6 +6877,9 @@ button:disabled {
 .st-loss { background: #fdf3ef; border: 1px solid #efc9bb; border-radius: 12px; padding: 12px 14px; }
 .st-loss p { margin: 0; font-size: 13.5px; }
 .st-cost-row { display: grid; grid-template-columns: 170px minmax(0, 1.4fr) 130px minmax(0, 1fr); gap: 10px; }
+.st-cost-row input[type=file] { font-size: 13px; padding: 7px 8px; min-height: 38px; }
+.st-receipt-link { display: grid; gap: 5px; font-size: 12px; font-weight: 700; color: var(--d-ink-soft, #5c5f62); max-width: 520px; }
+.pay-link.link-btn { background: none; border: 0; padding: 0; cursor: pointer; font: inherit; font-size: 12.5px; font-weight: 700; }
 .st-inline-label { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; }
 .st-inline-label input { width: 110px; }
 .st-adjust select, .st-adjust input { font: inherit; font-size: 14px; min-height: 38px; padding: 0 10px; border: 1px solid var(--d-line, #ddd); border-radius: 8px; background: #fff; }

@@ -10,7 +10,7 @@ import React, { useEffect, useState } from "react";
 import { apiFetch } from "./supabaseClient";
 import { fmtDate } from "./dates.js";
 import { CURRENCY_SYMBOL } from "../shared/currency.js";
-import { CostForm } from "./AdminSettlements.jsx";
+import { CostForm, Receipt } from "./AdminSettlements.jsx";
 
 const money = (n) => (n == null ? "—" : `${Number(n) < 0 ? "−" : ""}${CURRENCY_SYMBOL}${Math.abs(Number(n)).toLocaleString(undefined, { maximumFractionDigits: 2 })}`);
 const pct = (p) => `${Math.round(p * 1000) / 10}%`;
@@ -101,7 +101,7 @@ function DepartureCard({ d, categories, onChanged }) {
       {d.operating && (
         <div className="st-block">
           <strong>Your cost sheet {d.costsFinal && <span className="tag tag-on">Final</span>}</strong>
-          <p className="field-hint">Enter the real cost of running this date, with a receipt link where you have one. Sawa reviews every line before the profit is shared.</p>
+          <p className="field-hint">Enter the real cost of running this date, and attach the receipt (a PDF or a photo) where you have one. Sawa reviews every line before the profit is shared.</p>
           <ul className="pay-history">
             {d.costs.map((c) => (
               <li key={c.id} className={`pay-line ${c.state === "rejected" ? "pay-void" : ""}`}><div className="pay-line-main">
@@ -109,6 +109,7 @@ function DepartureCard({ d, categories, onChanged }) {
                 <span>{money(c.amount)}{c.state === "approved" && c.approvedAmount !== c.amount ? ` → approved ${money(c.approvedAmount)}` : ""}</span>
                 <span className={`tag ${c.state === "approved" ? "tag-on" : c.state === "rejected" ? "tag-off" : "tag-warn"}`}>{c.state === "submitted" ? "With Sawa" : c.state === "approved" ? "Approved" : "Rejected"}</span>
                 {c.reviewNote && <span className="muted-line">{c.reviewNote}</span>}
+                <Receipt c={c} />
               </div></li>
             ))}
             {d.costs.length === 0 && <li className="muted-line">No costs entered yet.</li>}
