@@ -387,6 +387,8 @@ const publicDepartureRequestSchema = z.object({
   // Join-first rule: near-matches must be explicitly rejected client-side
   // before a create is allowed through.
   ignoreMatches: z.coerce.boolean().optional(),
+  // The partner whose widget the request came from, as on a booking.
+  refCode: z.string().trim().max(60).optional(),
 });
 
 // Eligibility fences for traveler-picked dates. The addendum specified these
@@ -1723,6 +1725,11 @@ async function createDateRequest(input, req, requester = {}) {
 
     const dep = await loadDeparture(c, id);
     const pricing = computePledgePricing(dep, product, input);
+    // A traveller's request made through a partner's widget is credited to
+    // that partner, the same as a booking on an existing date. An operator's
+    // own request is theirs already and carries no code.
+    const refCode = requester.agencyId ? "" : cleanRefCode(input.refCode);
+    if (refCode) await c.query("INSERT INTO referrals (code) VALUES ($1) ON CONFLICT (code) DO NOTHING", [refCode]);
     const pledgeId = newPledgeId(id);
     await insertPledge(c, id, {
       id: pledgeId,
@@ -1735,7 +1742,7 @@ async function createDateRequest(input, req, requester = {}) {
       source: requester.agencyId ? "agency_request" : "public_request",
       createdByUserId: requester.userId || null,
       bookingCode: await uniqueBookingCode(c),
-      refCode: null,
+      refCode: refCode || null,
       ...pricing,
       // Nobody has approved this date yet, so the booking is not confirmed
       // either. It still holds its seats (every count reads `<> 'cancelled'`);

@@ -6777,8 +6777,14 @@ button:disabled {
 .eb-err { font-size: 13px; color: #b3261e; background: rgba(179,38,30,.08); border-radius: 10px; padding: 9px 12px; }
 .eb-submit { width: 100%; border: 0; cursor: pointer; font-family: inherit; }
 .eb-submit:disabled { opacity: .6; cursor: default; }
-.eb-empty { display: grid; gap: 10px; padding: 14px 18px 18px; font-size: 14px; color: var(--ink-soft); }
-.eb-empty .embed-cta { padding: 0 20px; width: fit-content; text-decoration: none; }
+.eb-label { font-size: 11.5px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; color: var(--ink-soft); }
+.eb-row.eb-one { grid-template-columns: minmax(0, 260px); }
+.eb-note { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--ink-soft); }
+.eb-switch { justify-self: start; font: inherit; font-size: 13px; font-weight: 700; color: var(--ink); background: none; border: 0; padding: 4px 0; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.eb-switch:disabled { opacity: .6; cursor: default; }
+.eb-matches { display: grid; gap: 8px; padding: 12px 14px; border-radius: 12px; background: rgba(199,154,62,.12); font-size: 13.5px; }
+.eb-matches p { margin: 0; }
+.eb-match { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
 .eb-done { display: grid; gap: 8px; padding: 26px 22px; text-align: center; justify-items: center; }
 .eb-done p { margin: 0; font-size: 14px; line-height: 1.5; }
 .eb-done-mark { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; background: rgba(31,122,82,.12); color: #1f7a52; }
