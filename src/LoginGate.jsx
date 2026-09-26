@@ -143,7 +143,13 @@ export function LoginGate({ children, onSession }) {
     return <LoginForm error={error} onClearError={() => setError("")} />;
   }
 
-  return children({ user: profile.user, agency: profile.agency, signOut });
+  // Settings changes the name and agency details this profile holds; re-read
+  // it without the sign-in path's side effects.
+  const refreshProfile = async () => {
+    const res = await apiFetch("/me");
+    if (res.ok) setProfile(await res.json());
+  };
+  return children({ user: profile.user, agency: profile.agency, signOut, refreshProfile });
 }
 
 // Shared shell so the three auth views can't drift apart visually.
