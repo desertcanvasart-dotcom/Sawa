@@ -150,6 +150,42 @@ Tests added to `pay-at-goahead.integration.test.js`:
 - the Terms versions.
 Two unit tests cover the new rules.
 
+## Online Era as collecting agent (decided 27 Sep 2026)
+
+The legal structure: **the operator assigned at GoAhead is the seller** of each departure. **Online Era** (Commercial Registration 148500), licensed to collect payments as an agent, is its commercial and payment-collection agent. **Capital Travel Service is not involved in Sawa.** Built on `feat/online-era-agent`, behind `catalogue_v2`. Migration 053 is additive, with a rollback; it was applied, re-applied and rolled back on a scratch Postgres. **Not run against production.**
+
+- **Seller disclosure.** From the assignment (offered or acknowledged), these name the operator's legal name and the **licence number shown to travelers** as seller, and "Online Era, collecting agent" as payee:
+  - the payment request and its reminder;
+  - the receipt;
+  - the voucher (printable, on the booking page once paid);
+  - the booking page.
+  Before the assignment they say "Operated by a licensed Sawa partner". This reverses "operator names hidden" for these documents only; the public catalog still names no operator.
+  The operator record has a new field, **License no. shown to travelers (as seller)**, in Admin → Operators. When it's empty, the Ministry of Tourism license number is used.
+- **Receipts** are issued by Online Era, "collecting agent, on behalf of" the operator, when a payment is recorded. Each receipt has a number (`R-<year>-<request>`), and the seller as it stood is kept on the request.
+- **The settlement statement** now distributes the departure's collections, in EUR:
+  - Gross Collections (paid, less refunds);
+  - payment costs (the provider fee setting);
+  - agency commission;
+  - the operator entitlement (the rate card, unchanged, converted at the rate on the departure's date);
+  - Online Era's commission, the remainder, never negative;
+  - where collections fall short, a **Minimum Departure Guarantee** line, paid by Online Era.
+  It is on the statement snapshot, the PDF and the admin statement view. Tested with the v2 examples: 8 travelers, €760 → **€181.20** commission; 2 travelers, €190 against €230 → **€45.70** guarantee.
+- **Capital Travel Service:**
+  - the statement PDF's header is now the collecting agent (from `BRAND`);
+  - the payment notes, the migration plan, the model-audit summary and gap analysis, the phase 3 report and the runbook no longer name CTS as seller or merchant;
+  - the operator record 049 would create for CTS stays **pending** and **can't be activated**: 053 marks it, activation is refused, and the automatic reactivation skips it.
+  The rule that CTS is never shown as the platform's operator is unchanged, and still enforced by `entity-disclosure.test.js`.
+- **`docs/legal/terms-catalogue-draft.md` v2:** a reservation with no payment; the sale made with the named operator at GoAhead; Online Era as collecting agent. It has 23 lawyer questions, 11 of them new, including Competition Law 3/2005 on a common retail price for competing operators.
+
+**Not changed, and still naming CTS** (`docs/legal/cts-references.md` has the full list):
+- **live today:**
+  - the privacy page's "ETAA license: 2179" under Online Era;
+  - Capital Travel Service on `/partners` (a database row);
+  - direct bookings shown as "Run by Capital Travel Service" (`DIRECT_BOOKINGS_OPERATOR`);
+- **the agreements draft** (`docs/model/…Agreements-draft.docx`): CTS is still the contracting party (lawyer question 23).
+
+These are outside "seller or merchant", or need Online Era's own licence number, or a database change. They are listed for your decision.
+
 ## Open items (not built, or for you to decide)
 
 1. **The Terms and site copy.** The published Terms still describe deposit and balance. The catalog wording is drafted for the lawyer in `docs/legal/terms-catalogue-draft.md`; once approved, it is published as catalog Terms version 2. Its first question is the **seller's identity**: the draft names Capital Travel Service as seller, while the current Terms say Online Era operates the platform.

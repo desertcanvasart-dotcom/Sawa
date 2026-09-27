@@ -1,5 +1,19 @@
 # Capital Travel Service: every reference in the repository
 
+> **Update, 27 Sep 2026 (`feat/online-era-agent`).** The legal structure is decided: the operator assigned at GoAhead sells; **Online Era** is its collecting agent; **CTS is not involved in Sawa**.
+> - **Changed:**
+>   - the statement PDF header (`server/pdf.js`) now names the collecting agent;
+>   - the Terms draft (v2), the payment notes and the planning documents no longer name CTS as seller or merchant;
+>   - migration 053 blocks activating the CTS operator record that 049 would create.
+> - **Not changed yet:**
+>   - L1 (privacy page, "ETAA license: 2179");
+>   - L2 (`/partners`, a database row, together with `scripts/dom-smoke.js`);
+>   - L3 (`DIRECT_BOOKINGS_OPERATOR`);
+>   - the agreements .docx;
+>   - the test fixtures.
+>
+> L1 needs Online Era's own licence number, or the line removed.
+
 **Why:** Capital Travel Service (CTS) is no longer involved; no deal was reached with its owner. This lists every reference to **Capital Travel Service**, **CTS**, **ETAA 2179** (its travel-agency registration) and **1 Farouk Mahmoud** (its address). Nothing has been changed yet: the replacement depends on your licence decision.
 
 Searched on `main` at `af18a94` (27 Sep 2026), plus open PR #224. The search covered text files (`git grep -i`) and the text inside the Word and Excel files. Matches for "Capital Travel" (without "Service") are included. `package-lock.json` has none.

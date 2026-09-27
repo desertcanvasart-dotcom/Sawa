@@ -30,7 +30,7 @@ Conventions:
    PRODUCTION_DB_HOST=<supabase host> DATABASE_URL="$PROD" npm run check:applied-schema
    ```
    ```sql
-   -- check: the last applied migrations; 046 must be there, 047–052 must not
+   -- check: the last applied migrations; 046 must be there, 047–053 must not
    SELECT name, applied_at FROM schema_migrations ORDER BY id DESC LIMIT 5;
    ```
 5. **Count the legacy departures still open.** They keep the existing settlement tools until the last one completes. Note the numbers.
@@ -52,7 +52,7 @@ Conventions:
 
 ---
 
-## 1. Migrations 047–052
+## 1. Migrations 047–053
 
 `npm run db:migrate` applies every pending migration in one go, and is safe to re-run. To check between them, apply them one at a time as below instead. Each file is idempotent. Stop at the first error: `-v ON_ERROR_STOP=1` does that.
 
@@ -132,7 +132,7 @@ psql "$PROD" -c "INSERT INTO schema_migrations (name) VALUES ('049_operators_ros
 
 **Post-check:**
 ```sql
--- check: one pending operator per company listed in the pre-check, Capital Travel Service among them
+-- check: one pending operator per company listed in the pre-check. A Capital Travel Service record, if 049 creates one, stays pending: 053 blocks its activation (CTS is not involved in Sawa)
 SELECT id, legal_name, agency_id, status FROM operators ORDER BY legal_name;
 -- check: the lock-at-first-seat trigger is in place
 SELECT tgname FROM pg_trigger WHERE tgname = 'trg_catalogue_lock_on_first_seat';
@@ -229,6 +229,21 @@ SELECT relrowsecurity FROM pg_class WHERE relname = 'terms_versions';       -- e
 
 Re-run check 0.6.
 
+### 1g. 053: the seller and the collecting agent
+
+```bash
+psql "$PROD" -v ON_ERROR_STOP=1 --single-transaction -f server/db/schema_053_seller_disclosure.sql
+psql "$PROD" -c "INSERT INTO schema_migrations (name) VALUES ('053_seller_disclosure') ON CONFLICT (name) DO NOTHING"
+```
+
+**Post-check:**
+```sql
+-- check: any Capital Travel Service operator record is pending and blocked from activation
+SELECT id, legal_name, status, activation_blocked FROM operators WHERE legal_name ILIKE 'capital travel%';
+```
+
+Re-run check 0.6.
+
 ---
 
 ## 2. Publish the specifications
@@ -268,7 +283,7 @@ SELECT c.catalogue_no, rv.version, rv.effective_from, rv.per_traveler, rv.land_p
 
 ## 4. Operators: documents, approvals, bank details
 
-In **Admin → Operators**, for each operator that will run tours, Capital Travel Service included:
+In **Admin → Operators**, for each operator that will run tours (**not** Capital Travel Service: its record stays pending and can't be activated). Enter each operator's **license no. shown to travelers**: it is printed as seller on payment requests, receipts and vouchers.
 1. Complete the record: legal name, license, ETAA, commercial registration, tax number, email and phone.
 2. Upload the four documents, each with its number and expiry: tourism license, ETAA membership, liability insurance and vehicle insurance.
 3. Tick the **approved products**.
@@ -393,12 +408,13 @@ Nothing is deleted. Bookings made meanwhile stay ordinary bookings on ordinary d
 
 | Order | Rollback | Loses |
 |---|---|---|
-| 1st | `psql "$PROD" -v ON_ERROR_STOP=1 -f server/db/down/schema_052_pay_safeguards_terms.down.sql` | Terms versions and each booking's recorded version; link alerts and admin decisions (an unsecured seat goes back to waiting for its link) |
-| 2nd | `psql "$PROD" -v ON_ERROR_STOP=1 -f server/db/down/schema_051_pay_at_goahead.down.sql` | payment requests, refunds, ops tasks, the waitlist, every tier version; the bookings' payment mode and tier version; `unpaid` cancellations become `admin` |
-| 3rd | `psql "$PROD" -v ON_ERROR_STOP=1 -f server/db/down/schema_050_settlements_commissions.down.sql` | payables, receivables, set-offs, statements, commissions, invoices, recorded payments, bank details and their log, FX rates, holidays, penalties, completion requests; agencies' billing columns |
-| 4th | `…/down/schema_049_operators_roster_rates.down.sql` | operators, documents, approvals, strikes, notices, roster, rate versions, assignments, manifests and their access log, the lock trigger; **operator logins (deleted)**; the three booking-detail columns on pledges |
-| 5th | `…/down/schema_048_catalogue_notices.down.sql` | the cancellation-notice log. Cruise and multi-day deadlines stay at 30, the decided value. |
-| 6th | `…/down/schema_047_catalogue_calendar.down.sql` | the catalog, specs, rules, catalog departures and events. Ordinary departures and bookings created for catalog dates stay, as ordinary rows. |
+| 1st | `psql "$PROD" -v ON_ERROR_STOP=1 -f server/db/down/schema_053_seller_disclosure.down.sql` | the licence numbers shown to travelers, the activation block, each receipt's recorded seller and number |
+| 2nd | `psql "$PROD" -v ON_ERROR_STOP=1 -f server/db/down/schema_052_pay_safeguards_terms.down.sql` | Terms versions and each booking's recorded version; link alerts and admin decisions (an unsecured seat goes back to waiting for its link) |
+| 3rd | `psql "$PROD" -v ON_ERROR_STOP=1 -f server/db/down/schema_051_pay_at_goahead.down.sql` | payment requests, refunds, ops tasks, the waitlist, every tier version; the bookings' payment mode and tier version; `unpaid` cancellations become `admin` |
+| 4th | `psql "$PROD" -v ON_ERROR_STOP=1 -f server/db/down/schema_050_settlements_commissions.down.sql` | payables, receivables, set-offs, statements, commissions, invoices, recorded payments, bank details and their log, FX rates, holidays, penalties, completion requests; agencies' billing columns |
+| 5th | `…/down/schema_049_operators_roster_rates.down.sql` | operators, documents, approvals, strikes, notices, roster, rate versions, assignments, manifests and their access log, the lock trigger; **operator logins (deleted)**; the three booking-detail columns on pledges |
+| 6th | `…/down/schema_048_catalogue_notices.down.sql` | the cancellation-notice log. Cruise and multi-day deadlines stay at 30, the decided value. |
+| 7th | `…/down/schema_047_catalogue_calendar.down.sql` | the catalog, specs, rules, catalog departures and events. Ordinary departures and bookings created for catalog dates stay, as ordinary rows. |
 
 Each rollback deletes its own `schema_migrations` row. **`npm run db:migrate` re-applies every migration it finds**, so after a rollback don't run it until the problem is fixed and you mean to re-apply.
 

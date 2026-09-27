@@ -1,5 +1,7 @@
 # Sawa model audit: summary
 
+> **Superseded on the seller (27 Sep 2026).** The operator assigned at GoAhead is the seller of each departure; **Online Era** (Commercial Registration 148500), licensed to collect payments as an agent, is its commercial and payment-collection agent and holds the merchant account. **Capital Travel Service is not involved in Sawa.** Where this document says CTS is the seller of record, the merchant or the invoicing party, read the operator as seller and Online Era as collecting agent. See `docs/legal/terms-catalogue-draft.md` (v2) and `docs/phase4/REPORT.md`.
+
 The audit is in three documents:
 - [01 · Current state](01-current-state.md): how Sawa works today, with file references.
 - [02 · Gap analysis](02-gap-analysis.md): one table per area, plus what to retire.
@@ -15,7 +17,7 @@ Scope: code at `0f97967` (26 Sep 2026), the rate-card workbook (no real figures 
    - a card saved with consent at booking;
    - automatic charging at GoAhead, with retries and failure handling;
    - API refunds for cancellation tiers;
-   - invoices in Capital Travel Service's name.
+   - receipts issued by Online Era on behalf of the operator (the seller).
    
    Nothing in the code shows whether Tab can do any of this.
 2. **Operators are sellers, not suppliers.** Operators and agencies share one `agencies` table and one portal. Operators can submit tours with their own prices (`server/app.js:1018-1039`). A departure's operator is never stored: it is recomputed as "the partner with the most paid travellers" (`server/domain.js:520-597`), and travellers are told it "can change". Direct bookings default to Capital Travel Service as operator. There is no roster, assignment, acknowledgement, rate card or manifest.
@@ -30,12 +32,12 @@ Close behind: there is **no departure calendar** (dates exist only once someone 
 
 ## The riskiest change
 
-**Turning on automatic charging at GoAhead, together with the switch to CTS as seller of record** (phase 3). Why:
+**Turning on automatic charging at GoAhead, together with the switch to the operator as seller and Online Era as collecting agent** (phase 3). Why:
 - It is the first time the platform moves money by itself. The GoAhead trigger runs inside booking transactions (`server/departure-status.js`) and must charge each card exactly once under concurrent bookings.
 - Existing bookings were made on "no card, pay by link" terms and have to stay on that path. So some departures will hold both kinds of booking.
 - About 40 public statements and the Terms (§§ 6, 12, 13) currently say the opposite, and must change in the same release.
 - A test enforces the current entity wording (`server/entity-disclosure.test.js:148-165`).
-- **It is legally gated.** The draft's own question 3 for the Egyptian lawyer is whether CTS may save a card and charge it later at all, under Central Bank rules and Consumer Protection Law 181/2018. Until that is answered, phase 3 can't ship.
+- **It is legally gated.** The draft's own question 3 for the Egyptian lawyer is whether Online Era, as collecting agent, may save a card and charge it later at all, under Central Bank rules and Consumer Protection Law 181/2018. Until that is answered, phase 3 can't ship.
 - Agency-account bookings must also carry the traveller's own acceptance of the Terms and, on standard payment, their card (ARA 4.2, 6.1). Today agencies book with neither.
 
 To reduce the risk:
@@ -58,7 +60,7 @@ To reduce the risk:
   - fix the takeover defect;
   - confirm the five decisions the draft settles, and answer D1, D3, D6–D8, D15 and D20;
   - get the lawyer's answers, especially question 3 (card on file), which gates phase 3;
-  - start merchant-account onboarding for CTS;
+  - start merchant-account onboarding for Online Era, as collecting agent;
   - fill the rate card;
   - run the production counts.
 - **Phase 1:**

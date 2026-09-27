@@ -202,7 +202,7 @@ The existing settlement tools stay in use until the last of these completes.
    - the payment provider's fee.
 6. **Agencies' country codes and billing approvals.**
 7. **Traveler charging, mode A or B.** This phase settles what Sawa owes; it doesn't take travelers' money. Mode A saves the card and charges at GoAhead; mode B charges at booking and refunds automatically if there is no GoAhead. Today travelers still pay through the manual Tab link.
-   - The choice depends on the lawyer's answer: whether Capital Travel may save a card and charge it later under CBE rules and the Consumer Protection Law.
+   - The choice depends on the lawyer's answer: whether Online Era, as collecting agent, may save a card and charge it later under CBE rules and the Consumer Protection Law.
    - It also depends on a payment provider that supports the chosen mode.
    - Mode B changes the "nothing is charged before GoAhead" promise, so the site copy must switch with it.
 8. **The lawyer's other answers** that affect this phase:
@@ -218,7 +218,7 @@ The existing settlement tools stay in use until the last of these completes.
 - **Cancellation fees.** Commission's 50% rule reads `cancelled_reason` and `cancelled_at`. Once the provider computes and refunds cancellation fees, the rule should read whether a fee was actually kept, not the schedule band.
 - **Agency-billed seats.** They are invoiced here and never charged to the traveler; the charge job must skip them. Standard agency seats (not billed) count toward GoAhead once the traveler completes the payment link, with a 48-hour hold (decided, not built).
 - **Booking details.** They are now captured at booking under the flag. The checkout can reuse `src/TravelerDetails.jsx` and the server rule in `server/booking-details.js`.
-- **Invoices and receipts** to travelers in Capital Travel's name are separate from the agency invoices built here.
+- **Receipts** to travelers are issued by Online Era on behalf of the operator (phase 4 follow-up); they are separate from the agency invoices built here.
 - **Seller of record.** The seller-of-record switch-over (Terms, Privacy, footer, JSON-LD) listed in the migration plan still applies.
 
 ## Tests

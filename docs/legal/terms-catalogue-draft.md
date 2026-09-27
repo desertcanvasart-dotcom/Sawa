@@ -1,105 +1,105 @@
-# DRAFT: Terms for catalog bookings: booking and payment
+# DRAFT: Terms for catalog bookings: reservation, sale and payment (v2)
 
 **Status: draft for the lawyer. Not published, not linked from the site, and not in force.**
-Prepared 27 Sep 2026 from what the platform does (`docs/phase4/REPORT.md`, `docs/phase4/payments-readiness.md` section 9). Once approved, the wording is published as **catalog Terms version 2** in Admin → Finance → Tiers and Terms. Catalog bookings then record that version; legacy bookings keep their own Terms series.
+Version 2, 27 Sep 2026. It follows the legal structure decided that day:
 
-These sections replace, for catalog bookings only, sections 6, 8, 9, 11, 12 and 13 of the current Terms (`/terms`). Everything else in the current Terms (tour changes, liability, complaints, privacy, law) is assumed to stay. **[LAWYER 1] Confirm that split, and whether catalog bookings need a separate document or a schedule to the existing Terms.**
+- **The operator assigned at GoAhead is the seller** of each departure.
+- **Online Era** (Commercial Registration 148500), trading as Sawa Tours, holds a licence to collect payments as an agent. It is the operator's **commercial and payment-collection agent**. It operates the platform, and it is not the seller of the tour.
+- Capital Travel Service is **not involved in Sawa**.
 
-Markers: **[LAWYER n]** is a point that needs the lawyer's confirmation. The questions are collected at the end.
+Once approved, the wording is published as **catalog Terms version 2** in Admin → Finance → Tiers and Terms. Catalog bookings then record that version; legacy bookings keep their own series. These sections replace, for catalog bookings, sections 6, 8, 9, 11, 12 and 13 of the current Terms (`/terms`). The rest is assumed to stay. **[LAWYER 1]**
+
+Markers: **[LAWYER n]** is a point that needs the lawyer's confirmation. The questions are collected at the end; those new in v2 are marked *new*.
 
 ---
 
-## C1. Who you are booking with
+## C1. Who does what
 
-1. Catalog tours are sold by **Capital Travel Service** (the "Seller"), through the Sawa platform. **[LAWYER 2]** The current Terms (section 1) say the platform is operated by **Online Era**, registration 148500, trading as Sawa Tours. They also treat Capital Travel Service as an operating partner, not as the platform's operator. Please confirm:
-   - which legal entity contracts with the traveler for a catalog booking;
-   - which entity is the merchant on the card payment (the Tab account);
-   - which entity's tourism licence covers the sale;
-   - how the platform operator (Online Era) and the Seller are each described, so that no licence or role is presented as another company's.
-2. Each tour is delivered on the ground by a licensed Egyptian operator chosen by the Seller (the "Operator"). The Operator is named in your booking confirmation or on your booking page once assigned. **[LAWYER 3] Whether the Operator must be named before booking, or whether naming it after GoAhead is enough (operators are assigned when a date goes ahead).**
-3. If you book through a travel agency, the agency books on your behalf and must show you these Terms and the cancellation terms before it books (Agency Reseller Agreement, clause 4.2). You will be asked to confirm them yourself before you pay. **[LAWYER 4] Whether the agency's showing is enough for the terms to bind the traveler, or whether the traveler's own confirmation is required before GoAhead.**
+1. **Online Era** (Commercial Registration 148500), trading as Sawa Tours ("Sawa", "we"), runs the platform. It takes reservations, and collects payment **as agent for the operator** that sells your departure. It is not the seller of the tour. **[LAWYER 2]**
+2. **The operator** is a licensed Egyptian tour company that Sawa assigns to your departure when it goes ahead. **The operator is the seller**: your contract for the tour is with the operator. It delivers the tour, or arranges its delivery. **[LAWYER 3]**
+3. **Before GoAhead** your booking pages say "operated by a licensed Sawa partner", because no operator is assigned yet. **From GoAhead**, your payment request, receipt, voucher and booking page name the operator's legal name and licence number as **seller**, and "Online Era, collecting agent" as **payee**. **[LAWYER 4]**
+4. If you book through a travel agency, the agency acts for you. It must show you these Terms and the cancellation terms before it reserves (Agency Reseller Agreement, clause 4.2), and you confirm them yourself before you pay. **[LAWYER 5]**
 
-## C2. Booking a seat: no payment now
+## C2. A reservation, not yet a sale
 
-1. You book a seat on a dated departure of a catalog tour. **No payment is taken and no card is stored when you book.**
-2. By booking you accept these Terms, including the cancellation terms in force at that moment (C7). Your booking records which version of each you accepted.
-3. You give us each traveler's name, a phone number, a pickup point, nationality where the tour's site tickets need it, and any health or safety needs (or "none"). Your guide needs these; we may ask you to complete them before the tour.
-4. Before GoAhead you can cancel at any time, for free, from your booking page or by replying to your confirmation email. Nothing was charged, so there is nothing to refund.
+1. You **reserve** seats on a dated departure of a catalog tour. **No payment is taken and no card is stored.**
+2. A reservation isn't yet a sale. It holds your place and counts toward the departure's minimum. The sale is made at GoAhead, with the operator named then (C3). **[LAWYER 6]**
+3. By reserving you accept these Terms, including the cancellation terms in force at that moment (C7). Your booking records which version of each you accepted.
+4. You give us each traveler's name, a phone number, a pickup point, nationality where the tour's tickets need it, and any health or safety needs (or "none"). We pass these to the operator when it is assigned, for the tour. **[LAWYER 7]**
+5. Before GoAhead you can cancel your reservation at any time, free. Nothing was charged.
 
-## C3. GoAhead: when a departure is confirmed
+## C3. GoAhead: the sale is made with the named operator
 
-1. A departure goes ahead ("GoAhead") when **4 travelers** have booked it, unless the tour page shows a different minimum. **[LAWYER 5] Whether the minimum must be fixed in the Terms, or can be shown per departure.**
-2. If a day tour or one-way tour hasn't reached its minimum at its booking cut-off, it is canceled and you are told. For cruises and multi-day tours, the decision is made at an earlier GoAhead deadline shown on the tour page. Nothing was charged, so nothing is owed, and we offer another date where we can.
-3. We may choose to run a departure below its minimum. If we do, it is a GoAhead like any other.
+1. A departure goes ahead when **4 travelers** have reserved it, unless the tour page shows a different minimum. **[LAWYER 8]**
+2. At GoAhead, Sawa assigns a licensed operator to the departure. **The sale of your seats is then made between you and that operator.** Online Era acts as the operator's agent in making it and in collecting the price.
+3. We tell you the operator's name and licence number in your payment request, and on your booking page from then on.
+4. If the assigned operator can't run the departure and Sawa assigns another before the tour, we tell you. The new operator becomes the seller on the same terms and at the same price. **[LAWYER 9]**
+5. If a departure doesn't reach its minimum by its booking cut-off, or its earlier GoAhead deadline for cruises and multi-day tours, the reservation lapses. No sale is made, nothing is charged, and we offer another date where we can. Sawa may choose to run a departure below its minimum; if it does, it is a GoAhead like any other.
 
-## C4. Paying: the payment request and its deadline
+## C4. Paying: the payment request, paid to Online Era as collecting agent
 
-1. When your departure goes ahead, we email you a secure payment link for the **full price** of your booking, in euros. Your booking code is the payment's reference.
-2. The link comes with a **payment deadline**, stated in the email and on your booking page: normally **48 hours** after the link is sent. It is never later than the departure's booking cut-off. We aim to give you at least 24 hours. **[LAWYER 6] Whether 48 hours (or 24, which Sawa may set) is a fair period, and whether the Terms should state the number or refer to "the deadline in your payment email".**
-3. **You will always have at least 12 hours to pay.** If we can't give you that, for example because we were late sending the link, we won't start a deadline. We'll contact you instead and agree a way forward (C5.3).
-4. We send one reminder halfway to the deadline.
-5. If your booking was made through an agency that pays us directly ("agency billing"), the agency pays by the same deadline, and these payment steps apply to the agency.
-6. Payment is by card through our payment provider. We never see or store your full card details. **[LAWYER 7] Naming the payment provider, and any card-scheme or currency-conversion wording (the traveler pays in EUR; the Seller may settle in Egypt).**
+1. At GoAhead we email you a **payment request** for the full price, in euros. It names the seller (the operator) and the payee (Online Era, collecting agent). Your booking code is the payment's reference.
+2. The request has a **deadline**, stated in the email and on your booking page: normally **48 hours** after it is sent, never later than the booking cut-off. **You always have at least 12 hours**. If we can't give you that, we don't start a deadline; we contact you (C5.3). **[LAWYER 10]**
+3. We send one reminder halfway to the deadline.
+4. You pay by card through the payment provider used by Online Era. Paying Online Era as the operator's collecting agent **settles the price with the operator**. **[LAWYER 11]**
+5. You receive a **receipt issued by Online Era on behalf of the operator**, and a **voucher** on your booking page naming the operator as seller.
+6. Agency billing: an agency that pays us directly does so by the same deadline, on the same terms.
 
 ## C5. If you don't pay by the deadline
 
-1. If the full price isn't paid by the deadline, **your seat is released**: your booking is canceled and the seat is offered to other travelers. We email you when this happens. Nothing was charged, so nothing is owed. **[LAWYER 8] Confirm that release is a cancellation with no charge to the traveler and no liability to the Seller, and that the notice we send is sufficient.**
-2. If you paid but the payment hasn't reached us, reply to the release email at once. If the payment is confirmed, we'll reinstate your booking if a seat is still available, or refund you in full.
-3. **If the delay was ours** (we didn't send your link in time), your seat is not released. Before the cut-off we will do one of these, and tell you which:
-   - send the link with a shorter deadline, agreed with you where we can;
-   - let you travel and collect payment afterwards;
-   - cancel your booking with an apology. Nothing was charged, so nothing is owed.
-   **[LAWYER 9] Whether a cancellation by the Seller in this case needs any compensation beyond "nothing was charged", and whether "collect payment afterwards" needs its own terms (when and how it is due).**
+1. If the full price isn't paid by the deadline, **your seat is released**: the reservation ends, no sale is completed, and the seat is offered to others. We email you. Nothing was charged. **[LAWYER 12]**
+2. If you paid but it hasn't reached us, reply at once. If the payment is confirmed, we reinstate your seat if one is still free, or refund you in full.
+3. **If the delay was ours** (the payment request wasn't sent in time), your seat isn't released. Before the cut-off we will do one of these, and tell you which:
+   - send the request with a shorter deadline;
+   - let you travel and pay afterwards;
+   - cancel with an apology. Nothing was charged.
+   **[LAWYER 13]**
 
 ## C6. Once your departure is going ahead: the guarantee
 
-1. **Once a departure has gone ahead, we don't cancel it for low numbers.** If other travelers cancel or are released for non-payment, your tour still runs.
-2. We can still cancel or change a departure for reasons outside our control (the current Terms, sections 15 and 16). If we cancel, you get a full refund of what you paid. **[LAWYER 10] Confirm that the existing force majeure and cancellation-by-us sections apply unchanged to catalog bookings.**
+1. **Once a departure has gone ahead, it isn't canceled for low numbers.** If other travelers cancel or are released, it still runs. Online Era meets any shortfall to the operator (the "Minimum Departure Guarantee"). That is between Online Era and the operator, and it costs you nothing. **[LAWYER 14]**
+2. The current Terms, sections 15 and 16 (cancellation by us or the operator; events outside anyone's control), still apply. If a departure is canceled for those reasons, you get a full refund of what you paid. **[LAWYER 15]**
 
 ## C7. If you cancel after GoAhead: the cancellation tiers
 
-1. After GoAhead, the Seller keeps a **percentage of the full price** if you cancel. The percentage depends on how long before the start you cancel, and on the kind of tour (day tour, one-way road tour, cruise, multi-day).
-2. **The percentages are those of the cancellation tier version your booking was made under.** That version is shown in your booking confirmation and on your booking page, as a table. It is the version in force:
-   - when you booked, if you booked directly;
-   - when your agency booked, if you booked through an agency.
-   Later changes to the tiers never apply to your booking.
-   **[LAWYER 11] Whether referring to a versioned table shown at booking, rather than stating the numbers in the Terms, is enough for the cancellation terms to bind. The Seller's intent is that the numbers live in one table and are repeated in each booking confirmation.**
-3. What you get back is what you paid, less the percentage of the full price kept under your tier. If you haven't paid yet, nothing is refunded and nothing further is owed. **[LAWYER 12] Whether the Seller may claim the kept percentage from a traveler who cancels after GoAhead but before paying. The platform currently claims nothing in that case.**
-4. A no-show is treated as a cancellation in the last tier.
-5. Refunds go back to the card you paid with. **[LAWYER 13] A stated refund period (for example, within 14 days), and any provider limits on partial refunds.**
-6. The current Terms say an operator's own cancellation schedule applies only if it was disclosed before booking. **[LAWYER 14] Confirm this no longer applies to catalog bookings: the Seller's tiers are the only schedule.**
+1. After GoAhead, **a percentage of the full price is kept** if you cancel. It depends on how long before the start you cancel, and on the kind of tour.
+2. **The percentages are those of the cancellation tier version your booking was made under.** That version is shown in your confirmation and on your booking page, as a table. It is the one in force when you reserved, or when your agency reserved for you. Later changes never apply to your booking. **[LAWYER 16]**
+3. What you get back is what you paid, less the percentage of the full price kept. If you haven't paid yet, nothing is refunded and nothing further is claimed. **[LAWYER 17]**
+4. A no-show counts as a cancellation in the last tier.
+5. Refunds are made by Online Era, as collecting agent, to the card you paid with. **[LAWYER 18]**
+6. For catalog bookings, the tiers are the only cancellation schedule. An operator's own schedule doesn't apply. **[LAWYER 19]**
 
 ## C8. The waitlist: a full refund if your seat is resold
 
-1. When a departure is full, you can join its waitlist. If a seat is released or canceled before the cut-off, the first traveler on the waitlist whose party fits is offered it, held for a limited time (normally 12 hours, never past the cut-off). If they don't take it, the next is offered.
-2. A traveler who takes a waitlist offer books under the Terms and tiers in force at that moment, and is asked to pay straight away (C4).
-3. **If you cancel after GoAhead and a waitlisted traveler takes your seat before the cut-off, you get a full refund**: the percentage kept under C7 is returned. If they take only some of your seats, that share of the percentage is returned. Seats resold to the general public, not from the waitlist, don't count. **[LAWYER 15] Confirm the partial-resale rule and the "waitlist only" limit, which follow the Seller's decision of 27 Sep 2026.**
-
-## C9. Agencies
-
-1. An agency booking follows these Terms. The cancellation terms and Terms version are fixed when the agency books (C1.3, C7.2).
-2. For an agency on billing, the agency's invoice is due at the payment deadline after GoAhead (C4.5). If it isn't paid, the agency's seats are released (C5).
-3. **[LAWYER 16] Whether any of this must also be reflected in the Agency Reseller Agreement (clauses 4.2 and 6), or already is.**
+1. A full departure has a waitlist. A seat released or canceled before the cut-off is offered to the first waiting traveler whose party fits, held for a limited time (normally 12 hours, never past the cut-off).
+2. **If you cancel after GoAhead and a waitlisted traveler takes your seat before the cut-off, you get a full refund.** The percentage kept under C7 is returned, or its share if only some of your seats are resold. Seats resold on general sale don't count. **[LAWYER 20]**
 
 ---
 
-## Questions for the lawyer, in one place
+## Questions for the lawyer (v2)
 
 | # | Question |
 |---|---|
 | 1 | A separate catalog document, or a schedule replacing sections 6, 8, 9, 11, 12 and 13 of the current Terms? |
-| 2 | **The seller's identity:** Capital Travel Service as Seller, set against the current Terms (Online Era operates the platform). Which entity contracts with the traveler, which is the card merchant, which licence covers the sale, and how each is described. |
-| 3 | Must the Operator be named before booking, or is naming it after GoAhead enough? |
-| 4 | Does the agency's showing of the terms bind the traveler, or is the traveler's own confirmation required? |
-| 5 | Must the GoAhead minimum (4) be in the Terms, or may it be shown per departure? |
-| 6 | Is the payment period (48 hours, or 24) fair? State the number, or refer to "the deadline in your email"? |
-| 7 | Naming the payment provider; currency and conversion wording. |
-| 8 | Is release for non-payment a no-charge cancellation, and is our notice sufficient? |
-| 9 | When the delay is the Seller's: is compensation needed on cancellation, and does "collect payment afterwards" need its own terms? |
-| 10 | Do the existing force majeure and cancellation-by-us sections apply unchanged? |
-| 11 | Does a versioned tier table, shown at booking, bind as cancellation terms? |
-| 12 | May the Seller claim the kept percentage from a traveler who cancels after GoAhead but before paying? |
-| 13 | A stated refund period, and partial-refund limits. |
-| 14 | Does the "operator's own schedule, if disclosed" rule fall away for catalog bookings? |
-| 15 | The waitlist refund: the partial-resale share, and the "waitlist only" limit. |
-| 16 | Does the Agency Reseller Agreement need matching changes? |
+| 2 | ***New.* The agent licence:** does Online Era's licence to collect payments as an agent cover all of the following, and what must its licence number or wording on the documents be? <br>• collecting card payments in EUR from foreign travelers for Egyptian tour operators; <br>• holding them until the operator is paid (in a segregated or trust account?); <br>• paying refunds on the operator's behalf. |
+| 3 | ***New.* The operator as seller:** is it enough that the operator is named at GoAhead (C3) and not at reservation? Is a traveler's consent at reservation, to a sale with "a licensed Sawa partner" named later, valid under the Consumer Protection Law (181/2018) and the tourism companies law? |
+| 4 | ***New.* Disclosure:** what must the payment request, receipt and voucher state about the seller (legal name, licence number, address, tax number?) and about the agent? |
+| 5 | Does the agency's showing of the terms bind the traveler, or is the traveler's own confirmation needed before GoAhead? |
+| 6 | ***New.* Reservation vs. sale:** do C2 and C3 hold? Is a reservation with no payment and no seller a binding contract with anyone, and with whom (Online Era, as the platform)? |
+| 7 | ***New.* Personal data:** under the Personal Data Protection Law (151/2020), what are the roles (controller, processor) of Online Era, the operator and the agency, before and after assignment? |
+| 8 | Must the GoAhead minimum (4) be in the Terms, or may it be shown per departure? |
+| 9 | ***New.* Reassignment:** if the operator is replaced after GoAhead, and possibly after payment, does the sale transfer to the new operator? Is the traveler's consent needed, and what must the receipt then say? |
+| 10 | The payment period (48 hours or 24) and the 12-hour minimum: fair, and stated as numbers or as "the deadline in your email"? |
+| 11 | ***New.* Payment to the agent:** does payment to Online Era as collecting agent discharge the traveler's debt to the operator, including if Online Era fails to pay the operator? |
+| 12 | Release for non-payment as a lapse with no sale and no charge: sufficient, with our notice? |
+| 13 | Sawa's delay: compensation on cancellation, and terms for "travel and pay afterwards"? |
+| 14 | ***New.* The Minimum Departure Guarantee:** Online Era pays the operator's shortfall. How is that characterized: a guarantee, a commission adjustment, or an operator subsidy? Does it affect the agent's licence or tax position? |
+| 15 | Do the existing force majeure and cancellation-by-us sections apply unchanged, with Online Era refunding as agent? |
+| 16 | Does a versioned tier table, shown at reservation, bind as cancellation terms? |
+| 17 | May the seller claim the kept percentage from a traveler who cancels after GoAhead but before paying? |
+| 18 | A stated refund period; partial refunds through the provider; who is liable for a refund if the operator has already been paid. |
+| 19 | For catalog bookings, does the "operator's own schedule, if disclosed" rule fall away? |
+| 20 | The waitlist refund: the partial-resale share, and the "waitlist only" limit. |
+| 21 | ***New.* Competition Law (3/2005):** Sawa sets **one retail price** for a catalog departure, and that price is paid to whichever of several **competing operators** is assigned. Operators are paid their own rate-card amounts. Does a common retail price across competing operators, set by their common agent, raise a price-fixing or information-exchange concern? What safeguards should the operator agreements carry? For example: Sawa sets the price alone, as principal of its catalog; operators don't see each other's rates; and the rate card is agreed bilaterally. |
+| 22 | ***New.* Invoices and tax:** who issues the tax invoice to the traveler (the operator as seller?) and to the operator (Online Era, for its commission)? Is VAT due on Online Era's commission, and on the guarantee? |
+| 23 | ***New.* The operator and agency agreements:** the draft Operator Supply and Agency Reseller Agreements name Capital Travel Service as the contracting party. They must be redrafted with the operator as seller and Online Era as its commercial and collecting agent. Which clauses change? |
