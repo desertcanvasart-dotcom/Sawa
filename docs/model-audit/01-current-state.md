@@ -4,6 +4,19 @@ Audit of branch `claude/wizardly-keller-z7x7op` at `0f97967`, 26 Sep 2026. That 
 
 This was read-only. Nothing was run against a database, a payment provider or a mail service. "Not found" means searched for and not found. Paths are relative to the repo root.
 
+**Inputs checked:**
+- `sawa-rate-card.xlsx`: two uploads with identical contents; no real figures yet.
+- *Sawa Operator Supply & Agency Reseller Agreements (draft, 26 Sep 2026)*.
+
+The agreements describe the target, so they are used in 02 and 03, not here. For their requirements, searched and **not found** in the code:
+- complaints handling;
+- on-time pickup tracking;
+- traveller nationality;
+- per-traveller pickup point;
+- programmatic WhatsApp messages;
+- operator documents (licence and insurance copies);
+- any split-payment capability.
+
 **The production database was not reachable from this audit.** Counts in §7 come from the repo (fixtures, and dated notes in `docs/audit/`) plus one admin screenshot supplied on 26 Sep. They are not a live query.
 
 ---

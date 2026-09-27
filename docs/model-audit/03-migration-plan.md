@@ -137,6 +137,31 @@ agency_commissions             pledge_id, agency_id, rate_id, seats, amount_mino
 agency_statements              id, agency_id, month, total_minor, net_of_billing_minor, state, paid_at, bank_reference
 agency_billing_invoices        → invoices with agency_id (published price − commission)
 
+── Added for the draft agreements (OSA / ARA, 26 Sep 2026) ─────────────
+products              + supplier_deadlines jsonb [{what, days_before, advance_pct}]  (OSA 9.2, Sched. 1)
+                      + needs_nationality bool (tickets need it, OSA 7.1)
+                      + launch_state active | later | merged  (catalogue advice: #2/#3 later, #14→#15)
+booking_travellers    + pickup_point, nationality (only when the product needs it), contact_phone
+pledges               + terms_accepted_at, terms_version   (ARA 4.2: agency bookings too)
+                      + commission_rate_id               (stamped at booking, ARA Sched. 1)
+                      + agency_client_until date          (departure end + 12 months, ARA 8.2)
+roster_availability   operator_id, month, product_id, weekday, available bool   (OSA 4.1-4.2)
+departure_assignments + reassigned_from_id, notified_whatsapp_at
+manifest_amendments   departure_id, after_cutoff bool, operator_consent_at, by   (OSA 5.4)
+manifest_flags        manifest_id, traveller_id, need, operator_note, raised_at, resolved_at  (OSA 7.2)
+rate_card_versions    + proposed_at, signed_off_by_operator_at, signed_off_by_sawa_at     (OSA 8.2, Sched. 2)
+settlement_lines      operator_settlement_id, kind per_traveller | departure_fee | room |
+                      government_fee_difference | penalty | service_failure_deduction |
+                      replacement_cost | force_majeure_cost, amount_minor, note
+operator_settlements  + statement_state issued | accepted | disputed, disputed_at, accept_by (issued + 30 days)
+complaints            id, departure_id, pledge_id, raised_by (traveller | agency | ops), body,
+                      evidence_requested_at, evidence_due_at (+48 h), outcome, refund_minor, deduction_minor
+complaint_evidence    complaint_id, party, file_path (private bucket), note
+organisation_documents organisation_id, kind tourism_licence | etaa | liability_insurance | vehicle_insurance,
+                      file_path, expires_on, received_at   → expiry job suspends from the roster (OSA 15.3)
+pickup_checkins       departure_id, operator_id, scheduled_at, picked_up_at   (on-time pickups, OSA Sched. 3)
+notifications         channel email | whatsapp | portal, recipient_kind, template, cc_agency_id, sent_at
+
 ── Quality ─────────────────────────────────────────────────────────────
 operator_ratings               departure_id, pledge_id, score 1–5, comment, created_at
 operator_strikes               operator_id, departure_id, kind missed_ack | unapproved_substitution |
@@ -161,7 +186,7 @@ operator_penalties             operator_id, departure_id, kind cancellation | no
 | `pledges` | pledges + booking_travellers | `payment_mode=legacy_link`; lead traveller from `customers`; the price columns stay as captured |
 | `pledges.agency_id` + `ref_code` | `booking_agency_id` + `attribution` | Backfill from `passengerOwner` logic once, then store |
 | `booking_payments` | legacy | Unchanged for legacy_link bookings |
-| `departure_costs`, adjustments, payout runs/lines/transfers | legacy (read-only) | Kept for history. If 044–046 are in prod with approved runs, **no deletion** |
+| `departure_costs`, adjustments, payout runs/lines/transfers | legacy (read-only), except cost lines and receipts | Kept for history. If 044–046 are in prod with approved runs, **no deletion**. The cost-line and receipt flow is reused for force-majeure claims (OSA 14.2); the payout run and transfer pattern is reused for monthly agency commission |
 | `referrals` | kept for widget codes | `commission_percent` ignored; commission comes from `agency_commission_rates` |
 | `operator_applications` | kept, plus an inbox | Link approved applications to organisations |
 
@@ -197,7 +222,8 @@ A **phase 0** of prerequisites comes first.
   - Answer the decisions in §4.
   - Choose the payment provider and open the merchant account in CTS's name (§3); this has lead time.
   - Get counsel's Terms and Privacy wording for CTS as seller of record.
-  - Fill the rate card and commission amounts.
+  - Get the Egyptian lawyer's answers to the draft's questions. **Question 3 gates phase 3:** can CTS save a card at booking and charge it later, under Central Bank rules and Consumer Protection Law 181/2018? Question 5 (PDPL 151/2020 roles) shapes the data schedules and the 90-day deletion.
+  - Fill the rate card and commission amounts, plus the other `[●]` values in the agreements (penalties, insurance minimum, payment currency, dispute route).
   - Run the read-only production counts from §1.4.
 - **Files:** `server/app.js:1018-1039` (defect only).
 - **Migrations:** none.
@@ -366,6 +392,54 @@ A **phase 0** of prerequisites comes first.
 
 ---
 
+### What the draft agreements add to each phase
+
+The agreements (26 Sep 2026) don't change the order. They add scope, listed here rather than folded in, so you can see what came from the contract.
+
+- **Phase 1:**
+  - Launch catalogue per the draft's advice: #1 daily Giza; #2 and #3 held as `later`; #14 merged into #15; niche products on one or two fixed weekdays.
+  - Supplier deadlines and `needs_nationality` in the product spec.
+  - Worked examples as fixtures.
+- **Phase 2:**
+  - Availability collection before the roster is published on the 15th.
+  - Every operator can see the whole roster.
+  - 72-hour swap notice.
+  - Reassign on a missed acknowledgement.
+  - Assignment notice by WhatsApp as well as the portal. This needs a WhatsApp Business provider and approved templates. **If that isn't ready, ship email and portal first**; WhatsApp is in the contract, not a precondition for assignment.
+  - CTS rostered and scored under the same rules as other operators.
+- **Phase 3:**
+  - **Gated on lawyer question 3.**
+  - Terms acceptance and a saved card for agency-account bookings: the agency creates the booking, then the traveller completes it through a link (D20).
+  - Per-traveller pickup point, contact number, nationality where needed, and safety needs from both direct and agency checkouts.
+  - Operator name hidden from traveller surfaces if "Sawa only" is chosen (OSA 6.5).
+- **Phase 4:**
+  - Advance within 2 business days, or on supplier deadlines for cruises and multi-day.
+  - Band recalculated for cancellations before cut-off.
+  - Government-fee difference lines.
+  - Statement accepted after 30 days unless disputed.
+  - Set-off of penalties.
+  - Force-majeure cost claims using the existing cost-line and receipt flow.
+  - Rate-card sign-off by both parties, with 60 days' notice.
+  - Schedule 4's examples (8 at cut-off → 520 with a 260/260 split; 2 late cancellations → 520; 2 early cancellations → 390) as unit tests.
+  - Post-cut-off additions with operator consent.
+  - The operator's "can't meet this need" flag within 24 h.
+- **Phase 5:**
+  - Commission rate stamped on each booking.
+  - Monthly statement and payout by the 10th.
+  - Billing agencies keep commission at payment.
+  - Commission share of retained late-cancellation fees (draft suggests 50%).
+  - Agency copied on operational messages.
+  - Marketing exclusion for 12 months after departure.
+  - Option A pricing only.
+  - ARA Schedule 3 example (3 × 95; commission 12 → payout 36, or 249 billed) as a test.
+- **Phase 6:**
+  - Complaints with operator evidence due in 48 h, capped deductions and disputes.
+  - On-time pickup check-ins feeding the quality score.
+  - Document uploads with expiry and automatic roster suspension.
+  - Penalties including replacement cost over the rate card.
+  - 3 cancellations in 90 days, or N strikes → roster reduction or removal.
+  - Quality-weighted allocation after 3 months (OSA Sched. 3).
+
 ## 3. Payment-provider requirements
 
 The current provider is **Tab (tab.travel), used only through links made by hand**. Nothing in the repo calls Tab (`server/payments.js:3-8`: "Nothing here talks to Tab"). So **the code cannot show whether Tab supports any capability below.** Each needs confirming with Tab, or with the provider chosen instead. This table does not guess.
@@ -383,6 +457,8 @@ The current provider is **Tab (tab.travel), used only through links made by hand
 | Merchant account in CTS's name; settlement currency (EUR vs USD, D1); Egyptian entity eligibility | Seller of record | **Not recorded in code** (DIR-18 vs DIR-22) |
 | Statements / payout reports (per charge, fees, net) for reconciliation | Settlement, accounting | **Can't tell**; the rate card assumes a 3% placeholder fee |
 | Disputes / chargebacks API | Operations | **Can't tell** |
+| Split payments to several payees (marketplace/connect style) | Only if counsel later approves Sawa as a disclosed agent with the provider splitting each payment (draft overview; lawyer Q4). Not needed for launch | **Can't tell**. Worth asking now, so the provider doesn't have to change later |
+| Legality of saving a card and charging it later, for an Egyptian merchant | The whole GoAhead charge (lawyer Q3: Central Bank rules, Law 181/2018) | Not a provider feature; a legal answer. Gates phase 3 |
 | Invoices | Seller-of-record receipts | Can be generated by Sawa; doesn't depend on the provider |
 | Payouts to operators and agencies | Advance, balance, commission | Today by bank transfer, recorded by hand. Keep as manual bank transfers unless the provider offers compliant payouts to Egyptian banks: **can't tell** |
 
@@ -390,36 +466,30 @@ The current provider is **Tab (tab.travel), used only through links made by hand
 
 ## 4. Decisions needed from you
 
-1. **D1 Currency.** The rate card is in USD (Assumptions sheet: "replace with the currency you agree with operators"); the site, prices, `booking_payments` and Terms are in EUR (`shared/currency.js:34`; `site/terms.html:198`). Do travellers pay EUR while operators are paid USD? Who carries the exchange risk?
-2. **D2 What is charged at GoAhead.** The full seat price? Today there is a deposit (10% / 25%) plus a balance due 2 or 14 days before (`shared/booking-policy.js:53-86`). A GoAhead for a cruise can come weeks ahead; a day-tour GoAhead may come 48 h out. One full charge simplifies everything; confirm.
-3. **D3 Seller-of-record mechanics.**
-   - What is Online Era's role once CTS sells: platform licensor to CTS, or CTS trading as "Sawa Tours"?
-   - Whose name appears in the footer, on invoices, on card statements (descriptor) and as data controller?
-   - Tax treatment of invoices.
-   - This supersedes DIR-19 and DIR-22 (`docs/audit/open-directives.md`) and inverts `server/entity-disclosure.test.js`.
-4. **D4 Payment provider.** Tab (if it has the §3 capabilities) or another provider. That choice gates phase 3.
-5. **D5 Failed charge at GoAhead.**
-   - How long does a traveller have to fix a card?
-   - Is the seat released?
-   - If failures take paid seats below 4, is the departure still guaranteed? (The target says guaranteed after GoAhead; the Terms §13.2 refill/refund clause says otherwise.) Is GoAhead reached on *booked* seats or on *successfully charged* seats?
-6. **D6 Day tours and one-way tours with no deadline.** The target gives GoAhead deadlines only for cruises and multi-day. Does a day tour that never reaches 4 stay open until the 48-h cut-off and then cancel? Today it auto-cancels 7 days out (`server/domain.js:80-81`) and the copy says so (`site/goahead-promise.html:94`).
-7. **D7 "Start your own date".** Remove it entirely, or keep it as "ask us to add a date" feeding the calendar? It is a large feature with emails and copy (01 §4.1).
-8. **D8 Cancellation tiers.** Today they are fractions of the deposit ("the most you can lose is your deposit"). With a full charge, what are the published tiers as a percentage of price, per product type, and for cruises?
-9. **D9 Organisations and roles.**
-   - Confirm one company can be both an agency and an operator, with separate records and separate logins.
-   - Is CTS itself an operator on the roster?
-   - Today CTS is the default operator for all direct bookings (`server/brand.js:174`).
-10. **D10 Catalogue list.**
-    - Merge #14 into #15?
-    - Keep or drop #2 and #3, which compete with #1?
-    - #3 and #7 are not in the repo yet.
-    - #13 title fix: "Ramesses".
-11. **D11 Roster granularity.** A weekday roster fits daily and weekly day tours. Cruises follow ship sailing days, and multi-day tours run fortnightly. Are those rostered by date instead? Who runs a GoAhead departure when no one is rostered?
-12. **D12 Agency billing terms.** Invoice at GoAhead or at cut-off? Payment terms, credit limit, what happens if the agency doesn't pay. Is commission netted on the invoice (the target says yes: "published price less its commission"), and so excluded from the monthly statement?
-13. **D13 Commission share of late-cancellation fees.** What percentage? Does it apply to no-shows?
-14. **D14 Operator advance.** Paid at assignment or at acknowledgement? Is 50% fixed or per product? Is the advance recovered if the operator then cancels?
-15. **D15 Solo travellers.** What are the pairing rules (gender, age, opt-in)? When is pairing fixed (at cut-off)? Is triple occupancy still offered? Is the "cost of single promise" budgeted per departure or absorbed?
-16. **D16 Legacy bookings.** Confirm legacy bookings keep link payment and their captured prices, even when a flat price differs on the same departure. Offer legacy travellers an optional card save?
-17. **D17 Safety data.** Is it collected per traveller at booking, or completed later? Does the operator see it before cut-off? What is the retention on Sawa's side (the target sets 90 days for operators only)?
-18. **D18 Controls on money.** Is maker/checker required for operator advances, balances and agency statements, now that ops_staff can do everything alone (01 §3)?
-19. **D19 Cut-off values.** Is 48 h right for every day tour, including the long ones (Minya, Abu Simbel)? What is the per-cruise cut-off?
+"Draft" = what the *Operator Supply & Agency Reseller Agreements* draft (26 Sep 2026) already says or suggests. Where it settles a question, the item is marked **settled by draft**; confirm it and nothing else is needed. Everything else is still open.
+
+| # | Decision | Why the code makes it matter | Draft | Status |
+|---|---|---|---|---|
+| D1 | **Currency:** what travellers pay in, what operators are paid in, and who carries the exchange risk | Site, Terms and payments are EUR (`shared/currency.js:34`; `site/terms.html:198`). The rate card is USD | OSA 9.4 "[EGP / USD]" to operators; rate card says USD | **Open** |
+| D2 | **What is charged at GoAhead:** the full seat price, or a deposit and balance as today | Deposit 10%/25% plus balance at 2/14 days is built in (`shared/booking-policy.js:53-86`) | ARA example: "each client's card is charged 95 at GoAhead", i.e. the full published price | **Settled by draft:** full price. Confirm, then the deposit/balance machinery is retired for new bookings |
+| D3 | **Seller-of-record mechanics:** Online Era's role; the name on the footer, invoices, card descriptor and privacy notice; tax on invoices | A test enforces "Online Era" and forbids "ETAA 2179" (`server/entity-disclosure.test.js:148-165`) | CTS sells and contracts "trading through the Sawa platform"; counsel may later allow Sawa as disclosed agent | **Open (legal):** needs counsel, then brand constants and that test change together |
+| D4 | **Payment provider** (Tab or another) | Tab is used only through links made by hand; no API | — | **Open**, gated on lawyer Q3 |
+| D5 | **Failed charge at GoAhead:** time to fix the card, seat release, and whether the departure stays guaranteed if failures take paid seats below 4 | Terms §13.2 promises refill/refund (`site/terms.html:273`) and conflicts with the guarantee | GoAhead = "four seats **sold**" (OSA 2); operator must run it after assignment (OSA 5.3) | **Partly settled:** GoAhead on seats sold, and the guarantee holds. Still open: the card-fix window and seat release |
+| D6 | **Day and one-way tours without a GoAhead deadline:** stay open until the 48-h cut-off, then cancel? | Today they auto-cancel 7 days out (`server/domain.js:80-81`), and copy says so | Deadline only for cruises and multi-day (OSA 5.5); cut-off 48 h for day tours | **Open:** what happens at cut-off to a day tour below 4 |
+| D7 | **"Start your own date":** remove, or keep as "ask us to add a date" | Large feature: routes, emails, jobs, copy (01 §4.1) | "Sawa owns the catalogue and the departure calendar" | **Open (leaning remove)** |
+| D8 | **Cancellation tiers** as a percentage of price per product type, including cruises | Tiers are fractions of the deposit (`shared/booking-policy.js:100-152`) | Refunds and fees under the Traveller Terms (OSA 10.3); late-cancel commission implies a retained fee | **Open** |
+| D9 | **Organisations:** one company holding both roles with separate records and logins; CTS on the roster | One `agencies` table for both today; CTS is default operator for direct bookings (`server/brand.js:174`) | Separate OSA for an agency that operates (ARA 1.2); CTS "scored and allocated under exactly the same rules" (OSA 4.4, Sched. 3) | **Settled by draft** |
+| D10 | **Launch catalogue** | 16–20 products live; #3 and #7 missing | Launch with #1 as daily Giza; add #2/#3 when #1 runs full; merge #14 into #15; niche products on 1–2 weekdays; #13 title "Ramesses" | **Settled by draft** (confirm the #14/#15 wording) |
+| D11 | **Roster granularity** for cruises (sailing days) and fortnightly multi-day; who runs a GoAhead date with no one rostered | Weekday roster is the brief's model | "Fixed at launch; quality-weighted after 3 months"; cruises and multi-day "follow ship sailing days" | **Open:** roster by date for cruises and multi-day, and the fallback |
+| D12 | **Agency billing timing and credit** | Not found in code | "[within ● days of GoAhead / ● days before the Departure]" (ARA 6.2); approval for credit | **Open** |
+| D13 | **Commission share of retained late-cancellation fees;** does it apply to no-shows? | No fee is ever computed today | Suggests "same share as the retained fee, e.g. 50%" (ARA 7.2) | **Open** (value) |
+| D14 | **Operator advance** | Not found | 50% within 2 business days of assignment; cruises and multi-day follow supplier deadlines (OSA 9.2) | **Settled by draft** (values in brackets to confirm) |
+| D15 | **No-single-supplement for cruises and multi-day** | A single supplement is charged today (`server/domain.js:145`) | "Either Sawa pairs solo travellers of the same sex, or Sawa pays the single supplement from its margin" | **Open (choose one).** Pairing means collecting sex/gender for solo travellers on those products, which is personal data, plus a pairing step at cut-off |
+| D16 | **Legacy bookings** keep link payment and their captured prices | Live pledges since 12 Aug under "no card" terms | — | **Open** |
+| D17 | **Safety data:** when it is collected, when the operator sees it, Sawa-side retention | Not collected today | At booking (ARA 4.4); on the manifest (OSA 7.1); operator deletes within 90 days (OSA 16.2); Schedule 5 is for the lawyer | **Partly settled:** Sawa's own retention is open, pending lawyer Q5 |
+| D18 | **Maker/checker on money** | ops_staff can approve and pay alone (01 §3) | — | **Open** |
+| D19 | **Cut-off values** | Default is 24 h today | 48 h for day tours; per product for cruises (OSA 2) | **Settled by draft** for day tours; cruise values open |
+| D20 | **How an agency-account booking gets the traveller's consent and card** | Agency books with no consent or card (`server/app.js:1185-1219`) | Every agency traveller accepts the Traveller Terms (ARA 4.2) and pays through Sawa's checkout unless on agency billing (ARA 6) | **Open (design):** a completion link to the traveller is proposed. Unpaid, unconfirmed agency seats: do they count toward GoAhead? |
+| D21 | **Show the operator's name to travellers?** | Shown on tour page, emails, `/partners`, JSON-LD | OSA 6.5 [●]; suggests "Sawa only at launch" | **Open (leaning Sawa only)** |
+| D22 | **Penalty amounts, insurance minimum, dispute route, governing language** | — | All [●] in OSA 11, 15.2, 19, 22.6 and Sched. 6 | **Open** (contract values; the platform only needs the amounts) |
+| D23 | **WhatsApp provider** for assignment notices | No WhatsApp messaging in code | Required by OSA 5.1 | **Open:** provider and number; email and portal can ship first |

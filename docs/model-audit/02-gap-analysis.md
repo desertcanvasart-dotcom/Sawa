@@ -2,6 +2,8 @@
 
 Each area has one table. File references point to the as-built evidence in [`01-current-state.md`](01-current-state.md).
 
+§1–24 follow the brief. §25 adds the requirements that come from the *Operator Supply & Agency Reseller Agreements* draft (26 Sep 2026), cited as OSA / ARA clause numbers.
+
 **Gap:** none / modify / new / remove.
 **Effort:** S ≈ days, M ≈ 1–2 weeks, L ≈ 3+ weeks, for one engineer who knows this codebase.
 **Risk:** the chance of breaking live bookings or money flows, or of shipping a false public claim.
@@ -12,7 +14,7 @@ Each area has one table. File references point to the as-built evidence in [`01-
 
 | Target capability | Current state (with file refs) | Gap | Effort | Risk | Notes |
 |---|---|---|---|---|---|
-| Fixed catalogue owned by Sawa (21 products) | `tour_products` holds Sawa products *and* agency-submitted listings (`schema_013`; `server/app.js:1018-1039`). Prod has ~16–20 products (01 §7); #3 and #7 not found | modify | S | L | Add missing products; remove the agency submission path (§R). Rate-card notes flag #2/#3 as competing and #14/#15 as near-duplicates: decide before seeding |
+| Fixed catalogue owned by Sawa (21 products) | `tour_products` holds Sawa products *and* agency-submitted listings (`schema_013`; `server/app.js:1018-1039`). Prod has ~16–20 products (01 §7); #3 and #7 not found | modify | S | L | Add missing products; remove the agency submission path (§R). The draft advises launching with #1 as the daily Giza product, holding #2/#3 until #1 runs full, and merging #14 into #15, so about 18 products are active at launch. #7 (4×4 safari) needs a rate by vehicle, not by band |
 | Four product types: day tour, one-way road tour, cruise, multi-day | `type` CHECK `day_tour`\|`package` (`schema.sql:34-60`). Cruises and multi-day are both `package`; one-way tours are `day_tour` | modify | M | M | `isPackage()` drives deposit, deadline, rooming, supplements and copy (`shared/booking-policy.js`, `server/domain.js`). Every branch needs a four-way decision |
 | Itinerary, timings | `itinerary` JSONB, `duration`, `default_time`, `overview_html` (`schema.sql`, `schema_006`) | none | – | – | Keep |
 | Vehicle class by group size | Single free-text `vehicle` (`schema.sql:34-60`) | new | S | L | Structured `[{band:'4-6', class:'...'}]` |
@@ -222,6 +224,43 @@ Each area has one table. File references point to the as-built evidence in [`01-
 | Cancellation text rebased off "deposit" | `shared/booking-policy.js:100-152` feeds tour page, emails, Terms | modify | S | H | |
 | SPA duplicates of legal pages | `src/main.jsx:3378-3553` (About, FAQ, Terms, Privacy, with a "review with your own counsel" draft banner) | remove | S | M | Route those paths to the static pages instead of keeping two copies |
 
+## 25. Requirements added by the draft agreements
+
+The *Operator Supply Agreement* (OSA) and *Agency Reseller Agreement* (ARA) draft of 26 Sep 2026 is more specific than the target brief. These rows cover what the areas above don't. Clause numbers refer to that draft.
+
+| Target capability | Current state | Gap | Effort | Risk | Notes |
+|---|---|---|---|---|---|
+| Assignment notice **by platform and WhatsApp** (OSA 5.1) | No WhatsApp messaging; WhatsApp is only a contact link (`server/brand.js:32`). Twilio is used for one-time codes only (`server/phone-verify.js`) | new | M | M | A WhatsApp Business provider plus approved message templates. Email + portal can ship first |
+| Reassign when acknowledgement is missed (OSA 5.2) | Not found | new | S | M | Part of §11: the 12-h expiry offers the date to the next rostered or approved operator |
+| Travellers added after cut-off only with operator consent (OSA 5.4) | Not found; cut-off simply closes sales (`server/domain.js:280-296`) | new | S | L | Admin "add after cut-off" action that records the operator's consent |
+| Manifest fields: names, **pickup point per traveller**, contact number, **nationality where tickets need it**, safety needs (OSA 7.1) | Only a lead name, email, phone and optional per-booking meeting point; no nationality; no per-traveller pickup (01 §4.2) | new | M | M | Nationality is personal data; collect it only for products whose tickets need it (a product flag) |
+| Operator flags an unmeetable safety need within 24 h (OSA 7.2) | Not found | new | S | M | "Can't meet" action on the manifest → ops task → traveller contact |
+| Rates fixed per season; new rates on 60 days' notice (OSA 8.2) | Not found | new | S | L | `effective_from` must be ≥ 60 days after proposal unless both sign off; each version signed off by both parties (Sched. 2) |
+| Government fee change after sale: Sawa pays the difference (OSA 8.3) | Not found | new | S | L | A settlement adjustment line type "government fee difference" per seat |
+| Advance within 2 business days of assignment; cruise and multi-day advances follow **supplier deadlines** in the spec (OSA 9.2, Sched. 1) | Not found | new | S | M | Product spec gains supplier-deadline entries; advance schedule per departure |
+| Statement lists each traveller and amount; accepted unless disputed within 30 days (OSA 9.3, 19.1) | Not found | new | S | L | Statement state issued → accepted (auto, 30 days) or disputed |
+| Set-off of penalties and deductions against pay (OSA 9.4, 12.2) | Settlement adjustments exist for a different purpose (`schema_044`) | modify | S | L | Negative lines on the operator settlement, capped per OSA 12.2 |
+| Payment currency EGP or USD to a registered bank account (OSA 9.4) | EUR only (`shared/currency.js:34`); no bank fields (`schema_025…:35-41`) | new | S | M | D1 |
+| **Band recalculated** when travellers cancel before cut-off; fixed at cut-off after (OSA 10.1-10.2, worked examples Sched. 4) | Not found | new | S | M | Use Schedule 4's three examples (520 / 520 / 390) as test fixtures |
+| Operator cancellation penalty, plus replacement cost over the rate card (OSA 11.1-11.2, Sched. 6) | Not found | new | S | M | Replacement operator's settlement vs the original rate → difference charged to the original operator |
+| 3 operator cancellations in 90 days → may remove from roster (OSA 11.3) | Not found | new | S | L | Rule and admin prompt |
+| **Complaints:** investigation, operator evidence within 48 h, capped deduction, dispute (OSA 12; ARA 11.2) | Not found (no complaints table, route or screen) | new | M | M | Complaint record linked to departure and booking, evidence uploads (the private receipts bucket, `server/receipts.js`, can be reused), outcome, deduction |
+| Operator sees its own ratings and quality score (OSA 13.1) | Not found | new | S | L | Operator portal view |
+| Quality score = average rating + **on-time pickups** + strikes; 3 strikes in 90 days → fewer days, N → removal (OSA Sched. 3) | Not found; no pickup-time record | new | M | M | On-time pickup needs a signal: an operator "picked up" check-in, or a traveller rating question |
+| Roster published by the 15th; operators state availability and may decline days before publication; 72-h swap notice; **every operator can see the whole roster** (OSA 4.1-4.4) | Not found | new | M | L | Availability collection step before publishing; a read-only roster view for all operators. CTS scored and allocated under the same rules |
+| Force majeure: pay for services delivered and **evidenced non-refundable costs** (OSA 14.2) | The cost-line and receipt machinery exists (`departure_costs`, `server/receipts.js`; 044–046) | modify | S | L | **Keep and repurpose** the cost-sheet and receipt flow for force-majeure claims instead of retiring it (see §R) |
+| Licence and insurance copies on signing and renewal; lapse → suspension from roster (OSA 15.3) | Verification fields on `agencies` (`schema_025`, `schema_035`); no document storage; no expiry check; verification gates nothing (01 §4.10) | modify | M | M | Document uploads per organisation, expiry job, automatic roster suspension |
+| Operator non-solicitation for 12 months; penalty for off-platform rebooking (OSA 16.3, Sched. 6) | Not found | new | S | L | Contract-side mostly; platform records the penalty when evidenced |
+| Traveller accepts Sawa's Traveller Terms at booking, **including agency-account bookings** (ARA 4.2) | Agency portal books without any customer consent or card (`server/app.js:1185-1219`) | new | M | **H** | Under standard payment an agency booking needs the traveller's own card and consent. Proposed: agency creates the booking → the traveller gets a link to accept the Terms and save a card. Agency-billing bookings skip the card (D20) |
+| Agency collects and passes safety needs (ARA 4.4) | Not found | new | S | L | Same per-traveller fields as direct checkout, in the agency booking form |
+| Agency may not sell below the published price; Option A (no agency fee) at launch (ARA 5) | Agencies book at the server-computed price (`server/app.js:1197`) | none | – | – | Option B later would need a separate fee line |
+| Commission rate fixed at booking: "a change in Commission applies only to seats booked after the change" (ARA Sched. 1) | Not found | new | S | M | Stamp the commission rate on the booking, not the departure |
+| Commission paid by the 10th of the following month; under agency billing the agency keeps it at payment (ARA 7.4) | Wednesday profit-share runs (`app.js:3508-3597`) | modify | S | L | Monthly run; billing agencies excluded from payout |
+| No Sawa marketing to agency travellers **for 12 months** after their departure (ARA 8.2) | No marketing sends exist | new | S | L | A time-bounded "agency client until" date on the traveller, which marketing queries must respect |
+| Operational messages go to agency travellers **and copy the agency** (ARA 11.1) | Sawa emails agency customers only for payment links, GoAhead and cancellation, never copying the agency; agency bookings get no confirmation (01 §4.9) | modify | S | M | CC the agency on transactional mail for its travellers |
+| Guides introduce the tour as a Sawa departure; operator name shown to travellers only if decided (OSA 6.5; draft suggests "Sawa only at launch") | Operator name is shown on the tour page (`src/main.jsx:1834-1845`), in emails (`server/email.js:495, 699`), on `/partners` (`server/seo.js:718-736`) and in JSON-LD `provider` (`server/seo.js:261-283`) | modify / remove | S | M | If "Sawa only": hide operator names from traveller surfaces; keep the licence and safety claims about operators in general |
+| Future option: Sawa as disclosed agent, **payment split by a licensed provider** (draft overview; lawyer Q4) | Not found | – | – | – | Not in scope now. Prefer a provider that can also do split payments, so a later switch doesn't need a new provider (03 §3) |
+
 ---
 
 ## R. What must be removed or retired
@@ -233,7 +272,7 @@ Each area has one table. File references point to the as-built evidence in [`01-
 | Live price that drops with group size | `livePriceFor` / `break_price` / `price_tiers` (`shared/pricing.js`; `server/domain.js:299-327`; `schema_020`); duplicate in `src/AgencyDashboard.jsx:37-46` | **Yes**: every existing pledge stores a price computed this way. Keep stored values; stop computing new ones |
 | Operator = "partner with most confirmed travellers" | `operatorForDeparture` / `passengerOwner` in operator role (`server/domain.js:520-607`); `server/operator-lookup.js`; `DIRECT_BOOKINGS_OPERATOR` (`server/brand.js:174`); copy in `src/main.jsx:1845`, `server/email.js:495, 699` | Only as a computed value; nothing stored. Emails already sent quoted it |
 | Pooling across operators / "join others' dates" framing | Copy (01 §6b), footer tagline; `NEAR_MATCH_WINDOW_DAYS` join-first (`app.js:414, 1763-1779`) | No stored dependence. Pooling of *travellers* on one departure stays; only the operator framing goes |
-| Profit-share settlement (10% / 90% by headcount) and operator cost sheets | `server/settlement.js`; `departure_costs`, `settlement_adjustments`, `departure_settlements`, `payout_runs/lines/transfers` (044–046); `src/AdminSettlements.jsx`; `src/AgencyMoney.jsx` | **Possibly**: if 044–046 are applied in prod and any run was approved/paid. Keep tables read-only for history; don't drop |
+| Profit-share settlement (10% / 90% by headcount) and operator cost sheets | `server/settlement.js`; `departure_costs`, `settlement_adjustments`, `departure_settlements`, `payout_runs/lines/transfers` (044–046); `src/AdminSettlements.jsx`; `src/AgencyMoney.jsx` | **Possibly**: if 044–046 are applied in prod and any run was approved/paid. Keep tables read-only for history; don't drop. **Retire only the profit split, not the whole thing:** the cost-line and receipt flow is reused for force-majeure cost claims (OSA 14.2, §25) |
 | Traveller and agency date requests | `createDateRequest` and routes (`app.js:1710-2011`); lapse branch of `cancel-unconfirmed.js`; request emails (`server/email.js:537-587`); `departures.created_by` traveler/agency (`schema_014`); `request_*` window columns (`schema_037`) | Possibly: any `pending_review` departures in prod must be resolved (approve into calendar or decline) before removal |
 | Admin "date requires a first traveller" rule | `app.js:734-753` | No |
 | Deposit / balance / payment-link machinery | `booking_payments` (043) routes and `src/AdminPayments.jsx`; `shared/payment-window.js`; `pledges.deposit_*`, `balance_*`; goahead-alert job; payment-link emails | **Yes** if any booking has a link sent or paid. Keep for legacy bookings until they have travelled (03 §1.4) |
