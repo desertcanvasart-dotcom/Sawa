@@ -3095,14 +3095,15 @@ app.get("/api/admin/bookings", requireAuth, requireRole("super_admin", "ops_staf
   })) });
 }));
 
-// Admin: change a booking's status (pending/confirmed/paid/cancelled).
-app.patch("/api/admin/bookings/:id", requireAuth, requireRole("super_admin", "ops_staff"), h(async (req, res) => {
-  const status = req.body?.status;
-  if (!["pending", "confirmed", "paid", "cancelled"].includes(status)) throw new AppError(422, "Invalid status.");
-  // Run inside a transaction and recompute the departure's status so that
-  // cancelling (or reinstating) a booking frees or reclaims its seats.
+// Admin: change a booking's status (pending/confirmed/paid/cancelled). One
+// booking, in its own transaction, recomputing the departure's status so that
+// cancelling (or reinstating) a booking frees or reclaims its seats. Shared by
+// the single and the bulk routes.
+const BOOKING_STATUS_VALUES = ["pending", "confirmed", "paid", "cancelled"];
+async function changeBookingStatus(id, status, cancelledReason) {
+  if (!BOOKING_STATUS_VALUES.includes(status)) throw new AppError(422, "Invalid status.");
   await withDepartureWrites(async (c, touch) => {
-    const found = await c.query(`SELECT departure_id FROM pledges WHERE id=$1`, [req.params.id]);
+    const found = await c.query(`SELECT departure_id FROM pledges WHERE id=$1`, [id]);
     if (!found.rows.length) throw new AppError(404, "Booking not found.");
     // F03 — the departure is locked first, the same order every booking takes,
     // and the pledge re-read under that lock. Reinstating a cancelled booking
@@ -3110,7 +3111,7 @@ app.patch("/api/admin/bookings/:id", requireAuth, requireRole("super_admin", "op
     // seats had since been sold went over capacity.
     const dep = await loadDeparture(c, found.rows[0].departure_id, { forUpdate: true });
     if (!dep) throw new AppError(404, "Booking not found.");
-    const cur = await c.query(`SELECT status, seats FROM pledges WHERE id=$1 FOR UPDATE`, [req.params.id]);
+    const cur = await c.query(`SELECT status, seats FROM pledges WHERE id=$1 FOR UPDATE`, [id]);
     if (!cur.rows.length) throw new AppError(404, "Booking not found.");
     const reinstating = cur.rows[0].status === "cancelled" && status !== "cancelled";
     if (reinstating) {
@@ -3124,23 +3125,83 @@ app.patch("/api/admin/bookings/:id", requireAuth, requireRole("super_admin", "op
         throw new AppError(409, `Only ${left} seat${left === 1 ? "" : "s"} left on this date; reinstating needs ${wanted}.`);
       }
     }
-    await c.query(`UPDATE pledges SET status=$1 WHERE id=$2`, [status, req.params.id]);
+    await c.query(`UPDATE pledges SET status=$1 WHERE id=$2`, [status, id]);
     // Model phase 3: when and why a booking ended decides the agency's
     // commission (50% when the traveler canceled late and Sawa keeps a fee).
     if (catalogueV2Enabled()) {
       if (status === "cancelled" && cur.rows[0].status !== "cancelled") {
-        const reason = req.body?.cancelledReason === "traveler" ? "traveler" : "admin";
-        await c.query(`UPDATE pledges SET cancelled_at = now(), cancelled_reason = $2 WHERE id = $1`, [req.params.id, reason]);
+        const reason = cancelledReason === "traveler" ? "traveler" : "admin";
+        await c.query(`UPDATE pledges SET cancelled_at = now(), cancelled_reason = $2 WHERE id = $1`, [id, reason]);
       } else if (reinstating) {
-        await c.query(`UPDATE pledges SET cancelled_at = NULL, cancelled_reason = NULL WHERE id = $1`, [req.params.id]);
+        await c.query(`UPDATE pledges SET cancelled_at = NULL, cancelled_reason = NULL WHERE id = $1`, [id]);
       }
     }
     await refreshStatus(c, dep.id);
     // TT1 — both seatsTaken and the departure's own status can move here.
     touch(dep.id);
   });
+}
+
+// Admin: delete a booking outright — for test and dummy bookings. Refused for
+// a booking with any recorded payment (cancel it instead, so the money trail
+// stays); super admin only. The departure's seats are freed.
+async function deleteBooking(id) {
+  let gone = null;
+  await withDepartureWrites(async (c, touch) => {
+    const found = await c.query(`SELECT departure_id FROM pledges WHERE id=$1`, [id]);
+    if (!found.rows.length) throw new AppError(404, "Booking not found.");
+    const dep = await loadDeparture(c, found.rows[0].departure_id, { forUpdate: true });
+    const p = (await c.query(`SELECT id, booking_code, departure_id, seats, status FROM pledges WHERE id=$1 FOR UPDATE`, [id])).rows[0];
+    if (!p) throw new AppError(404, "Booking not found.");
+    const has = async (table) => (await c.query("SELECT to_regclass($1) AS t", [`public.${table}`])).rows[0].t != null;
+    const paid = (await has("booking_payments")
+      && (await c.query(`SELECT 1 FROM booking_payments WHERE pledge_id=$1 AND state='paid' LIMIT 1`, [id])).rowCount > 0)
+      || (await has("payment_requests")
+      && (await c.query(`SELECT 1 FROM payment_requests WHERE pledge_id=$1 AND state='paid' LIMIT 1`, [id])).rowCount > 0);
+    if (paid) throw new AppError(409, "This booking has a recorded payment, so it can't be deleted. Cancel it instead.");
+    if (await has("catalogue_notices")) await c.query(`DELETE FROM catalogue_notices WHERE pledge_id=$1`, [id]);
+    await c.query(`DELETE FROM pledges WHERE id=$1`, [id]);
+    if (dep) { await refreshStatus(c, dep.id); touch(dep.id); }
+    gone = { bookingCode: p.booking_code, departureId: p.departure_id, seats: Number(p.seats), status: p.status };
+  });
+  return gone;
+}
+
+app.patch("/api/admin/bookings/:id", requireAuth, requireRole("super_admin", "ops_staff"), h(async (req, res) => {
+  const status = req.body?.status;
+  await changeBookingStatus(req.params.id, status, req.body?.cancelledReason);
   await logAudit(req, { action: "booking.status", entity: "pledge", entityId: req.params.id, detail: { status } });
   res.json({ ok: true, status });
+}));
+
+// Admin: the same for many bookings at once. Each booking is its own
+// transaction, so one refusal (a full date, a paid booking) doesn't undo the
+// rest; the answer says which went through and why the others didn't.
+const bulkBookingsSchema = z.object({
+  action: z.enum(["pending", "confirmed", "paid", "cancelled", "delete"]),
+  ids: z.array(z.string().trim().min(1).max(100)).min(1, "Select at least one booking.").max(500, "Select at most 500 bookings at once."),
+  cancelledReason: z.enum(["traveler", "admin"]).optional(),
+});
+app.post("/api/admin/bookings/bulk", requireAuth, requireRole("super_admin", "ops_staff"), h(async (req, res) => {
+  const input = parse(bulkBookingsSchema, req.body);
+  if (input.action === "delete" && req.user?.role !== "super_admin") throw new AppError(403, "Only a super admin can delete bookings.");
+  const done = [], failed = [];
+  for (const id of [...new Set(input.ids)]) {
+    try {
+      if (input.action === "delete") {
+        const gone = await deleteBooking(id);
+        await logAudit(req, { action: "booking.delete", entity: "pledge", entityId: id, detail: { ...gone, bulk: true } });
+      } else {
+        await changeBookingStatus(id, input.action, input.cancelledReason);
+        await logAudit(req, { action: "booking.status", entity: "pledge", entityId: id, detail: { status: input.action, bulk: true } });
+      }
+      done.push(id);
+    } catch (e) {
+      if (!(e instanceof AppError)) throw e;
+      failed.push({ id, error: e.message });
+    }
+  }
+  res.json({ action: input.action, done, failed });
 }));
 
 // ---- Payment links (043) ----------------------------------------------------

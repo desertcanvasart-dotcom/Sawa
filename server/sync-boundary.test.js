@@ -133,13 +133,15 @@ test("all four writers that were missed now go through withDepartureWrites", () 
   const routes = [
     ['app.post("/api/admin/tour-products/:id/pricing"', APP],
     ['app.post("/api/admin/departure-requests/:id/decline"', APP],
-    ['app.patch("/api/admin/bookings/:id"', APP],
+    // A booking's status change and its deletion (single and bulk routes call these).
+    ["async function changeBookingStatus(", APP],
+    ["async function deleteBooking(", APP],
     ['app.post("/api/admin/departures/:id/cancel"', APP],
   ];
   for (const [marker, src] of routes) {
     const start = src.indexOf(marker);
     assert.ok(start > 0, `${marker} not found`);
-    const body = src.slice(start, src.indexOf("\n}));", start));
+    const body = src.slice(start, src.indexOf(marker.startsWith("async function") ? "\n}\n" : "\n}));", start));
     assert.match(body, /withDepartureWrites\(/, `${marker} does not use the boundary`);
     assert.match(body, /touch\(/, `${marker} never marks the departure it changed`);
   }

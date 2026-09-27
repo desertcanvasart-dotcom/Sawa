@@ -30,6 +30,7 @@ const DEP = 910001;
 const USERS = {
   "ops-token": { id: "00000000-0000-4000-8000-000000000001", email: "ops@sawa.test", role: "super_admin", agency: null },
   "agency-token": { id: "00000000-0000-4000-8000-000000000002", email: "owner@agency.test", role: "agency_owner", agency: "ag_it" },
+  "staff-token": { id: "00000000-0000-4000-8000-000000000003", email: "staff@sawa.test", role: "ops_staff", agency: null },
 };
 
 before(async () => {
@@ -280,6 +281,48 @@ test("the operator follows widget bookings and paid deposits", { skip }, async (
 
 // Not payments, but this file has a signed-in admin: a new day tour typed the
 // way people type it ("8 hours") saves, stored in the house format.
+// The Bookings page's bulk actions: each booking on its own, the refusals
+// reported; delete is super admin only and never removes a paid booking.
+test("bulk actions: cancel several, delete test bookings, keep paid ones; each logged", { skip }, async () => {
+  const DEP3 = 910003;
+  await db.query(`INSERT INTO departures (id, type, tour_product_id, route, date, time, city, min_seats, max_seats, published_rate, break_price, status)
+                  VALUES ($1,'day_tour',$2,'Payment Tour',$3,'08:00','Cairo',4,12,100,80,'open')`, [DEP3, TOUR, cairoDay(30)]);
+  const ids = [];
+  for (const n of ["Bulk One", "Bulk Two", "Bulk Paid"]) {
+    const r = await call("POST", `/public/departures/${DEP3}/bookings`, { customerName: n, customerEmail: `${n.replace(" ", ".").toLowerCase()}@example.com`, seats: 1 });
+    assert.equal(r.status, 201, JSON.stringify(r.body));
+    ids.push(r.body.booking.id);
+  }
+  const [one, two, paid] = ids;
+
+  const cancel = await ops("POST", "/admin/bookings/bulk", { action: "cancelled", ids: [one, two] });
+  assert.equal(cancel.status, 200, JSON.stringify(cancel.body));
+  assert.deepEqual([cancel.body.done.sort(), cancel.body.failed], [[one, two].sort(), []]);
+  const st = (await db.query("SELECT id, status FROM pledges WHERE id = ANY($1::text[])", [[one, two]])).rows;
+  assert.ok(st.every((r) => r.status === "cancelled"));
+  assert.equal(Number((await db.query("SELECT count(*) AS n FROM audit_log WHERE action = 'booking.status' AND entity_id = ANY($1::text[]) AND detail->>'bulk' = 'true'", [[one, two]])).rows[0].n), 2);
+
+  // Delete is the super admin's alone.
+  const staff = await call("POST", "/admin/bookings/bulk", { action: "delete", ids: [one] }, "staff-token");
+  assert.equal(staff.status, 403);
+
+  // A booking with a recorded payment is never deleted.
+  const link = await ops("POST", `/admin/bookings/${paid}/payment-links`, { kind: "deposit", url: "https://pay.tab.travel/bulk" });
+  assert.equal(link.status, 201, JSON.stringify(link.body));
+  assert.equal((await ops("POST", `/admin/payments/${link.body.payment.id}/paid`, { reference: "TAB-BULK-1" })).status, 200);
+  const del = await ops("POST", "/admin/bookings/bulk", { action: "delete", ids: [one, two, paid, "no-such-booking"] });
+  assert.equal(del.status, 200, JSON.stringify(del.body));
+  assert.deepEqual(del.body.done.sort(), [one, two].sort());
+  assert.deepEqual(del.body.failed.map((f) => f.id).sort(), [paid, "no-such-booking"].sort());
+  assert.match(del.body.failed.find((f) => f.id === paid).error, /recorded payment/);
+  assert.equal(Number((await db.query("SELECT count(*) AS n FROM pledges WHERE departure_id = $1", [DEP3])).rows[0].n), 1, "only the paid booking is left");
+  assert.equal(Number((await db.query("SELECT count(*) AS n FROM audit_log WHERE action = 'booking.delete' AND entity_id = ANY($1::text[])", [[one, two]])).rows[0].n), 2);
+
+  // Nothing to act on, or an unknown action: refused before anything runs.
+  assert.equal((await ops("POST", "/admin/bookings/bulk", { action: "cancelled", ids: [] })).status, 422);
+  assert.equal((await ops("POST", "/admin/bookings/bulk", { action: "archive", ids: [paid] })).status, 422);
+});
+
 test("a new day tour with a duration of \"8 hours\" saves", { skip }, async () => {
   const r = await ops("POST", "/admin/tour-products", {
     type: "day_tour", title: "Giza Uncovered: Pyramids, Sphinx & Stories", city: "Cairo", duration: "8 hours",
