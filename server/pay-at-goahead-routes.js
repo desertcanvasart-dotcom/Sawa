@@ -14,8 +14,9 @@ import {
 } from "./cancellation-tiers.js";
 import {
   payAtGoAheadOverview, setPayAtGoAheadSettings, attachLink, markRequestPaid, extendDeadline, cancellationQuote,
-  cancelPayAtGoAheadBooking, completeRefund,
+  cancelPayAtGoAheadBooking, completeRefund, decideUnlinkedSeat, unlinkedSummary,
 } from "./pay-at-goahead.js";
+import { listTermsVersions, termsVersionInForce, createTermsDraft, saveTermsDraft, publishTermsDraft, discardTermsDraft } from "./terms-versions.js";
 
 export function registerPayAtGoAheadRoutes(app, { requireAuth, requireRole, h, logAudit, sendEmail, writeLimiter }) {
   const staff = [requireAuth, requireRole("super_admin", "ops_staff")];
@@ -31,8 +32,8 @@ export function registerPayAtGoAheadRoutes(app, { requireAuth, requireRole, h, l
     try {
       await fn(req, res);
     } catch (e) {
-      if (isMissingTierTables(e)) {
-        throw Object.assign(new CatalogueError(503, "Pay at GoAhead isn't switched on yet: migration 051 has not been applied to this database."), { expose: true });
+      if (isMissingTierTables(e) || (e?.code === "42P01" && /terms_versions/.test(e?.message || "")) || e?.code === "42703") {
+        throw Object.assign(new CatalogueError(503, "Pay at GoAhead isn't switched on yet: migrations 051 and 052 have not been applied to this database."), { expose: true });
       }
       throw e;
     }
@@ -124,6 +125,52 @@ export function registerPayAtGoAheadRoutes(app, { requireAuth, requireRole, h, l
       detail: { reason, retainedPct: r.retainedPct, fee: r.fee, refund: r.refund, tierVersion: r.tierVersion },
     });
     res.json({ cancellation: r });
+  }));
+
+  // The admin home and Finance: unpaid seats with no link, and those needing
+  // a decision (migration 052).
+  app.get("/api/admin/pay-at-goahead/summary", ...staff, route(async (_req, res) => {
+    res.json(await unlinkedSummary(pool));
+  }));
+
+  // An admin decision on a seat whose link was never made, or made too late:
+  // send the link with a short deadline, travel unsecured, or cancel.
+  app.post("/api/admin/pay-requests/:id/decision", ...staff, writeLimiter, route(async (req, res) => {
+    const r = await decideUnlinkedSeat(pool, {
+      requestId: id(req.params.id), decision: req.body?.decision, reason: req.body?.reason,
+      linkUrl: req.body?.linkUrl || null, dueAt: req.body?.dueAt || null, by: by(req), send: send(),
+    });
+    await logAudit(req, {
+      action: "pay_request.decision", entity: "payment_request", entityId: r.id,
+      detail: { pledgeId: r.pledgeId, decision: r.decision, reason: r.decisionReason, needed: r.decisionNeeded, dueAt: r.dueAt },
+    });
+    res.json({ request: r });
+  }));
+
+  // ---------------------------------------------------------------- Terms versions
+  app.get("/api/admin/terms-versions", ...staff, route(async (_req, res) => {
+    const [versions, catalogue, legacy] = await Promise.all([listTermsVersions(pool), termsVersionInForce(pool, "catalogue"), termsVersionInForce(pool, "legacy")]);
+    res.json({ versions, inForce: { catalogue: catalogue?.id ?? null, legacy: legacy?.id ?? null } });
+  }));
+  app.post("/api/admin/terms-versions/draft", ...staff, writeLimiter, route(async (req, res) => {
+    const v = await createTermsDraft(pool, { scope: req.body?.scope, by: by(req) });
+    await logAudit(req, { action: "terms.draft", entity: "terms_version", entityId: v.id, detail: { scope: v.scope, version: v.version } });
+    res.status(201).json({ version: v });
+  }));
+  app.put("/api/admin/terms-versions/:id", ...staff, writeLimiter, route(async (req, res) => {
+    const v = await saveTermsDraft(pool, { versionId: id(req.params.id), title: req.body?.title, documentUrl: req.body?.documentUrl, body: req.body?.body, note: req.body?.note });
+    await logAudit(req, { action: "terms.save", entity: "terms_version", entityId: v.id, detail: { scope: v.scope, version: v.version } });
+    res.json({ version: v });
+  }));
+  app.post("/api/admin/terms-versions/:id/publish", ...superAdmin, writeLimiter, route(async (req, res) => {
+    const v = await publishTermsDraft(pool, { versionId: id(req.params.id), effectiveFrom: req.body?.effectiveFrom, by: by(req) });
+    await logAudit(req, { action: "terms.publish", entity: "terms_version", entityId: v.id, detail: { scope: v.scope, version: v.version, effectiveFrom: v.effectiveFrom } });
+    res.json({ version: v });
+  }));
+  app.delete("/api/admin/terms-versions/:id", ...staff, route(async (req, res) => {
+    const r = await discardTermsDraft(pool, id(req.params.id));
+    await logAudit(req, { action: "terms.discard", entity: "terms_version", entityId: r.discarded });
+    res.json(r);
   }));
 
   // Ops confirm a refund made in the provider.

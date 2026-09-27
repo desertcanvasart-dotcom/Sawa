@@ -424,7 +424,9 @@ test("the deadline: capped at the cut-off, never under 24 hours unless the cut-o
   // Departure B goes ahead with Omar's 2 seats plus 2 more.
   deps.b.more = await book(deps.b, 2);
   await cat.runStatusJob({});
-  const late = cutoffOf(deps.b) - 10 * HOUR;
+  // 20 hours before the cut-off: under the 24-hour floor (a short window),
+  // over the 12-hour minimum that would hold the link for a decision.
+  const late = cutoffOf(deps.b) - 20 * HOUR;
   await tick(late);
   await link(deps.b.more, late);
   const r = await reqOf(deps.b.more);
@@ -653,4 +655,177 @@ test("with catalogue_v2 off a booking is on the deposit-and-balance flow and the
   // A legacy booking never gets a request, whatever its date does.
   await tick(Date.now());
   assert.equal(await reqOf(p.id), undefined);
+});
+
+// ---------------------------------------------------------------- links never made (migration 052)
+async function freshDeparture() {
+  const used = Object.values(deps).filter((d) => d && d.id).map((d) => d.id);
+  const r = (await db.query(
+    `SELECT id, date, legacy_departure_id FROM catalogue_departures
+      WHERE product_id = $1 AND legacy_departure_id IS NOT NULL AND status = 'open' AND date >= $2::date + 20 AND NOT (id = ANY($3::bigint[]))
+      ORDER BY date LIMIT 1`, [productId, today(), used])).rows[0];
+  const d = { id: Number(r.id), date: ymd(r.date), legacy: r.legacy_departure_id };
+  deps[`x${d.id}`] = d;
+  return d;
+}
+const summary = async () => (await fetch(`${on}/api/admin/pay-at-goahead/summary`, { headers: auth("staff-token") })).json();
+const decide = (requestId, body) => fetch(`${on}/api/admin/pay-requests/${requestId}/decision`, { method: "POST", headers: auth("staff-token"), body: JSON.stringify(body) });
+
+test("a link never made: alerts to ops and admin at 6 and 12 hours, a dashboard count, and a decision 24 hours before the cut-off; the seat is never released for it", { skip }, async () => {
+  const d = await freshDeparture();
+  d.short = await book(d, 1, { email: "short@example.test" });
+  d.unsecured = await book(d, 1, { email: "unsecured@example.test" });
+  d.cancel = await book(d, 1, { email: "cancel@example.test" });
+  d.more = await book(d, 1);
+  await cat.runStatusJob({});
+  const t0 = Date.now();
+  await tick(t0);
+  const before = await summary();
+  assert.ok(before.unlinkedSeats >= 4, JSON.stringify(before));
+  sent.length = 0;
+  assert.equal((await tick(t0 + 5 * HOUR)).linkAlerts6h, undefined, "not before 6 hours");
+  const six = await tick(t0 + 6 * HOUR + MIN);
+  assert.ok(six.linkAlerts6h >= 4);
+  const firstAlerts = sent.filter((m) => m.kind === "pay_at_goahead_escalation_6h");
+  assert.deepEqual(firstAlerts.map((m) => m.to).sort(), ["boss@sawa.test", "ops-alerts@sawa.test"], "ops and every super admin");
+  assert.equal((await tick(t0 + 7 * HOUR)).linkAlerts6h, undefined, "once");
+  sent.length = 0;
+  const twelve = await tick(t0 + 12 * HOUR + MIN);
+  assert.ok(twelve.linkAlerts12h >= 4);
+  assert.ok(sent.some((m) => m.kind === "pay_at_goahead_escalation_12h" && /Second alert/.test(m.subject)));
+
+  // 24 hours before the cut-off: each needs a decision. Nothing is released.
+  sent.length = 0;
+  const at = cutoffOf(d) - 24 * HOUR + MIN;
+  const dec = await tick(at);
+  assert.ok(dec.decisionsNeeded >= 4);
+  assert.ok(sent.some((m) => m.kind === "pay_at_goahead_escalation_no_link"));
+  const r = await reqOf(d.short);
+  assert.deepEqual([r.state, r.decision_needed], ["awaiting_link", "no_link"]);
+  assert.ok((await summary()).needsDecision >= 4);
+  assert.equal((await tick(cutoffOf(d) - MIN)).released, 0, "an unlinked seat is never released");
+  for (const id of [d.short, d.unsecured, d.cancel]) assert.equal((await one("SELECT status FROM pledges WHERE id = $1", [id])).status, "confirmed");
+  d.decisionAt = at;
+});
+
+test("decision 1: send the link now with a short deadline; the release follows it", { skip }, async () => {
+  const d = Object.values(deps).find((x) => x?.short);
+  const r = await reqOf(d.short);
+  assert.equal((await decide(r.id, { decision: "short_link", linkUrl: "https://pay.tab.travel/short" })).status, 422, "a reason is required");
+  const tooLate = new Date(cutoffOf(d) + HOUR).toISOString();
+  assert.equal((await decide(r.id, { decision: "short_link", reason: "Ops missed it", linkUrl: "https://pay.tab.travel/short", dueAt: tooLate })).status, 422, "not after the cut-off");
+  sent.length = 0;
+  const due = new Date(Date.now() + 6 * HOUR).toISOString();
+  const res = await decide(r.id, { decision: "short_link", reason: "Ops missed the link; the traveler agreed on the phone", linkUrl: "https://pay.tab.travel/short", dueAt: due });
+  assert.equal(res.status, 200, await res.text());
+  const after = await reqOf(d.short);
+  assert.deepEqual([after.state, after.due_bound_by, after.decision], ["sent", "decision", "short_link"]);
+  assert.equal(new Date(after.due_at).toISOString(), due);
+  const audit = await one("SELECT * FROM audit_log WHERE action = 'pay_request.decision' ORDER BY id DESC LIMIT 1");
+  assert.equal(audit.detail.reason, "Ops missed the link; the traveler agreed on the phone");
+  assert.equal((await tick(Date.parse(due) + MIN)).released >= 1, true, "unpaid at the short deadline: released");
+  assert.equal((await one("SELECT cancelled_reason FROM pledges WHERE id = $1", [d.short])).cancelled_reason, "unpaid");
+});
+
+test("decision 2: travel and collect later — an unsecured seat, never released, on the frozen manifest, paid afterwards", { skip }, async () => {
+  const d = Object.values(deps).find((x) => x?.unsecured);
+  const r = await reqOf(d.unsecured);
+  const res = await decide(r.id, { decision: "travel_unsecured", reason: "Regular guest of the hotel; will pay the guide in cash" });
+  assert.equal(res.status, 200, await res.text());
+  assert.equal((await reqOf(d.unsecured)).state, "unsecured");
+  assert.ok((await summary()).unsecured >= 1);
+  await tick(cutoffOf(d) + MIN);
+  await asg.freezeManifests({ db, now: cutoffOf(d) + MIN });
+  const frozen = await one("SELECT * FROM catalogue_manifests WHERE departure_id = $1", [d.id]);
+  const code = (await one("SELECT booking_code FROM pledges WHERE id = $1", [d.unsecured])).booking_code;
+  assert.ok(frozen.travelers.some((t) => t.booking === code), "the unsecured traveler travels");
+  const overview = await pag.payAtGoAheadOverview(db);
+  const seat = overview.departures.find((x) => x.id === d.id).seats.find((s) => s.pledgeId === d.unsecured);
+  assert.equal(seat.standing, "unsecured");
+  await pay(d.unsecured);
+  assert.equal((await reqOf(d.unsecured)).state, "paid", "collected later");
+});
+
+test("decision 3: cancel — nothing was charged, nothing refunded, and the traveler gets an apology", { skip }, async () => {
+  const d = Object.values(deps).find((x) => x?.cancel);
+  const r = await reqOf(d.cancel);
+  sent.length = 0;
+  const res = await decide(r.id, { decision: "cancel", reason: "No link was sent; traveler can't be reached" });
+  assert.equal(res.status, 200, await res.text());
+  const p = await one("SELECT status, cancelled_reason FROM pledges WHERE id = $1", [d.cancel]);
+  assert.deepEqual([p.status, p.cancelled_reason], ["cancelled", "admin"]);
+  assert.equal((await reqOf(d.cancel)).state, "cancelled");
+  assert.equal(await one("SELECT 1 FROM payment_refunds WHERE pledge_id = $1", [d.cancel]), undefined, "nothing to refund");
+  // The server started for the tests sends mail in log mode; the apology is
+  // checked through the module, which takes the send function.
+  const d2 = await freshDeparture();
+  const ids = [await book(d2, 1, { email: "sorry@example.test" }), await book(d2, 3)];
+  await cat.runStatusJob({});
+  await tick(Date.now());
+  const r2 = await reqOf(ids[0]);
+  sent.length = 0;
+  await pag.decideUnlinkedSeat(db, { requestId: Number(r2.id), decision: "cancel", reason: "Link never sent", by: "boss@sawa.test", send });
+  const apology = sent.find((m) => m.kind === "pay_at_goahead_apology");
+  assert.equal(apology.to, "sorry@example.test");
+  assert.match(apology.text, /Nothing was charged/);
+  deps.x2 = d2;
+});
+
+test("a link made too late (under 12 hours to pay) starts no deadline and goes to the same decision", { skip }, async () => {
+  const d = await freshDeparture();
+  const late = await book(d, 4, { email: "late@example.test" });
+  await cat.runStatusJob({});
+  await tick(Date.now());
+  sent.length = 0;
+  // Ops paste the link 10 hours before the cut-off: the traveler would have 10 hours.
+  const out = await link(late, cutoffOf(d) - 10 * HOUR);
+  assert.equal(out.heldForDecision, true);
+  const r = await reqOf(late);
+  assert.deepEqual([r.state, r.decision_needed, r.due_at], ["awaiting_link", "late_link", null], "no deadline started");
+  assert.ok(r.link_url, "the link is kept");
+  assert.ok(!sent.some((m) => m.to === "late@example.test"), "the traveler isn't sent a link they can't use");
+  assert.ok(sent.some((m) => m.kind === "pay_at_goahead_escalation_late_link"));
+  // The decision can reuse the link that was made.
+  const due = new Date(cutoffOf(d) - 2 * HOUR).toISOString();
+  await pag.decideUnlinkedSeat(db, { requestId: Number(r.id), decision: "short_link", reason: "Agreed with the traveler", dueAt: due, by: "ops", now: cutoffOf(d) - 9 * HOUR, send });
+  const after = await reqOf(late);
+  assert.deepEqual([after.state, after.link_url, new Date(after.due_at).toISOString()], ["sent", r.link_url, due]);
+  // 12 hours or more is fine: a link 30 hours before the cut-off starts a deadline as usual.
+  const d2 = await freshDeparture();
+  const ok = await book(d2, 4);
+  await cat.runStatusJob({});
+  await tick(Date.now());
+  const fine = await link(ok, cutoffOf(d2) - 30 * HOUR);
+  assert.deepEqual([fine.state, fine.dueBoundBy], ["sent", "cutoff"]);
+});
+
+// ---------------------------------------------------------------- Terms versions (migration 052)
+test("the Terms are versioned: catalog and legacy series; each booking records the version it accepted", { skip }, async () => {
+  const legacy = await tiers.tierVersionById(db, 1);
+  assert.ok(legacy);
+  const v = (await (await fetch(`${on}/api/admin/terms-versions`, { headers: auth("staff-token") })).json());
+  const cat1 = v.versions.find((x) => x.scope === "catalogue" && x.version === 1);
+  const leg1 = v.versions.find((x) => x.scope === "legacy" && x.version === 1);
+  assert.deepEqual([v.inForce.catalogue, v.inForce.legacy], [cat1.id, leg1.id]);
+  // A catalog booking records the catalog version.
+  const d = deps.a;
+  assert.equal(Number((await one("SELECT terms_version_id FROM pledges WHERE id = $1", [d.ana])).terms_version_id), cat1.id);
+  // A new catalog version: later bookings take it; earlier ones keep theirs.
+  const draft = await (await fetch(`${on}/api/admin/terms-versions/draft`, { method: "POST", headers: auth("staff-token"), body: JSON.stringify({ scope: "catalogue" }) })).json();
+  const saved = await fetch(`${on}/api/admin/terms-versions/${draft.version.id}`, { method: "PUT", headers: auth("staff-token"),
+    body: JSON.stringify({ title: "Terms for catalog bookings", documentUrl: "/terms/catalogue", body: "Approved wording" }) });
+  assert.equal(saved.status, 200, await saved.text());
+  assert.equal((await fetch(`${on}/api/admin/terms-versions/${draft.version.id}/publish`, { method: "POST", headers: auth("staff-token"), body: JSON.stringify({ effectiveFrom: today() }) })).status, 403, "super admin only");
+  const pub = await fetch(`${on}/api/admin/terms-versions/${draft.version.id}/publish`, { method: "POST", headers: auth("ops-token"), body: JSON.stringify({ effectiveFrom: today() }) });
+  assert.equal(pub.status, 200, await pub.text());
+  await assert.rejects(db.query("UPDATE terms_versions SET body = 'x' WHERE id = $1", [draft.version.id]), /published/);
+  const later = await book(deps.i, 1);
+  assert.equal(Number((await one("SELECT terms_version_id FROM pledges WHERE id = $1", [later])).terms_version_id), draft.version.id);
+  assert.equal(Number((await one("SELECT terms_version_id FROM pledges WHERE id = $1", [d.ana])).terms_version_id), cat1.id, "keeps the version it accepted");
+  // An agency booking fixes it when the agency books, and the booking page shows it.
+  const page = await (await fetch(`${on}/api/public/bookings/${(await one("SELECT booking_code FROM pledges WHERE id = $1", [deps.b.omar])).booking_code}`)).json();
+  assert.equal(page.booking.payAtGoAhead.terms.document.version, 1);
+  // A legacy booking records the legacy version.
+  const legacyBooking = await one("SELECT terms_version_id FROM pledges WHERE departure_id = $1 AND payment_mode = 'legacy_link' LIMIT 1", [deps.h.legacy]);
+  assert.equal(Number(legacyBooking.terms_version_id), leg1.id);
 });

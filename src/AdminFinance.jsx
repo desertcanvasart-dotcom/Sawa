@@ -6,7 +6,7 @@
 import React, { useEffect, useState } from "react";
 import { AlertTriangle } from "lucide-react";
 import { apiFetch } from "./supabaseClient";
-import { PayAtGoAhead, CancellationTiers, LossWarnings } from "./AdminPayAtGoAhead";
+import { PayAtGoAhead, CancellationTiers, LossWarnings, UnlinkedBanner, TermsVersions } from "./AdminPayAtGoAhead";
 
 const money = (currency, n) => (n == null ? "—" : `${currency} ${Number(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
 const dayLabel = (ymd) => (ymd ? new Intl.DateTimeFormat("en-US", { timeZone: "UTC", month: "short", day: "numeric", year: "numeric" }).format(new Date(`${ymd}T12:00:00Z`)) : "—");
@@ -23,16 +23,17 @@ async function call(path, method = "GET", body) {
 export function FinanceSection({ flash, isSuperAdmin }) {
   const [tab, setTab] = useState("owed");
   const tabs = [["owed", "Owed and paid"], ["pay", "Pay at GoAhead"], ["commissions", "Agency commission"], ["margin", "Margin"],
-    ["tiers", "Cancellation tiers"], ["settings", "Rates and settings"]];
+    ["tiers", "Tiers and Terms"], ["settings", "Rates and settings"]];
   return (
     <>
       <div className="dash-head"><div><h1>Finance</h1><p>Operator advances and balances, agency commission and invoices. Finance pays by bank transfer and records each payment here.</p></div></div>
       <div className="cat-actions" style={{ justifyContent: "flex-start", marginBottom: 12 }}>
         {tabs.map(([k, label]) => <button key={k} className={tab === k ? "btn-primary sm" : "btn-ghost sm"} onClick={() => setTab(k)}>{label}</button>)}
       </div>
+      {tab !== "pay" && <UnlinkedBanner onOpen={() => setTab("pay")} />}
       {tab === "owed" && <Owed flash={flash} isSuperAdmin={isSuperAdmin} />}
       {tab === "pay" && <PayAtGoAhead flash={flash} isSuperAdmin={isSuperAdmin} />}
-      {tab === "tiers" && <CancellationTiers flash={flash} isSuperAdmin={isSuperAdmin} />}
+      {tab === "tiers" && <><CancellationTiers flash={flash} isSuperAdmin={isSuperAdmin} /><TermsVersions flash={flash} isSuperAdmin={isSuperAdmin} /></>}
       {tab === "commissions" && <Commissions flash={flash} isSuperAdmin={isSuperAdmin} />}
       {tab === "margin" && <Margin />}
       {tab === "settings" && <Settings flash={flash} />}

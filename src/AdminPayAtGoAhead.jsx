@@ -25,6 +25,7 @@ export function PayAtGoAhead({ flash, isSuperAdmin }) {
   const [inputs, setInputs] = useState({});
   const [cancel, setCancel] = useState(null);
   const [extend, setExtend] = useState(null);
+  const [decide, setDecide] = useState(null);
   const set = (k, v) => setInputs((x) => ({ ...x, [k]: v }));
   const load = () => call("/admin/pay-at-goahead").then((d) => { setData(d); setErr(""); }).catch((e) => setErr(e.message));
   useEffect(() => { load(); }, []);
@@ -39,6 +40,7 @@ export function PayAtGoAhead({ flash, isSuperAdmin }) {
         released at the deadline and offered to the waitlist (held {data.settings.offerHours} hours). Tab is used by hand: make each link with the
         booking code as its reference, and mark payments with Tab's reference.
       </p>
+      <UnlinkedBanner />
       <div className="dash-card" style={{ marginBottom: 12 }}>
         <h2>To do in Tab ({data.tasks.length})</h2>
         {data.tasks.length ? (
@@ -93,6 +95,10 @@ export function PayAtGoAhead({ flash, isSuperAdmin }) {
                         </form>
                       )}
                       {r?.state === "sent" && s.status !== "cancelled" && <button className="btn-ghost sm" onClick={() => setExtend({ request: r, dueAt: "", reason: "" })}>Extend</button>}
+                      {r?.state === "awaiting_link" && r.decisionNeeded && s.status !== "cancelled" && (
+                        <button className="btn-primary sm" onClick={() => setDecide({ request: r, seat: s, decision: "short_link", reason: "", linkUrl: r.linkUrl || "", dueAt: "" })}>Decide…</button>
+                      )}
+                      {r?.decision && <div className="field-hint">Decided: {DECISION_TEXT[r.decision]} — {r.decisionReason} ({r.decidedBy})</div>}
                       {s.status !== "cancelled" && d.status === "go_ahead" && (
                         <button className="btn-ghost sm" onClick={() => call(`/admin/pay-at-goahead/bookings/${encodeURIComponent(s.pledgeId)}/cancellation-quote`).then((q) => setCancel({ seat: s, quote: q.quote, reason: "traveler" })).catch((e) => setErr(e.message))}>Cancel…</button>
                       )}
@@ -124,6 +130,34 @@ export function PayAtGoAhead({ flash, isSuperAdmin }) {
 
       {isSuperAdmin && <PaySettings settings={data.settings} onSave={(v) => run(() => call("/admin/pay-at-goahead/settings", "PUT", v), "Saved.")} />}
 
+      {decide && (
+        <div className="modal-overlay" role="dialog" aria-modal="true" aria-label="Decide an unlinked seat" onClick={() => setDecide(null)}>
+          <form className="modal" onClick={(e) => e.stopPropagation()} onSubmit={(e) => { e.preventDefault(); run(async () => {
+            await call(`/admin/pay-requests/${decide.request.id}/decision`, "POST", {
+              decision: decide.decision, reason: decide.reason, linkUrl: decide.linkUrl || null,
+              dueAt: decide.decision === "short_link" && decide.dueAt ? new Date(decide.dueAt).toISOString() : null,
+            });
+            setDecide(null);
+          }, "Decision recorded."); }}>
+            <h2>{decide.seat.bookingCode}: {decide.request.decisionNeeded === "late_link" ? "the link was made too late" : "no payment link was made"}</h2>
+            <p className="field-hint">The traveler did nothing wrong, so this seat isn't released automatically. Choose what happens, and why. The decision is kept on record.</p>
+            {Object.entries(DECISION_TEXT).map(([k, label]) => (
+              <label key={k} className="field" style={{ flexDirection: "row", gap: 8 }}>
+                <input type="radio" name="decision" checked={decide.decision === k} onChange={() => setDecide({ ...decide, decision: k })} /> {label}
+              </label>
+            ))}
+            {decide.decision === "short_link" && (
+              <>
+                <label className="field"><span>Tab link</span><input value={decide.linkUrl} onChange={(e) => setDecide({ ...decide, linkUrl: e.target.value })} placeholder="https://…" /></label>
+                <label className="field"><span>Deadline (your local time, before the cut-off)</span><input type="datetime-local" required value={decide.dueAt} onChange={(e) => setDecide({ ...decide, dueAt: e.target.value })} /></label>
+              </>
+            )}
+            {decide.decision === "cancel" && <p className="field-hint">Nothing was charged, so nothing is refunded. The traveler is emailed an apology.</p>}
+            <label className="field"><span>Reason</span><input required value={decide.reason} onChange={(e) => setDecide({ ...decide, reason: e.target.value })} /></label>
+            <div className="cat-actions"><button type="button" className="btn-ghost sm" onClick={() => setDecide(null)}>Close</button><button className="btn-primary sm">Record the decision</button></div>
+          </form>
+        </div>
+      )}
       {extend && (
         <div className="modal-overlay" role="dialog" aria-modal="true" aria-label="Extend the deadline" onClick={() => setExtend(null)}>
           <form className="modal" onClick={(e) => e.stopPropagation()} onSubmit={(e) => { e.preventDefault(); run(async () => { await call(`/admin/pay-requests/${extend.request.id}/extend`, "POST", { dueAt: new Date(extend.dueAt).toISOString(), reason: extend.reason }); setExtend(null); }, "Deadline extended."); }}>
@@ -167,6 +201,75 @@ function PaySettings({ settings, onSave }) {
       <label className="field"><span>Waitlist offer held (hours)</span><input type="number" min={1} max={72} value={v.offerHours} onChange={(e) => setV({ ...v, offerHours: e.target.value })} /></label>
       <div className="cat-actions"><button className="btn-primary sm">Save</button></div>
     </form>
+  );
+}
+
+const DECISION_TEXT = {
+  short_link: "Send the link now, with a short deadline",
+  travel_unsecured: "Let the traveler travel and collect later (unsecured seat)",
+  cancel: "Cancel: nothing was charged; send an apology",
+};
+
+// Unpaid seats with no payment link (migration 052): on the admin home and in
+// Finance. `onOpen` makes it a link to Finance.
+export function UnlinkedBanner({ onOpen = null }) {
+  const [s, setS] = useState(null);
+  useEffect(() => { call("/admin/pay-at-goahead/summary").then(setS).catch(() => setS(null)); }, []);
+  if (!s || (!s.unlinkedSeats && !s.needsDecision && !s.unsecured)) return null;
+  return (
+    <div className="auth-error" role="status" style={onOpen ? { cursor: "pointer" } : undefined} onClick={onOpen || undefined}>
+      <AlertTriangle size={14} /> {s.unlinkedSeats} unpaid seat{s.unlinkedSeats === 1 ? "" : "s"} with no payment link
+      {s.needsDecision ? <> · <b>{s.needsDecision} need{s.needsDecision === 1 ? "s" : ""} an admin decision</b></> : null}
+      {s.unsecured ? <> · {s.unsecured} traveling unsecured</> : null}
+      {onOpen ? ". Open Finance → Pay at GoAhead." : "."}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------- Terms versions
+export function TermsVersions({ flash, isSuperAdmin }) {
+  const [data, setData] = useState(null);
+  const [err, setErr] = useState("");
+  const [edit, setEdit] = useState(null);
+  const [effective, setEffective] = useState(new Date().toISOString().slice(0, 10));
+  const load = () => call("/admin/terms-versions").then((d) => { setData(d); setErr(""); }).catch((e) => setErr(e.message));
+  useEffect(() => { load(); }, []);
+  const run = async (fn, msg) => { setErr(""); try { await fn(); flash(msg); await load(); } catch (e) { setErr(e.message); } };
+  if (!data) return err ? <div className="auth-error">{err}</div> : null;
+  return (
+    <div className="dash-card" style={{ marginBottom: 12 }}>
+      <h2>Terms versions</h2>
+      <p className="field-hint">Each booking records the Terms version it accepted: catalog bookings from their own series, legacy bookings from theirs. A published version never changes.</p>
+      {err && <div className="auth-error">{err}</div>}
+      {["catalogue", "legacy"].map((scope) => {
+        const list = data.versions.filter((v) => v.scope === scope);
+        const draft = list.find((v) => v.state === "draft");
+        return (
+          <div key={scope} style={{ marginBottom: 12 }}>
+            <b>{scope === "catalogue" ? "Catalog bookings" : "Legacy bookings"}</b>
+            {list.map((v) => (
+              <div key={v.id} className="field-hint">v{v.version} · {v.state}{v.effectiveFrom ? ` from ${dayLabel(v.effectiveFrom)}` : ""}{v.id === data.inForce[scope] ? " · in force" : ""} · {v.title} ({v.documentUrl})</div>
+            ))}
+            {draft ? (
+              <div className="form-grid">
+                <label className="field"><span>Title</span><input value={edit?.id === draft.id ? edit.title : draft.title} onChange={(e) => setEdit({ ...draft, ...(edit?.id === draft.id ? edit : {}), title: e.target.value })} /></label>
+                <label className="field"><span>Document</span><input value={edit?.id === draft.id ? edit.documentUrl : draft.documentUrl} onChange={(e) => setEdit({ ...draft, ...(edit?.id === draft.id ? edit : {}), documentUrl: e.target.value })} /></label>
+                <div className="cat-actions">
+                  <button className="btn-ghost sm" onClick={() => run(() => call(`/admin/terms-versions/${draft.id}`, "DELETE"), "Draft discarded.")}>Discard</button>
+                  <button className="btn-primary sm" onClick={() => run(() => call(`/admin/terms-versions/${draft.id}`, "PUT", edit?.id === draft.id ? edit : draft), "Draft saved.")}>Save draft</button>
+                  {isSuperAdmin && (
+                    <>
+                      <input type="date" aria-label="Effective from" value={effective} onChange={(e) => setEffective(e.target.value)} />
+                      <button className="btn-primary sm" onClick={() => run(() => call(`/admin/terms-versions/${draft.id}/publish`, "POST", { effectiveFrom: effective }), "Published.")}>Publish</button>
+                    </>
+                  )}
+                </div>
+              </div>
+            ) : <button className="btn-ghost sm" onClick={() => run(() => call("/admin/terms-versions/draft", "POST", { scope }), "Draft started.")}>New version</button>}
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
