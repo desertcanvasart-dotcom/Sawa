@@ -464,7 +464,45 @@ The current provider is **Tab (tab.travel), used only through links made by hand
 
 ---
 
-## 4. Decisions needed from you
+## 4. Decisions (recorded 27 Sep 2026)
+
+As supplied. **SETTLED** lines are decided. **CONFIRM** lines are your recommendations, still awaiting final confirmation; phase 1 builds on them where it needs to.
+
+```
+SETTLED   Charge at GoAhead = full published price
+SETTLED   An agency that also operates signs a separate operator agreement; Capital Travel is rostered and scored like everyone else
+SETTLED   Launch catalogue: #1 daily Giza; #2 and #3 held; #14 merged into #15 (about 18 active)
+SETTLED   Operator advance: 50% within 2 business days of assignment
+SETTLED   Cut-off: 48 hours for day tours
+CONFIRM   Payment step runs in one of two modes, set by config: A = save card, charge at GoAhead; B = charge at booking, automatic full refund if no GoAhead
+CONFIRM   Card declined at GoAhead: 24 hours to fix, then the seat is released; the departure stays guaranteed and Sawa absorbs any shortfall
+CONFIRM   Standard agency seats count toward GoAhead only once the traveller completes the link; the hold expires after 48 h. Agency-billed seats count at booking.
+CONFIRM   Traveller currency EUR; rate card and operator payouts in EGP
+CONFIRM   Solo travellers on cruise/multi-day: Sawa pays the single supplement at launch
+CONFIRM   Day tour below minimum at cut-off: cancelled automatically, no charge, next date or alternative offered. Admin may override and run it (operator paid at the 4–6 band)
+CONFIRM   Operator names hidden from travellers at launch
+```
+
+How these map onto the open questions below:
+
+| Decision | Resolves |
+|---|---|
+| Full published price at GoAhead | D2 |
+| Separate operator agreement; CTS rostered like everyone else | D9 |
+| Launch catalogue | D10 |
+| 50% advance within 2 business days | D14 |
+| 48 h cut-off for day tours | D19 (day tours; cruise cut-offs stay per product) |
+| Payment modes A/B by config | D4 in part: mode B (charge at booking, refund if no GoAhead) doesn't need off-session charges. **New:** mode B changes the "you pay nothing until the GoAhead" promise, so copy must follow the mode |
+| 24 h to fix a declined card; seat released; guarantee kept | D5 |
+| Agency seats count once the link is completed; 48-h hold; billed seats count at booking | D20 |
+| EUR for travellers; EGP for rate card and payouts | D1 |
+| Sawa pays the single supplement at launch | D15 |
+| Day tour below minimum at cut-off: cancelled, next date offered; admin override runs it at the 4–6 band | D6 |
+| Operator names hidden at launch | D21 |
+
+Still open: D3, D7, D8, D11, D12, D13, D16, D17, D18, D22, D23.
+
+## 4a. Decisions needed from you (as first written; superseded where §4 answers them)
 
 "Draft" = what the *Operator Supply & Agency Reseller Agreements* draft (26 Sep 2026) already says or suggests. Where it settles a question, the item is marked **settled by draft**; confirm it and nothing else is needed. Everything else is still open.
 
