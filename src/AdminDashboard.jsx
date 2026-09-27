@@ -15,6 +15,7 @@ import { SettlementsSection } from "./AdminSettlements.jsx";
 import { CatalogueSection, CalendarSection } from "./AdminCatalogue.jsx";
 import { OperatorsSection, RosterSection, RatesSection } from "./AdminOperators.jsx";
 import { FinanceSection } from "./AdminFinance.jsx";
+import { UnlinkedBanner } from "./AdminPayAtGoAhead.jsx";
 // Date-only departure values need a local-noon anchor or they render a day
 // early west of UTC — see src/dates.js.
 import { fmtDate, fmtReceived } from "./dates.js";
@@ -133,6 +134,7 @@ export function AdminDashboard({ user, agency, signOut, navigate }) {
                 <AlertTriangle size={14} /> {stats.financeOverdue} payment{stats.financeOverdue === 1 ? " is" : "s are"} overdue. Open Finance.
               </div>
             )}
+            {section === "overview" && <UnlinkedBanner onOpen={() => setSection("finance")} />}
             {section === "overview" && <Overview stats={stats} data={data} onGo={setSection} />}
             {section === "tours" && <ToursSection data={data} destinations={destinations} reload={loadAll} flash={flash} />}
             {section === "catalogue" && <CatalogueSection flash={flash} />}

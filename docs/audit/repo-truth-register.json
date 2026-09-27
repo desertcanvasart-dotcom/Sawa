@@ -181,6 +181,13 @@
    "verdict": "AGREES",
    "contradicts": null,
    "note": "Internal to the manifest freeze (model phase 4, behind catalogue_v2): no public claim. A seat past its payment deadline is released by the pay-at-GoAhead tick, which runs before the freeze (server/jobs/operator-jobs.js); tested in pay-at-goahead.integration.test.js."
+  },
+  "b35c91a0af85": {
+   "where": "docs/legal/terms-catalogue-draft.md:67",
+   "text": "3. What you get back is what you paid, less the percentage of the full price kept under your tier. If you haven't paid yet, nothing is refunded and nothing further is owed. **[LAWYER 12] Whether the Seller may claim the kept percentage from a traveler who cancels after GoAhead but before paying. The",
+   "verdict": "AGREES",
+   "contradicts": null,
+   "note": "A draft for the lawyer, not published. It matches the build: cancelPayAtGoAheadBooking refunds nothing and claims nothing when no payment was made (refundPaid returns null without a paid request); tested in pay-at-goahead.integration.test.js (\"refunds…\")."
   }
  }
 }

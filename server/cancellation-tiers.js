@@ -70,6 +70,9 @@ export async function fixBookingTerms(c, { pledgeId, by, now = Date.now() }) {
     `UPDATE pledges SET payment_mode = 'pay_at_goahead', cancellation_tier_version_id = $2, terms_fixed_at = $3, terms_fixed_by = $4,
             traveller_terms_accepted_at = CASE WHEN $4 = 'traveller' THEN $3 ELSE traveller_terms_accepted_at END
       WHERE id = $1`, [pledgeId, v.id, new Date(now), by]);
+  // Migration 052: the catalog Terms version, fixed at the same moment.
+  const { recordTermsVersion } = await import("./terms-versions.js");
+  await recordTermsVersion(c, { pledgeId, scope: "catalogue", now });
   return v;
 }
 

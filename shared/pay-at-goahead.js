@@ -73,6 +73,7 @@ export const SEAT_STANDING = {
   sent: "Awaiting payment",
   paid: "Paid",
   released: "Released (unpaid)",
+  unsecured: "Unsecured: travels, pays later",
   cancelled: "Canceled",
 };
 
@@ -81,7 +82,8 @@ export function paymentStanding(req, { agencyBilled = false } = {}) {
   if (!req) return { standing: "not_requested", label: "Payment not requested yet" };
   if (req.state === "paid") return { standing: "paid", label: agencyBilled ? "Paid (agency invoice)" : "Paid" };
   if (req.state === "sent") return { standing: "due", label: "Payment due", dueAt: req.dueAt };
-  if (req.state === "awaiting_link") return { standing: "due", label: "Payment link on its way" };
+  if (req.state === "awaiting_link") return { standing: "due", label: req.decisionNeeded ? "Needs an admin decision" : "Payment link on its way" };
+  if (req.state === "unsecured") return { standing: "unsecured", label: "Unsecured: travels, pays later" };
   return { standing: req.state, label: SEAT_STANDING[req.state] || req.state };
 }
 
@@ -99,4 +101,47 @@ export function nextOffer(entries, freeSeats) {
 export function offerExpiresAt({ now, offerHours = DEFAULT_OFFER_HOURS, cutoffAtMs }) {
   const end = now + Math.max(1, Number(offerHours) || DEFAULT_OFFER_HOURS) * HOUR_MS;
   return Number.isFinite(Number(cutoffAtMs)) ? Math.min(end, Number(cutoffAtMs)) : end;
+}
+
+// ---------------------------------------------------------------- unlinked seats
+// A seat whose payment link was never made is not released: the traveler did
+// nothing wrong. The gap is escalated instead (added 27 Sep 2026):
+//   - alerts to ops and admin 6 and 12 hours after GoAhead;
+//   - 24 hours before the cut-off, an admin decision with a reason:
+//       short_link        send the link now with a short deadline
+//       travel_unsecured  let the traveler travel; collect later
+//       cancel            cancel (nothing was charged) with an apology
+// A link made so late that the traveler would have under 12 hours starts no
+// deadline; the seat goes to the same decision.
+export const LINK_ALERT_HOURS = [6, 12];
+export const DECISION_BEFORE_CUTOFF_HOURS = 24;
+export const MIN_TRAVELER_HOURS = 12;
+export const UNLINKED_DECISIONS = ["short_link", "travel_unsecured", "cancel"];
+export const DECISION_LABELS = {
+  short_link: "Send the link now, with a short deadline",
+  travel_unsecured: "Let the traveler travel and collect later (unsecured seat)",
+  cancel: "Cancel, nothing charged, with an apology",
+};
+
+// Which alert is due for a request still waiting for its link, if any.
+export function linkAlertDue(req, now) {
+  if (req.state !== "awaiting_link" || req.linkUrl) return null;
+  const since = now - Date.parse(req.createdAt);
+  if (since >= 12 * HOUR_MS && !req.linkAlert12hAt) return 12;
+  if (since >= 6 * HOUR_MS && !req.linkAlert6hAt && !req.linkAlert12hAt) return 6;
+  return null;
+}
+
+// A seat with no link 24 hours before the cut-off needs an admin decision.
+export const decisionDueAt = (cutoffAtMs) => Number(cutoffAtMs) - DECISION_BEFORE_CUTOFF_HOURS * HOUR_MS;
+
+// A deadline this close gives the traveler too little time: start none.
+export const tooLateToStart = (dueAtMs, now) => Number(dueAtMs) - Number(now) < MIN_TRAVELER_HOURS * HOUR_MS;
+
+// A decision's short deadline: after now, not after the cut-off.
+export function shortDeadlineError({ dueAtMs, cutoffAtMs, now }) {
+  if (!Number.isFinite(Number(dueAtMs))) return "Choose the deadline.";
+  if (Number(dueAtMs) <= now) return "The deadline must be in the future.";
+  if (Number(dueAtMs) > Number(cutoffAtMs)) return "The deadline can't be after the cut-off.";
+  return null;
 }

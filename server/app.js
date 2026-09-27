@@ -45,6 +45,7 @@ import { registerFinanceRoutes } from "./finance-routes.js";
 import { catalogueContextFor, assertBookingComplete } from "./booking-details.js";
 import { recordAgencyBooking } from "./commissions.js";
 import { fixBookingTerms } from "./cancellation-tiers.js";
+import { recordTermsVersion } from "./terms-versions.js";
 import {
   requestPayment, departureFor, seatsHeldForWaitlist, bookingPayView, acceptBookingTerms, joinWaitlist,
   waitlistOffer, claimWaitlistOffer, completeWaitlistOffer,
@@ -2473,6 +2474,9 @@ async function insertPledge(c, departureId, p) {
         WHERE id = $1`,
       [p.id, p.manifest.pickupPoint, p.manifest.nationality, p.manifest.safetyNeeds, JSON.stringify(p.manifest.travelerNames)]);
   }
+  // Migration 052: the Terms version the booking accepted. A catalog booking
+  // under the flag records the catalog version instead (fixBookingTerms).
+  await recordTermsVersion(c, { pledgeId: p.id, scope: "legacy" });
   await refreshStatus(c, departureId);
 }
 

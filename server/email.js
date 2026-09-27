@@ -1179,3 +1179,34 @@ export function payAtGoAheadBookingEmail({ to, customerName, route, dateLabel, s
   );
   return { to, subject, html, text, kind: "booking_confirmation" };
 }
+
+// To ops and every super admin: a payment link that was never made (6 and 12
+// hours after GoAhead), and a seat that now needs an admin decision (24 hours
+// before the cut-off, or a link made too late to give the traveler 12 hours).
+export function payAtGoAheadEscalationEmail({ to, level, items = [], portalUrl }) {
+  const n = items.length;
+  const subject = level === "no_link"
+    ? `Decision needed: ${n} unpaid seat${n === 1 ? "" : "s"} with no payment link, cut-off in 24 hours`
+    : level === "late_link"
+      ? `Decision needed: a payment link made too late (under ${12} hours to pay)`
+      : `${level === "12h" ? "Second alert" : "Alert"}: ${n} payment link${n === 1 ? "" : "s"} not made ${level} after GoAhead`;
+  const intro = level === "no_link" || level === "late_link"
+    ? "These seats are booked and going ahead but can't be released for non-payment: the traveler was never given a fair chance to pay. In Admin → Finance → Pay at GoAhead, decide each one, with a reason: send the link now with a short deadline, let the traveler travel and collect later, or cancel (nothing was charged) with an apology."
+    : "These bookings went ahead but their Tab payment links haven't been made. Until a link is sent, the seat can't be released and isn't paid. Make each link with the booking code as its reference and paste it into Admin → Finance → Pay at GoAhead.";
+  const lines = items.map((i) => `${i.reference} · ${i.title} ${i.date} · ${eur(i.amount)}${i.cutoffAt ? ` · cut-off ${cairoTime(i.cutoffAt)}` : ""}`);
+  const html = shell(subject,
+    `<p style="margin:0 0 16px">${esc(intro)}</p><ul>${lines.map((l) => `<li>${esc(l)}</li>`).join("")}</ul>${portalUrl ? button(portalUrl, "Open Pay at GoAhead") : ""}`,
+    { eyebrow: "Pay at GoAhead", preheader: subject });
+  return { to, subject, html, text: [intro, ...lines, portalUrl || ""].join("\n"), kind: `pay_at_goahead_escalation_${level}` };
+}
+
+// To a traveler whose booking Sawa canceled because the payment link was
+// never sent in time. Nothing was charged.
+export function payAtGoAheadApologyEmail({ to, name, title, dateLabel, bookingCode }) {
+  const subject = `We're sorry: your booking on ${title} is canceled`;
+  const text = `Hello${name ? ` ${name}` : ""}, we're sorry. Your date for ${title} on ${dateLabel} (booking ${bookingCode}) went ahead, `
+    + "but we didn't send your payment link in time, and we've had to cancel your booking. That was our mistake, not yours. "
+    + "Nothing was charged, so there is nothing to refund. Reply to this email and we'll help you find another date.";
+  const html = shell(subject, `<p style="margin:0 0 16px">${esc(text)}</p>`, { eyebrow: "Our apologies", preheader: "Nothing was charged." });
+  return { to, subject, html, text, kind: "pay_at_goahead_apology" };
+}

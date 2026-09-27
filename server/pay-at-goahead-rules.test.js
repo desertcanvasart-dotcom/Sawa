@@ -7,6 +7,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   payDeadline, reminderAt, reminderDue, releaseWarningDue, releaseDue, extensionError, nextOffer, offerExpiresAt, paymentStanding,
+  linkAlertDue, decisionDueAt, tooLateToStart, shortDeadlineError,
 } from "../shared/pay-at-goahead.js";
 import {
   tierAt, versionInForce, tierRowsError, describeTiers, refundFor, cancellationFee, lossCheck, owedPerSeatEgp,
@@ -147,4 +148,25 @@ test("commission under pay at GoAhead: void when released, earned only if paid, 
   assert.equal(commissionOutcome({ ...late, departureStatus: "completed", feeKept: false }).state, "void", "resold: nothing kept");
   // The legacy rule is unchanged.
   assert.equal(commissionOutcome({ ...late, payAtGoAhead: false, departureStatus: "completed", cancelledAtMs: 10 * 24 * HOUR - HOUR }).state, "half");
+});
+
+test("a link never made: alerts at 6 and 12 hours, once each; a decision 24 hours before the cut-off", () => {
+  const req = { state: "awaiting_link", linkUrl: null, createdAt: new Date(T0).toISOString() };
+  assert.equal(linkAlertDue(req, T0 + 5 * HOUR), null);
+  assert.equal(linkAlertDue(req, T0 + 6 * HOUR), 6);
+  assert.equal(linkAlertDue({ ...req, linkAlert6hAt: "x" }, T0 + 7 * HOUR), null, "once");
+  assert.equal(linkAlertDue({ ...req, linkAlert6hAt: "x" }, T0 + 12 * HOUR), 12);
+  assert.equal(linkAlertDue({ ...req, linkUrl: "https://x" }, T0 + 12 * HOUR), null, "a link was made");
+  assert.equal(linkAlertDue({ ...req, state: "sent" }, T0 + 12 * HOUR), null);
+  assert.equal(decisionDueAt(T0 + 48 * HOUR), T0 + 24 * HOUR);
+});
+
+test("a link that leaves under 12 hours starts no deadline; a decision's short deadline is before the cut-off", () => {
+  assert.equal(tooLateToStart(T0 + 11 * HOUR, T0), true);
+  assert.equal(tooLateToStart(T0 + 12 * HOUR, T0), false);
+  assert.equal(shortDeadlineError({ dueAtMs: T0 + HOUR, cutoffAtMs: T0 + 5 * HOUR, now: T0 }), null);
+  assert.match(shortDeadlineError({ dueAtMs: T0 + 6 * HOUR, cutoffAtMs: T0 + 5 * HOUR, now: T0 }), /cut-off/);
+  assert.match(shortDeadlineError({ dueAtMs: T0 - 1, cutoffAtMs: T0 + 5 * HOUR, now: T0 }), /future/);
+  assert.equal(paymentStanding({ state: "unsecured" }).standing, "unsecured");
+  assert.equal(paymentStanding({ state: "awaiting_link", decisionNeeded: "no_link" }).label, "Needs an admin decision");
 });

@@ -31,6 +31,7 @@ import { tierVersionById, bookingTerms } from "./cancellation-tiers.js";
 import {
   DEFAULT_WINDOW_HOURS, WINDOW_HOURS_CHOICES, DEFAULT_OFFER_HOURS, payDeadline, reminderDue, releaseWarningDue,
   releaseDue, extensionError, paymentStanding, nextOffer, offerExpiresAt,
+  linkAlertDue, decisionDueAt, tooLateToStart, shortDeadlineError, UNLINKED_DECISIONS, MIN_TRAVELER_HOURS,
 } from "../shared/pay-at-goahead.js";
 import { tierAt, hoursBeforeStart, refundFor } from "../shared/cancellation-tiers.js";
 
@@ -52,6 +53,10 @@ export const mapPayRequest = (r) => ({
   reminderSentAt: iso(r.reminder_sent_at), releaseWarnedAt: iso(r.release_warned_at), paidAt: iso(r.paid_at),
   providerReference: r.provider_reference || null, recordedBy: r.recorded_by || null, releasedAt: iso(r.released_at),
   cancelledAt: iso(r.cancelled_at), createdAt: iso(r.created_at),
+  // Migration 052: the escalation of a link never made.
+  linkAlert6hAt: iso(r.link_alert_6h_at), linkAlert12hAt: iso(r.link_alert_12h_at),
+  decisionNeeded: r.decision_needed || null, decisionNeededAt: iso(r.decision_needed_at),
+  decision: r.decision || null, decisionReason: r.decision_reason || null, decidedBy: r.decided_by || null, decidedAt: iso(r.decided_at),
 });
 
 export const mapRefund = (r) => ({
@@ -156,7 +161,7 @@ async function payerFor(c, pledge) {
 export async function requestPayment(c, { pledgeId, departure, now = Date.now(), send = null, env = process.env }) {
   const pledge = (await c.query("SELECT * FROM pledges WHERE id = $1 FOR UPDATE", [pledgeId])).rows[0];
   if (!pledge || pledge.status === "cancelled" || pledge.payment_mode !== "pay_at_goahead") return null;
-  const live = (await c.query("SELECT id FROM payment_requests WHERE pledge_id = $1 AND state IN ('awaiting_link', 'sent', 'paid')", [pledgeId])).rows[0];
+  const live = (await c.query("SELECT id FROM payment_requests WHERE pledge_id = $1 AND state IN ('awaiting_link', 'sent', 'paid', 'unsecured')", [pledgeId])).rows[0];
   if (live) return null;
   if (!(now < departure.cutoffAt)) return null;
   const who = await payerFor(c, pledge);
@@ -179,7 +184,7 @@ export async function requestPayment(c, { pledgeId, departure, now = Date.now(),
 
 // The link is out: stamp the deadline (from now, capped at the cut-off),
 // email the payer, and date an agency invoice to the deadline.
-async function sendLink(c, { requestId, linkUrl, by, now, send }) {
+async function sendLink(c, { requestId, linkUrl, by, now, send, decided = null }) {
   const r = (await c.query("SELECT * FROM payment_requests WHERE id = $1 FOR UPDATE", [requestId])).rows[0];
   if (!r) throw new CatalogueError(404, "Payment request not found.");
   if (r.state !== "awaiting_link") throw new CatalogueError(409, "This request already has its link.");
@@ -188,7 +193,24 @@ async function sendLink(c, { requestId, linkUrl, by, now, send }) {
   const departure = await departureFor(c, { id: Number(r.departure_id) });
   if (!(now < departure.cutoffAt)) throw new CatalogueError(409, "The cut-off has passed: the manifest is frozen.");
   const { windowHours } = await payAtGoAheadSettings(c);
-  const deadline = payDeadline({ sentAtMs: now, windowHours, cutoffAtMs: departure.cutoffAt });
+  // An admin decision sets its own short deadline; otherwise the window,
+  // capped at the cut-off.
+  const deadline = decided
+    ? { dueAt: decided.dueAtMs, boundBy: "decision", shortWindow: true }
+    : payDeadline({ sentAtMs: now, windowHours, cutoffAtMs: departure.cutoffAt });
+  // Migration 052: a link made so late that the traveler would have under 12
+  // hours starts no deadline. The link is kept, and the seat goes to an admin
+  // decision; nothing is emailed yet.
+  if (!decided && tooLateToStart(deadline.dueAt, now)) {
+    const held = (await c.query(
+      `UPDATE payment_requests SET link_url = $2, decision_needed = 'late_link', decision_needed_at = $3 WHERE id = $1 RETURNING *`,
+      [requestId, linkUrl, new Date(now)])).rows[0];
+    await c.query(
+      "UPDATE payment_tasks SET state = 'done', done_at = now(), done_by = $2 WHERE kind = 'create_link' AND request_id = $1 AND state = 'open'",
+      [requestId, by]);
+    await alertDecisionNeeded(c, { request: held, departure, why: "late_link", send });
+    return { ...mapPayRequest(held), heldForDecision: true };
+  }
   const who = await payerFor(c, pledge);
   const upd = (await c.query(
     `UPDATE payment_requests SET state = 'sent', link_url = $2, link_sent_at = $3, due_at = $4, original_due_at = $4,
@@ -212,6 +234,93 @@ async function sendLink(c, { requestId, linkUrl, by, now, send }) {
     })).catch(() => ({ ok: false }));
   }
   return { ...request, shortWindow: deadline.shortWindow };
+}
+
+// ---------------------------------------------------------------- unlinked seats
+async function escalationRecipients(c) {
+  const { opsRecipient } = await import("./email.js");
+  const admins = (await c.query("SELECT email FROM app_users WHERE role = 'super_admin' AND status = 'active' ORDER BY created_at")).rows.map((r) => r.email);
+  return [...new Set([opsRecipient(), ...admins].filter(Boolean).map((e) => String(e).toLowerCase()))];
+}
+
+async function alertDecisionNeeded(c, { request, departure, why, send }) {
+  if (!send) return;
+  const { payAtGoAheadEscalationEmail } = await import("./email.js");
+  for (const to of await escalationRecipients(c)) {
+    await send(payAtGoAheadEscalationEmail({
+      to, level: why, portalUrl: `${site()}/portal`,
+      items: [{ reference: request.reference, title: departure.product.title, date: departure.date, amount: Number(request.amount_eur), cutoffAt: new Date(departure.cutoffAt).toISOString() }],
+    })).catch(() => ({ ok: false }));
+  }
+}
+
+// An admin's decision on a seat whose link was never made, or made too late
+// (added 27 Sep 2026). A reason is required, and the decision is kept.
+//   short_link        the link now, with a short deadline (after now, not after
+//                     the cut-off); the release follows it as usual
+//   travel_unsecured  the traveler travels; payment is collected later. The
+//                     seat is never released and is marked unsecured.
+//   cancel            the booking is canceled; nothing was charged, so nothing
+//                     is refunded; the traveler gets an apology
+export async function decideUnlinkedSeat(db, { requestId, decision, reason, linkUrl = null, dueAt = null, by, now = Date.now(), send = null, env = process.env }) {
+  if (!UNLINKED_DECISIONS.includes(decision)) throw new CatalogueError(422, "Choose: send the link now, let the traveler travel unsecured, or cancel.");
+  if (!String(reason || "").trim()) throw new CatalogueError(422, "Give the reason for the decision.");
+  return inTx(db, async (c) => {
+    const r = (await c.query("SELECT * FROM payment_requests WHERE id = $1 FOR UPDATE", [requestId])).rows[0];
+    if (!r) throw new CatalogueError(404, "Payment request not found.");
+    if (r.state !== "awaiting_link") throw new CatalogueError(409, "This seat's payment request isn't waiting for a link.");
+    const departure = await departureFor(c, { id: Number(r.departure_id) });
+    const record = (state = null) => c.query(
+      `UPDATE payment_requests SET decision = $2, decision_reason = $3, decided_by = $4, decided_at = $5,
+              decision_needed = COALESCE(decision_needed, 'no_link'), decision_needed_at = COALESCE(decision_needed_at, $5)
+              ${state ? ", state = $6" : ""}
+        WHERE id = $1`, [requestId, decision, String(reason).trim().slice(0, 500), by, new Date(now), ...(state ? [state] : [])]);
+    if (decision === "short_link") {
+      const url = cleanLinkUrl(linkUrl || r.link_url);
+      if (!url) throw new CatalogueError(422, "Paste the full https:// payment link.");
+      const due = Date.parse(dueAt);
+      const err = shortDeadlineError({ dueAtMs: due, cutoffAtMs: departure.cutoffAt, now });
+      if (err) throw new CatalogueError(422, err);
+      await record();
+      return sendLink(c, { requestId, linkUrl: url, by, now, send, decided: { dueAtMs: due } });
+    }
+    if (decision === "travel_unsecured") {
+      await record("unsecured");
+      await c.query(
+        "UPDATE payment_tasks SET state = 'done', done_at = now(), done_by = $2 WHERE kind = 'create_link' AND request_id = $1 AND state = 'open'",
+        [requestId, by]);
+      return mapPayRequest((await c.query("SELECT * FROM payment_requests WHERE id = $1", [requestId])).rows[0]);
+    }
+    // cancel
+    await record();
+    const pledge = (await c.query("SELECT * FROM pledges WHERE id = $1", [r.pledge_id])).rows[0];
+    await cancelPayAtGoAheadBooking(c, { pledgeId: r.pledge_id, reason: "admin", by, now, send, env });
+    if (send) {
+      const who = await payerFor(c, pledge);
+      if (who.to) {
+        const { payAtGoAheadApologyEmail } = await import("./email.js");
+        await send(payAtGoAheadApologyEmail({
+          to: who.to, name: who.payer === "traveller" ? pledge.customers : null, title: departure.product.title,
+          dateLabel: dateLabel(departure.date), bookingCode: r.reference,
+        })).catch(() => ({ ok: false }));
+      }
+    }
+    return mapPayRequest((await c.query("SELECT * FROM payment_requests WHERE id = $1", [requestId])).rows[0]);
+  });
+}
+
+// For the admin home and Finance: seats booked, going ahead, not paid and
+// with no link; those needing a decision; those traveling unsecured.
+export async function unlinkedSummary(db = pool) {
+  const r = (await db.query(
+    `SELECT
+       COUNT(*) FILTER (WHERE r.state = 'awaiting_link' AND r.link_url IS NULL)::int AS unlinked_bookings,
+       COALESCE(SUM(p.seats) FILTER (WHERE r.state = 'awaiting_link' AND r.link_url IS NULL), 0)::int AS unlinked_seats,
+       COALESCE(SUM(p.seats) FILTER (WHERE r.state = 'awaiting_link' AND r.decision_needed IS NOT NULL AND r.decision IS NULL), 0)::int AS needs_decision,
+       COALESCE(SUM(p.seats) FILTER (WHERE r.state = 'unsecured'), 0)::int AS unsecured
+       FROM payment_requests r JOIN pledges p ON p.id = r.pledge_id
+      WHERE p.status <> 'cancelled'`)).rows[0];
+  return { unlinkedBookings: r.unlinked_bookings, unlinkedSeats: r.unlinked_seats, needsDecision: r.needs_decision, unsecured: r.unsecured };
 }
 
 // Ops paste the provider's link (a manual provider).
@@ -360,7 +469,7 @@ export async function cancelPayAtGoAheadBooking(db, { pledgeId, reason = "travel
     await refreshStatus(c, pledge.departure_id);
     await c.query(
       `UPDATE payment_requests SET state = 'cancelled', cancelled_at = $2, cancel_reason = $3
-        WHERE pledge_id = $1 AND state IN ('awaiting_link', 'sent')`, [pledgeId, new Date(now), `Booking canceled (${reason}).`]);
+        WHERE pledge_id = $1 AND state IN ('awaiting_link', 'sent', 'unsecured')`, [pledgeId, new Date(now), `Booking canceled (${reason}).`]);
     await c.query(
       `UPDATE payment_tasks t SET state = 'cancelled', done_at = now(), done_by = $2 FROM payment_requests r
         WHERE t.request_id = r.id AND r.pledge_id = $1 AND t.kind = 'create_link' AND t.state = 'open'`, [pledgeId, by]);
@@ -398,13 +507,13 @@ export async function completeRefund(db, { refundId, providerReference, by }) {
 async function reconcileCancelled(db, { now, env }) {
   const rows = (await db.query(
     `SELECT r.id, r.pledge_id, r.state FROM payment_requests r JOIN pledges p ON p.id = r.pledge_id
-      WHERE p.status = 'cancelled' AND (r.state IN ('awaiting_link', 'sent')
+      WHERE p.status = 'cancelled' AND (r.state IN ('awaiting_link', 'sent', 'unsecured')
          OR (r.state = 'paid' AND NOT EXISTS (SELECT 1 FROM payment_refunds f WHERE f.request_id = r.id AND f.state <> 'cancelled')))`)).rows;
   let n = 0;
   for (const row of rows) {
     await inTx(db, async (c) => {
       const r = (await c.query("SELECT * FROM payment_requests WHERE id = $1 FOR UPDATE", [row.id])).rows[0];
-      if (r.state === "awaiting_link" || r.state === "sent") {
+      if (["awaiting_link", "sent", "unsecured"].includes(r.state)) {
         await c.query("UPDATE payment_requests SET state = 'cancelled', cancelled_at = $2, cancel_reason = 'Booking canceled.' WHERE id = $1", [r.id, new Date(now)]);
         await c.query("UPDATE payment_tasks SET state = 'cancelled', done_at = now(), done_by = 'system' WHERE kind = 'create_link' AND request_id = $1 AND state = 'open'", [r.id]);
       } else if (r.state === "paid") {
@@ -630,12 +739,17 @@ export async function bookingPayView(db, { pledgeId }) {
   const departure = await departureFor(db, { legacyDepartureId: p.departure_id });
   const r = (await requestsByPledge(db, [pledgeId])).get(pledgeId) || null;
   const terms = await bookingTerms(db, { versionId: p.cancellation_tier_version_id, productType: departure.product.type });
+  const { termsVersionById } = await import("./terms-versions.js");
+  const doc = p.terms_version_id ? await termsVersionById(db, p.terms_version_id) : null;
   return {
     mode: "pay_at_goahead",
     request: r && ["sent", "paid", "released"].includes(r.state)
       ? { state: r.state, amountEur: r.amountEur, dueAt: r.dueAt, linkUrl: r.state === "sent" ? r.linkUrl : null, payer: r.payer }
       : r ? { state: r.state, amountEur: r.amountEur, payer: r.payer } : null,
-    terms: terms ? { ...terms, fixedBy: p.terms_fixed_by, fixedAt: iso(p.terms_fixed_at), travellerAcceptedAt: iso(p.traveller_terms_accepted_at) } : null,
+    terms: terms ? {
+      ...terms, fixedBy: p.terms_fixed_by, fixedAt: iso(p.terms_fixed_at), travellerAcceptedAt: iso(p.traveller_terms_accepted_at),
+      document: doc ? { version: doc.version, title: doc.title, url: doc.documentUrl } : null,
+    } : null,
   };
 }
 
@@ -666,7 +780,7 @@ export async function runPayAtGoAheadTick({ db = pool, now = Date.now(), send = 
     `SELECT p.id AS pledge_id, cd.id AS dep_id FROM pledges p
        JOIN catalogue_departures cd ON cd.legacy_departure_id = p.departure_id
       WHERE cd.status = 'go_ahead' AND p.status <> 'cancelled' AND p.payment_mode = 'pay_at_goahead'
-        AND NOT EXISTS (SELECT 1 FROM payment_requests r WHERE r.pledge_id = p.id AND r.state IN ('awaiting_link', 'sent', 'paid'))
+        AND NOT EXISTS (SELECT 1 FROM payment_requests r WHERE r.pledge_id = p.id AND r.state IN ('awaiting_link', 'sent', 'paid', 'unsecured'))
       ORDER BY p.created_at, p.id`)).rows;
   for (const row of due) {
     const made = await inTx(db, async (c) => {
@@ -691,6 +805,43 @@ export async function runPayAtGoAheadTick({ db = pool, now = Date.now(), send = 
     }
     await db.query("UPDATE payment_requests SET ops_notified_at = $2 WHERE id = ANY($1::bigint[])", [waiting.map((r) => r.id), new Date(now)]);
     out.opsNotified = waiting.length;
+  }
+
+  // 2b. A link never made (migration 052): alerts to ops and admin at 6 and 12
+  // hours after GoAhead, then an admin decision 24 hours before the cut-off.
+  // The seat is never released for it: the traveler did nothing wrong.
+  const unlinked = (await db.query(
+    `SELECT r.* FROM payment_requests r JOIN pledges p ON p.id = r.pledge_id
+      WHERE r.state = 'awaiting_link' AND r.decision IS NULL AND p.status <> 'cancelled' ORDER BY r.id`)).rows;
+  const alerts = { 6: [], 12: [] };
+  for (const row of unlinked) {
+    const r = mapPayRequest(row);
+    const departure = await departureFor(db, { id: r.departureId });
+    const item = { reference: r.reference, title: departure.product.title, date: departure.date, amount: r.amountEur, cutoffAt: new Date(departure.cutoffAt).toISOString() };
+    if (!r.decisionNeeded && now >= decisionDueAt(departure.cutoffAt)) {
+      const claimed = await db.query(
+        "UPDATE payment_requests SET decision_needed = 'no_link', decision_needed_at = $2 WHERE id = $1 AND decision_needed IS NULL AND state = 'awaiting_link'",
+        [r.id, new Date(now)]);
+      if (claimed.rowCount) {
+        out.decisionsNeeded = (out.decisionsNeeded || 0) + 1;
+        await alertDecisionNeeded(db, { request: row, departure, why: "no_link", send });
+      }
+      continue;
+    }
+    const level = linkAlertDue(r, now);
+    if (!level) continue;
+    const col = level === 12 ? "link_alert_12h_at" : "link_alert_6h_at";
+    const claimed = await db.query(`UPDATE payment_requests SET ${col} = $2 WHERE id = $1 AND ${col} IS NULL`, [r.id, new Date(now)]);
+    if (claimed.rowCount) alerts[level].push(item);
+  }
+  for (const level of [6, 12]) {
+    if (!alerts[level].length) continue;
+    out[`linkAlerts${level}h`] = alerts[level].length;
+    if (!send) continue;
+    const { payAtGoAheadEscalationEmail } = await import("./email.js");
+    for (const to of await escalationRecipients(db)) {
+      await send(payAtGoAheadEscalationEmail({ to, level: `${level}h`, items: alerts[level], portalUrl: `${site()}/portal` })).catch(() => ({ ok: false }));
+    }
   }
 
   // 3–5. Reminders, warnings, releases.
