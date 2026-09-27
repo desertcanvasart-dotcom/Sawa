@@ -81,7 +81,7 @@ const itinerary = [
   },
   {
     day: 7, city: "Aswan", title: "Leisure in Aswan", overnight: "Nile Cruise · Aswan",
-    description: "A relaxed day in beautiful Aswan. Set sail on a traditional felucca, the lateen-rigged boat that has plied the Nile for centuries, and gliding past Elephantine Island and the Aga Khan Mausoleum. The rest of the day is free to explore the colourful Aswan market and souq at your own pace.",
+    description: "A relaxed day in beautiful Aswan. Set sail on a traditional felucca, the lateen-rigged boat that has plied the Nile for centuries, and gliding past Elephantine Island and the Aga Khan Mausoleum. The rest of the day is free to explore the colorful Aswan market and souq at your own pace.",
     accommodation: "Nile Cruise · Aswan", meals: "Breakfast, Lunch, Dinner",
     included: ["Felucca sail on the Nile", "Free time at the Aswan market (souq)"],
     optional: [],

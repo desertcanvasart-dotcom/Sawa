@@ -164,17 +164,17 @@ export async function runCancelUnconfirmed({
       const sent = await deps.send(mail).catch(() => ({ ok: false }));
       if (sent?.ok) { reached += 1; notified += 1; }
     }
-    log(line + `  [cancelled, ${result.pledgesCancelled} booking(s) released]`);
+    log(line + `  [canceled, ${result.pledgesCancelled} booking(s) released]`);
     if (!reportNotifications({ intended, sent: reached, context: `  #${dep.id}`, log, error: logError })) {
       shortfalls += 1;
     }
   }
 
   if (!dryRun) {
-    log(`cancelled ${cancelled}, emails sent ${notified}`);
+    log(`canceled ${cancelled}, emails sent ${notified}`);
     if (shortfalls) {
       logError(
-        `${shortfalls} departure(s) were cancelled WITHOUT reaching every traveller on them. `
+        `${shortfalls} departure(s) were canceled WITHOUT reaching every traveler on them. `
         + "This is not a quiet zero — somebody was not told."
       );
     }

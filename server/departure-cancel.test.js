@@ -79,7 +79,7 @@ test("nobody to tell is said out loud, and is not an error", () => {
   const clean = reportNotifications({ intended: 0, sent: 0, context: "x", log: c.log, error: c.error });
   assert.equal(clean, true);
   assert.equal(c.out.error.length, 0);
-  assert.match(c.out.log[0], /no travellers to notify/);
+  assert.match(c.out.log[0], /no travelers to notify/);
 });
 
 test("everyone reached reports the count", () => {

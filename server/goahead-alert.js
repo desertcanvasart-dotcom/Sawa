@@ -209,11 +209,11 @@ export function reportAlerts({ intended, sent, log = console.log, error = consol
 // purpose: the confirmation email PROMISED this message. A departure counted
 // here is a set of named people who were told they would hear and did not.
 export function reportNotices({ intended, sent, log = console.log, error = console.error }) {
-  if (intended === 0) { log("goahead-notify: no departures awaiting a traveller notice"); return true; }
+  if (intended === 0) { log("goahead-notify: no departures awaiting a traveler notice"); return true; }
   if (sent === intended) { log(`goahead-notify: ${sent} of ${intended} departure(s) notified`); return true; }
   error(
     `goahead-notify: NOTICE SHORTFALL — ${sent} of ${intended} departure(s) notified. `
-    + `Travellers on ${intended - sent} confirmed departure(s) were promised "we'll email you when that happens" `
+    + `Travelers on ${intended - sent} confirmed departure(s) were promised "we'll email you when that happens" `
     + `and have not been. They stay in the queue; re-run the job.`
   );
   return false;

@@ -179,7 +179,7 @@ test("'X of N joined' is read in context, because it means opposite things on tw
 });
 
 test("the rules never change spelling", () => {
-  // The static pages write "travelers", the SPA writes "travellers". An early
+  // The site writes "travelers" everywhere; supplied copy may not. An early
   // version of the rules quietly rewrote three files to the other spelling,
   // which is what this guards: sync-constants must leave both alone.
   const us = "you only pay when four travelers confirm the date";

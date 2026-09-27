@@ -153,7 +153,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       <div class="panel-in" style="padding:18px">
         <div class="code"><button class="copy" data-copy="#snippet">Copy</button><span id="snippet"><span class="cm">&lt;!-- Sawa widget: paste where it should appear --&gt;</span>
 &lt;iframe src="https://sawa.tours/embed?ref=YOUR-CODE" style="width:100%;border:0;border-radius:18px" loading="lazy" data-sawa-embed&gt;&lt;/iframe&gt;
-<span class="cm">&lt;!-- Sizes it to fit and matches your page's colours --&gt;</span>
+<span class="cm">&lt;!-- Sizes it to fit and matches your page's colors --&gt;</span>
 &lt;script&gt;
 (function(){function s(f){try{var c=getComputedStyle(document.body),a=document.querySelector('a');f.contentWindow.postMessage({type:'sawa-embed-theme',bg:c.backgroundColor,text:c.color,accent:a?getComputedStyle(a).color:''},'*');}catch(e){}}
 addEventListener('message',function(e){if(!e.data)return;document.querySelectorAll('iframe[data-sawa-embed]').forEach(function(f){if(f.contentWindow!==e.source)return;if(e.data.type==='sawa-embed-height')f.style.height=e.data.height+'px';if(e.data.type==='sawa-embed-ready')s(f);if(e.data.type==='sawa-embed-top'&&f.getBoundingClientRect().top&lt;0)f.scrollIntoView({behavior:'smooth',block:'start'});});});

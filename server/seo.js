@@ -94,7 +94,7 @@ export const DEFAULTS = {
 export const STATIC = {
   "/itineraries": { title: `Egypt Tour Itineraries — Day Tours & Packages | ${BRAND.name}`, description: "Every Sawa itinerary: shared Egypt day tours and multi-day packages. Join a date that's forming or start your own — nothing is charged until it confirms.", crumb: "Itineraries" },
   "/booking": { title: `Check Your Booking | ${BRAND.name}`, description: "Enter your booking code to see whether your Sawa departure has reached GoAhead.", crumb: "Booking" },
-  "/blog": { title: `Blog — Notes from the Nile | ${BRAND.name}`, description: "Guides, history and practical tips for travelling Egypt the shared way, from the people who run the tours.", crumb: "Blog" },
+  "/blog": { title: `Blog — Notes from the Nile | ${BRAND.name}`, description: "Guides, history and practical tips for traveling Egypt the shared way, from the people who run the tours.", crumb: "Blog" },
   // The operator directory. Data-driven — a partner appears the day its record
   // is created, so this is an SPA route rather than a hand-written /site file
   // that would need editing every time one joins.
@@ -585,7 +585,7 @@ async function upcomingDepartures(tourProductId = null) {
     return {
       route: d.route, date: d.start_date || d.date, endDate: d.end_date, time: d.time,
       seats, max: Number(d.max_seats) || 12, min,
-      label: confirmed ? "confirmed to run (GoAhead)" : `forming — ${Math.max(0, min - seats)} more traveller${min - seats === 1 ? "" : "s"} to confirm`,
+      label: confirmed ? "confirmed to run (GoAhead)" : `forming — ${Math.max(0, min - seats)} more traveler${min - seats === 1 ? "" : "s"} to confirm`,
       productId: d.tour_product_id,
     };
   });
@@ -656,11 +656,11 @@ export async function buildBody(pathname) {
     return wrapBody(`
 <article>
   <h1>${esc(p.title)}</h1>
-  <p>${esc(p.city || "Egypt")}${p.duration ? ` · ${esc(p.duration)}` : ""} · shared departure for ${Math.max(1, Number(p.min_seats) || 4)}–${Number(p.max_seats) || 12} travellers${from ? ` · from ${from} per person` : ""}${Array.isArray(p.operating_days) && p.operating_days.length ? ` · departs on ${p.operating_days.map((d) => ["Sundays", "Mondays", "Tuesdays", "Wednesdays", "Thursdays", "Fridays", "Saturdays"][d]).join(", ")}` : ""}</p>
+  <p>${esc(p.city || "Egypt")}${p.duration ? ` · ${esc(p.duration)}` : ""} · shared departure for ${Math.max(1, Number(p.min_seats) || 4)}–${Number(p.max_seats) || 12} travelers${from ? ` · from ${from} per person` : ""}${Array.isArray(p.operating_days) && p.operating_days.length ? ` · departs on ${p.operating_days.map((d) => ["Sundays", "Mondays", "Tuesdays", "Wednesdays", "Thursdays", "Fridays", "Saturdays"][d]).join(", ")}` : ""}</p>
   ${p.overview_html ? cleanHtml(p.overview_html) : `<p>${esc(p.description || "")}</p>`}
   <h2>Upcoming departures</h2>
   ${departureListHtml(deps)}
-  <p>Every date needs ${Math.max(1, Number(p.min_seats) || 4)} travellers to be confirmed (the GoAhead). Hold a seat free — a deposit is only charged once the date confirms. Don't see your day? Start your own date on this page; our team reviews it before it opens.</p>
+  <p>Every date needs ${Math.max(1, Number(p.min_seats) || 4)} travelers to be confirmed (the GoAhead). Hold a seat free — a deposit is only charged once the date confirms. Don't see your day? Start your own date on this page; our team reviews it before it opens.</p>
   ${itin.length ? `<h2>Itinerary</h2><ol>${itin.map((d) => `<li><strong>${esc(d.title || "")}</strong>${d.description ? ` — ${esc(plain(d.description, 400))}` : ""}</li>`).join("")}</ol>` : ""}
   ${included.length ? `<h2>Included</h2><ul>${included.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}
   ${notIncluded.length ? `<h2>Not included</h2><ul>${notIncluded.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}
@@ -711,7 +711,7 @@ export async function buildBody(pathname) {
     deps.forEach((d) => byProduct.set(d.productId, (byProduct.get(d.productId) || 0) + 1));
     return wrapBody(`
 <h1>Egypt tour itineraries — shared day tours &amp; packages</h1>
-<p>Every itinerary Sawa runs is operated by an Egyptian travel company licensed by the Ministry of Tourism and registered with ETAA. Open one to join a forming date or start your own. Each date shows exactly how many travellers it needs to confirm — that moment is the GoAhead — and no Sawa group ever goes above ${GROUP_MAX_WORD}. You pay nothing until your date confirms. Dates already filling are on <a href="/departures">the departures board</a>; confirmed trips are on <a href="/goahead">the GoAhead board</a>.</p>
+<p>Every itinerary Sawa runs is operated by an Egyptian travel company licensed by the Ministry of Tourism and registered with ETAA. Open one to join a forming date or start your own. Each date shows exactly how many travelers it needs to confirm — that moment is the GoAhead — and no Sawa group ever goes above ${GROUP_MAX_WORD}. You pay nothing until your date confirms. Dates already filling are on <a href="/departures">the departures board</a>; confirmed trips are on <a href="/goahead">the GoAhead board</a>.</p>
 <ul>${catalogueListHtml(rows, byProduct)}</ul>`);
   }
 
@@ -730,7 +730,7 @@ export async function buildBody(pathname) {
       .filter((p) => p.name);
     return wrapBody(`
 <h1>The companies that operate Sawa departures</h1>
-<p>Sawa pools travellers into shared departures; the trips themselves are run by Egyptian travel companies licensed by the Ministry of Tourism and Antiquities and registered with ETAA. This page names them. Where Sawa has completed its verification of a partner's records, that is shown with its date — a listed company without the line is a partner whose verification has not been completed yet.</p>
+<p>Sawa pools travelers into shared departures; the trips themselves are run by Egyptian travel companies licensed by the Ministry of Tourism and Antiquities and registered with ETAA. This page names them. Where Sawa has completed its verification of a partner's records, that is shown with its date — a listed company without the line is a partner whose verification has not been completed yet.</p>
 ${partnersListHtml(partners)}
 <p>The directory grows as operators join: an Egyptian travel company can <a href="/verify">apply to list with Sawa</a>.</p>`);
   }
@@ -747,8 +747,8 @@ ${BRAND.description}
 ## Core pages
 
 - [Itineraries](/itineraries): browse every shared day tour and multi-day package we run.
-- [Departures](/departures): dates currently forming — each already has travellers aboard and shows live seat counts.
-- [GoAhead departures](/goahead): dates confirmed to run (four or more travellers) that can still be joined.
+- [Departures](/departures): dates currently forming — each already has travelers aboard and shows live seat counts.
+- [GoAhead departures](/goahead): dates confirmed to run (four or more travelers) that can still be joined.
 - [How it works](/how-it-works): the GoAhead model — join a forming date or start your own, hold a seat free, and the date is confirmed before you pay.
 - [Blog](/blog): guides, history and travel tips for Egypt.
 - [About](/about): who Sawa is and why shared departures.
@@ -760,7 +760,7 @@ ${BRAND.description}
 
 Sawa runs shared, small-group tours across Egypt — Cairo and Giza, Luxor's East and West Banks, Aswan, Abu Simbel, and the Nile temples between Luxor and Aswan, plus multi-day packages. Every departure is operated by licensed Egyptian guides with inspected transport.
 
-The distinguishing model is "GoAhead": travellers from different bookings are pooled onto the same date. You hold a seat for free; once a date reaches its minimum number of travellers it is confirmed to run, and only then is a deposit due. If a date never fills, you pay nothing.
+The distinguishing model is "GoAhead": travelers from different bookings are pooled onto the same date. You hold a seat for free; once a date reaches its minimum number of travelers it is confirmed to run, and only then is a deposit due. If a date never fills, you pay nothing.
 
 ## Pricing and booking model
 
@@ -805,7 +805,7 @@ ${(() => {
       const board = deps.filter((d) => d.seats >= 1);
       return board.length
         ? board.map((d) => `- ${dateLabel(d.date)}${d.endDate ? ` – ${dateLabel(d.endDate)}` : ""}: ${titleById.get(d.productId) || d.route} — ${d.seats} of ${d.max} seats taken, ${d.label}`).join("\n")
-        : "- No public departures forming at the moment — travellers can start a date on any itinerary page.";
+        : "- No public departures forming at the moment — travelers can start a date on any itinerary page.";
     })()}
 `;
   } catch (e) {
@@ -830,8 +830,8 @@ ${(() => {
 
 Tours are delivered by licensed Egyptian operators with verified vehicles. Group sizes are small. Meeting points and departure times are specified per tour and per destination (for example, Cairo tours meet at the Egyptian Museum in Tahrir or Marriott Mena House in Giza).
 
-## How to refer a traveller
+## How to refer a traveler
 
-Point travellers to ${BRAND.url}/itineraries to browse and hold a seat, or to ${BRAND.url}/contact for questions. For booking status, ${BRAND.url}/booking accepts a booking code.
+Point travelers to ${BRAND.url}/itineraries to browse and hold a seat, or to ${BRAND.url}/contact for questions. For booking status, ${BRAND.url}/booking accepts a booking code.
 `;
 }

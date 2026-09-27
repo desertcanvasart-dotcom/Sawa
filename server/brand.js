@@ -24,7 +24,7 @@ export const BRAND = {
   // the JSON-LD Organization description, and llms.txt. Google and the AI
   // engines were reading it directly.
   description:
-    "Sawa is a Cairo-based shared-tour platform. We pool small bookings from independent travellers onto the same date, so day tours and multi-day packages across Egypt reach the numbers they need to run — you hold a seat for free and only pay once your departure is confirmed (GoAhead).",
+    "Sawa is a Cairo-based shared-tour platform. We pool small bookings from independent travelers onto the same date, so day tours and multi-day packages across Egypt reach the numbers they need to run — you hold a seat for free and only pay once your departure is confirmed (GoAhead).",
   foundingDate: "", // TODO e.g. "2024"
   founders: [], // TODO e.g. [{ name: "…", jobTitle: "Founder" }]
   email: "hello@sawa.tours",
@@ -68,7 +68,7 @@ export const BRAND = {
   accreditations: [
     {
       "@type": "EducationalOccupationalCredential",
-      name: "Egyptian tourism operating licence",
+      name: "Egyptian tourism operating license",
       credentialCategory: "license",
       recognizedBy: {
         "@type": "GovernmentOrganization",

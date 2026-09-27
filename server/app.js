@@ -361,12 +361,12 @@ const operatorApplicationSchema = z.object({
   city: z.string().trim().min(1, "City is required.").max(120),
   email: z.string().trim().email("A valid email is required.").max(200),
   phone: z.string().trim().max(60).optional().or(z.literal("")),
-  licence: z.string().trim().min(1, "Tourism licence number is required.").max(120),
+  licence: z.string().trim().min(1, "Tourism license number is required.").max(120),
   regions: z.string().trim().max(160).optional().or(z.literal("")),
   about: z.string().trim().max(4000).optional().or(z.literal("")),
   // The consent tick is required in the form's own markup; it is re-checked
   // here so a scripted post can't create an application nobody agreed to.
-  consent: z.literal(true, { message: "Please confirm the licence and insurance declaration." }),
+  consent: z.literal(true, { message: "Please confirm the license and insurance declaration." }),
 });
 
 // Agency-created pooling request. Numeric fields are bounded so a malformed or
@@ -392,7 +392,7 @@ const agencyDepartureRequestSchema = z.object({
 const publicDepartureRequestSchema = z.object({
   tourProductId: z.string().trim().min(1, "Tour is required."),
   date: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, "A valid date (YYYY-MM-DD) is required."),
-  customerName: z.string().trim().min(1, "Traveller name is required."),
+  customerName: z.string().trim().min(1, "Traveler name is required."),
   customerEmail: z.string().trim().email("A valid email is required."),
   customerPhone: z.string().trim().max(40).optional(),
   phoneToken: z.string().trim().max(400).optional(),
@@ -743,10 +743,10 @@ app.post("/api/admin/departures", requireAuth, requireRole("super_admin", "ops_s
   const travelerPhone = String(t.phone || "").trim();
   const travelerSeats = Number(t.seats || 1);
   if (!travelerName) {
-    throw new AppError(422, "A date is created by its first booking — record the traveller's name.");
+    throw new AppError(422, "A date is created by its first booking — record the traveler's name.");
   }
   if (!travelerEmail && !travelerPhone) {
-    throw new AppError(422, "Record how to reach the first traveller — an email or a phone number.");
+    throw new AppError(422, "Record how to reach the first traveler — an email or a phone number.");
   }
   if (!Number.isInteger(travelerSeats) || travelerSeats < 1) {
     throw new AppError(422, "Seats must be a whole number of at least 1.");
@@ -776,7 +776,7 @@ app.post("/api/admin/departures", requireAuth, requireRole("super_admin", "ops_s
     if (capacityProblem) throw new AppError(422, capacityProblem);
 
     if (travelerSeats > depMaxSeats) {
-      throw new AppError(422, `This date holds at most ${depMaxSeats} travellers.`);
+      throw new AppError(422, `This date holds at most ${depMaxSeats} travelers.`);
     }
 
     const isPkg = product.type === "package";
@@ -1188,7 +1188,7 @@ app.post("/api/departures/:id/pledges", requireAuth, requireRole("agency_owner",
   const departure = await withTransaction(async (c) => {
     const dep = await loadDeparture(c, Number(req.params.id), { forUpdate: true });
     if (!dep) throw new AppError(404, "Departure not found.");
-    if (dep.status === "cancelled") throw new AppError(409, "This departure has been cancelled.");
+    if (dep.status === "cancelled") throw new AppError(409, "This departure has been canceled.");
     if (dep.status === "pending_review") throw new AppError(409, "This departure is awaiting review and not open for bookings yet.");
     if (seatsTotal(dep.pledges) + input.seats > dep.maxSeats) {
       throw new AppError(409, "This pledge exceeds capacity.");
@@ -1302,7 +1302,7 @@ app.post("/api/public/departures/:id/bookings", writeLimiter, h(async (req, res)
     if (phoneVerificationEnabled() && dep.pledges.some((p) => p.status !== "cancelled" && p.customerPhone === input.customerPhone)) {
       throw new AppError(409, "This phone number already holds a booking on this date. Check your email for its booking code, or reply to it to change the number of seats.");
     }
-    if (dep.status === "cancelled") throw new AppError(409, "This departure has been cancelled.");
+    if (dep.status === "cancelled") throw new AppError(409, "This departure has been canceled.");
     if (dep.status === "pending_review") throw new AppError(409, "This departure is awaiting review and not open for bookings yet.");
     if (seatsTotal(dep.pledges) + input.seats > dep.maxSeats) {
       throw new AppError(409, "This booking exceeds the remaining seats.");
@@ -1804,7 +1804,7 @@ async function createDateRequest(input, req, requester = {}) {
         product.quality,
         requester.agencyId
           ? `Operator request (${requester.agencyName})${input.note ? `: ${input.note}` : " awaiting review."}`
-          : input.note ? `Traveller request: ${input.note}` : "Traveller-requested date awaiting review.",
+          : input.note ? `Traveler request: ${input.note}` : "Traveler-requested date awaiting review.",
         Number(product.depositPercent || defaultDepositFor(product)),
         requester.agencyId ? "agency" : "traveler",
       ]
@@ -2980,7 +2980,7 @@ app.post("/api/admin/bookings/:pledgeId/payment-links", requireAuth, requireRole
   if (!url) throw new AppError(422, "That isn't a valid https payment link.");
   const result = await withPayments(() => withTransaction(async (c) => {
     const { pledge, departure, product, payments } = await paymentContext(c, req.params.pledgeId);
-    if (pledge.status === "cancelled") throw new AppError(409, "This booking is cancelled — there is nothing to collect.");
+    if (pledge.status === "cancelled") throw new AppError(409, "This booking is canceled — there is nothing to collect.");
     if (payments.some((p) => p.state === "link_sent" && p.kind === input.kind)) {
       throw new AppError(409, `A ${input.kind} link is already out for this booking. Void it before sending another.`);
     }
@@ -3689,7 +3689,7 @@ app.post("/api/admin/departures/:id/cancel", requireAuth, requireRole("super_adm
   }
   const notificationsClean = reportNotifications({
     intended: recipients.length, sent: reached,
-    context: `departure ${departure.id} cancelled`,
+    context: `departure ${departure.id} canceled`,
   });
 
   res.json({
@@ -3699,7 +3699,7 @@ app.post("/api/admin/departures/:id/cancel", requireAuth, requireRole("super_adm
     notificationsIntended: recipients.length,
     // The caller is told plainly rather than left to compare two numbers.
     notificationWarning: notificationsClean ? null
-      : `${recipients.length - reached} traveller(s) on this departure were not reached. They have not been told it is cancelled.`,
+      : `${recipients.length - reached} traveler(s) on this departure were not reached. They have not been told it is canceled.`,
   });
 }));
 
@@ -4061,7 +4061,7 @@ if (existsSync(distDir)) {
 
     const routes = async () => {
       const detail = await catalogueRoutes().catch((e) => {
-        console.warn("[warm] could not list catalogue routes —", e.message);
+        console.warn("[warm] could not list catalog routes —", e.message);
         return [];
       });
       const all = [...HOT_PATHS, ...detail];
@@ -4119,7 +4119,7 @@ if (existsSync(distDir)) {
     const timer = setInterval(run, everyMs);
     // unref so the timer never holds the process open during a shutdown.
     timer.unref();
-    console.log(`[warm] keeping the catalogue and ${HOT_PATHS.join(", ")} warm every ${Math.round(everyMs / 1000)}s`);
+    console.log(`[warm] keeping the catalog and ${HOT_PATHS.join(", ")} warm every ${Math.round(everyMs / 1000)}s`);
     return () => clearInterval(timer);
   };
 
@@ -4160,7 +4160,7 @@ if (!process.env.APP_NO_LISTEN) app.listen(port, "0.0.0.0", () => {
   // warm it is not an error, only a slower first page.
   publicBootstrapPayload()
     .then((p) => {
-      console.log(`[boot] catalogue warm — ${(p?.tourProducts || []).length} products`);
+      console.log(`[boot] catalog warm — ${(p?.tourProducts || []).length} products`);
       // Only once the payload is in hand: the hot-path renders each need it,
       // and starting them first would have every one of them build its own.
       startPageWarmer?.();
@@ -4170,7 +4170,7 @@ if (!process.env.APP_NO_LISTEN) app.listen(port, "0.0.0.0", () => {
       // accepting requests, and a failed catalogue warm-up means slower first
       // responses, not wrong ones.
       if (!surfaceProgrammerError("pageWarm", e)) {
-        console.warn("[boot] catalogue warm-up skipped —", e.message);
+        console.warn("[boot] catalog warm-up skipped —", e.message);
       }
     });
 });

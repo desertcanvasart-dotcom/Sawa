@@ -83,6 +83,62 @@
    "verdict": "AGREES",
    "contradicts": null,
    "note": "Internal and verified. Records a defect found and fixed in this repository's own tooling — the fabricated-operator card removal comment, and the placeholder phone number — as worked examples of a removal comment preserving the string it removed. Neither string is on any served surface: the operator card was removed before this session and the phone number renders only as +20 109 284 7613. No public claim depends on either."
+  },
+  "e85635bf52e7": {
+   "where": "docs/model-audit/01-current-state.md:51",
+   "text": "email-retry | Retries failed outbox rows | every 15 min | Always (no-op in log mode) |",
+   "verdict": "AGREES",
+   "contradicts": null,
+   "note": "retryPendingEmails returns early in log mode (server/email.js:176). Model audit finding, no public claim involved."
+  },
+  "06a7cd71997b": {
+   "where": "docs/model-audit/01-current-state.md:400",
+   "text": "Not implemented:** Terms §13.2 (`terms.html:273`) promises that a paid departure falling below its minimum because another payment failed is held and refunded if not refilled. No code does this.",
+   "verdict": "CONTRADICTS",
+   "contradicts": "site/terms.html:273 (Terms §13.2 refill/refund promise)",
+   "note": "Model audit (26 Sep 2026) records no code for §13.2. The fix is planned in the phase-3 copy/terms change (docs/model-audit/03-migration-plan.md)."
+  },
+  "a3077034e866": {
+   "where": "docs/model-audit/02-gap-analysis.md:74",
+   "text": "No path un-confirms a guaranteed departure | Admin cancel works in any status (`app.js:3648-3704`); Terms §13.2 promises refill/refund if a payment fails (`site/terms.html:273`, not implemented) | modify | S | M | Admin cancel stays (force majeure) but should require a reason and trigger operator/tr",
+   "verdict": "CONTRADICTS",
+   "contradicts": "site/terms.html:273 (Terms §13.2 refill/refund promise)",
+   "note": "Same finding as 01-current-state.md; gap row, planned for phase 3."
+  },
+  "8570bc979d15": {
+   "where": "docs/model-audit/03-migration-plan.md:215",
+   "text": "Copy is not a final phase.** Each phase ships the copy for what it changes, because the payment and seller wording is legally binding (Terms §6, §12, §13) and currently says the opposite of the target. Phase 7 is a sweep of what's left.",
+   "verdict": "AGREES",
+   "contradicts": null,
+   "note": "Planning statement; the payment and seller wording that contradicts the target model is listed in 01-current-state.md §6."
+  },
+  "d990c2102501": {
+   "where": "docs/model-audit/03-migration-plan.md:264",
+   "text": "the audit-claims rules, which currently look for \"price drops\" wording.",
+   "verdict": "AGREES",
+   "contradicts": null,
+   "note": "scripts/audit-claims.js RULES include price-drop wording; planning note only."
+  },
+  "301c21683ac0": {
+   "where": "docs/model-audit/03-migration-plan.md:382",
+   "text": "Note:** ratings shown publicly would re-open the \"no reviews table\" claim history (`docs/audit/approvals-register.md`); keep them internal until a review policy exists.",
+   "verdict": "AGREES",
+   "contradicts": null,
+   "note": "No reviews table exists (schema_025 header); ratings stay internal. Consistent with docs/audit/approvals-register.md."
+  },
+  "674edaf6eae5": {
+   "where": "docs/model-audit/03-migration-plan.md:458",
+   "text": "Statements / payout reports (per charge, fees, net) for reconciliation | Settlement, accounting | **Can't tell**; the rate card assumes a 3% placeholder fee |",
+   "verdict": "AGREES",
+   "contradicts": null,
+   "note": "Refers to the rate-card workbook's 3% processing-fee placeholder, not to site copy."
+  },
+  "2f18487f7b97": {
+   "where": "docs/model-audit/03-migration-plan.md:489",
+   "text": "D17 | **Safety data:** when it is collected, when the operator sees it, Sawa-side retention | Not collected today | At booking (ARA 4.4); on the manifest (OSA 7.1); operator deletes within 90 days (OSA 16.2); Schedule 5 is for the lawyer | **Partly settled:** Sawa's own retention is open, pending la",
+   "verdict": "CONTRADICTS",
+   "contradicts": "site/privacy.html:118-122, 158 (says health, allergy and dietary data is collected)",
+   "note": "No booking form or schema captures safety needs (model audit 01 §4.2). Capture planned for phase 3."
   }
  }
 }

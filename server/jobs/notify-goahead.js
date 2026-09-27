@@ -89,13 +89,13 @@ export async function recipientsFor(departureId, client = pool) {
 
 export async function runGoAheadNotices({ dryRun = DRY_RUN } = {}) {
   const due = await pendingGoAheadNotices();
-  console.log(`${due.length} departure(s) confirmed and awaiting a traveller notice${dryRun ? " (dry run)" : ""}`);
+  console.log(`${due.length} departure(s) confirmed and awaiting a traveler notice${dryRun ? " (dry run)" : ""}`);
 
   let sent = 0;
   for (const departure of due) {
     const dateLabel = dateLabelFor(departure);
     const to = await recipientsFor(departure.id);
-    const line = `  #${departure.id} ${dateLabel} — ${to.length} traveller(s) — ${departure.route}`;
+    const line = `  #${departure.id} ${dateLabel} — ${to.length} traveler(s) — ${departure.route}`;
 
     if (dryRun) { console.log(`${line}  [would email ${to.join(", ") || "nobody"}]`); continue; }
 
@@ -103,7 +103,7 @@ export async function runGoAheadNotices({ dryRun = DRY_RUN } = {}) {
     // queued would report a permanent shortfall and train the reader to ignore
     // the number that means real people were not told.
     if (!to.length) {
-      await markNotified(pool, departure.id, { recipients: 0, reason: "no contactable traveller" });
+      await markNotified(pool, departure.id, { recipients: 0, reason: "no contactable traveler" });
       sent += 1;
       console.log(`${line}  [nobody to email — marked]`);
       continue;

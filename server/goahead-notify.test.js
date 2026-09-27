@@ -113,7 +113,7 @@ test("a departure with nobody to email is done, not permanently failed", () => {
   // Otherwise it reports a shortfall forever and trains the reader to ignore
   // the number that means real people were not told.
   const src = read("server/jobs/notify-goahead.js");
-  assert.match(src, /no contactable traveller/);
+  assert.match(src, /no contactable traveler/);
 });
 
 test("it fires — a shortfall is an error, not a quiet success", () => {

@@ -305,7 +305,7 @@ function CancellationSchedule({ tour, depositPct }) {
   const bands = cancellationBandsFor(tour);
   return (
     <details className="bk-policy">
-      <summary>Cancelling: free before GoAhead</summary>
+      <summary>Canceling: free before GoAhead</summary>
       <p>{CANCELLATION_BEFORE_GOAHEAD}</p>
       {/* The cap first. It is the good news, and it is what a reader needs
           before a table of dates: the exposure is the deposit, never the
@@ -2365,7 +2365,7 @@ function PublicSite({
                 <article className="how-step is-go">
                   <span className="how-num">03</span>
                   <h3>It runs — confirmed.</h3>
-                  <p>At minimum seats we confirm the guide and vehicle and take your deposit. If it never fills, you pay nothing.</p>
+                  <p>At minimum seats we confirm the guide and vehicle and send you a secure payment link for your deposit. If it never fills, you pay nothing.</p>
                 </article>
               </div>
               <div className="trust-band">
@@ -2936,7 +2936,7 @@ function EmbedBookTour({ product, refCode, phoneVerification }) {
   function pickMode(next) { setMode(next); setErr(""); setMatches(null); }
 
   function checkTraveller() {
-    if (name.trim().length < 2) return "Enter the lead traveller's name.";
+    if (name.trim().length < 2) return "Enter the lead traveler's name.";
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return "Enter a valid email.";
     if (!phoneConfirmed) return "Confirm your phone number with the code we send you first.";
     return "";
@@ -2970,7 +2970,7 @@ function EmbedBookTour({ product, refCode, phoneVerification }) {
     if (!reqDate) return setErr("Pick the date you'd like.");
     if (reqDate < minReq || reqDate > maxReq) return setErr(`Pick a date between ${formatDate(minReq, { alwaysYear: true })} and ${formatDate(maxReq, { alwaysYear: true })}.`);
     if (opDays.length && !opDays.includes(new Date(`${reqDate}T12:00:00`).getDay())) return setErr(`This tour runs on ${operatingDaysLabel(opDays)} only.`);
-    if (nSeats > capacity) return setErr(`This tour takes up to ${capacity} travellers per date.`);
+    if (nSeats > capacity) return setErr(`This tour takes up to ${capacity} travelers per date.`);
     const problem = checkTraveller();
     if (problem) return setErr(problem);
     if (preview) return setErr("Preview only — nothing was sent. On your website this sends the date request to Sawa.");
@@ -3001,7 +3001,7 @@ function EmbedBookTour({ product, refCode, phoneVerification }) {
         {b.bookingCode && <p className="eb-code">Booking code <b>{b.bookingCode}</b></p>}
         <p className="eb-muted">
           {done.kind === "requested"
-            ? `Nothing is charged now. Sawa reviews the date and emails ${email || "you"} once it opens for other travellers to join.`
+            ? `Nothing is charged now. Sawa reviews the date and emails ${email || "you"} once it opens for other travelers to join.`
             : `Nothing is charged now. We've emailed the details to ${email || "you"}; the deposit link follows once this date reaches GoAhead.`}
         </p>
         {b.bookingCode && <a className="eb-link" href={`${SITE_URL}/booking/${encodeURIComponent(b.bookingCode)}`} target="_blank" rel="noopener noreferrer">Manage this booking <ArrowRight size={14} /></a>}
@@ -3028,7 +3028,7 @@ function EmbedBookTour({ product, refCode, phoneVerification }) {
             </label>
             <p className="eb-note">
               {opDays.length ? `Runs on ${operatingDaysLabel(opDays)}. ` : ""}
-              Sawa reviews the date, then it opens for other travellers to join. Nothing is charged unless it reaches GoAhead.
+              Sawa reviews the date, then it opens for other travelers to join. Nothing is charged unless it reaches GoAhead.
             </p>
             {dates.length > 0 && <button type="button" className="eb-switch" onClick={() => pickMode("join")}>Back to the open dates</button>}
           </div>
@@ -3088,10 +3088,10 @@ function EmbedBookTour({ product, refCode, phoneVerification }) {
         )}
 
         <div className="eb-row">
-          <label>Travellers
+          <label>Travelers
             <input type="number" min="1" max={dep ? Math.max(1, remaining) : capacity} value={seats} onChange={(e) => setSeats(e.target.value)} />
           </label>
-          <label>Lead traveller
+          <label>Lead traveler
             <input value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" placeholder="Full name" />
           </label>
         </div>
@@ -3109,7 +3109,7 @@ function EmbedBookTour({ product, refCode, phoneVerification }) {
         )}
 
         <div className="eb-sum">
-          <div><span>{CURRENCY_SYMBOL}{pp.toLocaleString()} × {nSeats} traveller{nSeats === 1 ? "" : "s"}</span><b>{CURRENCY_SYMBOL}{total.toLocaleString()}</b></div>
+          <div><span>{CURRENCY_SYMBOL}{pp.toLocaleString()} × {nSeats} traveler{nSeats === 1 ? "" : "s"}</span><b>{CURRENCY_SYMBOL}{total.toLocaleString()}</b></div>
           <div><span>Deposit once the date is confirmed ({depositPct}%)</span><b>{CURRENCY_SYMBOL}{deposit.toLocaleString()}</b></div>
           <p>Nothing is charged today. The shared price drops as the group grows.</p>
         </div>
@@ -3200,7 +3200,7 @@ function PartnersPage({ navigate, operatorsByProduct = {}, customerCalendars = [
       <PageHead
         eyebrow="Partners"
         title="The companies that operate Sawa departures."
-        lead="Sawa pools travellers into shared departures; the trips themselves are run by Egyptian travel companies licensed by the Ministry of Tourism and Antiquities and registered with ETAA. Where Sawa has completed its verification of a partner's records, that is shown with its date."
+        lead="Sawa pools travelers into shared departures; the trips themselves are run by Egyptian travel companies licensed by the Ministry of Tourism and Antiquities and registered with ETAA. Where Sawa has completed its verification of a partner's records, that is shown with its date."
       />
       <section className="partners-list reveal in">
         {partners.length === 0 ? (
@@ -3328,7 +3328,7 @@ function HowItWorksPage({ navigate, customerSummary }) {
   const steps = [
     { n: "01", t: "Hold a seat, free", d: "Pick a date and reserve your spot with no card and no deposit. You're simply joining the group that's forming for that day." },
     { n: "02", t: "The group fills", d: "As more travelers book the same date, it moves toward GoAhead. The shared cost of the guide and vehicle is split across everyone, so the price stays fair." },
-    { n: "03", t: "It runs — confirmed.", d: "Once the minimum number of travelers is reached, we confirm the guide and transport and take your deposit. If a date never fills, you pay nothing." },
+    { n: "03", t: "It runs — confirmed.", d: "Once the minimum number of travelers is reached, we confirm the guide and transport and send you a secure payment link for your deposit. If a date never fills, you pay nothing." },
   ];
   return (
     <div className="page-wrap">
@@ -3701,7 +3701,7 @@ function BookingLookupPage({ navigate, path }) {
                     </p>
                     <div className="booking-cancel-actions">
                       <button type="button" className="btn-pill primary" disabled={cancelState.busy} onClick={cancelBooking}>
-                        {cancelState.busy ? "Cancelling…" : "Yes, cancel my booking"}
+                        {cancelState.busy ? "Canceling…" : "Yes, cancel my booking"}
                       </button>
                       <button type="button" className="btn-pill" disabled={cancelState.busy} onClick={() => setConfirming(false)}>
                         Keep my seat

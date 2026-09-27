@@ -33,7 +33,7 @@ test("a cancelled date is never reported as confirmed", () => {
 
   const view = bookingLookupView(AFTER_AUTO_CANCEL);
   assert.equal(view.confirmed, false);
-  assert.equal(view.statusLabel, "Date cancelled");
+  assert.equal(view.statusLabel, "Date canceled");
   assert.ok(
     !/guide and transport are booked/.test(view.note),
     "the note told a traveller on a cancelled date that their trip was running"
@@ -66,7 +66,7 @@ test("the date's status outranks the pledge's", () => {
 test("a traveller who cancelled is told that, and not that the date failed", () => {
   const view = bookingLookupView({ departureStatus: "open", pledgeStatus: "cancelled", seatsBooked: 2, goAhead: 4 });
   assert.equal(view.state, "booking_cancelled");
-  assert.match(view.note, /This booking was cancelled/);
+  assert.match(view.note, /This booking was canceled/);
   assert.ok(!/didn't reach/.test(view.note), "blaming the date for a traveller's own cancellation");
 });
 
