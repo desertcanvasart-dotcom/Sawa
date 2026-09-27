@@ -2,6 +2,14 @@
 
 **Why:** Capital Travel Service (CTS) is no longer involved; no deal was reached with its owner. This lists every reference to **Capital Travel Service**, **CTS**, **ETAA 2179** (its travel-agency registration) and **1 Farouk Mahmoud** (its address). Nothing has been changed yet: the replacement depends on your licence decision.
 
+> **Status, 27 Sep 2026, later.** Capital Travel Service no longer operates Sawa; Online Era does, under General Sales Agent license no. 32241. The live items below are dealt with in [#226](https://github.com/desertcanvasart-dotcom/Sawa/pull/226):
+> - **L1**: the privacy page shows Online Era's own license, and the build check now catches any wording of ETAA 2179.
+> - **L2**: new migration 054 lets a record be unlisted. The production SQL and its rollback are in `docs/ops/remove-cts-from-partners.md`, **to be run by hand**. `dom-smoke.js` no longer requires CTS.
+> - **L3**: `DIRECT_BOOKINGS_OPERATOR` has no default. Remove it from Railway if it is set there.
+> - **`server/pdf.js:89`**: the header reads "Sawa (Online Era)".
+>
+> The seller and merchant references in the planning docs, and the Terms draft, are updated in [#225](https://github.com/desertcanvasart-dotcom/Sawa/pull/225). The agreements .docx still names CTS and is awaiting a redraft. The inventory below is kept as it was found.
+
 Searched on `main` at `af18a94` (27 Sep 2026), plus open PR #224. The search covered text files (`git grep -i`) and the text inside the Word and Excel files. Matches for "Capital Travel" (without "Service") are included. `package-lock.json` has none.
 
 ## First: what is live on the site today
