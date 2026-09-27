@@ -72,7 +72,17 @@ function Owed({ flash, isSuperAdmin }) {
         </div>
       )}
       {data?.legacy && (
-        <p className="field-hint">Legacy departures (existing settlement tools): <b>{data.legacy.open}</b> still open{data.legacy.lastDate ? <>, the last on <b>{dayLabel(data.legacy.lastDate)}</b></> : ""}.</p>
+        <>
+          <p className="field-hint">
+            Legacy departures (the old Settlements module): <b>{data.legacy.open}</b> still to run{data.legacy.lastDate ? <>, the last on <b>{dayLabel(data.legacy.lastDate)}</b></> : ""}.
+            {!data.legacy.canRetire && (data.legacy.unsettled || data.legacy.draftRuns || data.legacy.duePayouts) ? <> Still to pay out: {[
+              data.legacy.unsettled ? `${data.legacy.unsettled} ended date${data.legacy.unsettled === 1 ? "" : "s"} not yet in an approved run` : null,
+              data.legacy.draftRuns ? `${data.legacy.draftRuns} run${data.legacy.draftRuns === 1 ? "" : "s"} in draft` : null,
+              data.legacy.duePayouts ? `${data.legacy.duePayouts} transfer${data.legacy.duePayouts === 1 ? "" : "s"} due` : null,
+            ].filter(Boolean).join(", ")}.</> : null}
+          </p>
+          {data.legacy.canRetire && <p className="tag tag-on">The old Settlements module can be retired.</p>}
+        </>
       )}
       <form className="form-grid" style={{ marginBottom: 12 }} onSubmit={(e) => { e.preventDefault(); load(); }}>
         <label className="field"><span>Due from</span><input type="date" value={filters.from} onChange={(e) => setFilters({ ...filters, from: e.target.value })} /></label>

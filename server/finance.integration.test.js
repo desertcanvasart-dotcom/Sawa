@@ -703,6 +703,133 @@ test("the finance, settlement and portal routes answer, each party seeing only i
   assert.equal((await patch("ops-token")).status, 200);
 });
 
+// Catalog departures are settled by the rate card (Operators and Finance) and
+// never by the old Settlements module, by departure type; their cost sheet
+// and receipts still work, and feed the new settlement only.
+test("a catalog departure with approved cost lines never appears in Settlements, is refused by its API and skipped by the payout run; its force-majeure reimbursement reaches the new statement; legacy departures behave as before", { skip }, async () => {
+  const on = await startServer({ FEATURES: "catalogue_v2" });
+  const req = (method, path, token, body) => fetch(`${on}${path}`, { method, headers: auth(token), body: body ? JSON.stringify(body) : undefined });
+  const LEGACY = 990501;
+  // A catalog departure with an acknowledged operator whose statement can still change.
+  const pick = await one(
+    `SELECT cd.id, cd.legacy_departure_id FROM catalogue_departures cd
+       JOIN catalogue_assignments a ON a.departure_id = cd.id AND a.state = 'acknowledged'
+       LEFT JOIN settlement_statements s ON s.departure_id = cd.id
+      WHERE s.state IS NULL OR s.state IN ('draft', 'disputed') ORDER BY cd.id LIMIT 1`);
+  assert.ok(pick, "a catalog departure with an acknowledged operator and an open statement");
+  const cat = { id: Number(pick.id), legacy: Number(pick.legacy_departure_id) };
+  await db.query(
+    `INSERT INTO departures (id, type, tour_product_id, route, date, time, city, min_seats, max_seats, published_rate, break_price, status)
+     VALUES ($1,'day_tour',$2,'Legacy Tour',$3,'08:00','Cairo',4,12,100,80,'minimum_reached')`, [LEGACY, GIZA, shiftDate(today(), 10)]);
+
+  // The cost sheet still works for a catalog departure: Sawa adds a line, with a receipt, approved as entered.
+  const added = await req("POST", `/api/admin/settlements/${cat.legacy}/costs`, "staff-token",
+    { category: "entrance", description: "Tickets, site closed by the authorities", basis: "group", amount: 20, receiptUrl: "https://example.test/receipt.pdf" });
+  assert.equal(added.status, 201, await added.clone().text());
+  const line = (await added.json()).cost;
+  assert.equal(line.state, "approved");
+  // The legacy departure takes a cost line too, as before.
+  assert.equal((await req("POST", `/api/admin/settlements/${LEGACY}/costs`, "staff-token", { category: "transport", description: "Bus", basis: "group", amount: 50 })).status, 201);
+
+  // 1. The Settlements list: the legacy date is there, the catalog date isn't, whatever its cost sheet says.
+  const list = await (await req("GET", "/api/admin/settlements", "staff-token")).json();
+  const listed = list.items.map((i) => i.departure.id);
+  assert.ok(listed.includes(LEGACY), "the legacy departure is listed");
+  assert.ok(!listed.includes(cat.legacy), "the catalog departure is not listed");
+  assert.ok(!listed.some((id) => [deps.a, deps.b, deps.c, cat].some((d) => d.legacy === id)), "no catalog departure is listed");
+  // Nor on an agency's money page.
+  const money = await (await req("GET", "/api/agency/money", "ag-a-token")).json();
+  assert.ok(!(money.departures || []).some((x) => x.departure.id === cat.legacy));
+
+  // 2. The old settlement API refuses the catalog departure, clearly; the legacy one works as before.
+  for (const [path, body] of [
+    [`/api/admin/settlements/${cat.legacy}/costs-final`, { final: true }],
+    [`/api/admin/settlements/${cat.legacy}/adjustments`, { agencyId: null, amount: 10, reason: "Sawa absorbs it" }],
+    [`/api/admin/settlements/${cat.legacy}/loss-decision`, { note: "Sawa absorbs the loss" }],
+  ]) {
+    const r = await req("POST", path, "staff-token", body);
+    assert.equal(r.status, 409, path);
+    assert.match((await r.json()).error, /catalog departure\. It is settled under Operators and Finance/);
+  }
+  const agencyCost = await req("POST", `/api/agency/departures/${cat.legacy}/costs`, "ag-a-token", { category: "transport", description: "Bus", basis: "group", amount: 5 });
+  assert.equal(agencyCost.status, 409);
+  assert.match((await agencyCost.json()).error, /catalog departure: Sawa records its costs/);
+  assert.equal((await req("POST", `/api/admin/settlements/${LEGACY}/costs-final`, "staff-token", { final: true })).status, 200);
+
+  // 3. The Wednesday run skips catalog departures, and says so; approving a run that holds one is refused.
+  const built = await req("POST", "/api/admin/payout-runs", "staff-token", {});
+  assert.equal(built.status, 201, await built.clone().text());
+  const run = await built.json();
+  assert.ok(run.skippedCatalogueDepartures.includes(cat.legacy), "logged as skipped");
+  assert.ok(!run.run.lines.some((l) => l.departureId === cat.legacy));
+  const logged = await one("SELECT detail FROM audit_log WHERE action = 'payout.run_built' AND entity_id = $1 ORDER BY id DESC LIMIT 1", [String(run.run.id)]);
+  assert.ok(logged.detail.skippedCatalogueDepartures.includes(cat.legacy));
+  await db.query("INSERT INTO payout_lines (run_id, departure_id, agency_id, amount, detail) VALUES ($1, $2, 'ag_a', 1, '{}')", [run.run.id, cat.legacy]);
+  const approve = await req("POST", `/api/admin/payout-runs/${run.run.id}/approve`, "staff-token");
+  assert.equal(approve.status, 409);
+  assert.match((await approve.json()).error, new RegExp(`catalog departure ${cat.legacy}.*Rebuild the run`));
+  await db.query("DELETE FROM payout_lines WHERE run_id = $1", [run.run.id]);
+  await db.query("DELETE FROM payout_runs WHERE id = $1", [run.run.id]);
+
+  // 4. The force-majeure reimbursement points at that line and reaches the new statement.
+  const before = await (await req("GET", `/api/admin/catalogue/departures/${cat.id}/settlement`, "staff-token")).json();
+  assert.equal(before.legacyDepartureId, cat.legacy);
+  assert.ok(before.costLines.some((c) => c.id === line.id && c.hasReceipt), "the line is on the new settlement's cost sheet");
+  const reimb = await req("POST", `/api/admin/catalogue/departures/${cat.id}/adjustments`, "staff-token",
+    { kind: "reimbursement", amountEgp: 40, reason: "Site closed by the authorities; tickets non-refundable", clauseRef: "Operator 14", costLineIds: [line.id] });
+  assert.equal(reimb.status, 201, await reimb.clone().text());
+  const after = await (await req("GET", `/api/admin/catalogue/departures/${cat.id}/settlement`, "staff-token")).json();
+  assert.equal(after.reimbursements, before.reimbursements + 40);
+  const snap = (await settle.statementFor(db, cat.id)).snapshot;
+  assert.ok(snap.adjustments.some((a) => a.kind === "reimbursement" && a.costLineIds.includes(line.id) && a.amountEgp === 40), "on the statement");
+  // And still never in Settlements.
+  const again = await (await req("GET", "/api/admin/settlements", "staff-token")).json();
+  assert.ok(!again.items.some((i) => i.departure.id === cat.legacy));
+  await db.query("DELETE FROM departure_costs WHERE departure_id = $1", [LEGACY]);
+  await db.query("DELETE FROM departure_settlements WHERE departure_id = $1", [LEGACY]);
+  await db.query("DELETE FROM departures WHERE id = $1", [LEGACY]);
+});
+
+test("Admin → Finance: the old Settlements module can be retired once no legacy departure is still to run and every legacy payout is paid", { skip }, async () => {
+  const L = (today) => fin.legacyOpenDepartures(db, { today });
+  const base = await L(today());
+  const LEG = 990502;
+  const date = shiftDate(today(), 5);
+  await db.query(
+    `INSERT INTO departures (id, type, route, date, time, city, min_seats, max_seats, published_rate, break_price, status)
+     VALUES ($1,'day_tour','Legacy Retire',$2,'08:00','Cairo',4,12,100,80,'supplier_confirmed')`, [LEG, date]);
+  const running = await L(today());
+  assert.equal(running.open, base.open + 1, "still to run");
+  assert.equal(running.canRetire, false);
+  // After it ran, a date that took money but was never paid out still holds retirement back.
+  await db.query(`INSERT INTO pledges (id, departure_id, agency_id, agency, seats, customers, status, source) VALUES ('pl_retire', $1, 'direct_customer', 'Direct', 1, 'R', 'confirmed', 'public')`, [LEG]);
+  await db.query(`INSERT INTO booking_payments (pledge_id, kind, amount, link_url, due_at, due_bound_by, state, paid_at, provider_reference)
+                  VALUES ('pl_retire', 'deposit', 10, 'https://pay.tab.travel/r', now(), 'window', 'paid', now(), 'TAB-R')`);
+  const later = shiftDate(date, 2);
+  const ended = await L(later);
+  assert.equal(ended.unsettled >= 1, true);
+  assert.equal(ended.canRetire, false);
+  // Paid out in an approved run: nothing legacy is left.
+  const runRow = await one("INSERT INTO payout_runs (pay_date, cutoff_at, state, approved_at) VALUES ($1, now(), 'approved', now()) RETURNING id", [shiftDate(today(), -700)]);
+  await db.query("INSERT INTO payout_lines (run_id, departure_id, agency_id, amount, detail) VALUES ($1, $2, 'ag_a', 1, '{}')", [runRow.id, LEG]);
+  const done = await L(later);
+  assert.equal(done.unsettled, ended.unsettled - 1);
+  // Once every legacy date has run (the fixture's other dates are catalog ones) and nothing is due: retire.
+  const far = await L("2099-01-01");
+  assert.deepEqual([far.open, far.draftRuns, far.duePayouts, far.unsettled, far.canRetire], [0, 0, 0, 0, true], JSON.stringify(far));
+  // A transfer still due holds it back.
+  const due = await one("INSERT INTO payout_runs (pay_date, cutoff_at, state, approved_at) VALUES ($1, now(), 'approved', now()) RETURNING id", [shiftDate(today(), -693)]);
+  await db.query("INSERT INTO payout_transfers (run_id, agency_id, amount) VALUES ($1, 'ag_a', 5)", [due.id]);
+  assert.equal((await L("2099-01-01")).canRetire, false);
+  await db.query("DELETE FROM payout_transfers WHERE run_id = $1", [due.id]);
+  await db.query("DELETE FROM payout_runs WHERE id = $1", [due.id]);
+  await db.query("DELETE FROM payout_lines WHERE run_id = $1", [runRow.id]);
+  await db.query("DELETE FROM payout_runs WHERE id = $1", [runRow.id]);
+  await db.query("DELETE FROM booking_payments WHERE pledge_id = 'pl_retire'");
+  await db.query("DELETE FROM pledges WHERE id = 'pl_retire'");
+  await db.query("DELETE FROM departures WHERE id = $1", [LEG]);
+});
+
 test("with catalogue_v2 off the phase 3 jobs do nothing and an acknowledgement creates no advance", { skip }, async () => {
   const OFF = { FEATURES: "" };
   assert.deepEqual(await jobs.runOperatorAssignments({ env: OFF, log: () => {} }), { skipped: "catalogue_v2 is off" });

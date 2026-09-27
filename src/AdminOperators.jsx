@@ -780,12 +780,17 @@ export function DepartureOperatorPanel({ departure, operators, flash, onChange, 
 // ============================================================ Settlement (phase 3)
 const PAYABLE_LABEL = { advance: "Advance (50%)", balance: "Balance" };
 const ADJ_LABEL = { penalty: "Penalty", service_failure: "Service-failure deduction", reimbursement: "Force-majeure reimbursement" };
+const COST_LINE_CATEGORIES = [
+  ["transport", "Transportation"], ["guide", "Tour guide"], ["entrance", "Entrance fees"], ["meals", "Meals"],
+  ["activities", "Activities"], ["accommodation", "Accommodation"], ["permits", "Permits"], ["local_services", "Local services"], ["other", "Other"],
+];
 
 function SettlementBlock({ departureId, flash }) {
   const [d, setD] = useState(null);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const [adj, setAdj] = useState(null);
+  const [cost, setCost] = useState(null);
   const [note, setNote] = useState("");
   async function load() {
     try { setErr(""); setD(await call(`/admin/catalogue/departures/${departureId}/settlement`)); } catch (e) { setErr(e.message); }
@@ -876,7 +881,7 @@ function SettlementBlock({ departureId, flash }) {
                   <label key={c.id} className="field-check"><input type="checkbox" checked={(adj.costLineIds || []).includes(c.id)}
                     onChange={(e) => setAdj({ ...adj, costLineIds: e.target.checked ? [...(adj.costLineIds || []), c.id] : (adj.costLineIds || []).filter((x) => x !== c.id) })} />
                     {" "}#{c.id} {c.description} (EUR {c.amount}){c.hasReceipt ? "" : ", no receipt"}</label>
-                )) : <p className="field-hint">No approved lines on this departure's cost sheet. Add them in Settlements first.</p>}
+                )) : <p className="field-hint">No approved lines on this departure's cost sheet yet. Add them under "Cost sheet" below first.</p>}
               </div>
             ) : (
               <label className="field field-full"><span>Evidence files</span><input type="file" multiple accept="application/pdf,image/*" onChange={(e) => setAdj({ ...adj, files: [...(e.target.files || [])] })} /></label>
@@ -888,6 +893,42 @@ function SettlementBlock({ departureId, flash }) {
           </div>
         </form>
       ) : <button className="btn-ghost sm" onClick={() => setAdj({ kind: "service_failure" })}>Add adjustment</button>)}
+      {/* The cost sheet, with receipts: what a force-majeure reimbursement
+          points at. It feeds this settlement only; catalog departures never
+          appear in the old Settlements module. Lines Sawa adds are approved. */}
+      <h4>Cost sheet</h4>
+      {d.costLines.length ? (
+        <table className="dash-table"><tbody>{d.costLines.map((c) => (
+          <tr key={c.id}><td>#{c.id} {c.description}<div className="field-hint">{c.category}{c.hasReceipt ? "" : " · no receipt"}</div></td><td className="tnum">EUR {c.amount}</td></tr>
+        ))}</tbody></table>
+      ) : <p className="field-hint">No lines.</p>}
+      {d.legacyDepartureId != null && (cost ? (
+        <form onSubmit={(e) => {
+          e.preventDefault();
+          run(async () => {
+            const receiptUrl = cost.file ? await upload(cost.file) : undefined;
+            await call(`/admin/settlements/${d.legacyDepartureId}/costs`, "POST", {
+              category: cost.category, description: cost.description, basis: "group", amount: Number(cost.amount), receiptUrl,
+            });
+            setCost(null);
+          }, "Cost line added.");
+        }}>
+          <div className="form-grid">
+            <label className="field"><span>Category</span>
+              <select value={cost.category} onChange={(e) => setCost({ ...cost, category: e.target.value })}>
+                {COST_LINE_CATEGORIES.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+              </select>
+            </label>
+            <label className="field"><span>Amount (EUR)</span><input type="number" min="0.01" step="0.01" value={cost.amount || ""} onChange={(e) => setCost({ ...cost, amount: e.target.value })} required /></label>
+            <label className="field field-full"><span>Description</span><input value={cost.description || ""} onChange={(e) => setCost({ ...cost, description: e.target.value })} required maxLength={300} /></label>
+            <label className="field field-full"><span>Receipt</span><input type="file" accept="application/pdf,image/*" onChange={(e) => setCost({ ...cost, file: e.target.files?.[0] || null })} /></label>
+          </div>
+          <div className="cat-actions">
+            <button type="button" className="btn-ghost" onClick={() => setCost(null)}>Cancel</button>
+            <button className="btn-primary" disabled={busy}>Add line</button>
+          </div>
+        </form>
+      ) : <button className="btn-ghost sm" onClick={() => setCost({ category: "transport" })}>Add cost line</button>)}
       <h4>Statement</h4>
       {st ? (
         <>
