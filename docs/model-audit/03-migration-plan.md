@@ -518,6 +518,28 @@ CONFIRM   Assignment notices by email and in the operator portal now; WhatsApp l
 
 These replace the phase 1 placeholders: the 21-day deadline (now 30) and British English for new copy (now US). "Rate card in EGP" settles the operator side of D1; travellers still pay in EUR.
 
+### Phase 3 decisions: settlements and commissions (recorded 27 Sep 2026)
+
+As supplied, all CONFIRM. Phase 3 builds on them.
+
+```
+CONFIRM   Operator payouts use the EGP amounts of the locked rate version; no currency conversion in what operators are owed
+CONFIRM   Agency commission is stored per seat in EUR (the traveller currency), locked at booking
+CONFIRM   Agencies are paid commission in EUR; Egyptian agencies in EGP at the Central Bank of Egypt rate on the statement date (subject to the lawyer's answer on foreign-currency payments)
+CONFIRM   Margin reporting converts EUR revenue at the CBE rate on the charge date, from a rate table admin maintains; realised FX differences are reconciled monthly
+CONFIRM   Operator advance: 50% of the expected amount, due 2 Egyptian business days (Sun–Thu, excluding public holidays) after acknowledgement
+CONFIRM   Operator balance: due 7 calendar days after the departure ends
+CONFIRM   Settlement statement accepted automatically 30 days after it is sent unless disputed
+CONFIRM   Commission on a late cancellation where Sawa keeps a fee: 50% of the seat's commission
+CONFIRM   Commission statement: monthly, sent by the 10th for the previous month
+CONFIRM   Service-failure deduction cap: the operator amount for that departure
+CONFIRM   Penalty amounts (Operator Schedule 6): configurable, default 0 until set
+CONFIRM   Catalog departures use the new settlement path; legacy departures keep the existing settlement tools until the last one completes
+CONFIRM   New bookings under the flag require: every traveller's name, a phone number, a pickup point, and nationality where the product needs it. Safety needs are asked every time, with an explicit "none" option.
+```
+
+These settle the payouts questions phase 2's report left open: operators are owed EGP with no conversion, agency commission is EUR, and conversion appears only in margin reporting and in Egyptian agencies' commission statements.
+
 ## 4a. Decisions needed from you (as first written; superseded where §4 answers them)
 
 "Draft" = what the *Operator Supply & Agency Reseller Agreements* draft (26 Sep 2026) already says or suggests. Where it settles a question, the item is marked **settled by draft**; confirm it and nothing else is needed. Everything else is still open.
