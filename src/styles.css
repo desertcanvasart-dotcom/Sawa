@@ -7053,3 +7053,8 @@ button:disabled {
 .cat-row-link:hover td, .cat-row-link:focus td { background: var(--sand-100, #f6f1e7); }
 .cat-draft { border-top: 1px solid var(--line); padding-top: 16px; margin-top: 8px; }
 .cat-draft h3 { margin: 0 0 6px; }
+/* catalogue_v2 tour page: the spec's fixed details */
+.cat-facts { display: grid; grid-template-columns: max-content 1fr; gap: 8px 20px; margin: 0; }
+.cat-facts dt { font-weight: 600; color: var(--ink-soft); }
+.cat-facts dd { margin: 0; }
+@media (max-width: 560px) { .cat-facts { grid-template-columns: 1fr; gap: 2px; } .cat-facts dd { margin-bottom: 8px; } }

@@ -9,6 +9,7 @@
 //
 // Never throws: an email that can't name its operator still goes out without
 // the line, rather than not at all.
+import { catalogueV2Enabled } from "./features.js";
 import { pool } from "./db/index.js";
 import { mapAgency, mapPledge, mapDeparture, mapProduct } from "./db/mappers.js";
 import { operatorForDeparture, directOperatorId, publicOperator, bookingClosesAtMs } from "./domain.js";
@@ -49,6 +50,10 @@ export function withDepositTimes(pledges, depositPaidAt) {
 // (operatorForDeparture). The confirmation and GoAhead emails name it; a
 // lookup that fails leaves the name out rather than holding up the email.
 export async function operatorFor(departureId, db = pool) {
+  // catalogue_v2 (model phase 1): operator names are hidden from travellers at
+  // launch, so the emails name nobody. The email copy already reads correctly
+  // without an operator (it did before one was ever set).
+  if (catalogueV2Enabled()) return null;
   try {
     const dep = (await db.query("SELECT * FROM departures WHERE id=$1", [departureId])).rows[0];
     if (!dep) return null;

@@ -40,6 +40,8 @@ import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import { logAudit } from "./audit.js";
 import { registerCatalogueRoutes } from "./catalogue-routes.js";
+import { catalogueV2Enabled } from "./features.js";
+import { publicCatalogue, overlayBootstrap, clearPublicCatalogue } from "./catalogue-public.js";
 import {
   sendEmail, sendEmailInBackground, emailMode,
   inviteEmail, bookingConfirmationEmail, goAheadEmail, cancellationEmail,
@@ -602,6 +604,7 @@ const cacheClearers = [];
 // write has to drop them with everything else.
 cacheClearers.push(() => clearSeoCaches());
 function invalidatePublicBootstrap() {
+  clearPublicCatalogue();
   publicBootstrap.invalidate();
   publicBlogCache = { at: 0, payload: null };
   for (const clear of cacheClearers) clear();
@@ -673,7 +676,7 @@ async function buildBootstrap(user) {
     .map((p) => ({ ...p, operatorAgencyId: p.agencyId || directAgencyId || null }));
   const productsById = new Map(mappedProducts.map((p) => [p.id, p]));
 
-  return {
+  const payload = {
     // Only platform staff get the agency directory; agencies/public don't need it.
     agencies: isPlatform(user) ? agencies.rows.map(mapAgency) : [],
     // The operator behind each listing, whitelisted by publicOperator(). The
@@ -716,6 +719,14 @@ async function buildBootstrap(user) {
         return presentDeparture(enriched, user);
       }),
   };
+  // catalogue_v2 (model phase 1): travellers and agencies see the catalogue:
+  // its products, its dates, no operator names. Staff keep the full payload.
+  // With the flag off, or before migration 047, this returns the payload as is.
+  if (catalogueV2Enabled() && !canSeeAll) {
+    const cat = await publicCatalogue();
+    if (cat) return overlayBootstrap(payload, cat, user);
+  }
+  return payload;
 }
 
 // Bootstrap — open to all; pledge detail redacted per viewer.
@@ -3844,6 +3855,21 @@ if (existsSync(siteDir)) {
 // behind the catalogue_v2 flag (see catalogue-public.js); with it off nothing
 // here reaches a traveller.
 registerCatalogueRoutes(app, { requireAuth, requireRole, h, logAudit, invalidatePublic: () => invalidatePublicBootstrap() });
+
+// catalogue_v2: a retired product's old URL goes to the product it was merged
+// into (301); a product whose catalogue title changed its slug moves to the new
+// one (301); a hidden product (held, or not yet published) goes to the
+// itineraries page (302, as it may come back). The operator directory is not
+// shown to travellers at launch. With the flag off this passes straight through.
+app.use(h(async (req, res, next) => {
+  if (req.method !== "GET" || !catalogueV2Enabled()) return next();
+  if (/^\/partners\/?$/.test(req.path)) return res.redirect(302, "/itineraries");
+  if (!/^\/(tour|package)\/[^/]+\/?$/.test(req.path)) return next();
+  const cat = await publicCatalogue();
+  const hit = cat?.redirects.get(decodeURIComponent(req.path.replace(/\/$/, "")));
+  if (!hit || hit.to === req.path) return next();
+  return res.redirect(hit.status, hit.to + queryOf(req));
+}));
 
 // ============================ LEGACY TOUR URL → SEO SLUG (301) ============================
 // Old ugly URLs (/tour/<db-id>) permanently redirect to the clean slug URL so any

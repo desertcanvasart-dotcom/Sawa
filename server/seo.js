@@ -13,6 +13,8 @@ import { BRAND, ORG_ID, SITE_ID, travelAgencySchema, websiteSchema, DIRECT_BOOKI
 // warm a URL the catalogue does not link to.
 import { tourSlug, tourPath } from "./slug.js";
 import { publicOperator, directOperatorId } from "./domain.js";
+import { catalogueV2Enabled } from "./features.js";
+import { catalogueRowsFor, publicCatalogue } from "./catalogue-public.js";
 import { mapAgency } from "./db/mappers.js";
 import { GROUP_MAX_WORD } from "../shared/group-size.js";
 import { CURRENCY, CURRENCY_SYMBOL } from "../shared/currency.js";
@@ -160,8 +162,10 @@ async function catalogueRows() {
     `SELECT id, type, title, city, duration, break_price, published_rate
        FROM tour_products WHERE ${VISIBLE} ORDER BY id`
   );
-  catalogueCache = { at: Date.now(), rows: r.rows };
-  return r.rows;
+  // catalogue_v2: only the catalogue's visible products, as it shows them.
+  const rows = catalogueV2Enabled() ? await catalogueRowsFor(r.rows) : r.rows;
+  catalogueCache = { at: Date.now(), rows };
+  return rows;
 }
 
 // Every product's detail URL, in the same form the catalogue links to and the
@@ -176,8 +180,9 @@ async function slugToId(slug) {
   if (!slugIndex.byslug || Date.now() - slugIndex.at > LOOKUP_TTL_MS) {
     // tourSlug() reads title, type and city, and nothing else.
     const r = await pool.query(`SELECT id, title, type, city FROM tour_products WHERE ${VISIBLE}`);
+    const rows = catalogueV2Enabled() ? await catalogueRowsFor(r.rows) : r.rows;
     const byslug = new Map();
-    for (const row of r.rows) byslug.set(tourSlug(row), row.id);
+    for (const row of rows) byslug.set(tourSlug(row), row.id);
     slugIndex = { at: Date.now(), byslug };
   }
   return slugIndex.byslug.get(slug) || null;
@@ -195,6 +200,8 @@ async function slugToId(slug) {
 let agencyCache = { at: 0, byId: null };
 async function operatorForProduct(product) {
   if (!product) return null;
+  // catalogue_v2: operator names are hidden from travellers at launch.
+  if (catalogueV2Enabled()) return null;
   if (!agencyCache.byId || Date.now() - agencyCache.at > LOOKUP_TTL_MS) {
     const r = await pool.query("SELECT * FROM agencies");
     agencyCache = { at: Date.now(), byId: new Map(r.rows.map((row) => [row.id, row])) };
@@ -215,7 +222,8 @@ async function findTourProduct(idOrSlug) {
     const id = await slugToId(idOrSlug);
     if (id) r = await pool.query(`SELECT * FROM tour_products WHERE id=$1 AND ${VISIBLE} LIMIT 1`, [id]);
   }
-  const row = r.rows[0] || null;
+  let row = r.rows[0] || null;
+  if (row && catalogueV2Enabled()) row = (await catalogueRowsFor([row]))[0] || null;
   // A miss is cached too: an unknown slug is exactly what a crawler hammers,
   // and it used to cost the full-table scan every time.
   if (productCache.size > 300) productCache.clear();
@@ -578,20 +586,27 @@ async function upcomingDepartures(tourProductId = null) {
       LIMIT 40`,
     [tourProductId]
   );
-  return r.rows.map((d) => {
+  // catalogue_v2: only the catalogue's bookable dates, with its labels.
+  const cat = catalogueV2Enabled() ? await publicCatalogue() : null;
+  const rows = cat ? r.rows.filter((d) => cat.dates.has(Number(d.id))) : r.rows;
+  return rows.map((d) => {
     const seats = Number(d.seats_taken) || 0;
     const min = Math.max(1, Number(d.min_seats) || 4);
     const confirmed = d.status === "supplier_confirmed" || seats >= min;
     return {
       route: d.route, date: d.start_date || d.date, endDate: d.end_date, time: d.time,
       seats, max: Number(d.max_seats) || 12, min,
-      label: confirmed ? "confirmed to run (GoAhead)" : `forming — ${Math.max(0, min - seats)} more traveler${min - seats === 1 ? "" : "s"} to confirm`,
+      label: cat ? cat.dates.get(Number(d.id)).catalogueLabel
+        : confirmed ? "confirmed to run (GoAhead)" : `forming — ${Math.max(0, min - seats)} more traveler${min - seats === 1 ? "" : "s"} to confirm`,
       productId: d.tour_product_id,
     };
   });
 }
 
 function departureListHtml(deps) {
+  if (!deps.length && catalogueV2Enabled()) {
+    return `<p>No dates are open for booking right now. New dates are added to the calendar regularly.</p>`;
+  }
   if (!deps.length) {
     return `<p>No public dates are forming right now — you can start your own date on this page: pick the day that suits you, our team reviews it, and nothing is charged unless it reaches GoAhead.</p>`;
   }
@@ -660,7 +675,9 @@ export async function buildBody(pathname) {
   ${p.overview_html ? cleanHtml(p.overview_html) : `<p>${esc(p.description || "")}</p>`}
   <h2>Upcoming departures</h2>
   ${departureListHtml(deps)}
-  <p>Every date needs ${Math.max(1, Number(p.min_seats) || 4)} travelers to be confirmed (the GoAhead). Hold a seat free — a deposit is only charged once the date confirms. Don't see your day? Start your own date on this page; our team reviews it before it opens.</p>
+  ${catalogueV2Enabled()
+    ? `<p>Every date needs ${Math.max(1, Number(p.min_seats) || 4)} travellers to go ahead (the GoAhead). Nothing is charged before then, and once a date goes ahead it runs.</p>`
+    : `<p>Every date needs ${Math.max(1, Number(p.min_seats) || 4)} travelers to be confirmed (the GoAhead). Hold a seat free — a deposit is only charged once the date confirms. Don't see your day? Start your own date on this page; our team reviews it before it opens.</p>`}
   ${itin.length ? `<h2>Itinerary</h2><ol>${itin.map((d) => `<li><strong>${esc(d.title || "")}</strong>${d.description ? ` — ${esc(plain(d.description, 400))}` : ""}</li>`).join("")}</ol>` : ""}
   ${included.length ? `<h2>Included</h2><ul>${included.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}
   ${notIncluded.length ? `<h2>Not included</h2><ul>${notIncluded.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}
