@@ -81,5 +81,7 @@ test("the xlsx reader reads the rate card and the import skips its EXAMPLE rows"
   assert.ok(parsed.rows.length >= 20, `rows: ${parsed.rows.length}`);
   assert.ok(parsed.rows.every((r) => Number.isInteger(r.catalogueNo) && r.catalogueNo > 0));
   assert.ok(!parsed.rows.some((r) => /EXAMPLE/i.test(r.product)));
-  assert.ok(parsed.notes.some((n) => /currency is USD/.test(n)), parsed.notes.join("\n"));
+  // The workbook states EGP for operators and EUR for commission: no warning.
+  assert.ok(!parsed.notes.some((n) => /USD|imported as (EGP|EUR); check/.test(n)), parsed.notes.join("\n"));
+  assert.deepEqual(parsed.currencies, { operator: "EGP", commission: "EUR" });
 });

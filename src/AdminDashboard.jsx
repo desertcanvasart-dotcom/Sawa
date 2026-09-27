@@ -1931,8 +1931,15 @@ function BookingsSection({ data, stats }) {
     .filter(({ d }) => { if (!q) return true; return `${d.route} ${d.city}`.toLowerCase().includes(q.toLowerCase()); })
     .sort((a, b) => new Date(a.d.startDate || a.d.date) - new Date(b.d.startDate || b.d.date));
 
+  // Model phase 3 (catalogue_v2): who canceled decides the agency's commission.
+  const [catalogueOn, setCatalogueOn] = useState(false);
+  useEffect(() => { apiFetch("/admin/features").then((r) => (r.ok ? r.json() : {})).then((j) => setCatalogueOn(j.catalogueV2 === true)).catch(() => setCatalogueOn(false)); }, []);
   async function setStatus(id, status) {
-    const r = await apiFetch(`/admin/bookings/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status }) });
+    const body = { status };
+    if (status === "cancelled" && catalogueOn) {
+      body.cancelledReason = window.confirm("Did the traveler ask to cancel?\n\nOK: the traveler canceled (the cancellation schedule and the agency's commission follow from it).\nCancel: Sawa canceled it.") ? "traveler" : "admin";
+    }
+    const r = await apiFetch(`/admin/bookings/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     if (r.ok) { const list = await load(); setOpen((o) => (o ? list.find((b) => b.id === o.id) || null : null)); }
   }
 

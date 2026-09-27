@@ -20,7 +20,7 @@ const RATE_LABELS = {
   perTraveler: "Per traveler", landPerTraveler: "Land services per traveler",
   roomTwin: "Twin room or cabin, per trip", roomSingle: "Single room or cabin, per trip",
   fee4_6: "Departure fee, 4–6 travelers", fee7_9: "Departure fee, 7–9 travelers", fee10_12: "Departure fee, 10–12 travelers",
-  commissionPerSeat: "Agency commission per seat (reference)",
+  commissionPerSeat: "Agency commission per seat",
 };
 const egp = (n) => (n == null ? "—" : `EGP ${Number(n).toLocaleString("en-US", { maximumFractionDigits: 2 })}`);
 const dayLabel = (ymd) => (ymd ? new Intl.DateTimeFormat("en-US", { timeZone: "Africa/Cairo", weekday: "short", month: "short", day: "numeric", year: "numeric" }).format(new Date(`${ymd}T12:00:00Z`)) : "—");
@@ -525,7 +525,7 @@ export function RatesSection({ flash }) {
   return (
     <>
       <Head title="Rate card"
-        sub="What each operator is paid per product, in EGP. A departure keeps the version in force when its first seat sold. Shown for reference; nothing is paid from here yet."
+        sub="What each operator is paid per product, in EGP, and the agency commission per seat, in EUR. A departure keeps the version in force when its first seat sold."
         action={<label className="btn-ghost" style={{ cursor: "pointer" }}><Upload size={16} />Import spreadsheet
           <input type="file" accept=".xlsx" hidden disabled={busy} onChange={(e) => importFile(e.target.files?.[0])} /></label>} />
       {err && <div className="auth-error">{err}</div>}
@@ -601,14 +601,14 @@ function RateEditor({ product, flash, onClose }) {
 
   return (
     <>
-      <Head title={`#${product.catalogue_no} ${product.title}`} sub={`${TYPE_LABELS[product.type] || product.type} · rates in EGP`}
+      <Head title={`#${product.catalogue_no} ${product.title}`} sub={`${TYPE_LABELS[product.type] || product.type} · operator amounts in EGP, agency commission in EUR`}
         action={<button className="btn-ghost" onClick={onClose}><ArrowLeft size={16} />Rate card</button>} />
       {err && <div className="auth-error">{err}</div>}
       <form className="dash-card" style={{ marginBottom: 12 }} onSubmit={save}>
         <h2>{draft ? `Draft v${draft.version}` : "New draft"}</h2>
         <div className="form-grid">
           {fields.map((k) => (
-            <label className="field" key={k}><span>{RATE_LABELS[k]} (EGP)</span>
+            <label className="field" key={k}><span>{RATE_LABELS[k]} ({k === "commissionPerSeat" ? "EUR" : "EGP"})</span>
               <input type="number" min="0" step="0.01" value={values[k] ?? ""} onChange={(e) => setValues({ ...values, [k]: e.target.value })} />
             </label>
           ))}
@@ -718,21 +718,27 @@ export function DepartureOperatorPanel({ departure, operators, flash, onChange, 
 export function ManifestTable({ travelers }) {
   if (!travelers?.length) return <p className="field-hint">No travelers yet.</p>;
   const nationality = travelers.some((t) => t.nationality !== undefined);
+  const incomplete = travelers.filter((t) => t.missing?.length).length;
   return (
     <div className="table-wrap">
+      {incomplete > 0 && <p className="field-hint"><span className="tag tag-warn">Missing</span> {incomplete} row{incomplete === 1 ? "" : "s"} still lack details. Sawa asks travelers to complete them 7 days before the tour, with a reminder at 3.</p>}
       <table className="dash-table">
         <thead><tr><th>Booking</th><th>Name</th><th>Pickup</th><th>Contact</th>{nationality && <th>Nationality</th>}<th>Safety needs</th></tr></thead>
         <tbody>
-          {travelers.map((t, i) => (
-            <tr key={i} style={t.canceledAfterCutoff ? { opacity: 0.6 } : undefined}>
-              <td>{t.booking}</td>
-              <td>{t.name}{t.canceledAfterCutoff && <div className="field-hint">canceled after the cut-off</div>}</td>
-              <td>{t.pickupPoint || "—"}</td>
-              <td>{t.contactNumber || (t.lead ? "—" : "")}</td>
-              {nationality && <td>{t.nationality || "—"}</td>}
-              <td>{t.safetyNeeds || (t.lead ? "—" : "")}</td>
-            </tr>
-          ))}
+          {travelers.map((t, i) => {
+            const miss = new Set(t.missing || []);
+            const Missing = () => <span className="tag tag-warn">Missing</span>;
+            return (
+              <tr key={i} style={t.canceledAfterCutoff ? { opacity: 0.6 } : undefined}>
+                <td>{t.booking}</td>
+                <td>{t.name}{miss.has("name") && <> <Missing /></>}{t.canceledAfterCutoff && <div className="field-hint">canceled after the cut-off</div>}</td>
+                <td>{miss.has("pickupPoint") ? <Missing /> : t.pickupPoint || "—"}</td>
+                <td>{miss.has("phone") ? <Missing /> : t.contactNumber || (t.lead ? "—" : "")}</td>
+                {nationality && <td>{miss.has("nationality") ? <Missing /> : t.nationality || "—"}</td>}
+                <td>{miss.has("safetyNeeds") ? <Missing /> : t.safetyNeeds || (t.lead ? "—" : "")}</td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>

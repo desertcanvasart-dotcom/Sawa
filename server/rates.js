@@ -19,7 +19,7 @@ export const RATE_FIELDS = {
 export function mapRate(r) {
   const out = {
     id: Number(r.id), productId: Number(r.product_id), version: r.version, state: r.state,
-    effectiveFrom: ymd(r.effective_from), currency: r.currency, source: r.source || {},
+    effectiveFrom: ymd(r.effective_from), currency: r.currency, commissionCurrency: r.commission_currency || "EUR", source: r.source || {},
     createdBy: r.created_by, createdAt: r.created_at, publishedBy: r.published_by, publishedAt: r.published_at,
   };
   for (const [k, col] of Object.entries(RATE_FIELDS)) out[k] = num(r[col]);
@@ -142,16 +142,32 @@ const NOT_IMPORTED = [
   [/^retail/, "retail price (pricing is a later phase; not part of the operator rate card)"],
   [/^goahead deadline/, "GoAhead deadline (set per product in Admin → Catalog)"],
   [/^sawa margin|^loss at 4|^cost of single promise/, "calculated check"],
+  [/^notes$/, "notes"],
 ];
 
 // → { rows: [{ catalogueNo, product, sheet, row, values }], skipped: [...], notes: [...] }
 export function parseRateCard(buffer) {
   const sheets = readXlsx(buffer);
   const out = { rows: [], skipped: [], notes: [] };
+  // Currencies (decided 27 Sep 2026): operator amounts in EGP, agency
+  // commission (and retail) in EUR. The workbook states both on its
+  // Assumptions sheet; a different statement is reported, never converted.
   const assumptions = sheets.find((s) => /^assumptions$/i.test(s.name));
-  const currency = assumptions?.rows.find((r) => /^currency$/i.test(String(r[0] || "")))?.[1];
-  if (currency && String(currency).toUpperCase() !== "EGP") {
-    out.notes.push(`The workbook's Assumptions sheet says the currency is ${currency}. Amounts are imported as EGP, as decided on 27 Sep 2026; check them before publishing.`);
+  const stated = (re) => assumptions?.rows.find((r) => re.test(String(r[0] || "")))?.[1];
+  out.currencies = { operator: "EGP", commission: "EUR" };
+  const operatorCurrency = stated(/^operator currency/i);
+  const travelerCurrency = stated(/^travell?er currency/i);
+  if (operatorCurrency && String(operatorCurrency).trim().toUpperCase() !== "EGP") {
+    out.notes.push(`The workbook says operator amounts are in ${operatorCurrency}. They are imported as EGP; check them before publishing.`);
+  }
+  if (travelerCurrency && String(travelerCurrency).trim().toUpperCase() !== "EUR") {
+    out.notes.push(`The workbook says agency commission is in ${travelerCurrency}. It is imported as EUR; check it before publishing.`);
+  }
+  if (!operatorCurrency && !travelerCurrency) {
+    out.notes.push("The workbook's Assumptions sheet doesn't state its currencies. Operator amounts are imported as EGP and agency commission as EUR; check them before publishing.");
+  }
+  if (stated(/^exchange rate/i) != null) {
+    out.notes.push("The workbook's exchange rate is not imported: rates are entered by date in Admin → Finance → Exchange rates.");
   }
   for (const sheet of sheets) {
     const headerIdx = sheet.rows.findIndex((r) => String(r[0] || "").trim() === "#" && /product/i.test(String(r[1] || "")));

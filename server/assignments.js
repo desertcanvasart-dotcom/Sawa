@@ -12,6 +12,7 @@
 //
 // No money moves: the expected operator amount is shown, never paid.
 import { pool, withTransaction } from "./db/index.js";
+import { catalogueV2Enabled } from "./features.js";
 import { BRAND } from "./brand.js";
 import { CatalogueError, todayIn, departureInstants, mapCatalogueProduct } from "./catalogue.js";
 import { rosteredOperator } from "./roster.js";
@@ -182,7 +183,13 @@ export async function acknowledge(db, { assignmentId, operatorId, by, now = Date
     const upd = await c.query(
       `UPDATE catalogue_assignments SET state = 'acknowledged', acknowledged_at = now(), acknowledged_by = $2 WHERE id = $1 RETURNING *`,
       [assignmentId, by]);
-    return mapAssignment(upd.rows[0]);
+    const acknowledged = mapAssignment(upd.rows[0]);
+    // Model phase 3: the 50% advance, due 2 Egyptian business days from now.
+    if (catalogueV2Enabled()) {
+      const { createAdvance } = await import("./operator-settlement.js");
+      await createAdvance(c, { assignment: acknowledged, now });
+    }
+    return acknowledged;
   });
 }
 
@@ -223,9 +230,18 @@ export function manifestRows(pledges, { needsNationality = false } = {}) {
     const names = Array.isArray(p.traveller_names) ? p.traveller_names.map((n) => String(n || "").trim()).filter(Boolean) : [];
     const lead = String(p.customers || "").trim();
     const seats = Math.max(1, Number(p.seats) || 1);
+    // Model phase 3: what the booking still lacks is marked on the manifest.
+    const bookingMissing = [
+      !String(p.customer_phone || "").trim() && "phone",
+      !String(p.pickup_point || "").trim() && "pickupPoint",
+      needsNationality && !String(p.nationality || "").trim() && "nationality",
+      !String(p.safety_needs || "").trim() && "safetyNeeds",
+    ].filter(Boolean);
     for (let i = 0; i < seats; i++) {
+      const missing = [...(names[i] ? [] : ["name"]), ...(i === 0 ? bookingMissing : [])];
       rows.push({
         booking: p.booking_code || String(p.id).slice(-8),
+        ...(missing.length ? { missing } : {}),
         name: names[i] || (i === 0 ? lead : `${lead || "Guest"}, guest ${i + 1}`),
         lead: i === 0,
         pickupPoint: p.pickup_point || null,
