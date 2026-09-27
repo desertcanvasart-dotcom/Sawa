@@ -963,9 +963,14 @@ export function ManifestTable({ travelers }) {
   if (!travelers?.length) return <p className="field-hint">No travelers yet.</p>;
   const nationality = travelers.some((t) => t.nationality !== undefined);
   const incomplete = travelers.filter((t) => t.missing?.length).length;
+  // Model phase 4, before the cut-off: which seats are paid and which still
+  // have payment due (an unpaid seat is released at its deadline).
+  const unpaid = travelers.filter((t) => t.payment?.standing === "due").length;
+  const payDue = (iso) => new Intl.DateTimeFormat("en-US", { timeZone: "Africa/Cairo", weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).format(new Date(iso));
   return (
     <div className="table-wrap">
       {incomplete > 0 && <p className="field-hint"><span className="tag tag-warn">Missing</span> {incomplete} row{incomplete === 1 ? "" : "s"} still lack details. Sawa asks travelers to complete them 7 days before the tour, with a reminder at 3.</p>}
+      {unpaid > 0 && <p className="field-hint"><span className="tag tag-warn">Payment due</span> {unpaid} seat{unpaid === 1 ? " is" : "s are"} booked but not paid yet. A seat not paid by its deadline is released before the cut-off and comes off this manifest; you aren't paid for it (clause 10.1).</p>}
       <table className="dash-table">
         <thead><tr><th>Booking</th><th>Name</th><th>Pickup</th><th>Contact</th>{nationality && <th>Nationality</th>}<th>Safety needs</th></tr></thead>
         <tbody>
@@ -975,7 +980,9 @@ export function ManifestTable({ travelers }) {
             return (
               <tr key={i} style={t.canceledAfterCutoff ? { opacity: 0.6 } : undefined}>
                 <td>{t.booking}</td>
-                <td>{t.name}{miss.has("name") && <> <Missing /></>}{t.canceledAfterCutoff && <div className="field-hint">canceled after the cut-off</div>}</td>
+                <td>{t.name}{miss.has("name") && <> <Missing /></>}{t.canceledAfterCutoff && <div className="field-hint">canceled after the cut-off</div>}
+                  {t.payment?.standing === "paid" && <div><span className="tag tag-on">Paid</span></div>}
+                  {t.payment?.standing === "due" && <div><span className="tag tag-warn">{t.payment.dueAt ? `Payment due by ${payDue(t.payment.dueAt)}` : "Payment due"}</span></div>}</td>
                 <td>{miss.has("pickupPoint") ? <Missing /> : t.pickupPoint || "—"}</td>
                 <td>{miss.has("phone") ? <Missing /> : t.contactNumber || (t.lead ? "—" : "")}</td>
                 {nationality && <td>{miss.has("nationality") ? <Missing /> : t.nationality || "—"}</td>}

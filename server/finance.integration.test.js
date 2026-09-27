@@ -49,7 +49,12 @@ const today = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" 
 const ymd = (d) => (d instanceof Date ? d.toISOString().slice(0, 10) : String(d).slice(0, 10));
 
 async function startServer(extraEnv) {
-  const port = 22000 + Math.floor(Math.random() * 900);
+  // A port nothing is listening on: a random one could land on the other
+  // server this suite started, and the health check would answer from it.
+  const port = await new Promise((resolve) => {
+    const probe = createServer();
+    probe.listen(0, "127.0.0.1", () => { const p = probe.address().port; probe.close(() => resolve(p)); });
+  });
   const proc = spawn(process.execPath, [join(ROOT, "server", "app.js")], {
     env: { ...process.env, DATABASE_URL: dbUrl, PGSSL: "false", PORT: String(port), NODE_ENV: "test", PAGE_WARM_INTERVAL_MS: "0",
       SUPABASE_URL: `http://127.0.0.1:${fakeAuth.address().port}`, SUPABASE_ANON_KEY: "x", SUPABASE_SERVICE_ROLE_KEY: "x",

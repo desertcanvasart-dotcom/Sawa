@@ -1673,6 +1673,15 @@ app.get("/api/public/bookings/:code", h(async (req, res) => {
     }
   }
 
+  // "Nothing was charged" isn't true of a pay-at-GoAhead booking canceled
+  // after it paid, and a released seat has its own reason.
+  const payReq = payAtGoAhead?.request;
+  if (view.state === "booking_cancelled" && payReq?.state === "paid") {
+    view.note = "This booking was canceled. Any refund due under your cancellation terms is made to the card you paid with.";
+  } else if (view.state === "booking_cancelled" && payReq?.state === "released") {
+    view.note = "This seat was released because payment wasn't received by the deadline. Nothing was charged.";
+  }
+
   res.json({ booking: {
     code: b.booking_code,
     tourTitle: b.product_title || b.route,

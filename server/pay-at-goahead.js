@@ -735,6 +735,11 @@ export async function runPayAtGoAheadTick({ db = pool, now = Date.now(), send = 
   // 6. Bookings canceled elsewhere; waitlist offers not taken.
   out.reconciled = await reconcileCancelled(db, { now, env });
   out.offersExpired = await expireOffers(db, { now, send });
+  // Seats freed any other way (an admin edit): offered to whoever is waiting.
+  const waitingOn = (await db.query("SELECT DISTINCT departure_id FROM departure_waitlist WHERE state = 'waiting'")).rows;
+  for (const { departure_id: id } of waitingOn) {
+    out.offered = (out.offered || 0) + await inTx(db, async (c) => offerFreedSeats(c, { departure: await departureFor(c, { id: Number(id) }), now, send }));
+  }
   const busy = Object.values(out).some(Boolean);
   if (busy) log(`pay at GoAhead: ${JSON.stringify(out)}`);
   return out;
