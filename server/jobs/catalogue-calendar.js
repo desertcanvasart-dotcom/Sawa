@@ -1,0 +1,44 @@
+// The two catalogue jobs (model phase 1), run by the scheduler:
+//
+//   catalogue-generate  daily: departures from the calendar rules, over a
+//                       rolling window (idempotent)
+//   catalogue-status    every 15 minutes: GoAhead, cancelled below minimum at
+//                       the cut-off or GoAhead deadline, completed
+//
+// Both are no-ops until migration 047 is applied. Neither moves money.
+//
+//   node server/jobs/catalogue-calendar.js           run both once
+import { generateDepartures, runStatusJob, isMissingCatalogueTables } from "../catalogue.js";
+import { catalogueV2Enabled } from "../features.js";
+
+let warnedMissing = false;
+async function guarded(fn, log) {
+  try {
+    return await fn();
+  } catch (e) {
+    if (!isMissingCatalogueTables(e)) throw e;
+    if (!warnedMissing) {
+      warnedMissing = true;
+      log("catalogue: tables not found; apply migration 047 (npm run db:migrate). The catalogue jobs do nothing until then.");
+    }
+    return null;
+  }
+}
+
+export function runCatalogueGenerate({ log = console.log, env = process.env, now } = {}) {
+  return guarded(() => generateDepartures({ log, now, materialise: catalogueV2Enabled(env) }), log);
+}
+
+export function runCatalogueStatus({ log = console.log, now } = {}) {
+  return guarded(() => runStatusJob({ log, now }), log);
+}
+
+if (import.meta.url === `file://${process.argv[1]}`) {
+  const { pool } = await import("../db/index.js");
+  try {
+    console.log(await runCatalogueGenerate());
+    console.log(await runCatalogueStatus());
+  } finally {
+    await pool.end();
+  }
+}
