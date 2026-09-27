@@ -160,6 +160,13 @@
    "verdict": "AGREES",
    "contradicts": null,
    "note": "Records the phase 2 decisions of 27 Sep 2026: GoAhead deadline 30 days for cruise and multi-day (shared/catalogue.js DEFAULT_GOAHEAD_DEADLINE_DAYS = 30), US English, operator rates in EGP (catalogue_rate_versions currency CHECK). Traveler prices stay in EUR as before."
+  },
+  "3d751ac9220c": {
+   "where": "docs/phase2/REPORT.md:206",
+   "text": "Operator bank details and invoices** are not collected yet.",
+   "verdict": "AGREES",
+   "contradicts": null,
+   "note": "No table or form collects operator bank details or invoices: 049 adds none, and operators/operator_documents hold only identity, license and insurance data. Internal report; no public claim depends on it."
   }
  }
 }
