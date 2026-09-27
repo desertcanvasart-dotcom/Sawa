@@ -40,6 +40,7 @@ import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import { logAudit } from "./audit.js";
 import { registerCatalogueRoutes } from "./catalogue-routes.js";
+import { registerOperatorRoutes } from "./operator-routes.js";
 import { catalogueV2Enabled } from "./features.js";
 import { publicCatalogue, overlayBootstrap, clearPublicCatalogue } from "./catalogue-public.js";
 import {
@@ -2291,7 +2292,7 @@ function requireAdmin() {
 }
 
 // Create a Supabase auth user + app_users profile. Returns { id, tempPassword }.
-async function provisionUser({ email, fullName, role, agencyId }) {
+async function provisionUser({ email, fullName, role, agencyId, operatorId }) {
   const normalizedEmail = String(email || "").trim().toLowerCase();
   if (!normalizedEmail) throw new AppError(422, "Email is required.");
   if (!supabaseAdmin) throw new AppError(500, "Server is not configured to create accounts.");
@@ -2313,10 +2314,17 @@ async function provisionUser({ email, fullName, role, agencyId }) {
   }
 
   try {
+    // operator_id exists only once migration 049 is applied; it is named only
+    // for an operator login, so every other login is inserted exactly as before.
     await pool.query(
-      `INSERT INTO app_users (id, email, full_name, role, agency_id, status)
-       VALUES ($1,$2,$3,$4,$5,'active')`,
-      [data.user.id, normalizedEmail, fullName || null, role, agencyId]
+      operatorId != null
+        ? `INSERT INTO app_users (id, email, full_name, role, agency_id, operator_id, status)
+           VALUES ($1,$2,$3,$4,NULL,$5,'active')`
+        : `INSERT INTO app_users (id, email, full_name, role, agency_id, status)
+           VALUES ($1,$2,$3,$4,$5,'active')`,
+      operatorId != null
+        ? [data.user.id, normalizedEmail, fullName || null, role, operatorId]
+        : [data.user.id, normalizedEmail, fullName || null, role, agencyId]
     );
   } catch (e) {
     // Roll back the auth user if the profile insert fails, so we don't orphan it.
@@ -3745,6 +3753,7 @@ app.post("/api/admin/uploads", requireAuth, requireRole("super_admin", "ops_staf
 // behind the catalogue_v2 flag (see catalogue-public.js); with it off nothing
 // here reaches a traveller. Registered before the /api 404 below.
 registerCatalogueRoutes(app, { requireAuth, requireRole, h, logAudit, invalidatePublic: () => invalidatePublicBootstrap() });
+registerOperatorRoutes(app, { requireAuth, requireRole, h, logAudit, provisionUser, supabaseAdmin, sendEmail });
 
 app.use("/api", (_req, res) => res.status(404).json({ error: "Not found." }));
 

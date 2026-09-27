@@ -936,6 +936,63 @@ export function belowMinimumCancellationEmail({
   return { to, subject, html, text, kind: agencyCopy ? "below_minimum_cancellation_agency" : "below_minimum_cancellation" };
 }
 
+// Model phase 2 — an operator document is about to expire (30 and 7 days).
+// Goes to the operator and to Sawa's admin.
+export function documentExpiryEmail({ to, operatorName, document, expiresOn, days }) {
+  const subject = `${document} for ${operatorName} expires in ${days} days`;
+  const text = `${operatorName}'s ${document.toLowerCase()} expires on ${expiresOn}. `
+    + "An operator whose document has expired is suspended from the Sawa roster until a valid replacement is uploaded. "
+    + "Please send the renewal before then.";
+  const html = shell(
+    `${document} expires in ${days} days`,
+    `<p style="margin:0 0 16px">${esc(operatorName)}'s ${esc(document.toLowerCase())} expires on <strong>${esc(expiresOn)}</strong>.</p>
+     <p style="margin:0 0 20px">An operator whose document has expired is suspended from the Sawa roster until a valid replacement is uploaded. Please send the renewal before then.</p>
+     ${note("Reply to this email with the renewed document, or upload it with Sawa's team.")}`,
+    { eyebrow: "Document expiring", preheader: `${document} expires on ${expiresOn}` }
+  );
+  return { to, subject, html, text, kind: "operator_document_expiry" };
+}
+
+// Model phase 2 — a departure has reached GoAhead and is assigned to the
+// rostered operator, who must acknowledge it in the portal within 12 hours.
+export function operatorAssignmentEmail({ to, operatorName, title, dateLabel, specVersion, seats, ackBy, portalUrl }) {
+  const subject = `Assigned: ${title} on ${dateLabel} — please acknowledge`;
+  const text = [
+    `${operatorName}, you have been assigned ${title} on ${dateLabel}.`,
+    `Specification version: ${specVersion ?? "—"}. Seats sold so far: ${seats}. Seats keep selling until the cut-off.`,
+    `Please acknowledge in the operator portal by ${ackBy}: ${portalUrl}`,
+    "A missed acknowledgement counts as a strike and the departure may be reassigned.",
+  ].join("\n\n");
+  const html = shell(
+    `Assigned: ${title}`,
+    `<p style="margin:0 0 16px">${esc(operatorName)}, you have been assigned <strong>${esc(title)}</strong> on <strong>${esc(dateLabel)}</strong>.</p>
+     <p style="margin:0 0 16px">Specification version ${esc(specVersion ?? "—")} · ${esc(seats)} seat${Number(seats) === 1 ? "" : "s"} sold so far. Seats keep selling until the cut-off.</p>
+     <p style="margin:0 0 20px">Please acknowledge in the operator portal by <strong>${esc(ackBy)}</strong>.</p>
+     ${button(portalUrl, "Acknowledge")}
+     ${note("A missed acknowledgement counts as a strike and the departure may be reassigned.")}`,
+    { eyebrow: "New assignment", preheader: `Acknowledge by ${ackBy}` }
+  );
+  return { to, subject, html, text, kind: "operator_assignment" };
+}
+
+// Model phase 2 — to Sawa's admin: a departure needs a person (nobody rostered,
+// or an acknowledgement that didn't come).
+export function catalogueAdminAlertEmail({ to, kind, title, dateLabel, detail, portalUrl }) {
+  const what = kind === "no_rostered_operator"
+    ? "reached GoAhead with no operator rostered"
+    : `was not acknowledged in time by ${detail?.operatorName || "its operator"}`;
+  const subject = `Action needed: ${title} on ${dateLabel} ${kind === "no_rostered_operator" ? "has no operator" : "wasn't acknowledged"}`;
+  const text = `${title} on ${dateLabel} ${what}. Assign an active operator approved for this product in Admin → Calendar: ${portalUrl}`;
+  const html = shell(
+    "Action needed",
+    `<p style="margin:0 0 16px"><strong>${esc(title)}</strong> on ${esc(dateLabel)} ${esc(what)}.</p>
+     <p style="margin:0 0 20px">Assign an active operator approved for this product in Admin → Calendar.</p>
+     ${button(portalUrl, "Open the calendar")}`,
+    { eyebrow: "Operator needed", preheader: `${title} on ${dateLabel}` }
+  );
+  return { to, subject, html, text, kind: `catalogue_alert_${kind}` };
+}
+
 export function cancellationEmail({ to, route, dateLabel }) {
   const subject = `Cancellation — ${route}`;
   const text = `This confirms your booking for ${route} on ${dateLabel} has been canceled.`;

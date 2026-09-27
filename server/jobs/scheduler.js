@@ -320,13 +320,24 @@ export function startJobScheduler(env = process.env) {
   });
   const catalogueStatusTick = () => runSafely("catalogue-status", async (opts) => {
     const { runCatalogueStatus } = await import("./catalogue-calendar.js");
-    return runCatalogueStatus({ log: opts.log, env });
+    const status = await runCatalogueStatus({ log: opts.log, env });
+    // Model phase 2: assignment follows GoAhead in the same tick (behind
+    // catalogue_v2; nothing when it is off).
+    const { runOperatorAssignments } = await import("./operator-jobs.js");
+    const operators = await runOperatorAssignments({ log: opts.log, env });
+    return { status, operators };
+  });
+  const operatorDailyTick = () => runSafely("operator-daily", async (opts) => {
+    const { runOperatorDaily } = await import("./operator-jobs.js");
+    return runOperatorDaily({ log: opts.log, env });
   });
   const catGenFirst = setTimeout(catalogueGenerateTick, FIRST_RUN_DELAY_MS * 2);
   const catGenRepeat = setInterval(catalogueGenerateTick, DAY_MS);
   const catStatusFirst = setTimeout(catalogueStatusTick, FIRST_RUN_DELAY_MS * 4);
   const catStatusRepeat = setInterval(catalogueStatusTick, CATALOGUE_STATUS_MS);
-  for (const t of [catGenFirst, catGenRepeat, catStatusFirst, catStatusRepeat]) t.unref();
+  const opDailyFirst = setTimeout(operatorDailyTick, FIRST_RUN_DELAY_MS * 6);
+  const opDailyRepeat = setInterval(operatorDailyTick, DAY_MS);
+  for (const t of [catGenFirst, catGenRepeat, catStatusFirst, catStatusRepeat, opDailyFirst, opDailyRepeat]) t.unref();
 
   const first = setTimeout(tick, FIRST_RUN_DELAY_MS);
   const repeat = setInterval(tick, DAY_MS);

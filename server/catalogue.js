@@ -56,6 +56,7 @@ export function mapCatalogueProduct(r) {
     cutoffHours: r.cutoff_hours,
     goaheadDeadlineDays: r.goahead_deadline_days,
     legacyProductId: r.legacy_product_id,
+    needsNationality: r.needs_nationality === true,
     updatedAt: r.updated_at,
   };
 }
@@ -522,6 +523,7 @@ const PRODUCT_FIELDS = {
   title: "title", type: "type", baseCity: "base_city", endCity: "end_city", status: "status",
   mergedIntoId: "merged_into_id", goaheadMin: "goahead_min", maxGroup: "max_group",
   cutoffHours: "cutoff_hours", goaheadDeadlineDays: "goahead_deadline_days", legacyProductId: "legacy_product_id",
+  needsNationality: "needs_nationality",
 };
 
 export async function updateProduct(db, id, patchIn) {

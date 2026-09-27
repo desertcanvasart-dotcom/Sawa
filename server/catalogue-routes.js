@@ -31,6 +31,7 @@ const productPatch = z.object({
   cutoffHours: z.number().int().min(0).max(2160).optional(),
   goaheadDeadlineDays: z.number().int().min(1).max(365).nullable().optional(),
   legacyProductId: z.string().trim().max(120).nullable().optional(),
+  needsNationality: z.boolean().optional(),
 }).strict();
 
 const ymdSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use a date like 2026-11-13.");
