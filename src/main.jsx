@@ -401,6 +401,12 @@ const INLINE_BOOTSTRAP = (() => {
   }
 })();
 
+// catalogue_v2 (model phase 1). One value per deployment, carried by the
+// bootstrap payload; with it off the payload has no `catalogue` key and every
+// page renders as before.
+let CATALOGUE_V2 = INLINE_BOOTSTRAP?.catalogue?.enabled === true;
+const catalogueV2 = () => CATALOGUE_V2;
+
 function App() {
   const [path, setPath] = useState(window.location.pathname);
   const [agencies, setAgencies] = useState(INLINE_BOOTSTRAP?.agencies || []);
@@ -510,6 +516,7 @@ function App() {
       setTourProducts((prev) => same(prev, data.tourProducts) ? prev : (data.tourProducts || []));
       setOperatorsByProduct((prev) => same(prev, data.operatorsByProduct) ? prev : (data.operatorsByProduct || {}));
       setPhoneVerification(data.phoneVerification === true);
+      CATALOGUE_V2 = data.catalogue?.enabled === true;
       setDepartures((prev) => same(prev, data.departures) ? prev : (data.departures || []));
       setSelectedId((prev) => prev || data.departures?.[0]?.id || null);
       const firstDayTour = (data.tourProducts || []).find((p) => !isPackage(p));
@@ -1434,6 +1441,33 @@ function PhoneCodeStep({ phone, confirmed, onVerified }) {
   );
 }
 
+// catalogue_v2 — the fixed parts of a product's published specification that
+// the "What's included" lists don't already say. Only what the spec states;
+// an empty field is left out rather than guessed.
+function CatalogueFacts({ facts }) {
+  const bands = facts.vehicleByBand
+    ? [["4–6", facts.vehicleByBand["4-6"]], ["7–9", facts.vehicleByBand["7-9"]], ["10–12", facts.vehicleByBand["10-12"]]].filter(([, v]) => v)
+    : [];
+  const rows = [
+    facts.guideLanguages?.length ? ["Guide", `Licensed guide speaking ${facts.guideLanguages.join(", ")}`] : null,
+    facts.meals ? ["Meals", facts.meals] : null,
+    facts.pickupArea ? ["Pickup", facts.pickupWindow ? `${facts.pickupArea} (${facts.pickupWindow})` : facts.pickupArea] : null,
+    facts.endCity ? ["Ends in", facts.endCity] : null,
+    bands.length ? ["Vehicle", bands.map(([b, v]) => `${b} travellers: ${v}`).join("; ")] : null,
+    facts.roomCategories?.length ? ["Rooms", facts.roomCategories.map((r) => r.name).join(", ")] : null,
+    facts.addons?.length ? ["Optional extras", facts.addons.map((a) => (a.price != null ? `${a.name} (${CURRENCY_SYMBOL}${a.price})` : a.name)).join(", ")] : null,
+  ].filter(Boolean);
+  if (!rows.length) return null;
+  return (
+    <section className="sec rv">
+      <h2>The details</h2>
+      <dl className="cat-facts">
+        {rows.map(([k, v]) => <React.Fragment key={k}><dt>{k}</dt><dd>{v}</dd></React.Fragment>)}
+      </dl>
+    </section>
+  );
+}
+
 function TourDetailV2({ isSaving, navigate, phoneVerification = false, onBookPublicDeparture, onCancelPublicBooking, publicBooking, tour: tourProp, allProducts = [], operatorsByProduct = {} }) {
   const rootRef = useRef(null);
 
@@ -1803,6 +1837,8 @@ function TourDetailV2({ isSaving, navigate, phoneVerification = false, onBookPub
                 </section>
               )}
 
+              {catalogueV2() && tour.catalogue && <CatalogueFacts facts={tour.catalogue} />}
+
               {/* "Your operator" used to render tour.guide as the operating company,
                   under a "Verified operator" badge and the line "Vetted by Sawa".
                   Every live product has guide = "Licensed Egyptologist" — a job
@@ -1865,7 +1901,7 @@ function TourDetailV2({ isSaving, navigate, phoneVerification = false, onBookPub
               <section className="sec rv" style={{ borderBottom: 0, marginBottom: 0 }}>
                 <h2>Good to know</h2>
                 <div className="faq">
-                  {[["When is the trip confirmed?", "The moment this date reaches its own GoAhead number — the count is shown on the date itself."], ["Can I pick my own date?", "Yes — use 'start your own' in the dates list. Our team gives it a quick review, it opens for other travelers to join, and nothing is charged unless it reaches GoAhead."], ["What if a date doesn't fill?", "You're never charged for a trip that doesn't run. Nothing is taken before GoAhead, so there is nothing to refund — move to another date or walk away."], ["Who will I travel with?", "A small mix of travelers pooled from operators registered with the Egyptian Ministry of Tourism & Antiquities — a shared group with one licensed guide, never a freelancer."], ["How do payments work?", "You hold a seat now — nothing is charged. Once the date is confirmed we send a secure payment link for the deposit: 10% on a day tour, 25% on a package. The balance is due before you travel."]].map(([q, a]) => (
+                  {[["When is the trip confirmed?", "The moment this date reaches its own GoAhead number — the count is shown on the date itself."], ["Can I pick my own date?", "Yes — use 'start your own' in the dates list. Our team gives it a quick review, it opens for other travelers to join, and nothing is charged unless it reaches GoAhead."], ["What if a date doesn't fill?", "You're never charged for a trip that doesn't run. Nothing is taken before GoAhead, so there is nothing to refund — move to another date or walk away."], ["Who will I travel with?", "A small mix of travelers pooled from operators registered with the Egyptian Ministry of Tourism & Antiquities — a shared group with one licensed guide, never a freelancer."], ["How do payments work?", "You hold a seat now — nothing is charged. Once the date is confirmed we send a secure payment link for the deposit: 10% on a day tour, 25% on a package. The balance is due before you travel."]].filter(([q]) => !(catalogueV2() && q === "Can I pick my own date?")).map(([q, a]) => (
                     <div className="q" key={q}><h4>{q}</h4><p>{a}</p></div>
                   ))}
                 </div>
@@ -1921,7 +1957,7 @@ function TourDetailV2({ isSaving, navigate, phoneVerification = false, onBookPub
                             aria-label={`${formatDate(d.date, { alwaysYear: true })}${d.time ? ` at ${d.time}` : ""} — ${s} of ${ga} joined${left <= 0 ? ", full" : ""}`}
                           >
                             <div className="d-left"><b>{formatDate(d.date, { alwaysYear: true })}{d.time ? ` · ${d.time}` : ""}</b><span>{s} of {ga} joined</span></div>
-                            <span className={`d-right ${cf ? "go" : "form"}`}>{cf ? "GoAhead" : left > 0 ? `${Math.max(0, ga - s)} to go` : "Full"}</span>
+                            <span className={`d-right ${cf ? "go" : "form"}`}>{catalogueV2() && d.catalogueLabel && left > 0 ? d.catalogueLabel : cf ? "GoAhead" : left > 0 ? `${Math.max(0, ga - s)} to go` : "Full"}</span>
                           </button>
                         );
                       })}
@@ -1931,6 +1967,8 @@ function TourDetailV2({ isSaving, navigate, phoneVerification = false, onBookPub
                         <div className="bk-ok" style={{ marginTop: 8 }}>
                           Date request received for {formatDate(reqDone.date, { alwaysYear: true })}{reqDone.code ? ` — code ${reqDone.code}` : ""}. Our team reviews it and emails you shortly. Nothing is charged now.
                         </div>
+                      ) : catalogueV2() ? (
+                        !tour.dates.length && <div className="note" style={{ marginTop: 8 }}>No dates are open for booking right now. New dates are added to the calendar regularly.</div>
                       ) : !reqMode ? (
                         <button type="button" className="date-opt start-own" onClick={() => { setReqMode(true); setReqErr(""); }} aria-label="Start your own date — pick any day, free to request">
                           <span className="plus" aria-hidden="true">+</span>
@@ -2890,7 +2928,7 @@ function EmbedBookTour({ product, refCode, phoneVerification }) {
   // "join" an open date, or "request" a new one. A tour with nothing open
   // starts on the request: sending the visitor to sawa.tours for it was the one
   // step that still left the partner's site.
-  const [mode, setMode] = useState(dates.length ? "join" : "request");
+  const [mode, setMode] = useState(dates.length || catalogueV2() ? "join" : "request");
   const [depId, setDepId] = useState(dates[0]?.id ?? "");
   const [reqDate, setReqDate] = useState("");
   const [matches, setMatches] = useState(null);
@@ -3043,12 +3081,13 @@ function EmbedBookTour({ product, refCode, phoneVerification }) {
               return (
                 <button type="button" key={d.id} className={on ? "eb-date on" : "eb-date"} aria-pressed={on} onClick={() => { setDepId(d.id); setErr(""); }}>
                   <span><b>{formatDate(d.date, { alwaysYear: true })}</b>{!pkg && d.time ? <em> · {d.time}</em> : null}</span>
-                  <span className={go ? "eb-tag go" : "eb-tag"}>{go ? "Confirmed" : `${need} more to confirm`}</span>
+                  <span className={go ? "eb-tag go" : "eb-tag"}>{catalogueV2() && d.catalogueLabel ? d.catalogueLabel : go ? "Confirmed" : `${need} more to confirm`}</span>
                   <span className="eb-left">{Math.max(0, d.maxSeats - n)} seats left</span>
                 </button>
               );
             })}
-            <button type="button" className="eb-switch" onClick={() => pickMode("request")}>None of these work? Request your own date</button>
+            {!catalogueV2() && <button type="button" className="eb-switch" onClick={() => pickMode("request")}>None of these work? Request your own date</button>}
+            {catalogueV2() && !dates.length && <p className="eb-note">No dates are open for booking right now.</p>}
           </fieldset>
         )}
 

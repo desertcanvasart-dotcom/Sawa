@@ -20,6 +20,7 @@
 // scheduler enabled?" would need a DATABASE_URL — which is exactly what the
 // tests have to ask without one.
 
+import { catalogueV2Enabled } from "../features.js";
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 // Not on boot: a deploy would run it while the app is still warming, and a
@@ -110,6 +111,7 @@ async function alert(log, { base, lines, stale }) {
 // Go live by setting GOAHEAD_ALERT_DRY_RUN=0 once the recipient is agreed.
 const HOUR_MS = 60 * 60 * 1000;
 const EMAIL_RETRY_MS = 15 * 60 * 1000;
+const CATALOGUE_STATUS_MS = 15 * 60 * 1000;
 
 export function goAheadAlertDryRun(env = process.env) {
   return env.GOAHEAD_ALERT_DRY_RUN !== "0";
@@ -308,6 +310,24 @@ export function startJobScheduler(env = process.env) {
     return retryPendingEmails({ log: opts.log });
   });
 
+  // Model phase 1 — the catalogue calendar. The generator runs daily (its
+  // window is 90 or 365 days, so a day's delay costs nothing); the status job
+  // every 15 minutes, so a cut-off is acted on within a quarter of an hour. Both
+  // do nothing until migration 047 is applied, and neither moves money.
+  const catalogueGenerateTick = () => runSafely("catalogue-generate", async (opts) => {
+    const { runCatalogueGenerate } = await import("./catalogue-calendar.js");
+    return runCatalogueGenerate({ log: opts.log, env });
+  });
+  const catalogueStatusTick = () => runSafely("catalogue-status", async (opts) => {
+    const { runCatalogueStatus } = await import("./catalogue-calendar.js");
+    return runCatalogueStatus({ log: opts.log });
+  });
+  const catGenFirst = setTimeout(catalogueGenerateTick, FIRST_RUN_DELAY_MS * 2);
+  const catGenRepeat = setInterval(catalogueGenerateTick, DAY_MS);
+  const catStatusFirst = setTimeout(catalogueStatusTick, FIRST_RUN_DELAY_MS * 4);
+  const catStatusRepeat = setInterval(catalogueStatusTick, CATALOGUE_STATUS_MS);
+  for (const t of [catGenFirst, catGenRepeat, catStatusFirst, catStatusRepeat]) t.unref();
+
   const first = setTimeout(tick, FIRST_RUN_DELAY_MS);
   const repeat = setInterval(tick, DAY_MS);
   const auditFirst = setTimeout(auditTick, FIRST_RUN_DELAY_MS * 5);
@@ -335,6 +355,8 @@ export function startJobScheduler(env = process.env) {
   console.log(dryRun
     ? "[jobs] cancel-unconfirmed is DRY-RUN — it will log what it would cancel and email, and do neither. Set CANCEL_JOB_DRY_RUN=0 to go live."
     : "[jobs] cancel-unconfirmed is LIVE — it will cancel departures and email travelers.");
+  console.log(`[jobs] catalogue-generate in ${(FIRST_RUN_DELAY_MS * 2) / 1000}s, then every 24h; catalogue-status every 15 min — `
+    + (catalogueV2Enabled(env) ? "catalogue_v2 is ON: generated departures are bookable" : "catalogue_v2 is off: catalogue tables only, nothing public"));
   console.log(`[jobs] email-retry in ${(FIRST_RUN_DELAY_MS * 3) / 1000}s, then every 15 min — re-sends failed or interrupted emails`);
   console.log(`[jobs] audit-watch in ${(FIRST_RUN_DELAY_MS * 5) / 1000}s, then every 24h, against ${auditWatchBase(env)} — read-only, writes nothing`);
   console.log(goAheadDry
@@ -349,5 +371,7 @@ export function startJobScheduler(env = process.env) {
     clearTimeout(auditFirst); clearInterval(auditRepeat);
     clearTimeout(alertFirst); clearInterval(alertRepeat);
     clearTimeout(noticeFirst); clearInterval(noticeRepeat);
+    clearTimeout(catGenFirst); clearInterval(catGenRepeat);
+    clearTimeout(catStatusFirst); clearInterval(catStatusRepeat);
   };
 }
