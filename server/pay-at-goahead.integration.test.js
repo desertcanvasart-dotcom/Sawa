@@ -829,3 +829,87 @@ test("the Terms are versioned: catalog and legacy series; each booking records t
   const legacyBooking = await one("SELECT terms_version_id FROM pledges WHERE departure_id = $1 AND payment_mode = 'legacy_link' LIMIT 1", [deps.h.legacy]);
   assert.equal(Number(legacyBooking.terms_version_id), leg1.id);
 });
+
+// ---------------------------------------------------------------- the seller and the collecting agent (27 Sep 2026)
+test("seller disclosure: 'a licensed Sawa partner' before assignment; from it, the operator's legal name and licence as seller and the collecting agent as payee, on the request, receipt, voucher and booking page", { skip }, async () => {
+  const { BRAND } = await import("./brand.js");
+  const payee = `${BRAND.legalName}, collecting agent`;
+  await ops.updateOperator(db, X, { travellerLicenceNo: "TL-4471" });
+  const d = await freshDeparture();
+  const p = await book(d, 4, { email: "seller@example.test" });
+  await cat.runStatusJob({});
+  await tick(Date.now());
+  sent.length = 0;
+  await link(p, Date.now());
+  const linkMail = sent.find((m) => m.kind === "pay_at_goahead_link");
+  assert.match(linkMail.text, /Operated by a licensed Sawa partner\. Payee: /);
+  assert.ok(linkMail.text.includes(`Payee: ${payee}.`));
+  const code = (await one("SELECT booking_code FROM pledges WHERE id = $1", [p])).booking_code;
+  let page = (await (await fetch(`${on}/api/public/bookings/${code}`)).json()).booking.payAtGoAhead;
+  assert.deepEqual([page.seller, page.sellerLine, page.payee, page.voucher], [null, "Operated by a licensed Sawa partner", payee, null]);
+
+  // Assigned: the operator is named from now on.
+  await asg.assignByAdmin(db, { departureId: d.id, operatorId: X, by: "ops" });
+  page = (await (await fetch(`${on}/api/public/bookings/${code}`)).json()).booking.payAtGoAhead;
+  assert.equal(page.sellerLine, "Sold by Nile Tours S.A.E., licence no. TL-4471");
+  sent.length = 0;
+  const r = await reqOf(p);
+  const paid = await pag.markRequestPaid(db, { requestId: Number(r.id), providerReference: "TAB-SELLER", by: "ops", send });
+  assert.match(paid.receipt.receiptNo, /^R-\d{4}-\d{6}$/);
+  const receipt = sent.find((m) => m.kind === "pay_at_goahead_receipt");
+  assert.ok(receipt.text.includes(`Issued by ${BRAND.legalName} (Commercial Registration ${BRAND.registrationNumber}), collecting agent, on behalf of Nile Tours S.A.E., licence no. TL-4471.`), receipt.text);
+  const stored = await reqOf(p);
+  assert.deepEqual([stored.seller_legal_name, stored.seller_licence_no, stored.receipt_no], ["Nile Tours S.A.E.", "TL-4471", paid.receipt.receiptNo]);
+  page = (await (await fetch(`${on}/api/public/bookings/${code}`)).json()).booking.payAtGoAhead;
+  assert.deepEqual([page.voucher.bookingCode, page.voucher.seller, page.voucher.payee, page.voucher.receiptNo],
+    [code, "Sold by Nile Tours S.A.E., licence no. TL-4471", payee, paid.receipt.receiptNo]);
+  // The reminder carries the same lines (another booking, still unpaid).
+  const p2 = await book(d, 1, { email: "remind@example.test" });
+  const now = Date.now();
+  await tick(now);
+  await link(p2, now);
+  sent.length = 0;
+  await tick(now + 24 * HOUR + MIN);
+  const reminder = sent.find((m) => m.kind === "pay_at_goahead_reminder" && m.to === "remind@example.test");
+  assert.ok(reminder.text.includes("Sold by Nile Tours S.A.E., licence no. TL-4471.") && reminder.text.includes(`Payee: ${payee}.`), reminder.text);
+});
+
+test("the settlement statement distributes the collections: gross, payment costs, agency commission, the operator entitlement and the agent's commission", { skip }, async () => {
+  const { BRAND } = await import("./brand.js");
+  // Departure D (the guarantee test): 2 travelers paid €190, agency commission €20, entitlement 5,900 EGP.
+  await fin.setFxRate(db, { day: deps.d.date, egpPerEur: 50, by: "it" });
+  const f = await settle.departureDistribution(db, deps.d.id, { entitlementEgp: 5900 });
+  assert.deepEqual([f.grossEur, f.agencyCommissionEur, f.entitlementEur, f.paymentCostsEur], [190, 20, 118, 0]);
+  assert.equal(f.agentCommissionEur, 52, "190 − 20 − 118");
+  assert.equal(f.guaranteeEur, 0);
+  assert.equal(f.lines.at(-1).label, `${BRAND.legalName} commission`);
+  // With a 3% fee and a higher rate, collections fall short: the guarantee.
+  await fin.setFeeSetting(db, { percent: 3, fixedEur: 0, by: "it" });
+  await fin.setFxRate(db, { day: deps.d.date, egpPerEur: 25, by: "it" });
+  const g = await settle.departureDistribution(db, deps.d.id, { entitlementEgp: 5900 });
+  assert.deepEqual([g.paymentCostsEur, g.entitlementEur, g.agentCommissionEur, g.guaranteeEur], [5.7, 236, 0, 71.7]);
+  assert.ok(g.lines.some((l) => l.key === "minimum_departure_guarantee" && l.label === `Minimum Departure Guarantee, paid by ${BRAND.legalName}`));
+  // The statement carries it, and so does its PDF.
+  const st = await settle.statementFor(db, deps.d.id);
+  assert.ok(st.snapshot.distribution, "the statement snapshot has the distribution");
+  const { statementPdf } = await import("./pdf.js");
+  const pdf = statementPdf({ ...st, snapshot: { ...st.snapshot, distribution: g } }).toString("latin1");
+  assert.match(pdf, /Distribution of collections/);
+  assert.match(pdf, /Minimum Departure Guarantee/);
+  assert.ok(pdf.includes(`Sawa - ${BRAND.legalName}, collecting agent`));
+  assert.ok(!/Capital Travel/.test(pdf));
+  await db.query("DELETE FROM finance_settings WHERE key = 'payment_fees'");
+});
+
+test("the Capital Travel Service operator record stays pending and can't be activated", { skip }, async () => {
+  const cts = await ops.createOperator(db, { legalName: "Capital Travel Service" }, "it");
+  execFileSync(process.execPath, [join(ROOT, "server", "db", "migrate.js")], { env: { ...process.env, DATABASE_URL: dbUrl, PGSSL: "false" }, stdio: "pipe" });
+  const op = await ops.getOperator(db, cts.id);
+  assert.equal(op.status, "pending");
+  assert.match(op.activationBlocked, /not involved in Sawa/);
+  for (const kind of ["tourism_license", "etaa_membership", "liability_insurance", "vehicle_insurance"]) {
+    await ops.addDocument(db, cts.id, { kind, number: "1", expiresOn: shiftDate(today(), 400) }, { by: "it" });
+  }
+  await assert.rejects(ops.setOperatorStatus(db, cts.id, "active", { by: "it" }), /must not be activated/);
+  assert.equal((await ops.getOperator(db, cts.id)).status, "pending");
+});

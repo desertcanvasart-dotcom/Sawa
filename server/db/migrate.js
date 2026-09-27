@@ -61,6 +61,7 @@ const MIGRATIONS = [
   { name: "050_settlements_commissions", file: "schema_050_settlements_commissions.sql" },
   { name: "051_pay_at_goahead", file: "schema_051_pay_at_goahead.sql" },
   { name: "052_pay_safeguards_terms", file: "schema_052_pay_safeguards_terms.sql" },
+  { name: "053_seller_disclosure", file: "schema_053_seller_disclosure.sql" },
 ];
 
 async function main() {

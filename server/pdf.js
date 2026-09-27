@@ -6,6 +6,8 @@
 //
 // Characters outside Latin-1 are replaced (the standard Helvetica font has no
 // Arabic glyphs); names are kept as close as the font allows.
+import { BRAND } from "./brand.js";
+
 const W = 595.28;
 const H = 841.89;
 const MARGIN = 50;
@@ -85,8 +87,11 @@ export function textPdf(items, { title = "Statement" } = {}) {
 export function statementPdf(statement) {
   const s = statement.snapshot || {};
   const egp = (n) => (n == null ? "-" : `EGP ${Number(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
+  const eur = (n) => (n == null ? "-" : `EUR ${Number(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
   const items = [
-    { text: "Sawa - Capital Travel Service", size: 9 },
+    // The collecting agent issues the statement; the entity's name comes from
+    // BRAND, the one place it is written (entity-disclosure.test.js).
+    { text: `Sawa - ${s.collectingAgent?.name || BRAND.legalName}, collecting agent`, size: 9 },
     { text: "Settlement statement", size: 18, bold: true, gap: 6 },
     { text: `${s.operator?.legalName || ""}`, size: 12, bold: true },
     { text: `${s.departure?.code || ""} ${s.departure?.title || ""}`, size: 11 },
@@ -125,6 +130,15 @@ export function statementPdf(statement) {
         { text: `${egp(r.amountEgp)}: ${r.reason} Outstanding ${egp(r.outstandingEgp)}; set off against your next advance or balance.`, size: 9, gap: 0 },
         ...(r.setOffAgainst || []).map((x) => ({ text: `   recovered ${egp(x.amountEgp)} from the ${x.payable} of ${x.departure}`, size: 9, gap: 0 })),
       ]),
+      { text: "", gap: 6 },
+    ] : []),
+    // The distribution of the departure's collections (27 Sep 2026), in EUR.
+    ...(s.distribution ? [
+      { rule: true },
+      { text: "Distribution of collections (EUR)", size: 11, bold: true, gap: 4 },
+      ...(s.distribution.lines || []).map((l) => ({ text: `${l.label}: ${eur(l.amountEur)}`, size: 10, bold: l.key === "agent_commission" || l.key === "minimum_departure_guarantee", gap: 0 })),
+      ...(s.distribution.problem ? [{ text: `Not complete: ${s.distribution.problem}.`, size: 9 }] : []),
+      ...(s.distribution.fx ? [{ text: `Operator entitlement ${egp(s.distribution.entitlementEgp)} at ${s.distribution.fx.egpPerEur} EGP per EUR (${s.distribution.fx.day}).`, size: 8 }] : []),
       { text: "", gap: 6 },
     ] : []),
     { text: "", gap: 4 },

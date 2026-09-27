@@ -145,3 +145,17 @@ export function shortDeadlineError({ dueAtMs, cutoffAtMs, now }) {
   if (Number(dueAtMs) > Number(cutoffAtMs)) return "The deadline can't be after the cut-off.";
   return null;
 }
+
+// ---------------------------------------------------------------- the seller
+// The operator assigned at GoAhead is the seller of each departure; Sawa's
+// operating company is its commercial and payment-collection agent (decided
+// 27 Sep 2026). Before the assignment no operator is named.
+export const SELLER_PENDING = "Operated by a licensed Sawa partner";
+export const payeeLine = (agentName) => `${agentName}, collecting agent`;
+
+// What a document says about the seller: the operator's legal name and the
+// licence number shown to travelers, or the pending line before assignment.
+export function sellerLine(seller) {
+  if (!seller?.legalName) return SELLER_PENDING;
+  return `Sold by ${seller.legalName}${seller.licenceNo ? `, licence no. ${seller.licenceNo}` : ""}`;
+}

@@ -32,6 +32,7 @@ import {
   DEFAULT_WINDOW_HOURS, WINDOW_HOURS_CHOICES, DEFAULT_OFFER_HOURS, payDeadline, reminderDue, releaseWarningDue,
   releaseDue, extensionError, paymentStanding, nextOffer, offerExpiresAt,
   linkAlertDue, decisionDueAt, tooLateToStart, shortDeadlineError, UNLINKED_DECISIONS, MIN_TRAVELER_HOURS,
+  sellerLine, payeeLine, SELLER_PENDING,
 } from "../shared/pay-at-goahead.js";
 import { tierAt, hoursBeforeStart, refundFor } from "../shared/cancellation-tiers.js";
 
@@ -155,6 +156,30 @@ async function payerFor(c, pledge) {
   return { payer: "traveller", amount: Number(pledge.booking_total) || 0, to, name: pledge.customers || null, invoiceId: null };
 }
 
+// ---------------------------------------------------------------- the seller
+// The operator assigned at GoAhead sells the departure; Sawa's operating
+// company (BRAND.legalName) is its commercial and payment-collection agent
+// (decided 27 Sep 2026). From the assignment (offered or acknowledged), the
+// documents name the operator; before it, "a licensed Sawa partner". The
+// licence shown is the one entered for travelers (migration 053), else the
+// tourism licence on the record.
+export async function sellerOf(c, departureId) {
+  const r = (await c.query(
+    `SELECT o.* FROM catalogue_assignments a JOIN operators o ON o.id = a.operator_id
+      WHERE a.departure_id = $1 AND a.state IN ('offered', 'acknowledged') ORDER BY a.id DESC LIMIT 1`, [departureId])).rows[0];
+  if (!r) return null;
+  return { operatorId: Number(r.id), legalName: r.legal_name, licenceNo: r.traveller_licence_no || r.tourism_license_no || null };
+}
+
+export const collectingAgent = () => ({
+  name: BRAND.legalName, registrationNo: BRAND.registrationNumber, payee: payeeLine(BRAND.legalName),
+});
+
+// The two lines every traveler document carries.
+export function sellerAndPayee(seller) {
+  return { seller: sellerLine(seller), payee: collectingAgent().payee };
+}
+
 // ---------------------------------------------------------------- requests
 // One request for a booking on a departure that is going ahead. Idempotent:
 // a booking with a live request (awaiting a link, sent or paid) gets none.
@@ -226,11 +251,13 @@ async function sendLink(c, { requestId, linkUrl, by, now, send, decided = null }
   const request = mapPayRequest(upd);
   if (send && who.to) {
     const { payAtGoAheadLinkEmail } = await import("./email.js");
+    const parties = sellerAndPayee(await sellerOf(c, departure.id));
     const agencyTraveller = who.payer === "traveller" && pledge.terms_fixed_by === "agency" && !pledge.traveller_terms_accepted_at;
     await send(payAtGoAheadLinkEmail({
       to: who.to, name: who.name, title: departure.product.title, dateLabel: dateLabel(departure.date), amount: request.amountEur,
       dueAt: request.dueAt, url: linkUrl, bookingCode: request.reference, agencyBilled: who.payer === "agency",
       termsLink: agencyTraveller ? `${site()}/booking/${encodeURIComponent(request.reference)}` : null,
+      ...parties,
     })).catch(() => ({ ok: false }));
   }
   return { ...request, shortWindow: deadline.shortWindow };
@@ -332,7 +359,7 @@ export async function attachLink(db, { requestId, linkUrl, by, now = Date.now(),
 
 // The payment arrived: ops mark it paid with the provider's reference (a
 // webhook later). A released seat can't be marked paid; reinstate it first.
-export async function markRequestPaid(db, { requestId, providerReference, by, now = Date.now() }) {
+export async function markRequestPaid(db, { requestId, providerReference, by, now = Date.now(), send = null }) {
   return inTx(db, async (c) => {
     const r = (await c.query("SELECT * FROM payment_requests WHERE id = $1 FOR UPDATE", [requestId])).rows[0];
     if (!r) throw new CatalogueError(404, "Payment request not found.");
@@ -354,8 +381,43 @@ export async function markRequestPaid(db, { requestId, providerReference, by, no
     if (r.payer === "agency") {
       await c.query("UPDATE agency_invoices SET state = 'paid', paid_at = $2 WHERE pledge_id = $1 AND state = 'due'", [r.pledge_id, new Date(now)]);
     }
-    return mapPayRequest(upd);
+    const receipt = await issueReceipt(c, { request: upd, now, send });
+    return { ...mapPayRequest(upd), receipt };
   });
+}
+
+// The receipt: issued by the collecting agent on behalf of the seller, with
+// the seller as it stood when the payment was recorded (migration 053). The
+// number is the year and the request id.
+async function issueReceipt(c, { request, now, send }) {
+  const hasColumns = (await c.query(
+    "SELECT 1 FROM information_schema.columns WHERE table_name = 'payment_requests' AND column_name = 'receipt_no'")).rowCount > 0;
+  const seller = await sellerOf(c, Number(request.departure_id));
+  const receiptNo = `R-${new Date(now).getUTCFullYear()}-${String(request.id).padStart(6, "0")}`;
+  if (hasColumns) {
+    await c.query(
+      `UPDATE payment_requests SET seller_operator_id = $2, seller_legal_name = $3, seller_licence_no = $4, receipt_no = $5, receipt_issued_at = $6
+        WHERE id = $1 AND receipt_no IS NULL`,
+      [request.id, seller?.operatorId ?? null, seller?.legalName ?? null, seller?.licenceNo ?? null, receiptNo, new Date(now)]);
+  }
+  const agent = collectingAgent();
+  const out = {
+    receiptNo, issuedAt: new Date(now).toISOString(), amountEur: Number(request.amount_eur), reference: request.reference,
+    issuer: `${agent.name} (Commercial Registration ${agent.registrationNo}), collecting agent`,
+    onBehalfOf: seller ? `${seller.legalName}${seller.licenceNo ? `, licence no. ${seller.licenceNo}` : ""}` : SELLER_PENDING.replace(/^Operated by /, "").replace(/^a /, "the ") + " operating this departure",
+    seller, payee: agent.payee,
+  };
+  if (send && request.emailed_to) {
+    const pledge = (await c.query("SELECT customers FROM pledges WHERE id = $1", [request.pledge_id])).rows[0];
+    const departure = await departureFor(c, { id: Number(request.departure_id) });
+    const { payAtGoAheadReceiptEmail } = await import("./email.js");
+    await send(payAtGoAheadReceiptEmail({
+      to: request.emailed_to, name: request.payer === "traveller" ? pledge?.customers : null, title: departure.product.title,
+      dateLabel: dateLabel(departure.date), amount: out.amountEur, bookingCode: request.reference, receiptNo,
+      paidAt: out.issuedAt, issuer: out.issuer, onBehalfOf: out.onBehalfOf,
+    })).catch(() => ({ ok: false }));
+  }
+  return out;
 }
 
 // A later deadline for one traveler, with a reason. The first deadline is
@@ -741,7 +803,20 @@ export async function bookingPayView(db, { pledgeId }) {
   const terms = await bookingTerms(db, { versionId: p.cancellation_tier_version_id, productType: departure.product.type });
   const { termsVersionById } = await import("./terms-versions.js");
   const doc = p.terms_version_id ? await termsVersionById(db, p.terms_version_id) : null;
+  // Seller disclosure: the assigned operator, or the pending line; the payee is
+  // the collecting agent. A paid booking has its voucher.
+  const seller = await sellerOf(db, departure.id);
+  const parties = sellerAndPayee(seller);
+  const paid = r?.state === "paid";
+  const receipt = paid ? (await db.query("SELECT * FROM payment_requests WHERE id = $1", [r.id])).rows[0] : null;
   return {
+    seller: seller ? { legalName: seller.legalName, licenceNo: seller.licenceNo } : null,
+    sellerLine: parties.seller, payee: parties.payee,
+    voucher: paid ? {
+      bookingCode: p.booking_code, title: departure.product.title, date: departure.date, seats: Number(p.seats),
+      travellers: Array.isArray(p.traveller_names) ? p.traveller_names : [], pickupPoint: p.pickup_point || null,
+      seller: parties.seller, payee: parties.payee, receiptNo: receipt?.receipt_no || null,
+    } : null,
     mode: "pay_at_goahead",
     request: r && ["sent", "paid", "released"].includes(r.state)
       ? { state: r.state, amountEur: r.amountEur, dueAt: r.dueAt, linkUrl: r.state === "sent" ? r.linkUrl : null, payer: r.payer }
@@ -866,6 +941,7 @@ export async function runPayAtGoAheadTick({ db = pool, now = Date.now(), send = 
           await send(payAtGoAheadReminderEmail({
             to: r.emailedTo, name: r.payer === "traveller" ? row.customers : null, title: row.title, dateLabel: dateLabel(row.date),
             amount: r.amountEur, dueAt: r.dueAt, url: r.linkUrl, bookingCode: r.reference,
+            ...sellerAndPayee(await sellerOf(db, r.departureId)),
           })).catch(() => ({ ok: false }));
         }
       }

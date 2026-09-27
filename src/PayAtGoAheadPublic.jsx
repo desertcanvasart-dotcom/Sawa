@@ -45,6 +45,10 @@ export function BookingPayAtGoAhead({ code, view, onChanged }) {
       {r?.state === "sent" && r.payer === "agency" && <p>Your agency pays for this booking. It is due by {due(r.dueAt)}.</p>}
       {r?.state === "paid" && <p><b>Paid.</b> Thank you — see you on the day.</p>}
       {r?.state === "released" && <p>This seat was released because payment wasn't received by the deadline.</p>}
+      {/* Seller disclosure: the operator assigned at GoAhead sells; Sawa's
+          operating company collects the payment as its agent. */}
+      <p className="booking-seller"><small>{view.sellerLine}. Payee: {view.payee}.</small></p>
+      {view.voucher && <BookingVoucher voucher={view.voucher} />}
       {t && (
         <div className="booking-terms">
           <p><b>Cancellation after GoAhead</b> (terms v{t.version}{t.fixedBy === "agency" ? ", as your agency booked" : ""})</p>
@@ -59,6 +63,20 @@ export function BookingPayAtGoAhead({ code, view, onChanged }) {
           {err && <div className="form-error" role="alert">{err}</div>}
         </div>
       )}
+    </div>
+  );
+}
+
+// The voucher for a paid booking: what the traveler shows on the day. Printable.
+function BookingVoucher({ voucher: v }) {
+  return (
+    <div className="booking-voucher" style={{ border: "1px solid currentColor", borderRadius: 8, padding: 12, margin: "12px 0" }}>
+      <p><b>Voucher</b> · booking {v.bookingCode}{v.receiptNo ? ` · receipt ${v.receiptNo}` : ""}</p>
+      <p>{v.title}, {v.date} · {v.seats} traveler{v.seats === 1 ? "" : "s"}</p>
+      {v.travellers?.length > 0 && <p>{v.travellers.join(", ")}</p>}
+      {v.pickupPoint && <p>Pickup: {v.pickupPoint}</p>}
+      <p><small>{v.seller}. Payee: {v.payee}.</small></p>
+      <button type="button" className="btn-pill" onClick={() => window.print()}>Print the voucher</button>
     </div>
   );
 }

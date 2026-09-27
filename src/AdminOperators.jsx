@@ -141,6 +141,9 @@ export function OperatorsSection({ flash, isSuperAdmin }) {
 const OPERATOR_TEXT_FIELDS = [
   ["legalName", "Legal name"], ["tradingName", "Trading name"],
   ["tourismLicenseNo", "Ministry of Tourism license no."], ["etaaNo", "ETAA membership no."],
+  // Printed for travelers where this operator is named as seller (payment
+  // request, receipt, voucher, booking page). Empty: the Ministry license no.
+  ["travellerLicenceNo", "License no. shown to travelers (as seller)"],
   ["commercialRegistrationNo", "Commercial registration no."], ["taxRegistrationNo", "Tax registration no."],
   ["email", "Email (assignment notices)"], ["phone", "Phone"], ["whatsapp", "WhatsApp (stored; not used yet)"],
 ];
@@ -185,7 +188,8 @@ function OperatorEditor({ id, products, agencies, flash, isSuperAdmin, onClose }
         <h2>Status</h2>
         <p className="field-hint">Activating needs all four documents current. The daily check suspends an operator whose document expires and reactivates it when you upload a valid replacement. Removal is always a manual decision.</p>
         <div className="cat-actions">
-          {op.status !== "active" && op.status !== "removed" && <button className="btn-primary" disabled={busy} onClick={() => run(() => call(`/admin/operators/${id}/status`, "POST", { status: "active" }), "Operator activated.")}>Activate</button>}
+          {op.activationBlocked && <div className="auth-error" role="status">{op.activationBlocked}</div>}
+          {op.status !== "active" && op.status !== "removed" && !op.activationBlocked && <button className="btn-primary" disabled={busy} onClick={() => run(() => call(`/admin/operators/${id}/status`, "POST", { status: "active" }), "Operator activated.")}>Activate</button>}
           {op.status === "active" && <button className="btn-ghost" disabled={busy} onClick={() => { const reason = window.prompt("Reason for suspending"); if (reason) run(() => call(`/admin/operators/${id}/status`, "POST", { status: "suspended", reason }), "Operator suspended."); }}>Suspend</button>}
           {op.status !== "removed" && <button className="btn-ghost" disabled={busy} onClick={() => { const reason = window.prompt("Reason for removing this operator from the roster"); if (reason) run(() => call(`/admin/operators/${id}/status`, "POST", { status: "removed", reason }), "Operator removed."); }}>Remove</button>}
           {op.status === "removed" && <button className="btn-ghost" disabled={busy} onClick={() => run(() => call(`/admin/operators/${id}/status`, "POST", { status: "pending" }), "Operator moved back to pending.")}>Reinstate as pending</button>}
@@ -894,6 +898,16 @@ function SettlementBlock({ departureId, flash }) {
           </p>
           {st.disputeReason && <p className="field-hint">Disputed by {st.disputedBy}: {st.disputeReason}</p>}
           {st.resolutionNote && <p className="field-hint">Resolved by {st.resolvedBy}: {st.resolutionNote}</p>}
+          {/* The distribution of the departure's collections (27 Sep 2026). */}
+          {st.snapshot?.distribution && (
+            <table className="dash-table"><tbody>
+              {(st.snapshot.distribution.lines || []).map((l) => (
+                <tr key={l.key}><td>{l.key === "agent_commission" || l.key === "minimum_departure_guarantee" ? <b>{l.label}</b> : l.label}</td>
+                  <td className="tnum">EUR {Number(l.amountEur).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td></tr>
+              ))}
+              {st.snapshot.distribution.problem && <tr><td colSpan={2}><span className="tag tag-warn">{st.snapshot.distribution.problem}</span></td></tr>}
+            </tbody></table>
+          )}
           <div className="cat-actions" style={{ justifyContent: "flex-start" }}>
             <button className="btn-ghost sm" onClick={() => apiFetch(`/admin/catalogue/departures/${departureId}/statement.pdf`).then((r) => r.blob()).then((b) => window.open(URL.createObjectURL(b), "_blank", "noopener"))}>PDF</button>
             {st.state === "draft" && <button className="btn-primary sm" disabled={busy} onClick={() => run(() => call(`/admin/catalogue/departures/${departureId}/statement/send`, "POST", {}), "Statement sent to the operator.")}>Send to operator</button>}

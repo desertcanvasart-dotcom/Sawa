@@ -21,7 +21,7 @@ import { applySetoffs, releaseSetoffs, syncBalanceReceivable, createReceivable, 
 import { shiftDate } from "../shared/catalogue.js";
 import { rateFieldsFor } from "../shared/operators.js";
 import {
-  advanceFor, operatorBalance, deductionRoom, egyptBusinessDaysAfter, balanceDueOn, statementAutoAcceptAt,
+  advanceFor, operatorBalance, deductionRoom, egyptBusinessDaysAfter, balanceDueOn, statementAutoAcceptAt, collectionsDistribution,
 } from "../shared/settlement-rules.js";
 
 const inTx = (db, fn) => (db === pool ? withTransaction(fn) : fn(db));
@@ -234,6 +234,45 @@ export async function settlementFigures(c, departureId) {
   return { departure: d, party, expected, adjustments, deductions: round2(deductions), reimbursements: round2(reimbursements), advance, advanceRow, ...bal };
 }
 
+// How the departure's collections are distributed (decided 27 Sep 2026): Gross
+// Collections, less payment costs, agency commission and the operator
+// entitlement (the rate card, unchanged), leaving the collecting agent's
+// commission; a Minimum Departure Guarantee where collections fall short.
+// In EUR: the entitlement (EGP) is converted at the rate on the departure's
+// date, or the latest before it. No rate: shown as missing, never guessed.
+export async function departureDistribution(c, departureId, { entitlementEgp }) {
+  const d = (await c.query("SELECT cd.date, cd.legacy_departure_id FROM catalogue_departures cd WHERE cd.id = $1", [departureId])).rows[0];
+  const hasRequests = (await c.query("SELECT to_regclass('public.payment_requests') AS t")).rows[0].t != null;
+  const charges = [];
+  if (hasRequests) {
+    for (const r of (await c.query("SELECT amount_eur FROM payment_requests WHERE departure_id = $1 AND state = 'paid'", [departureId])).rows) charges.push(Number(r.amount_eur));
+  }
+  for (const r of (await c.query(
+    `SELECT b.amount FROM booking_payments b JOIN pledges p ON p.id = b.pledge_id WHERE p.departure_id = $1 AND b.state = 'paid'`, [d?.legacy_departure_id])).rows) {
+    charges.push(Number(r.amount));
+  }
+  const refunded = hasRequests ? Number((await c.query(
+    `SELECT COALESCE(SUM(f.amount_eur), 0) AS n FROM payment_refunds f JOIN payment_requests r ON r.id = f.request_id
+      WHERE r.departure_id = $1 AND f.state <> 'cancelled'`, [departureId])).rows[0].n) : 0;
+  const gross = round2(charges.reduce((s2, x) => s2 + x, 0) - refunded);
+  const fees = (await c.query("SELECT value FROM finance_settings WHERE key = 'payment_fees'")).rows[0]?.value || null;
+  const paymentCosts = fees ? round2(charges.reduce((s2, x) => s2 + x * (Number(fees.percent) / 100) + Number(fees.fixedEur || 0), 0)) : 0;
+  const agency = Number((await c.query(
+    "SELECT COALESCE(SUM(COALESCE(earned_eur, CASE WHEN state = 'pending' THEN amount_eur END)), 0) AS n FROM agency_commissions WHERE departure_id = $1",
+    [departureId])).rows[0].n);
+  const fx = d ? (await c.query("SELECT day, egp_per_eur FROM fx_rates WHERE day <= $1 ORDER BY day DESC LIMIT 1", [d.date])).rows[0] : null;
+  const entitlementEur = entitlementEgp != null && fx ? round2(Number(entitlementEgp) / Number(fx.egp_per_eur)) : null;
+  const out = collectionsDistribution({
+    grossEur: gross, paymentCostsEur: paymentCosts, agencyCommissionEur: agency, entitlementEur, agentName: BRAND.legalName,
+  });
+  return {
+    ...out, currency: "EUR", entitlementEgp: entitlementEgp ?? null,
+    fx: fx ? { day: ymd(fx.day), egpPerEur: Number(fx.egp_per_eur) } : null,
+    feesMissing: !fees,
+    problem: out.problem || (entitlementEgp != null && !fx ? "exchange rate missing" : null),
+  };
+}
+
 async function statementSnapshot(c, departureId, figures = null) {
   const f = figures || await settlementFigures(c, departureId);
   const manifest = (await c.query("SELECT frozen_at, travelers, seat_count FROM catalogue_manifests WHERE departure_id = $1", [departureId])).rows[0];
@@ -269,6 +308,9 @@ async function statementSnapshot(c, departureId, figures = null) {
         netBalance: f.balance == null ? null : round2(Math.max(0, f.balance) - balanceSetoff),
       };
     })() : { setoffs: [], receivables: [], netBalance: f.balance }),
+    // The distribution of the departure's collections (27 Sep 2026).
+    distribution: await departureDistribution(c, departureId, { entitlementEgp: f.expected.total }),
+    collectingAgent: { name: BRAND.legalName, registrationNo: BRAND.registrationNumber },
     generatedAt: new Date().toISOString(),
   };
 }
