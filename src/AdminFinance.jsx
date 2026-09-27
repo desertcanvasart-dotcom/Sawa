@@ -10,7 +10,7 @@ import { apiFetch } from "./supabaseClient";
 const money = (currency, n) => (n == null ? "—" : `${currency} ${Number(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
 const dayLabel = (ymd) => (ymd ? new Intl.DateTimeFormat("en-US", { timeZone: "UTC", month: "short", day: "numeric", year: "numeric" }).format(new Date(`${ymd}T12:00:00Z`)) : "—");
 const STANDING_TONE = { due: "", overdue: "tag-off", paid: "tag-on", on_hold: "tag-warn", draft: "tag-warn" };
-const STANDING_LABEL = { due: "Due", overdue: "Overdue", paid: "Paid", on_hold: "On hold", draft: "Draft" };
+const STANDING_LABEL = { due: "Due", overdue: "Overdue", paid: "Paid", offset: "Set off", on_hold: "On hold", draft: "Draft" };
 
 async function call(path, method = "GET", body) {
   const r = await apiFetch(path, body === undefined ? { method } : { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
@@ -57,6 +57,15 @@ function Owed({ flash, isSuperAdmin }) {
       {data?.overdue?.overdue > 0 && (
         <div className="auth-error" role="status"><AlertTriangle size={14} /> {data.overdue.overdue} overdue ({data.overdue.operator} to operators, {data.overdue.agency} with agencies).</div>
       )}
+      {data?.receivables?.length > 0 && (
+        <div className="dash-card" style={{ marginBottom: 12 }}>
+          <h2>Owed to Sawa by operators</h2>
+          <p className="field-hint">Set off automatically against each operator's next advance or balance (clause 9.4), or repaid by transfer.</p>
+          <table className="dash-table"><tbody>{data.receivables.map((r) => (
+            <tr key={r.operatorId}><td>{r.name}</td><td className="tnum">{money("EGP", r.outstandingEgp)}</td><td className="field-hint">{r.count} item{r.count === 1 ? "" : "s"}</td></tr>
+          ))}</tbody></table>
+        </div>
+      )}
       {data?.legacy && (
         <p className="field-hint">Legacy departures (existing settlement tools): <b>{data.legacy.open}</b> still open{data.legacy.lastDate ? <>, the last on <b>{dayLabel(data.legacy.lastDate)}</b></> : ""}.</p>
       )}
@@ -82,13 +91,15 @@ function Owed({ flash, isSuperAdmin }) {
                   <td>{i.type}{i.direction === "in" && <div className="field-hint">money in</div>}</td>
                   <td>{i.party.name}</td>
                   <td>{i.departure ? <>{i.departure.label}<div className="field-hint">{dayLabel(i.departure.date)}</div></> : "—"}</td>
-                  <td className="tnum">{money(i.currency, i.amount)}</td>
+                  <td className="tnum">{money(i.currency, i.amount)}
+                    {i.setoffEgp > 0 && <div className="field-hint">{money(i.currency, i.grossAmount)} less {money(i.currency, i.setoffEgp)} set off</div>}
+                    {i.kind === "operator_receivable" && i.grossAmount !== i.amount && <div className="field-hint">of {money(i.currency, i.grossAmount)}</div>}</td>
                   <td>
                     <span className={`tag ${STANDING_TONE[i.standing]}`}>{STANDING_LABEL[i.standing]}</span>
                     {i.holdReason && <div className="field-hint">{i.holdReason}</div>}
                     {i.payment && <div className="field-hint">{money(i.currency, i.payment.amount)} on {dayLabel(i.payment.paidOn)}, ref {i.payment.bankReference}{i.payment.differs ? ` (differs; approved by ${i.payment.overrideBy})` : ""}</div>}
                   </td>
-                  <td className="row-actions">{(i.standing === "due" || i.standing === "overdue") && <button className="btn-ghost sm" onClick={() => setPaying(i)}>Record payment</button>}</td>
+                  <td className="row-actions">{(i.standing === "due" || i.standing === "overdue") && <button className="btn-ghost sm" onClick={() => setPaying(i)}>{i.direction === "in" ? "Record money received" : "Record payment"}</button>}</td>
                 </tr>
               ))}
             </tbody>
@@ -121,7 +132,9 @@ function PaymentForm({ item, isSuperAdmin, onClose, onDone }) {
   return (
     <form className="dash-card" onSubmit={submit} style={{ marginBottom: 12 }}>
       <h2>Record payment: {item.type}, {item.party.name}</h2>
-      <p className="field-hint">Due: {money(item.currency, item.amount)}{item.party.kind === "operator" ? ". Paid to the operator's verified bank account." : ""}</p>
+      <p className="field-hint">{item.kind === "operator_receivable"
+        ? `Outstanding: ${money(item.currency, item.amount)}. The operator may repay in parts.`
+        : `Due: ${money(item.currency, item.amount)}${item.party.kind === "operator" ? ". Paid to the operator's verified bank account." : ""}`}</p>
       {err && <div className="auth-error">{err}</div>}
       <div className="form-grid">
         <label className="field"><span>Amount ({item.currency})</span><input type="number" step="0.01" min="0" value={f.amount} onChange={(e) => setF({ ...f, amount: e.target.value })} required /></label>

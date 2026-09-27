@@ -17,6 +17,7 @@ import { BRAND } from "./brand.js";
 import { CatalogueError, todayIn } from "./catalogue.js";
 import { expectedAmountFor } from "./assignments.js";
 import { notifyOperator, operatorRecipients } from "./operators.js";
+import { applySetoffs, releaseSetoffs, syncBalanceReceivable, createReceivable, setoffLines } from "./receivables.js";
 import { shiftDate } from "../shared/catalogue.js";
 import { rateFieldsFor } from "../shared/operators.js";
 import {
@@ -38,6 +39,9 @@ export const mapPayable = (r) => ({
   id: Number(r.id), departureId: Number(r.departure_id), operatorId: Number(r.operator_id),
   assignmentId: r.assignment_id == null ? null : Number(r.assignment_id), kind: r.kind, currency: r.currency,
   amount: num(r.amount), dueOn: ymd(r.due_on), state: r.state, holdReason: r.hold_reason, detail: r.detail || {},
+  setoffEgp: num(r.setoff_egp) || 0,
+  // What is left to transfer after set-off (Operator 9.4).
+  netDue: r.amount == null ? null : Math.max(0, round2(Number(r.amount) - Number(r.setoff_egp || 0))),
   createdAt: r.created_at, paidAt: r.paid_at,
 });
 
@@ -61,7 +65,10 @@ export async function createAdvance(c, { assignment, now = Date.now() }) {
      ON CONFLICT (assignment_id) WHERE kind = 'advance' DO NOTHING RETURNING *`,
     [assignment.departureId, assignment.operatorId, assignment.id, amount, dueOn, hold ? "on_hold" : "due", hold,
       JSON.stringify({ expectedTotal: expected.total, travelers: expected.travelers, band: expected.band, rateVersion: expected.rateVersion })]);
-  return r.rows[0] ? mapPayable(r.rows[0]) : null;
+  if (!r.rows[0]) return null;
+  // What the operator owes Sawa comes off this advance first (9.4).
+  await applySetoffs(c, Number(r.rows[0].id));
+  return mapPayable((await c.query("SELECT * FROM operator_payables WHERE id = $1", [r.rows[0].id])).rows[0]);
 }
 
 // Advances held for a missing rate are priced once the rate exists; advances
@@ -73,17 +80,111 @@ export async function tidyAdvances(db) {
     const expected = await expectedAmountFor(db, Number(p.departure_id));
     const amount = advanceFor(expected.total);
     if (amount == null) continue;
-    await db.query(
-      `UPDATE operator_payables SET amount = $2, state = 'due', hold_reason = NULL, updated_at = now(),
-              detail = detail || $3::jsonb WHERE id = $1 AND state = 'on_hold'`,
-      [p.id, amount, JSON.stringify({ expectedTotal: expected.total, pricedLater: true })]);
+    await inTx(db, async (c) => {
+      await c.query(
+        `UPDATE operator_payables SET amount = $2, state = 'due', hold_reason = NULL, updated_at = now(),
+                detail = detail || $3::jsonb WHERE id = $1 AND state = 'on_hold'`,
+        [p.id, amount, JSON.stringify({ expectedTotal: expected.total, pricedLater: true })]);
+      await applySetoffs(c, Number(p.id));
+    });
     priced += 1;
   }
-  const cancelled = await db.query(
-    `UPDATE operator_payables p SET state = 'cancelled', cancelled_at = now(), cancel_reason = 'Assignment replaced before payment.', updated_at = now()
-       FROM catalogue_assignments a
-      WHERE p.assignment_id = a.id AND p.kind = 'advance' AND p.state IN ('due', 'on_hold') AND a.state IN ('replaced', 'expired')`);
-  return { advancesPriced: priced, advancesCancelled: cancelled.rowCount };
+  const stale = (await db.query(
+    `SELECT p.id FROM operator_payables p JOIN catalogue_assignments a ON a.id = p.assignment_id
+      WHERE p.kind = 'advance' AND p.state IN ('due', 'on_hold') AND a.state IN ('replaced', 'expired')`)).rows;
+  for (const { id } of stale) await inTx(db, (c) => cancelUnpaidAdvance(c, Number(id)));
+  return { advancesPriced: priced, advancesCancelled: stale.length };
+}
+
+// An unpaid advance whose assignment is gone: any set-off on it goes back to
+// the receivable, and the advance is canceled.
+async function cancelUnpaidAdvance(c, payableId) {
+  await releaseSetoffs(c, payableId);
+  await c.query(
+    `UPDATE operator_payables SET state = 'cancelled', cancelled_at = now(), cancel_reason = 'Assignment replaced before payment.', updated_at = now()
+      WHERE id = $1 AND state IN ('due', 'on_hold')`, [payableId]);
+}
+
+// ---------------------------------------------------------------- reassignment
+// A departure is taken from an operator whose advance was already paid (or
+// fully set off). Admin says why (decided 27 Sep 2026):
+//   operator_fault      it canceled or didn't acknowledge: the whole advance
+//                       becomes a receivable; a Schedule 6 penalty, if chosen,
+//                       is a separate adjustment and receivable
+//   not_operator_fault  Sawa or force majeure: the operator keeps its evidenced
+//                       non-refundable costs (approved cost-sheet lines); the
+//                       rest of the advance becomes a receivable
+// An unpaid advance is simply canceled. The new operator gets its own advance
+// on acknowledgement, as normal.
+export const REASSIGN_REASONS = ["operator_fault", "not_operator_fault"];
+
+export async function paidAdvanceOf(c, assignmentId) {
+  return (await c.query(
+    "SELECT * FROM operator_payables WHERE assignment_id = $1 AND kind = 'advance' AND state IN ('paid', 'offset')", [assignmentId])).rows[0] || null;
+}
+
+export async function settleReplacedAdvance(c, { replaced, reason, penaltyCode = null, travelers = null, keptEgp = null, costLineIds = [], note = null, by }) {
+  const unpaid = (await c.query(
+    "SELECT id FROM operator_payables WHERE assignment_id = $1 AND kind = 'advance' AND state IN ('due', 'on_hold')", [replaced.id])).rows[0];
+  if (unpaid) await cancelUnpaidAdvance(c, Number(unpaid.id));
+  const adv = await paidAdvanceOf(c, replaced.id);
+  if (!adv) return { receivables: [], adjustments: [] };
+  if (!REASSIGN_REASONS.includes(reason)) {
+    throw Object.assign(new CatalogueError(409, "This operator's advance has been paid. Say why the departure is being reassigned: the operator's fault, or not."), { code: "reason_required" });
+  }
+  const operatorId = Number(replaced.operator_id);
+  const departureId = Number(replaced.departure_id);
+  const advance = Number(adv.amount);
+  const out = { receivables: [], adjustments: [] };
+  await c.query("UPDATE catalogue_assignments SET replaced_reason = $2 WHERE id = $1", [replaced.id, reason]);
+  const why = note ? ` ${String(note).trim().slice(0, 500)}` : "";
+  if (reason === "operator_fault") {
+    out.receivables.push(await createReceivable(c, {
+      operatorId, departureId, source: "reassignment_advance", amountEgp: advance, by, clauseRef: "Operator 9.4; 11",
+      reason: `Advance repayable: the departure was reassigned through the operator's fault.${why}`,
+    }));
+    if (penaltyCode) {
+      const rate = (await c.query("SELECT * FROM operator_penalty_rates WHERE code = $1", [penaltyCode])).rows[0];
+      if (!rate) throw new CatalogueError(422, "Choose the penalty from Schedule 6.");
+      const amount = round2(Number(rate.amount_egp) * (rate.per_traveler ? Math.max(1, Number(travelers) || 1) : 1));
+      const a = (await c.query(
+        `INSERT INTO operator_adjustments (departure_id, operator_id, kind, penalty_code, amount_egp, reason, clause_ref, created_by)
+         VALUES ($1, $2, 'penalty', $3, $4, $5, $6, $7) RETURNING *`,
+        [departureId, operatorId, penaltyCode, amount, `${rate.label}.${why}`, rate.clause_ref, by])).rows[0];
+      out.adjustments.push(mapAdjustment(a));
+      const pr = await createReceivable(c, {
+        operatorId, departureId, source: "penalty", amountEgp: amount, sourceAdjustmentId: Number(a.id), by, clauseRef: rate.clause_ref,
+        reason: `Penalty: ${rate.label}.`,
+      });
+      if (pr) out.receivables.push(pr);
+    }
+  } else {
+    const kept = round2(Number(keptEgp) || 0);
+    if (kept < 0 || kept > advance) throw new CatalogueError(422, `The costs kept must be between EGP 0 and the advance (EGP ${advance}).`);
+    if (kept > 0) {
+      const ids = [...new Set((costLineIds || []).map(Number).filter((n) => Number.isInteger(n) && n > 0))];
+      const legacy = (await c.query("SELECT legacy_departure_id FROM catalogue_departures WHERE id = $1", [departureId])).rows[0]?.legacy_departure_id;
+      const ok = ids.length ? (await c.query(
+        "SELECT COUNT(*)::int AS n FROM departure_costs WHERE id = ANY($1::bigint[]) AND departure_id = $2 AND state = 'approved'", [ids, legacy])).rows[0].n : 0;
+      if (!ids.length || ok !== ids.length) {
+        throw new CatalogueError(422, "Costs the operator keeps must be evidenced: point to approved lines on this departure's cost sheet, with their receipts.");
+      }
+      const a = (await c.query(
+        `INSERT INTO operator_adjustments (departure_id, operator_id, kind, amount_egp, reason, clause_ref, cost_line_ids, created_by)
+         VALUES ($1, $2, 'reimbursement', $3, $4, 'Operator 14', $5, $6) RETURNING *`,
+        [departureId, operatorId, kept, `Evidenced non-refundable costs kept from the advance; the departure was reassigned through no fault of the operator.${why}`,
+          JSON.stringify(ids), by])).rows[0];
+      out.adjustments.push(mapAdjustment(a));
+    }
+    const rest = round2(advance - kept);
+    if (rest > 0) {
+      out.receivables.push(await createReceivable(c, {
+        operatorId, departureId, source: "reassignment_advance", amountEgp: rest, by, clauseRef: "Operator 9.4; 14",
+        reason: `Advance repayable, less evidenced costs of EGP ${kept}: the departure was reassigned through no fault of the operator.${why}`,
+      }));
+    }
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------- balance
@@ -110,8 +211,12 @@ async function departureFacts(c, departureId) {
   };
 }
 
-async function adjustmentsFor(c, departureId) {
-  return (await c.query("SELECT * FROM operator_adjustments WHERE departure_id = $1 AND voided_at IS NULL ORDER BY id", [departureId])).rows.map(mapAdjustment);
+// The adjustments of the operator settling the departure. An earlier
+// operator's (on a reassignment) are settled through its receivables.
+async function adjustmentsFor(c, departureId, operatorId) {
+  return (await c.query(
+    "SELECT * FROM operator_adjustments WHERE departure_id = $1 AND voided_at IS NULL AND ($2::bigint IS NULL OR operator_id = $2) ORDER BY id",
+    [departureId, operatorId])).rows.map(mapAdjustment);
 }
 
 // Everything the balance and the statement need, computed once.
@@ -119,7 +224,7 @@ export async function settlementFigures(c, departureId) {
   const d = await departureFacts(c, departureId);
   const party = await settlementParty(c, departureId);
   const expected = await expectedAmountFor(c, departureId);
-  const adjustments = await adjustmentsFor(c, departureId);
+  const adjustments = await adjustmentsFor(c, departureId, party?.operatorId ?? null);
   const deductions = adjustments.filter((a) => DEDUCTIONS.includes(a.kind)).reduce((s, a) => s + a.amountEgp, 0);
   const reimbursements = adjustments.filter((a) => a.kind === "reimbursement").reduce((s, a) => s + a.amountEgp, 0);
   const advanceRow = party ? (await c.query(
@@ -152,6 +257,18 @@ async function statementSnapshot(c, departureId, figures = null) {
     deductions: f.deductions, deductionsApplied: f.deductionsApplied, capped: f.capped, reimbursements: f.reimbursements,
     advance: f.advance, advanceState: f.advanceRow?.state || null,
     balance: f.balance,
+    // Set-off (Operator 9.4): what this departure's payments were reduced by,
+    // for what the operator owed on another departure; and anything the
+    // operator owes Sawa from this one, with where it was recovered.
+    ...(f.party ? await (async () => {
+      const lines = await setoffLines(c, departureId, f.party.operatorId);
+      const balanceSetoff = lines.taken.filter((t) => t.payable === "balance").reduce((sum, t) => sum + t.amountEgp, 0);
+      return {
+        setoffs: lines.taken,
+        receivables: lines.receivables.map((r) => ({ id: r.id, source: r.source, amountEgp: r.amountEgp, outstandingEgp: r.outstandingEgp, reason: r.reason, setOffAgainst: r.setOffAgainst })),
+        netBalance: f.balance == null ? null : round2(Math.max(0, f.balance) - balanceSetoff),
+      };
+    })() : { setoffs: [], receivables: [], netBalance: f.balance }),
     generatedAt: new Date().toISOString(),
   };
 }
@@ -178,6 +295,7 @@ export async function createBalances({ db = pool, log = () => {} } = {}) {
           hold ? "on_hold" : "due", hold, JSON.stringify({ operatorAmount: f.expected.total, advance: f.advance, deductions: f.deductionsApplied, reimbursements: f.reimbursements })]);
       if (!ins.rows.length) return;
       created += 1;
+      await settleBalanceSign(c, Number(ins.rows[0].id));
       await c.query(
         `INSERT INTO settlement_statements (departure_id, operator_id, snapshot) VALUES ($1, $2, $3)
          ON CONFLICT (departure_id) DO NOTHING`, [f.departure.id, f.party.operatorId, JSON.stringify(await statementSnapshot(c, f.departure.id, f))]);
@@ -185,6 +303,17 @@ export async function createBalances({ db = pool, log = () => {} } = {}) {
   }
   if (created) log(`settlement: ${created} balances created`);
   return { balancesCreated: created };
+}
+
+// A balance of zero or less has nothing to transfer ('offset'); below zero it
+// becomes a receivable. A positive one first takes what the operator owes.
+async function settleBalanceSign(c, payableId) {
+  const p = (await c.query("SELECT * FROM operator_payables WHERE id = $1", [payableId])).rows[0];
+  if (p.amount != null && Number(p.amount) <= 0) {
+    await c.query("UPDATE operator_payables SET state = 'offset', paid_at = now(), updated_at = now() WHERE id = $1", [payableId]);
+  }
+  await syncBalanceReceivable(c, p);
+  if (p.amount != null && Number(p.amount) > 0) await applySetoffs(c, payableId);
 }
 
 // After an adjustment or a resolved dispute: the unpaid balance and the
@@ -195,10 +324,12 @@ async function refreshBalance(c, departureId) {
   if (!bal) return null;
   const f = await settlementFigures(c, departureId);
   if (bal.state !== "paid") {
+    await releaseSetoffs(c, Number(bal.id));
     await c.query(
-      `UPDATE operator_payables SET amount = $2, state = CASE WHEN $2::numeric IS NULL THEN 'on_hold' ELSE 'due' END,
+      `UPDATE operator_payables SET amount = $2, state = CASE WHEN $2::numeric IS NULL THEN 'on_hold' ELSE 'due' END, paid_at = NULL,
               detail = $3, updated_at = now() WHERE id = $1`,
       [bal.id, f.balance, JSON.stringify({ operatorAmount: f.expected.total, advance: f.advance, deductions: f.deductionsApplied, reimbursements: f.reimbursements })]);
+    await settleBalanceSign(c, Number(bal.id));
   }
   await c.query(
     "UPDATE settlement_statements SET snapshot = $2, updated_at = now() WHERE departure_id = $1 AND state IN ('draft', 'disputed')",

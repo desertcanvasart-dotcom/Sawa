@@ -11,7 +11,7 @@ import { pool } from "./db/index.js";
 import { CatalogueError, isMissingCatalogueTables, todayIn } from "./catalogue.js";
 import { catalogueV2Enabled } from "./features.js";
 import {
-  financeItems, overdueSummary, recordPayment, listFxRates, setFxRate, deleteFxRate, listHolidays, setHoliday, deleteHoliday,
+  financeItems, overdueSummary, recordPayment, receivablesByOperator, listFxRates, setFxRate, deleteFxRate, listHolidays, setHoliday, deleteHoliday,
   listPenaltyRates, setPenaltyRate, feeSetting, setFeeSetting, marginReport, legacyOpenDepartures,
 } from "./finance.js";
 import {
@@ -22,6 +22,7 @@ import { bankAccountsFor, submitBankDetails, decideBankDetails } from "./bank-de
 import { mapCommission, mapStatement, buildCommissionStatement } from "./commissions.js";
 import { bookingDetailsByToken, saveBookingDetailsByToken } from "./booking-details.js";
 import { statementPdf } from "./pdf.js";
+import { mapReceivable } from "./receivables.js";
 
 const ymdSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use a date like 2026-11-13.");
 
@@ -67,8 +68,8 @@ export function registerFinanceRoutes(app, { requireAuth, requireRole, h, logAud
       from: ymdSchema.optional(), to: ymdSchema.optional(), party: z.string().max(120).optional(),
       standing: z.enum(["due", "overdue", "paid", "on_hold", "draft"]).optional(),
     }).parse(req.query || {});
-    const [items, overdue, legacy] = await Promise.all([financeItems(pool, q), overdueSummary(pool), legacyOpenDepartures(pool)]);
-    res.json({ items, overdue, legacy, today: todayIn() });
+    const [items, overdue, legacy, receivables] = await Promise.all([financeItems(pool, q), overdueSummary(pool), legacyOpenDepartures(pool), receivablesByOperator(pool)]);
+    res.json({ items, overdue, legacy, receivables, today: todayIn() });
   }));
 
   app.get("/api/admin/finance/overdue", ...staff, route(async (_req, res) => {
@@ -77,7 +78,7 @@ export function registerFinanceRoutes(app, { requireAuth, requireRole, h, logAud
 
   app.post("/api/admin/finance/payments", ...staff, route(async (req, res) => {
     const input = z.object({
-      kind: z.enum(["operator_payable", "commission_statement", "agency_invoice"]), id: z.number().int().positive(),
+      kind: z.enum(["operator_payable", "commission_statement", "agency_invoice", "operator_receivable"]), id: z.number().int().positive(),
       amount: z.coerce.number().positive(), paidOn: ymdSchema, bankReference: z.string().trim().min(2).max(120),
       override: z.boolean().optional(), overrideReason: z.string().trim().max(500).optional(),
     }).parse(req.body || {});
@@ -143,6 +144,7 @@ export function registerFinanceRoutes(app, { requireAuth, requireRole, h, logAud
       departure: f.departure, operator: f.party, expected: f.expected, adjustments: f.adjustments,
       deductions: f.deductions, deductionsApplied: f.deductionsApplied, capped: f.capped, reimbursements: f.reimbursements,
       advance: f.advance, balance: f.balance, payables, statement: await statementFor(pool, depId),
+      receivables: (await pool.query("SELECT * FROM operator_receivables WHERE departure_id = $1 AND state <> 'cancelled' ORDER BY id", [depId])).rows.map(mapReceivable),
       penalties: await listPenaltyRates(pool), costLines,
     });
   }));
@@ -245,7 +247,9 @@ export function registerFinanceRoutes(app, { requireAuth, requireRole, h, logAud
       "SELECT * FROM settlement_statements WHERE operator_id = $1 AND state <> 'draft' ORDER BY sent_at DESC LIMIT 200", [req.user.operatorId]);
     const payables = (await pool.query(
       "SELECT * FROM operator_payables WHERE operator_id = $1 AND state <> 'cancelled' ORDER BY due_on DESC NULLS LAST LIMIT 200", [req.user.operatorId])).rows.map(mapPayable);
-    res.json({ statements: r.rows.map(mapStatementRow), payables });
+    const receivables = (await pool.query(
+      "SELECT * FROM operator_receivables WHERE operator_id = $1 AND state <> 'cancelled' ORDER BY created_at DESC LIMIT 200", [req.user.operatorId])).rows.map(mapReceivable);
+    res.json({ statements: r.rows.map(mapStatementRow), payables, receivables });
   }));
   const ownStatement = async (req) => {
     const st = await statementFor(pool, id(req.params.id));

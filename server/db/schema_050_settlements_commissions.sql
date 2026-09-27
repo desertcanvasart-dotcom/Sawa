@@ -123,7 +123,10 @@ CREATE TABLE IF NOT EXISTS operator_payables (
   currency       TEXT NOT NULL DEFAULT 'EGP' CHECK (currency = 'EGP'),
   amount         NUMERIC(12,2),
   due_on         DATE,
-  state          TEXT NOT NULL DEFAULT 'due' CHECK (state IN ('due', 'on_hold', 'paid', 'cancelled')),
+  -- 'offset': nothing left to transfer: fully set off against what the
+  -- operator owes Sawa, or a balance of zero or less (then a receivable).
+  state          TEXT NOT NULL DEFAULT 'due' CHECK (state IN ('due', 'on_hold', 'paid', 'offset', 'cancelled')),
+  setoff_egp     NUMERIC(12,2) NOT NULL DEFAULT 0 CHECK (setoff_egp >= 0),
   hold_reason    TEXT,
   detail         JSONB NOT NULL DEFAULT '{}'::jsonb,
   created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -157,6 +160,50 @@ CREATE TABLE IF NOT EXISTS operator_adjustments (
   void_reason    TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_operator_adjustments_departure ON operator_adjustments (departure_id);
+
+-- What an operator owes Sawa (Operator Supply Agreement 9.4: set-off): a
+-- negative balance, an advance on a departure taken away from it, or a
+-- penalty on one. Recovered automatically from its next advances and
+-- balances (operator_setoffs), or by a payment finance records.
+CREATE TABLE IF NOT EXISTS operator_receivables (
+  id                    BIGSERIAL PRIMARY KEY,
+  operator_id           BIGINT NOT NULL REFERENCES operators(id),
+  departure_id          BIGINT NOT NULL REFERENCES catalogue_departures(id) ON DELETE CASCADE,
+  source                TEXT NOT NULL CHECK (source IN ('negative_balance', 'reassignment_advance', 'penalty')),
+  source_payable_id     BIGINT REFERENCES operator_payables(id),
+  source_adjustment_id  BIGINT REFERENCES operator_adjustments(id),
+  amount_egp            NUMERIC(12,2) NOT NULL CHECK (amount_egp > 0),
+  outstanding_egp       NUMERIC(12,2) NOT NULL CHECK (outstanding_egp >= 0),
+  state                 TEXT NOT NULL DEFAULT 'open' CHECK (state IN ('open', 'settled', 'cancelled')),
+  reason                TEXT NOT NULL,
+  clause_ref            TEXT NOT NULL DEFAULT 'Operator 9.4',
+  created_by            TEXT,
+  created_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
+  settled_at            TIMESTAMPTZ,
+  cancelled_at          TIMESTAMPTZ
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_operator_receivable_balance ON operator_receivables (source_payable_id)
+  WHERE source = 'negative_balance' AND state <> 'cancelled';
+CREATE INDEX IF NOT EXISTS idx_operator_receivables_open ON operator_receivables (operator_id) WHERE state = 'open';
+
+CREATE TABLE IF NOT EXISTS operator_setoffs (
+  id             BIGSERIAL PRIMARY KEY,
+  receivable_id  BIGINT NOT NULL REFERENCES operator_receivables(id) ON DELETE CASCADE,
+  payable_id     BIGINT NOT NULL REFERENCES operator_payables(id) ON DELETE CASCADE,
+  amount_egp     NUMERIC(12,2) NOT NULL CHECK (amount_egp > 0),
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+  released_at    TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_operator_setoffs_payable ON operator_setoffs (payable_id) WHERE released_at IS NULL;
+
+-- Why a departure was taken from an operator after its advance was paid.
+ALTER TABLE catalogue_assignments ADD COLUMN IF NOT EXISTS replaced_reason TEXT;
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'catalogue_assignments_replaced_reason_chk') THEN
+    ALTER TABLE catalogue_assignments ADD CONSTRAINT catalogue_assignments_replaced_reason_chk
+      CHECK (replaced_reason IS NULL OR replaced_reason IN ('operator_fault', 'not_operator_fault'));
+  END IF;
+END $$;
 
 -- The settlement statement per departure.
 CREATE TABLE IF NOT EXISTS settlement_statements (
@@ -254,7 +301,7 @@ CREATE TABLE IF NOT EXISTS agency_invoices (
 -- ===========================================================================
 CREATE TABLE IF NOT EXISTS finance_payments (
   id               BIGSERIAL PRIMARY KEY,
-  payable_kind     TEXT NOT NULL CHECK (payable_kind IN ('operator_payable', 'commission_statement', 'agency_invoice')),
+  payable_kind     TEXT NOT NULL CHECK (payable_kind IN ('operator_payable', 'commission_statement', 'agency_invoice', 'operator_receivable')),
   payable_id       BIGINT NOT NULL,
   direction        TEXT NOT NULL CHECK (direction IN ('out', 'in')),
   currency         TEXT NOT NULL CHECK (currency IN ('EGP', 'EUR')),
@@ -269,7 +316,9 @@ CREATE TABLE IF NOT EXISTS finance_payments (
   recorded_by      TEXT,
   recorded_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-CREATE UNIQUE INDEX IF NOT EXISTS uq_finance_payment_once ON finance_payments (payable_kind, payable_id);
+-- One payment per item, except a receivable, which an operator may repay in parts.
+CREATE UNIQUE INDEX IF NOT EXISTS uq_finance_payment_once ON finance_payments (payable_kind, payable_id)
+  WHERE payable_kind <> 'operator_receivable';
 
 -- Payment provider fees, for the margin report. Not set until finance sets it.
 CREATE TABLE IF NOT EXISTS finance_settings (
@@ -289,6 +338,8 @@ ALTER TABLE fx_rates ENABLE ROW LEVEL SECURITY;
 ALTER TABLE operator_penalty_rates ENABLE ROW LEVEL SECURITY;
 ALTER TABLE operator_payables ENABLE ROW LEVEL SECURITY;
 ALTER TABLE operator_adjustments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE operator_receivables ENABLE ROW LEVEL SECURITY;
+ALTER TABLE operator_setoffs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE settlement_statements ENABLE ROW LEVEL SECURITY;
 ALTER TABLE commission_statements ENABLE ROW LEVEL SECURITY;
 ALTER TABLE agency_commissions ENABLE ROW LEVEL SECURITY;

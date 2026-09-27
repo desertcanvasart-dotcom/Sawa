@@ -4,6 +4,7 @@
 import { pool, withTransaction } from "./db/index.js";
 import { CatalogueError, todayIn } from "./catalogue.js";
 import { payableAccount } from "./bank-details.js";
+import { receivablesByOperator, SOURCE_LABEL } from "./receivables.js";
 import { departureMargin } from "../shared/settlement-rules.js";
 
 const inTx = (db, fn) => (db === pool ? withTransaction(fn) : fn(db));
@@ -83,7 +84,7 @@ export async function setFeeSetting(db, { percent, fixedEur, by }) {
 // hold / draft where it can't be paid yet (its "standing").
 export async function financeItems(db = pool, { from = null, to = null, party = null, standing = null, now = Date.now() } = {}) {
   const today = todayIn(now);
-  const [payables, statements, invoices, payments] = await Promise.all([
+  const [payables, statements, invoices, payments, receivables] = await Promise.all([
     db.query(
       `SELECT p.*, o.legal_name, cd.date, c.code, c.title FROM operator_payables p
          JOIN operators o ON o.id = p.operator_id JOIN catalogue_departures cd ON cd.id = p.departure_id
@@ -94,9 +95,13 @@ export async function financeItems(db = pool, { from = null, to = null, party = 
       `SELECT i.*, a.name AS agency_name, cd.date, c.code, c.title FROM agency_invoices i JOIN agencies a ON a.id = i.agency_id
          JOIN catalogue_departures cd ON cd.id = i.departure_id JOIN catalogue_products c ON c.id = cd.product_id WHERE i.state <> 'void'`),
     db.query("SELECT * FROM finance_payments"),
+    db.query(
+      `SELECT r.*, o.legal_name, cd.date, c.code, c.title FROM operator_receivables r
+         JOIN operators o ON o.id = r.operator_id JOIN catalogue_departures cd ON cd.id = r.departure_id
+         JOIN catalogue_products c ON c.id = cd.product_id WHERE r.state <> 'cancelled'`),
   ]);
   const paidBy = new Map(payments.rows.map((p) => [`${p.payable_kind}:${p.payable_id}`, p]));
-  const standingOf = (state, dueOn) => (state === "paid" ? "paid" : state === "on_hold" ? "on_hold" : state === "draft" ? "draft"
+  const standingOf = (state, dueOn) => (state === "paid" ? "paid" : state === "offset" ? "offset" : state === "on_hold" ? "on_hold" : state === "draft" ? "draft"
     : dueOn && dueOn < today ? "overdue" : "due");
   const payment = (kind, id) => {
     const p = paidBy.get(`${kind}:${id}`);
@@ -107,8 +112,19 @@ export async function financeItems(db = pool, { from = null, to = null, party = 
       kind: "operator_payable", id: Number(p.id), type: p.kind === "advance" ? "Operator advance" : "Operator balance",
       direction: "out", party: { kind: "operator", id: Number(p.operator_id), name: p.legal_name },
       departure: { id: Number(p.departure_id), date: ymd(p.date), label: `${p.code} ${p.title}` },
-      currency: "EGP", amount: num(p.amount), dueOn: ymd(p.due_on), standing: standingOf(p.state, ymd(p.due_on)),
+      // What is left to transfer after set-off against what the operator owes.
+      currency: "EGP", amount: p.amount == null ? null : Math.max(0, round2(Number(p.amount) - Number(p.setoff_egp || 0))),
+      grossAmount: num(p.amount), setoffEgp: num(p.setoff_egp) || 0,
+      dueOn: ymd(p.due_on), standing: standingOf(p.state, ymd(p.due_on)),
       holdReason: p.hold_reason, payment: payment("operator_payable", p.id),
+    })),
+    ...receivables.rows.map((r) => ({
+      kind: "operator_receivable", id: Number(r.id), type: `Owed by operator: ${SOURCE_LABEL[r.source] || r.source}`,
+      direction: "in", party: { kind: "operator", id: Number(r.operator_id), name: r.legal_name },
+      departure: { id: Number(r.departure_id), date: ymd(r.date), label: `${r.code} ${r.title}` },
+      currency: "EGP", amount: num(r.outstanding_egp), grossAmount: num(r.amount_egp), dueOn: null,
+      standing: r.state === "settled" ? "paid" : "due", holdReason: r.reason, payment: null,
+      note: "Set off automatically against the operator's next advance or balance.",
     })),
     ...statements.rows.map((s) => {
       // Sent by the 10th; due on the last day of the month it's sent.
@@ -136,6 +152,8 @@ export async function financeItems(db = pool, { from = null, to = null, party = 
     .sort((a, b) => String(a.dueOn || "9999").localeCompare(String(b.dueOn || "9999")));
 }
 
+export { receivablesByOperator };
+
 export async function overdueSummary(db = pool, now = Date.now()) {
   const items = await financeItems(db, { now, standing: "overdue" });
   return { overdue: items.length, operator: items.filter((i) => i.party.kind === "operator").length, agency: items.filter((i) => i.party.kind === "agency").length };
@@ -152,11 +170,32 @@ export async function recordPayment(db, { kind, id, amount, paidOn, bankReferenc
   if (!String(bankReference || "").trim()) throw new CatalogueError(422, "Enter the bank reference.");
   return inTx(db, async (c) => {
     let due; let currency; let direction = "out"; let bankAccountId = null; let markPaid;
+    if (kind === "operator_receivable") {
+      // Money the operator pays back. Part payments are normal; more than is
+      // outstanding is refused.
+      const r = (await c.query("SELECT * FROM operator_receivables WHERE id = $1 FOR UPDATE", [id])).rows[0];
+      if (!r) throw new CatalogueError(404, "Not found.");
+      if (r.state !== "open") throw new CatalogueError(409, r.state === "settled" ? "Nothing is outstanding." : "This receivable was canceled.");
+      const outstanding = Number(r.outstanding_egp);
+      if (value > outstanding + 0.004) throw new CatalogueError(422, `Only EGP ${outstanding} is outstanding.`);
+      const left = round2(outstanding - value);
+      const pay = await c.query(
+        `INSERT INTO finance_payments (payable_kind, payable_id, direction, currency, amount, due_amount, differs, paid_on, bank_reference, recorded_by)
+         VALUES ('operator_receivable', $1, 'in', 'EGP', $2, $3, false, $4, $5, $6) RETURNING id`,
+        [id, value, outstanding, paidOn, String(bankReference).trim().slice(0, 120), user?.email || null]);
+      await c.query(
+        `UPDATE operator_receivables SET outstanding_egp = $2, state = CASE WHEN $2::numeric = 0 THEN 'settled' ELSE 'open' END,
+                settled_at = CASE WHEN $2::numeric = 0 THEN now() ELSE NULL END WHERE id = $1`, [id, left]);
+      return { id: Number(pay.rows[0].id), kind, payableId: id, amount: value, due: outstanding, currency: "EGP", differs: false, outstanding: left };
+    }
     if (kind === "operator_payable") {
       const p = (await c.query("SELECT * FROM operator_payables WHERE id = $1 FOR UPDATE", [id])).rows[0];
       if (!p) throw new CatalogueError(404, "Not found.");
-      if (p.state !== "due") throw new CatalogueError(409, p.state === "paid" ? "Already paid." : p.state === "on_hold" ? `On hold: ${p.hold_reason}` : `This is ${p.state}.`);
-      if (Number(p.amount) <= 0) throw new CatalogueError(409, "Nothing is owed to the operator on this line.");
+      if (p.state !== "due") {
+        throw new CatalogueError(409, p.state === "paid" ? "Already paid." : p.state === "offset" ? "Nothing to transfer: this was set off against what the operator owes."
+          : p.state === "on_hold" ? `On hold: ${p.hold_reason}` : `This is ${p.state}.`);
+      }
+      if (Number(p.amount) - Number(p.setoff_egp || 0) <= 0) throw new CatalogueError(409, "Nothing is owed to the operator on this line.");
       if (p.kind === "balance") {
         const st = (await c.query("SELECT state FROM settlement_statements WHERE departure_id = $1", [p.departure_id])).rows[0];
         if (st?.state === "disputed") throw new CatalogueError(409, "The operator disputes this statement. Resolve the dispute first.");
@@ -164,7 +203,7 @@ export async function recordPayment(db, { kind, id, amount, paidOn, bankReferenc
       const acct = await payableAccount(c, Number(p.operator_id));
       if (!acct.ok) throw new CatalogueError(409, acct.reason);
       bankAccountId = acct.accountId;
-      due = Number(p.amount); currency = "EGP";
+      due = round2(Number(p.amount) - Number(p.setoff_egp || 0)); currency = "EGP";
       markPaid = () => c.query("UPDATE operator_payables SET state = 'paid', paid_at = now(), updated_at = now() WHERE id = $1", [id]);
     } else if (kind === "commission_statement") {
       const s = (await c.query("SELECT * FROM commission_statements WHERE id = $1 FOR UPDATE", [id])).rows[0];

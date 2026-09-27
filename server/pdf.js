@@ -111,7 +111,23 @@ export function statementPdf(statement) {
     { text: `Less deductions ${egp(s.deductionsApplied)}`, size: 10 },
     { text: `Plus reimbursements ${egp(s.reimbursements)}`, size: 10 },
     { text: `Less advance ${egp(s.advance)}`, size: 10 },
-    { text: `Balance ${egp(s.balance)}`, size: 13, bold: true, gap: 10 },
+    { text: `Balance ${egp(s.balance)}`, size: 13, bold: true, gap: 6 },
+    // Set-off (Operator 9.4): amounts owed on other departures, taken here.
+    ...((s.setoffs || []).length ? [
+      { text: "Set-off against amounts owed to Sawa (clause 9.4)", size: 11, bold: true, gap: 2 },
+      ...s.setoffs.map((x) => ({ text: `- ${egp(x.amountEgp)} from the ${x.payable}, for departure ${x.fromDeparture}`, size: 9, gap: 0 })),
+      { text: `Net to transfer on the balance ${egp(s.netBalance)}`, size: 12, bold: true, gap: 8 },
+    ] : []),
+    // What the operator owes Sawa from this departure, and where it was recovered.
+    ...((s.receivables || []).length ? [
+      { text: "Owed to Sawa from this departure", size: 11, bold: true, gap: 2 },
+      ...s.receivables.flatMap((r) => [
+        { text: `${egp(r.amountEgp)}: ${r.reason} Outstanding ${egp(r.outstandingEgp)}; set off against your next advance or balance.`, size: 9, gap: 0 },
+        ...(r.setOffAgainst || []).map((x) => ({ text: `   recovered ${egp(x.amountEgp)} from the ${x.payable} of ${x.departure}`, size: 9, gap: 0 })),
+      ]),
+      { text: "", gap: 6 },
+    ] : []),
+    { text: "", gap: 4 },
     { text: "Amounts are in EGP from the rate card version locked when the departure's first seat was sold. This statement is accepted automatically 30 days after it is sent unless disputed in the operator portal.", size: 8 },
   ];
   return textPdf(items, { title: `Settlement ${s.departure?.code || ""} ${s.departure?.date || ""}` });

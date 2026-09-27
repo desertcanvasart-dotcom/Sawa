@@ -662,11 +662,32 @@ export function DepartureOperatorPanel({ departure, operators, flash, onChange, 
     call(`/admin/catalogue/departures/${departure.id}/manifest`).then(setManifest).catch(() => setManifest(null));
   }, [departure.id]);
 
+  // Phase 3: when the current operator's advance has been paid, say why the
+  // departure moves (the server asks; the choice decides what it repays).
+  const [why, setWhy] = useState(null);
+  const [costLines, setCostLines] = useState([]);
+  const [penalties, setPenalties] = useState([]);
   async function assign(e) {
     e.preventDefault();
     setBusy(true); setErr("");
     try {
-      await call(`/admin/catalogue/departures/${departure.id}/assign`, "POST", { operatorId: Number(operatorId) });
+      const body = { operatorId: Number(operatorId) };
+      if (why?.reason) {
+        Object.assign(body, { reason: why.reason, note: why.note || undefined });
+        if (why.reason === "operator_fault" && why.penaltyCode) Object.assign(body, { penaltyCode: why.penaltyCode, travelers: Number(why.travelers) || null });
+        if (why.reason === "not_operator_fault") Object.assign(body, { keptEgp: Number(why.keptEgp) || 0, costLineIds: why.costLineIds || [] });
+      }
+      const r = await apiFetch(`/admin/catalogue/departures/${departure.id}/assign`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const j = await r.json().catch(() => ({}));
+      if (r.status === 409 && j.code === "reason_required") {
+        const s = await call(`/admin/catalogue/departures/${departure.id}/settlement`).catch(() => null);
+        setCostLines(s?.costLines || []);
+        setPenalties(s?.penalties || []);
+        setWhy({ reason: "" });
+        throw new Error(j.error);
+      }
+      if (!r.ok) throw new Error(j.error || "That didn't work. Please try again.");
+      setWhy(null);
       flash("Assigned. The operator has 12 hours to acknowledge.");
       onChange();
     } catch (e2) { setErr(e2.message); } finally { setBusy(false); }
@@ -689,8 +710,42 @@ export function DepartureOperatorPanel({ departure, operators, flash, onChange, 
             <option value="">Choose an operator</option>
             {(operators || []).map((o) => <option key={o.id} value={o.id}>{o.legalName}</option>)}
           </select>
-          <button className="btn-primary" disabled={busy || !operatorId}>{a ? "Reassign" : "Assign"}</button>
+          <button className="btn-primary" disabled={busy || !operatorId || (why && !why.reason)}>{a ? "Reassign" : "Assign"}</button>
         </form>
+      )}
+      {why && (
+        <div className="dash-card" style={{ margin: "8px 0" }}>
+          <h3>Why is {a?.name} losing this departure? Its advance was paid.</h3>
+          <label className="field-check"><input type="radio" name="why" checked={why.reason === "operator_fault"} onChange={() => setWhy({ ...why, reason: "operator_fault" })} />
+            {" "}The operator's fault (it canceled, or didn't acknowledge): it repays the whole advance, set off against its next payments.</label>
+          <label className="field-check"><input type="radio" name="why" checked={why.reason === "not_operator_fault"} onChange={() => setWhy({ ...why, reason: "not_operator_fault" })} />
+            {" "}Not the operator's fault (Sawa, or force majeure): it keeps its evidenced non-refundable costs and repays the rest.</label>
+          {why.reason === "operator_fault" && (
+            <div className="form-grid">
+              <label className="field"><span>Schedule 6 penalty (optional)</span>
+                <select value={why.penaltyCode || ""} onChange={(e) => setWhy({ ...why, penaltyCode: e.target.value })}>
+                  <option value="">None</option>{penalties.map((p) => <option key={p.code} value={p.code}>{p.label}: EGP {p.amountEgp}{p.perTraveler ? " per traveler" : ""}</option>)}
+                </select>
+              </label>
+              {penalties.find((p) => p.code === why.penaltyCode)?.perTraveler && (
+                <label className="field"><span>Travelers</span><input type="number" min="1" max="12" value={why.travelers || ""} onChange={(e) => setWhy({ ...why, travelers: e.target.value })} /></label>
+              )}
+            </div>
+          )}
+          {why.reason === "not_operator_fault" && (
+            <div className="form-grid">
+              <label className="field"><span>Costs the operator keeps (EGP)</span><input type="number" min="0" step="0.01" value={why.keptEgp || ""} onChange={(e) => setWhy({ ...why, keptEgp: e.target.value })} /></label>
+              <div className="field field-full"><span>Evidence: approved cost-sheet lines</span>
+                {costLines.length ? costLines.map((c) => (
+                  <label key={c.id} className="field-check"><input type="checkbox" checked={(why.costLineIds || []).includes(c.id)}
+                    onChange={(e) => setWhy({ ...why, costLineIds: e.target.checked ? [...(why.costLineIds || []), c.id] : (why.costLineIds || []).filter((x) => x !== c.id) })} />
+                    {" "}#{c.id} {c.description} (EUR {c.amount})</label>
+                )) : <p className="field-hint">No approved lines on this departure's cost sheet. Add them in Settlements first, or keep nothing.</p>}
+              </div>
+            </div>
+          )}
+          <label className="field field-full"><span>Note</span><input value={why.note || ""} onChange={(e) => setWhy({ ...why, note: e.target.value })} /></label>
+        </div>
       )}
       {expected && (
         <>
@@ -753,9 +808,18 @@ function SettlementBlock({ departureId, flash }) {
       <p className="field-hint">Operator amount {egp(d.expected.total)} · advance {egp(d.advance)} · deductions {egp(d.deductionsApplied)}{d.capped ? " (capped)" : ""} · reimbursements {egp(d.reimbursements)} · balance <b>{egp(d.balance)}</b></p>
       {d.payables.length > 0 && (
         <table className="dash-table"><tbody>{d.payables.map((p) => (
-          <tr key={p.id}><td>{PAYABLE_LABEL[p.kind]}</td><td className="tnum">{egp(p.amount)}</td><td>due {dayLabel(p.dueOn)}</td>
+          <tr key={p.id}><td>{PAYABLE_LABEL[p.kind]}</td><td className="tnum">{egp(p.amount)}{p.setoffEgp > 0 && <div className="field-hint">less {egp(p.setoffEgp)} set off: {egp(p.netDue)} to transfer</div>}</td><td>due {dayLabel(p.dueOn)}</td>
             <td>{p.state}{p.holdReason && <div className="field-hint">{p.holdReason}</div>}</td></tr>
         ))}</tbody></table>
+      )}
+      {d.receivables?.length > 0 && (
+        <>
+          <h4>Owed to Sawa (set off against the operator's next payments)</h4>
+          <table className="dash-table"><tbody>{d.receivables.map((r) => (
+            <tr key={r.id}><td>{r.reason}<div className="field-hint">{r.clauseRef}</div></td><td className="tnum">{egp(r.amountEgp)}</td>
+              <td>{r.state === "settled" ? "recovered" : `outstanding ${egp(r.outstandingEgp)}`}</td></tr>
+          ))}</tbody></table>
+        </>
       )}
       <h4>Adjustments</h4>
       {d.adjustments.length ? (

@@ -195,7 +195,7 @@ export async function acknowledge(db, { assignmentId, operatorId, by, now = Date
 
 // An admin assigns (or reassigns) a departure to another operator. The live
 // assignment, if any, is replaced; open alerts for the departure are resolved.
-export async function assignByAdmin(db, { departureId, operatorId, by, now = Date.now(), send = null }) {
+export async function assignByAdmin(db, { departureId, operatorId, by, now = Date.now(), send = null, reassign = {} }) {
   return inTx(db, async (c) => {
     const departure = await departureContext(c, departureId);
     if (departure.status !== "go_ahead") throw new CatalogueError(409, "Only a departure that is going ahead can be assigned.");
@@ -204,8 +204,15 @@ export async function assignByAdmin(db, { departureId, operatorId, by, now = Dat
     const live = (await c.query(
       "SELECT * FROM catalogue_assignments WHERE departure_id = $1 AND state IN ('offered', 'acknowledged') FOR UPDATE", [departureId])).rows[0];
     if (live && Number(live.operator_id) === Number(operatorId)) throw new CatalogueError(409, "That operator already has this departure.");
+    // Model phase 3 (catalogue_v2): a paid advance needs a reason before
+    // anything changes.
+    const settlement = live && catalogueV2Enabled() ? await import("./operator-settlement.js") : null;
+    if (settlement && await settlement.paidAdvanceOf(c, live.id) && !settlement.REASSIGN_REASONS.includes(reassign.reason)) {
+      throw Object.assign(new CatalogueError(409, "This operator's advance has been paid. Say why the departure is being reassigned: the operator's fault, or not."), { code: "reason_required" });
+    }
     if (live) {
       await c.query("UPDATE catalogue_assignments SET state = 'replaced', replaced_at = now() WHERE id = $1", [live.id]);
+      if (settlement) await settlement.settleReplacedAdvance(c, { replaced: live, by, ...reassign });
       await notifyOperator(c, {
         operatorId: Number(live.operator_id), kind: "unassigned",
         title: `No longer assigned: ${departure.product.title} on ${dateLabel(departure.date)}`,

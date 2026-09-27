@@ -19,6 +19,9 @@ import { freshDatabase, dropDatabase, testDbSkip } from "./test-db.js";
 import { zonedDateTimeToUtc } from "./tz.js";
 import { shiftDate } from "../shared/catalogue.js";
 import { egyptBusinessDaysAfter } from "../shared/settlement-rules.js";
+import { statementPdf } from "./pdf.js";
+
+const statementPdfText = (st) => statementPdf(st).toString("latin1");
 
 const skip = testDbSkip;
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -138,9 +141,9 @@ before(async () => {
   const r = await db.query(
     `SELECT id, date, legacy_departure_id FROM catalogue_departures
       WHERE product_id = $1 AND legacy_departure_id IS NOT NULL AND status = 'open' AND to_char(date, 'YYYY-MM') = $2
-      ORDER BY date LIMIT 5`, [productId, month]);
-  assert.ok(r.rows.length >= 5, `need five departures in ${month}`);
-  [deps.a, deps.b, deps.c, deps.d, deps.e] = r.rows.map((x) => ({ id: Number(x.id), date: ymd(x.date), legacy: x.legacy_departure_id }));
+      ORDER BY date LIMIT 9`, [productId, month]);
+  assert.ok(r.rows.length >= 9, `need nine departures in ${month}`);
+  [deps.a, deps.b, deps.c, deps.d, deps.e, deps.f, deps.g, deps.h, deps.i] = r.rows.map((x) => ({ id: Number(x.id), date: ymd(x.date), legacy: x.legacy_departure_id }));
   deps.month = month;
   for (const d of [deps.a, deps.b]) await roster.overrideEntry(db, { productId, date: d.date, operatorId: X, by: "it" });
   await roster.publishMonth(db, month, { by: "it" });
@@ -499,6 +502,125 @@ test("the finance view lists due, overdue and paid; the margin shows 'rate missi
   assert.equal(row.margin, Math.round((400 - (5.85 + 2.4375) - 24) * 100) / 100);
   const legacy = await fin.legacyOpenDepartures(db);
   assert.equal(typeof legacy.open, "number");
+});
+
+// ---------------------------------------------------------------- set-off (9.4)
+async function goAheadWithOperator(dep, operatorId) {
+  for (let n = 0; n < 8; n += 2) await pledge(dep, 2);
+  await cat.runStatusJob({});
+  const a = await asg.assignByAdmin(db, { departureId: dep.id, operatorId, by: "ops" });
+  await asg.acknowledge(db, { assignmentId: a.id, operatorId, by: "dispatch" });
+  return one("SELECT * FROM operator_payables WHERE assignment_id = $1 AND kind = 'advance'", [a.id]);
+}
+const payOp = (id, amount) => fin.recordPayment(db, { kind: "operator_payable", id, amount, paidOn: today(), bankReference: `T-${id}`, user: STAFF });
+
+test("a negative balance becomes a receivable, set off against the operator's next advance and shown on both statements", { skip }, async () => {
+  // Clear what X is still owed, so the set-off lands where the test expects.
+  await payOp(deps.b.balance, 140);
+  const advF = await goAheadWithOperator(deps.f, X);
+  await payOp(Number(advF.id), 260);
+  await asg.freezeManifests({ db, now: (await cutoffOf(deps.f)) + 60000 });
+  await db.query("UPDATE catalogue_departures SET status = 'completed' WHERE id = $1", [deps.f.id]);
+  await settle.runSettlementTick({});
+  // A service failure: 400 deducted from 520, less the 260 advance, is −140.
+  await settle.addAdjustment(db, { departureId: deps.f.id, kind: "service_failure", amountEgp: 400, reason: "tour cut short; refunds to travelers", clauseRef: "Operator 12.2", by: "ops" });
+  const balF = await one("SELECT * FROM operator_payables WHERE departure_id = $1 AND kind = 'balance'", [deps.f.id]);
+  assert.deepEqual([Number(balF.amount), balF.state], [-140, "offset"], "nothing to transfer");
+  const rec = await one("SELECT * FROM operator_receivables WHERE source_payable_id = $1", [balF.id]);
+  assert.deepEqual([rec.source, Number(rec.amount_egp), Number(rec.outstanding_egp), rec.state], ["negative_balance", 140, 140, "open"]);
+  assert.deepEqual((await fin.receivablesByOperator(db)).find((x) => x.operatorId === X)?.outstandingEgp, 140, "on the finance dashboard");
+
+  // The next advance takes it: 260 less 140 set off, 120 to transfer.
+  const advG = await goAheadWithOperator(deps.g, X);
+  assert.deepEqual([Number(advG.amount), Number(advG.setoff_egp), advG.state], [260, 140, "due"]);
+  assert.equal((await one("SELECT state FROM operator_receivables WHERE id = $1", [rec.id])).state, "settled");
+  await assert.rejects(payOp(Number(advG.id), 260), /differs from what is due \(EGP 120\)/);
+  assert.equal((await payOp(Number(advG.id), 120)).due, 120);
+
+  // On both statements: F's says what it owed and where it was recovered.
+  const sentF = await settle.sendStatement(db, { departureId: deps.f.id, by: "ops" });
+  assert.equal(sentF.snapshot.balance, -140);
+  assert.equal(sentF.snapshot.receivables[0].amountEgp, 140);
+  assert.deepEqual(sentF.snapshot.receivables[0].setOffAgainst.map((x) => [x.payable, x.amountEgp]), [["advance", 140]]);
+  assert.match(statementPdfText(sentF), /recovered EGP 140\.00 from the advance/);
+  // G's balance statement lists the set-off taken from its advance.
+  await asg.freezeManifests({ db, now: (await cutoffOf(deps.g)) + 60000 });
+  await db.query("UPDATE catalogue_departures SET status = 'completed' WHERE id = $1", [deps.g.id]);
+  await settle.runSettlementTick({});
+  const stG = await settle.statementFor(db, deps.g.id);
+  assert.deepEqual(stG.snapshot.setoffs.map((x) => [x.payable, x.amountEgp, x.fromDepartureId]), [["advance", 140, deps.f.id]]);
+  assert.equal(stG.snapshot.balance, 260, "the advance counts in full: the operator had its value");
+  assert.match(statementPdfText(stG), /140\.00 from the advance, for departure/);
+});
+
+test("reassigned after a paid advance, through the operator's fault: the whole advance is owed back, with a penalty; the new operator gets its own advance", { skip }, async () => {
+  const Y = (await ops.createOperator(db, { legalName: "Delta Travel", email: "ops@delta.test" }, "it")).id;
+  for (const kind of ["tourism_license", "etaa_membership", "liability_insurance", "vehicle_insurance"]) {
+    await ops.addDocument(db, Y, { kind, number: "1", expiresOn: shiftDate(today(), 400) }, { by: "it" });
+  }
+  await ops.setApprovals(db, Y, [productId], "it");
+  await ops.setOperatorStatus(db, Y, "active", { by: "it" });
+  deps.Y = Y;
+  // X is paid what it's owed on G first, so the new receivables stay open.
+  await payOp(Number((await one("SELECT id FROM operator_payables WHERE departure_id = $1 AND kind = 'balance'", [deps.g.id])).id), 260);
+
+  const advH = await goAheadWithOperator(deps.h, X);
+  await payOp(Number(advH.id), 260);
+  await assert.rejects(asg.assignByAdmin(db, { departureId: deps.h.id, operatorId: Y, by: "ops" }), (e) => e.code === "reason_required");
+  assert.equal((await one("SELECT operator_id, state FROM catalogue_assignments WHERE departure_id = $1 AND state = 'acknowledged'", [deps.h.id])).operator_id, String(X), "nothing changed");
+  // Over HTTP the admin is asked the same way.
+  const on = await startServer({ FEATURES: "catalogue_v2" });
+  const ask = await fetch(`${on}/api/admin/catalogue/departures/${deps.h.id}/assign`, { method: "POST", headers: auth("staff-token"), body: JSON.stringify({ operatorId: Y }) });
+  assert.equal(ask.status, 409);
+  assert.equal((await ask.json()).code, "reason_required");
+
+  const a = await asg.assignByAdmin(db, { departureId: deps.h.id, operatorId: Y, by: "ops", reassign: { reason: "operator_fault", penaltyCode: "no_show", note: "Canceled the morning of the tour." } });
+  const owed = (await db.query("SELECT * FROM operator_receivables WHERE departure_id = $1 AND operator_id = $2 ORDER BY id", [deps.h.id, X])).rows;
+  assert.deepEqual(owed.map((r) => [r.source, Number(r.amount_egp)]), [["reassignment_advance", 260], ["penalty", 50]]);
+  const pen = await one("SELECT * FROM operator_adjustments WHERE departure_id = $1 AND operator_id = $2", [deps.h.id, X]);
+  assert.deepEqual([pen.kind, pen.penalty_code, Number(pen.amount_egp)], ["penalty", "no_show", 50]);
+  assert.equal((await one("SELECT replaced_reason FROM catalogue_assignments WHERE departure_id = $1 AND operator_id = $2", [deps.h.id, X])).replaced_reason, "operator_fault");
+  // The new operator: a fresh advance under the normal rules, nothing set off.
+  await asg.acknowledge(db, { assignmentId: a.id, operatorId: Y, by: "ops@delta.test" });
+  const advY = await one("SELECT * FROM operator_payables WHERE assignment_id = $1 AND kind = 'advance'", [a.id]);
+  assert.deepEqual([Number(advY.amount), Number(advY.setoff_egp), advY.state], [260, 0, "due"]);
+  const figs = await settle.settlementFigures(db, deps.h.id);
+  assert.deepEqual([figs.party.operatorId, figs.deductions], [Y, 0], "X's penalty isn't deducted from Y");
+
+  // X repays part of it by transfer.
+  const part = await fin.recordPayment(db, { kind: "operator_receivable", id: Number(owed[0].id), amount: 100, paidOn: today(), bankReference: "IN-1", user: STAFF });
+  assert.equal(part.outstanding, 160);
+  await assert.rejects(fin.recordPayment(db, { kind: "operator_receivable", id: Number(owed[0].id), amount: 200, paidOn: today(), bankReference: "IN-2", user: STAFF }), /Only EGP 160 is outstanding/);
+  assert.equal((await fin.receivablesByOperator(db)).find((x) => x.operatorId === X).outstandingEgp, 210);
+});
+
+test("reassigned after a paid advance, not the operator's fault: it keeps its evidenced costs and owes back the rest", { skip }, async () => {
+  // X's next advance first takes what it still owes (160 + 50): 50 to transfer.
+  const advI = await goAheadWithOperator(deps.i, X);
+  assert.deepEqual([Number(advI.amount), Number(advI.setoff_egp)], [260, 210]);
+  await payOp(Number(advI.id), 50);
+  assert.equal((await fin.receivablesByOperator(db)).find((x) => x.operatorId === X), undefined, "all recovered");
+  // Through the pool, as the route does: a refused reassignment rolls back whole.
+  const { pool } = await import("./db/index.js");
+  const reassign = (extra) => asg.assignByAdmin(pool, { departureId: deps.i.id, operatorId: deps.Y, by: "ops", reassign: { reason: "not_operator_fault", ...extra } });
+  await assert.rejects(reassign({ keptEgp: 60 }), /evidenced/);
+  await assert.rejects(reassign({ keptEgp: 300 }), /between EGP 0 and the advance/);
+  const line = await one(
+    `INSERT INTO departure_costs (departure_id, category, description, amount, state, approved_amount, reviewed_at, submitted_by_agency_id)
+     VALUES ($1, 'transport', 'Van deposit, non-refundable', 1.2, 'approved', 1.2, now(), NULL) RETURNING id`, [deps.i.legacy]);
+  const a = await reassign({ keptEgp: 60, costLineIds: [Number(line.id)], note: "Site closed by the ministry." });
+  const adj = await one("SELECT * FROM operator_adjustments WHERE departure_id = $1 AND operator_id = $2", [deps.i.id, X]);
+  assert.deepEqual([adj.kind, Number(adj.amount_egp), adj.cost_line_ids], ["reimbursement", 60, [Number(line.id)]]);
+  const rec = await one("SELECT * FROM operator_receivables WHERE departure_id = $1 AND operator_id = $2", [deps.i.id, X]);
+  assert.deepEqual([rec.source, Number(rec.amount_egp)], ["reassignment_advance", 200]);
+  assert.equal((await one("SELECT replaced_reason FROM catalogue_assignments WHERE departure_id = $1 AND operator_id = $2", [deps.i.id, X])).replaced_reason, "not_operator_fault");
+  await asg.acknowledge(db, { assignmentId: a.id, operatorId: deps.Y, by: "ops@delta.test" });
+  assert.equal(Number((await one("SELECT amount FROM operator_payables WHERE assignment_id = $1 AND kind = 'advance'", [a.id])).amount), 260, "a fresh advance for the new operator");
+  // The advance counts in full (cash plus set-off): 260 less the 60 kept.
+  assert.equal((await fin.receivablesByOperator(db)).find((x) => x.operatorId === X).outstandingEgp, 200);
+  const items = await fin.financeItems(db, { party: "Nile Tours" });
+  assert.ok(items.some((i) => i.kind === "operator_receivable" && i.amount === 200 && i.standing === "due"));
+  assert.ok(items.some((i) => i.kind === "operator_receivable" && i.grossAmount === 50 && i.standing === "paid"), "the penalty, recovered by set-off");
 });
 
 test("the finance, settlement and portal routes answer, each party seeing only its own", { skip }, async () => {

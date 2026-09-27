@@ -284,11 +284,21 @@ function Money({ user, flash }) {
             <h2>Payments</h2>
             {data.payables.length ? (
               <table className="dash-table"><tbody>{data.payables.map((p) => (
-                <tr key={p.id}><td>{PAYABLE_LABEL[p.kind]}<div className="field-hint">departure #{p.departureId}</div></td><td className="tnum">{egp(p.amount)}</td>
-                  <td>due {dayLabel(p.dueOn)}</td><td>{p.state === "paid" ? <span className="tag tag-on">Paid</span> : p.state === "on_hold" ? <span className="tag tag-warn">On hold</span> : "Due"}</td></tr>
+                <tr key={p.id}><td>{PAYABLE_LABEL[p.kind]}<div className="field-hint">departure #{p.departureId}</div></td>
+                  <td className="tnum">{egp(p.amount)}{p.setoffEgp > 0 && <div className="field-hint">less {egp(p.setoffEgp)} set off (clause 9.4): {egp(p.netDue)}</div>}</td>
+                  <td>due {dayLabel(p.dueOn)}</td><td>{p.state === "paid" ? <span className="tag tag-on">Paid</span> : p.state === "offset" ? <span className="tag tag-on">Set off</span> : p.state === "on_hold" ? <span className="tag tag-warn">On hold</span> : "Due"}</td></tr>
               ))}</tbody></table>
             ) : <p className="field-hint">Nothing yet.</p>}
           </div>
+          {data.receivables?.some((r) => r.state === "open") && (
+            <div className="dash-card" style={{ marginBottom: 12 }}>
+              <h2>Owed to Sawa</h2>
+              <p className="field-hint">Taken from your next advance or balance (clause 9.4), unless you repay it by transfer first.</p>
+              <table className="dash-table"><tbody>{data.receivables.filter((r) => r.state === "open").map((r) => (
+                <tr key={r.id}><td>{r.reason}</td><td className="tnum">{egp(r.outstandingEgp)}</td></tr>
+              ))}</tbody></table>
+            </div>
+          )}
           <div className="dash-card" style={{ marginBottom: 12 }}>
             <h2>Settlement statements</h2>
             {data.statements.length ? (

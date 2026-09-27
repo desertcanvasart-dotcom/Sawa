@@ -296,8 +296,22 @@ export function registerOperatorRoutes(app, { requireAuth, requireRole, h, logAu
 
   // ============================================================== assignment
   app.post("/api/admin/catalogue/departures/:id/assign", ...staff, route(async (req, res) => {
-    const input = z.object({ operatorId: z.number().int().positive() }).parse(req.body || {});
-    const assignment = await assignByAdmin(pool, { departureId: id(req.params.id), operatorId: input.operatorId, by: by(req), send: send() });
+    const input = z.object({
+      operatorId: z.number().int().positive(),
+      // Phase 3: why, when the current operator's advance has been paid.
+      reason: z.enum(["operator_fault", "not_operator_fault"]).optional(),
+      penaltyCode: z.string().max(60).nullable().optional(), travelers: z.number().int().min(1).max(12).nullable().optional(),
+      keptEgp: z.coerce.number().min(0).nullable().optional(), costLineIds: z.array(z.number().int().positive()).max(50).optional(),
+      note: z.string().trim().max(500).optional(),
+    }).parse(req.body || {});
+    const { operatorId, ...reassign } = input;
+    let assignment;
+    try {
+      assignment = await assignByAdmin(pool, { departureId: id(req.params.id), operatorId, by: by(req), send: send(), reassign });
+    } catch (e) {
+      if (e.code === "reason_required") return res.status(409).json({ error: e.message, code: e.code });
+      throw e;
+    }
     await logAudit(req, { action: "catalogue.departure.assign", entity: "catalogue_departure", entityId: req.params.id, detail: input });
     res.json({ assignment });
   }));

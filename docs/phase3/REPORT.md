@@ -100,6 +100,26 @@ Rules:
    - An amount that differs from what's due is refused with a warning. Only a super admin can override, with a reason, and the override is recorded.
    - Payment is refused while the balance's statement is disputed, and without verified bank details.
 
+6. **Set-off** (Operator Supply Agreement 9.4). What an operator owes Sawa is a receivable (`operator_receivables`). It arises three ways:
+   - a balance below zero, because deductions and the advance exceed the operator amount. The balance itself is `offset`: nothing to transfer;
+   - an advance on a departure taken away from the operator (point 7);
+   - a penalty on one.
+
+   It is recovered automatically from the operator's next advances and balances, oldest first, as far as each goes. A payable reduced this way shows its gross amount, the set-off and the net to transfer, and payment is recorded against the net. A payable set off in full is `offset`.
+
+   Each set-off is a line (`operator_setoffs`) on both statements:
+   - the departure where the debt arose ("owed to Sawa … recovered from the advance of P01 2026-11-14");
+   - the departure whose payment was reduced ("set-off … for departure P01 2026-11-12").
+
+   Finance can also record money received from the operator against a receivable, in parts. The finance dashboard shows what each operator owes, and the operator portal shows it too.
+
+   If an adjustment or a resolved dispute changes a balance, its set-offs are released and applied again. If part of a negative balance has already been recovered and the new balance would owe less than that, the change is refused, to be handled by hand.
+7. **Reassignment after a paid advance.** When a departure is reassigned and the current operator's advance has been paid (or set off), the admin must choose a reason before anything changes:
+   - **Operator's fault** (it canceled, or didn't acknowledge): the whole advance becomes a receivable, set off as above. A Schedule 6 penalty, if chosen, is a separate adjustment on that operator and a separate receivable.
+   - **Not the operator's fault** (Sawa, or force majeure): the operator keeps the evidenced non-refundable costs the admin enters. They must point to approved lines on the departure's existing cost sheet, where the receipts are, and they are recorded as a reimbursement. The rest of the advance becomes a receivable.
+
+   The reason is recorded on the replaced assignment. An unpaid advance is simply canceled, with any set-off on it returned. Either way the new operator gets a fresh advance on acknowledgement under the normal rules. The earlier operator's adjustments are never deducted from the new operator's balance.
+
 ### E. Agency commission
 
 1. **Locked at booking.** When an agency books a seat on a catalog departure, the commission per seat is locked in EUR from the rate version in force (`agency_commissions`). A later version doesn't change it.
@@ -146,8 +166,8 @@ The existing settlement tools and legacy departures are untouched. Admin → Fin
 
 | Adds | |
 |---|---|
-| Tables | `booking_completion_requests`, `operator_bank_accounts`, `operator_bank_access_log`, `egypt_holidays`, `fx_rates`, `operator_penalty_rates` (4 rows seeded at 0 EGP), `operator_payables`, `operator_adjustments`, `settlement_statements`, `commission_statements`, `agency_commissions`, `agency_invoices`, `finance_payments`, `finance_settings`. RLS is on for every one, with no policies (server-only, as 024 set). |
-| Columns | `catalogue_rate_versions.commission_currency` (`EUR`, CHECK), and `agencies.country_code`, `billing_approved` (default false) and `billing_due_days` (default 14) |
+| Tables | `booking_completion_requests`, `operator_bank_accounts`, `operator_bank_access_log`, `egypt_holidays`, `fx_rates`, `operator_penalty_rates` (4 rows seeded at 0 EGP), `operator_payables`, `operator_adjustments`, `operator_receivables`, `operator_setoffs`, `settlement_statements`, `commission_statements`, `agency_commissions`, `agency_invoices`, `finance_payments`, `finance_settings`. RLS is on for every one, with no policies (server-only, as 024 set). |
+| Columns | `catalogue_rate_versions.commission_currency` (`EUR`, CHECK); `agencies.country_code`, `billing_approved` (default false) and `billing_due_days` (default 14); `catalogue_assignments.replaced_reason` |
 
 It has **not** been run against production. It depends on 047–049.
 
@@ -236,6 +256,8 @@ The existing settlement tools stay in use until the last of these completes.
   - the monthly statement, held for an EGP rate, then sent and paid;
   - the finance view's standings;
   - the margin with, then without, a missing rate;
+  - a negative balance becoming a receivable, set off against the next advance and shown on both statements;
+  - reassignment after a paid advance, on both paths (operator's fault with a penalty; not the operator's fault with evidenced costs kept), with the new operator's fresh advance and part repayment by transfer;
   - route ownership for operators, agencies and staff;
   - with the flag off: jobs skip, routes 404, no commission, invoice or advance.
 - **Updated tests:**
