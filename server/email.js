@@ -955,7 +955,7 @@ export function documentExpiryEmail({ to, operatorName, document, expiresOn, day
 }
 
 // Model phase 2 — a departure has reached GoAhead and is assigned to the
-// rostered operator, who must acknowledge it in the portal within 12 hours.
+// rostered operator, who must acknowledge it in the portal within ACK_HOURS.
 export function operatorAssignmentEmail({ to, operatorName, title, dateLabel, specVersion, seats, ackBy, portalUrl }) {
   const subject = `Assigned: ${title} on ${dateLabel} — please acknowledge`;
   const text = [
@@ -1236,4 +1236,31 @@ export function payAtGoAheadReceiptEmail({ to, name, title, dateLabel, amount, b
      ${note(esc(lines[4]))}`,
     { eyebrow: "Receipt", preheader: `${eur(amount)} received for ${title}.` });
   return { to, subject, html, text: lines.join("\n"), kind: "pay_at_goahead_receipt" };
+}
+
+// The operator changed after the traveler paid (decided 27 Sep 2026): the new
+// seller, the reissued receipt (the original is kept, marked superseded), and
+// the right to cancel with a full refund until `cancelBy` (48 hours).
+export function payAtGoAheadSellerChangedEmail({
+  to, name, title, dateLabel, bookingCode, amount, previousSeller, seller, receiptNo, supersededReceiptNo,
+  issuedAt, issuer, onBehalfOf, cancelBy, url,
+}) {
+  const subject = `The operator of your ${title} on ${dateLabel} has changed`;
+  const deadline = cairoTime(cancelBy);
+  const lines = [
+    `Hello${name ? ` ${name}` : ""},`,
+    `The company operating your ${title} on ${dateLabel} (booking ${bookingCode}) has changed. ${previousSeller} can no longer run it; ${seller} now sells and operates it. Your date, your seats and the price are unchanged.`,
+    `Your receipt has been reissued to name the new seller: receipt ${receiptNo}, ${new Date(issuedAt).toISOString().slice(0, 10)}, for ${eur(amount)}. It replaces receipt ${supersededReceiptNo}, which is kept on record and marked superseded.`,
+    `Issued by ${issuer}, on behalf of ${onBehalfOf}.`,
+    `If you'd rather not travel with the new operator, you can cancel with a full refund of ${eur(amount)} until ${deadline}: ${url}`,
+  ];
+  const html = shell(subject,
+    `<p style="margin:0 0 16px">${esc(lines[0])}</p>
+     <p style="margin:0 0 16px">${esc(lines[1])}</p>
+     ${panel(`${row("New receipt:", esc(receiptNo))}<br/>${row("Replaces:", `${esc(supersededReceiptNo)} (superseded)`)}<br/>${row("Seller:", esc(seller))}<br/>${row("Amount:", esc(eur(amount)))}`)}
+     ${note(esc(lines[3]))}
+     <p style="margin:0 0 16px">If you'd rather not travel with the new operator, you can cancel with a <strong>full refund of ${esc(eur(amount))}</strong> until <strong>${esc(deadline)}</strong>.</p>
+     ${button(url, "See your booking")}`,
+    { eyebrow: "Your booking", preheader: `${seller} now operates your ${title}.` });
+  return { to, subject, html, text: lines.join("\n\n"), kind: "pay_at_goahead_seller_changed" };
 }

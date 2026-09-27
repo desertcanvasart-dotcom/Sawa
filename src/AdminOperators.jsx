@@ -8,7 +8,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, RefreshCw, Upload, Check, X, AlertTriangle } from "lucide-react";
 import { apiFetch } from "./supabaseClient";
 import {
-  DOCUMENT_KINDS, DOCUMENT_LABELS, STRIKE_KINDS, STRIKE_LABELS, STRIKE_FLAG_AT, rateFieldsFor,
+  DOCUMENT_KINDS, DOCUMENT_LABELS, STRIKE_KINDS, STRIKE_LABELS, STRIKE_FLAG_AT, ACK_HOURS, rateFieldsFor,
 } from "../shared/operators.js";
 import { TYPE_LABELS } from "../shared/catalogue.js";
 
@@ -692,7 +692,7 @@ export function DepartureOperatorPanel({ departure, operators, flash, onChange, 
       }
       if (!r.ok) throw new Error(j.error || "That didn't work. Please try again.");
       setWhy(null);
-      flash("Assigned. The operator has 12 hours to acknowledge.");
+      flash(`Assigned. The operator has ${ACK_HOURS} hours to acknowledge.`);
       onChange();
     } catch (e2) { setErr(e2.message); } finally { setBusy(false); }
   }

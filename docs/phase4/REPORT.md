@@ -154,19 +154,25 @@ Two unit tests cover the new rules.
 
 The legal structure: **the operator assigned at GoAhead is the seller** of each departure. **Online Era** (Commercial Registration 148500), licensed to collect payments as an agent, is its commercial and payment-collection agent. **Capital Travel Service is not involved in Sawa.** Built on `feat/online-era-agent`, behind `catalogue_v2`. Migration 053 is additive, with a rollback; it was applied, re-applied and rolled back on a scratch Postgres. **Not run against production.**
 
-- **Seller disclosure.** From the assignment (offered or acknowledged), these name the operator's legal name and the **licence number shown to travelers** as seller, and "Online Era, collecting agent" as payee:
+- **Acknowledgement first.** The seller is named, and payment requests go out, only once the operator has **acknowledged** the assignment. The acknowledgement window is now **4 hours** (it was 12). GoAhead alone, or an offer not yet acknowledged, makes no request; the booking page says "Operated by a licensed Sawa partner. Your payment request will follow shortly." The acknowledgement makes the requests at once (the job also catches any it missed). The 48-hour payment deadline, capped at the cut-off, runs from when the request reaches the payer, as before.
+- **Seller disclosure.** From the acknowledgement, these name the operator's legal name and the **license number shown to travelers** as seller, and "Online Era, collecting agent (General Sales Agent license no. 32241)" as payee:
   - the payment request and its reminder;
   - the receipt;
   - the voucher (printable, on the booking page once paid);
   - the booking page.
-  Before the assignment they say "Operated by a licensed Sawa partner". This reverses "operator names hidden" for these documents only; the public catalog still names no operator.
+  Before the acknowledgement they say "Operated by a licensed Sawa partner". This reverses "operator names hidden" for these documents only; the public catalog still names no operator.
   The operator record has a new field, **License no. shown to travelers (as seller)**, in Admin → Operators. When it's empty, the Ministry of Tourism license number is used.
-- **Receipts** are issued by Online Era, "collecting agent, on behalf of" the operator, when a payment is recorded. Each receipt has a number (`R-<year>-<request>`), and the seller as it stood is kept on the request.
+- **Receipts** are issued by Online Era, "collecting agent, on behalf of" the operator, when a payment is recorded. Each receipt has a number (`R-<year>-<request>`), is kept in `payment_receipts`, and the seller as it stood is kept on the request.
+- **Reassignment after payment.** When the operator fails after travelers paid and Sawa reassigns, nothing is sent until the new operator acknowledges. Then, for each paid booking:
+  - the traveler (or the agency that paid) is emailed that the seller has changed;
+  - the receipt is reissued naming the new seller (`R-<year>-<request>-2`); the original is kept in `payment_receipts`, marked superseded, and points at its replacement;
+  - the traveler may **cancel with a full refund within 48 hours** (never past the start), from the booking page. The booking is canceled as the operator's failure (`operator`): no tier fee is kept, and no agency commission is earned. After 48 hours the offer expires and the booking stands;
+  - each change is written to `audit_log` (`booking.seller_changed`) in the same transaction, and each acceptance is logged by its route (`booking.seller_change_cancel`).
 - **The settlement statement** now distributes the departure's collections, in EUR:
   - Gross Collections (paid, less refunds);
   - payment costs (the provider fee setting);
   - agency commission;
-  - the operator entitlement (the rate card, unchanged, converted at the rate on the departure's date);
+  - the operator entitlement (the rate card, unchanged), converted to EUR **per traveler at the CBE rate on each charge date**, the margin report's rule: the entitlement is shared across the travelers' payments in proportion to their amounts, and each share converts at its own day's rate. A day with no rate is shown as missing, never guessed; a refund lowers Gross Collections but carries no share. The PDF lists the rates used;
   - Online Era's commission, the remainder, never negative;
   - where collections fall short, a **Minimum Departure Guarantee** line, paid by Online Era.
   It is on the statement snapshot, the PDF and the admin statement view. Tested with the v2 examples: 8 travelers, €760 → **€181.20** commission; 2 travelers, €190 against €230 → **€45.70** guarantee.

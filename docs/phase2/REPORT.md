@@ -95,7 +95,7 @@ The admin Calendar flags open and going-ahead departures with no active operator
 
 - **At GoAhead**, the assignment tick (every 15 minutes, after the status job) offers the departure to the operator on the published roster for that product and date. If nobody is rostered, or the rostered operator is no longer eligible, admin gets an alert (`catalogue_admin_alerts`) instead.
 - **The notice** goes to the portal and by email (the operator's email and its owner logins). It gives the product, date, spec version and seats sold. WhatsApp is not used yet.
-- **Acknowledgement.** The operator acknowledges in the portal within 12 hours. If it doesn't:
+- **Acknowledgement.** The operator acknowledges in the portal within 4 hours (12 until 27 Sep 2026, when pay at GoAhead made travelers' payment requests wait for it). If it doesn't:
   - the assignment expires and records a strike;
   - the operator gets a notice;
   - admin gets an alert and an email.

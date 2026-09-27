@@ -1,8 +1,8 @@
 // Assignment and manifest (model phase 2).
 //
 //   GoAhead → assign to the operator on the published roster for that product
-//   and date → portal notice + email → the operator acknowledges within 12
-//   hours. No roster entry, or no acknowledgement: an admin alert; a missed
+//   and date → portal notice + email → the operator acknowledges within
+//   ACK_HOURS (4). No roster entry, or no acknowledgement: an admin alert; a missed
 //   acknowledgement is also a strike, and an admin may reassign to another
 //   active operator approved for the product.
 //
@@ -172,7 +172,7 @@ export async function expireAcknowledgements({ db = pool, now = Date.now(), send
   return { expired };
 }
 
-export async function acknowledge(db, { assignmentId, operatorId, by, now = Date.now() }) {
+export async function acknowledge(db, { assignmentId, operatorId, by, now = Date.now(), send = null }) {
   return inTx(db, async (c) => {
     const r = await c.query("SELECT * FROM catalogue_assignments WHERE id = $1 FOR UPDATE", [assignmentId]);
     const a = r.rows[0];
@@ -188,6 +188,11 @@ export async function acknowledge(db, { assignmentId, operatorId, by, now = Date
     if (catalogueV2Enabled()) {
       const { createAdvance } = await import("./operator-settlement.js");
       await createAdvance(c, { assignment: acknowledged, now });
+      // Pay at GoAhead: the seller is named from now on. Payment requests go
+      // out, and travelers who paid a previous seller are told of the change.
+      const { onOperatorAcknowledged } = await import("./pay-at-goahead.js");
+      const effects = await onOperatorAcknowledged(c, { departureId: acknowledged.departureId, by, now, send });
+      return { ...acknowledged, paymentRequests: effects.requested, sellerChanges: effects.sellerChanges };
     }
     return acknowledged;
   });

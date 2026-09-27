@@ -31,9 +31,17 @@ export function BookingPayAtGoAhead({ code, view, onChanged }) {
     try { await post(`/public/bookings/${encodeURIComponent(code)}/accept-terms`, { versionId: t.versionId }); onChanged?.(); }
     catch (e) { setErr(e.message); } finally { setBusy(false); }
   }
+  const change = view.sellerChange;
+  async function cancelForSellerChange() {
+    if (!window.confirm(`Cancel this booking? You'll get a full refund of ${eur(r?.amountEur)}.`)) return;
+    setBusy(true); setErr("");
+    try { await post(`/public/bookings/${encodeURIComponent(code)}/seller-change/cancel`, {}); onChanged?.(); }
+    catch (e) { setErr(e.message); } finally { setBusy(false); }
+  }
   return (
     <div className="booking-pay">
-      {!r && <p>Nothing to pay yet. When this date reaches GoAhead we'll email you a link for the full price, with a deadline.</p>}
+      {!r && view.awaitingOperator && <p><b>Your date is going ahead.</b> Operated by a licensed Sawa partner. Your payment request will follow shortly.</p>}
+      {!r && !view.awaitingOperator && <p>Nothing to pay yet. When this date reaches GoAhead we'll email you a link for the full price, with a deadline.</p>}
       {r?.state === "awaiting_link" && <p>Your date is going ahead. Your payment link for <b>{eur(r.amountEur)}</b> is on its way by email.</p>}
       {r?.state === "sent" && r.payer === "traveller" && (
         <>
@@ -44,10 +52,23 @@ export function BookingPayAtGoAhead({ code, view, onChanged }) {
       )}
       {r?.state === "sent" && r.payer === "agency" && <p>Your agency pays for this booking. It is due by {due(r.dueAt)}.</p>}
       {r?.state === "paid" && <p><b>Paid.</b> Thank you — see you on the day.</p>}
+      {change && (
+        <div className="booking-seller-change" role="status">
+          <p><b>Your operator has changed.</b> {change.from ? `${change.from} can no longer run this date. ` : ""}{view.sellerLine}. Your receipt was reissued{change.receiptNo ? ` as ${change.receiptNo}` : ""}; the original is kept, marked superseded.</p>
+          {change.open && (
+            <>
+              <p>If you'd rather not travel with the new operator, you can cancel with a full refund until <b>{due(change.expiresAt)}</b>.</p>
+              <button type="button" className="btn-pill" disabled={busy} onClick={cancelForSellerChange}>{busy ? "Canceling…" : "Cancel with a full refund"}</button>
+            </>
+          )}
+          {change.state === "accepted" && <p>You canceled this booking. Your full refund is on its way.</p>}
+        </div>
+      )}
+      {err && !t && <div className="form-error" role="alert">{err}</div>}
       {r?.state === "released" && <p>This seat was released because payment wasn't received by the deadline.</p>}
       {/* Seller disclosure: the operator assigned at GoAhead sells; Sawa's
           operating company collects the payment as its agent. */}
-      <p className="booking-seller"><small>{view.sellerLine}. Payee: {view.payee}.</small></p>
+      {!view.awaitingOperator && <p className="booking-seller"><small>{view.sellerLine}. Payee: {view.payee}.</small></p>}
       {view.voucher && <BookingVoucher voucher={view.voucher} />}
       {t && (
         <div className="booking-terms">

@@ -20,8 +20,9 @@ export const STRIKE_LABELS = {
   other: "Other",
 };
 
-// Decided 27 Sep 2026.
-export const ACK_HOURS = 12;
+// Decided 27 Sep 2026. The acknowledgement window was 12 hours, cut to 4 the
+// same day: travelers' payment requests wait for it (pay at GoAhead).
+export const ACK_HOURS = 4;
 export const STRIKE_WINDOW_DAYS = 90;
 export const STRIKE_FLAG_AT = 3;              // 3 in 90 days: flagged for fewer roster days
 export const DOCUMENT_REMINDER_DAYS = [30, 7];

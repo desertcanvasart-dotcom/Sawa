@@ -198,6 +198,16 @@ const reqOf = (pledgeId) => one("SELECT * FROM payment_requests WHERE pledge_id 
 const cutoffOf = (dep) => zonedDateTimeToUtc(dep.date, "08:00") - 48 * HOUR;
 const startOf = (dep) => zonedDateTimeToUtc(dep.date, "08:00");
 const tick = (now) => pag.runPayAtGoAheadTick({ db, now, send });
+// GoAhead, and the operator acknowledges at once: payment requests wait for
+// the acknowledgement (decided 27 Sep 2026), so most cases start from it.
+async function goAhead() {
+  await cat.runStatusJob({});
+  await db.query(
+    `INSERT INTO catalogue_assignments (departure_id, operator_id, source, assigned_by, ack_due_at, state, acknowledged_at, acknowledged_by)
+     SELECT cd.id, $1, 'admin', 'it', now() + interval '4 hours', 'acknowledged', now(), 'it' FROM catalogue_departures cd
+      WHERE cd.status = 'go_ahead'
+        AND NOT EXISTS (SELECT 1 FROM catalogue_assignments a WHERE a.departure_id = cd.id AND a.state IN ('offered', 'acknowledged'))`, [X]);
+}
 const link = (pledgeId, now) => reqOf(pledgeId).then((r) => pag.attachLink(db, { requestId: Number(r.id), linkUrl: `https://pay.tab.travel/${r.reference}`, by: "ops", now, send }));
 const pay = (pledgeId, now = Date.now()) => reqOf(pledgeId).then((r) => pag.markRequestPaid(db, { requestId: Number(r.id), providerReference: `TAB-${r.id}`, by: "ops", now }));
 
@@ -254,7 +264,7 @@ test("a booking keeps the tier version in force when it was made, though tiers c
   deps.a.agency = await book(deps.a, 2, { agencyId: "ag_a", billing: true });
   deps.a.gone = await book(deps.a, 1);
   await db.query("UPDATE pledges SET status = 'cancelled', cancelled_reason = 'traveler', cancelled_at = now() WHERE id = $1", [deps.a.gone]);
-  await cat.runStatusJob({});
+  await goAhead();
   assert.equal((await one("SELECT status FROM catalogue_departures WHERE id = $1", [deps.a.id])).status, "go_ahead");
   assert.equal(Number((await one("SELECT cancellation_tier_version_id AS v FROM pledges WHERE id = $1", [deps.a.ana])).v), 1, "made under v1, keeps v1");
   assert.equal(Number((await one("SELECT cancellation_tier_version_id AS v FROM pledges WHERE id = $1", [deps.a.second])).v), v2.id);
@@ -423,7 +433,7 @@ test("at the cut-off the manifest freezes with manifest seats only", { skip }, a
 test("the deadline: capped at the cut-off, never under 24 hours unless the cut-off is sooner; admin sees the short window", { skip }, async () => {
   // Departure B goes ahead with Omar's 2 seats plus 2 more.
   deps.b.more = await book(deps.b, 2);
-  await cat.runStatusJob({});
+  await goAhead();
   // 20 hours before the cut-off: under the 24-hour floor (a short window),
   // over the 12-hour minimum that would hold the link for a decision.
   const late = cutoffOf(deps.b) - 20 * HOUR;
@@ -513,7 +523,7 @@ test("refunds: full price × the tier's retained percentage, as an ops task, rec
   const f = deps.f;
   f.p = await book(f, 1, { total: 100 });
   for (let n = 0; n < 2; n++) await book(f, 2);
-  await cat.runStatusJob({});
+  await goAhead();
   const now = Date.now();
   await tick(now);
   await link(f.p, now);
@@ -558,7 +568,7 @@ test("the waitlist: offers in order, expiry passes the seats on, a waitlisted bo
   await tiers.publishTierDraft(db, { versionId: d4.id, effectiveFrom: today(), by: "it" });
   const bookings = [];
   for (let n = 0; n < 6; n++) bookings.push(await book(g, 2));
-  await cat.runStatusJob({});
+  await goAhead();
   const join = (body) => fetch(`${on}/api/public/departures/${g.legacy}/waitlist`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   const w1 = await join({ name: "First", email: "w1@example.test", seats: 2 });
   const w1Body = await w1.text();
@@ -677,7 +687,7 @@ test("a link never made: alerts to ops and admin at 6 and 12 hours, a dashboard 
   d.unsecured = await book(d, 1, { email: "unsecured@example.test" });
   d.cancel = await book(d, 1, { email: "cancel@example.test" });
   d.more = await book(d, 1);
-  await cat.runStatusJob({});
+  await goAhead();
   const t0 = Date.now();
   await tick(t0);
   const before = await summary();
@@ -760,7 +770,7 @@ test("decision 3: cancel — nothing was charged, nothing refunded, and the trav
   // checked through the module, which takes the send function.
   const d2 = await freshDeparture();
   const ids = [await book(d2, 1, { email: "sorry@example.test" }), await book(d2, 3)];
-  await cat.runStatusJob({});
+  await goAhead();
   await tick(Date.now());
   const r2 = await reqOf(ids[0]);
   sent.length = 0;
@@ -774,7 +784,7 @@ test("decision 3: cancel — nothing was charged, nothing refunded, and the trav
 test("a link made too late (under 12 hours to pay) starts no deadline and goes to the same decision", { skip }, async () => {
   const d = await freshDeparture();
   const late = await book(d, 4, { email: "late@example.test" });
-  await cat.runStatusJob({});
+  await goAhead();
   await tick(Date.now());
   sent.length = 0;
   // Ops paste the link 10 hours before the cut-off: the traveler would have 10 hours.
@@ -793,7 +803,7 @@ test("a link made too late (under 12 hours to pay) starts no deadline and goes t
   // 12 hours or more is fine: a link 30 hours before the cut-off starts a deadline as usual.
   const d2 = await freshDeparture();
   const ok = await book(d2, 4);
-  await cat.runStatusJob({});
+  await goAhead();
   await tick(Date.now());
   const fine = await link(ok, cutoffOf(d2) - 30 * HOUR);
   assert.deepEqual([fine.state, fine.dueBoundBy], ["sent", "cutoff"]);
@@ -831,27 +841,46 @@ test("the Terms are versioned: catalog and legacy series; each booking records t
 });
 
 // ---------------------------------------------------------------- the seller and the collecting agent (27 Sep 2026)
-test("seller disclosure: 'a licensed Sawa partner' before assignment; from it, the operator's legal name and licence as seller and the collecting agent as payee, on the request, receipt, voucher and booking page", { skip }, async () => {
+test("seller disclosure: no seller and no payment request until the operator acknowledges (4 hours); then the operator's legal name and license as seller and the collecting agent as payee, on the request, receipt, voucher and booking page", { skip }, async () => {
   const { BRAND } = await import("./brand.js");
+  const { ACK_HOURS } = await import("../shared/operators.js");
   const payee = `${BRAND.legalName}, collecting agent (${BRAND.agentLicense})`;
   await ops.updateOperator(db, X, { travellerLicenceNo: "TL-4471" });
   const d = await freshDeparture();
   const p = await book(d, 4, { email: "seller@example.test" });
   await cat.runStatusJob({});
+  assert.equal((await one("SELECT status FROM catalogue_departures WHERE id = $1", [d.id])).status, "go_ahead");
   await tick(Date.now());
-  sent.length = 0;
-  await link(p, Date.now());
-  const linkMail = sent.find((m) => m.kind === "pay_at_goahead_link");
-  assert.match(linkMail.text, /Operated by a licensed Sawa partner\. Payee: /);
-  assert.ok(linkMail.text.includes(`Payee: ${payee}.`));
+  assert.equal(await reqOf(p), undefined, "GoAhead alone makes no payment request");
   const code = (await one("SELECT booking_code FROM pledges WHERE id = $1", [p])).booking_code;
-  let page = (await (await fetch(`${on}/api/public/bookings/${code}`)).json()).booking.payAtGoAhead;
-  assert.deepEqual([page.seller, page.sellerLine, page.payee, page.voucher], [null, "Operated by a licensed Sawa partner", payee, null]);
+  const pageOf = async () => (await (await fetch(`${on}/api/public/bookings/${code}`)).json()).booking.payAtGoAhead;
+  let page = await pageOf();
+  assert.deepEqual([page.seller, page.sellerLine, page.awaitingOperator, page.request, page.voucher],
+    [null, "Operated by a licensed Sawa partner", true, null, null], "the page says a request will follow");
 
-  // Assigned: the operator is named from now on.
-  await asg.assignByAdmin(db, { departureId: d.id, operatorId: X, by: "ops" });
-  page = (await (await fetch(`${on}/api/public/bookings/${code}`)).json()).booking.payAtGoAhead;
-  assert.equal(page.sellerLine, "Sold by Nile Tours S.A.E., license no. TL-4471");
+  // Offered, not yet acknowledged: still no seller and no request.
+  const a = await asg.assignByAdmin(db, { departureId: d.id, operatorId: X, by: "ops" });
+  assert.ok(Math.abs(new Date(a.ackDueAt).getTime() - new Date(a.assignedAt).getTime() - ACK_HOURS * HOUR) < 5000, "4 hours to acknowledge");
+  assert.equal(ACK_HOURS, 4);
+  await tick(Date.now());
+  assert.equal(await reqOf(p), undefined, "an offer alone makes no payment request");
+  page = await pageOf();
+  assert.deepEqual([page.seller, page.awaitingOperator], [null, true], "an offer names nobody");
+
+  // Acknowledged: the request is made at once, and the seller is named.
+  const acked = await asg.acknowledge(db, { assignmentId: a.id, operatorId: X, by: "dispatch", send });
+  assert.equal(acked.paymentRequests, 1);
+  assert.equal((await reqOf(p)).state, "awaiting_link");
+  page = await pageOf();
+  assert.deepEqual([page.sellerLine, page.awaitingOperator], ["Sold by Nile Tours S.A.E., license no. TL-4471", false]);
+  // The 48-hour deadline runs from the request reaching the traveler, capped at the cut-off.
+  sent.length = 0;
+  const sentAt = Date.now();
+  await link(p, sentAt);
+  assert.equal(new Date((await reqOf(p)).due_at).getTime(), Math.min(sentAt + 48 * HOUR, cutoffOf(d)));
+  const linkMail = sent.find((m) => m.kind === "pay_at_goahead_link");
+  assert.ok(linkMail.text.includes("Sold by Nile Tours S.A.E., license no. TL-4471.") && linkMail.text.includes(`Payee: ${payee}.`), linkMail.text);
+
   sent.length = 0;
   const r = await reqOf(p);
   const paid = await pag.markRequestPaid(db, { requestId: Number(r.id), providerReference: "TAB-SELLER", by: "ops", send });
@@ -860,7 +889,8 @@ test("seller disclosure: 'a licensed Sawa partner' before assignment; from it, t
   assert.ok(receipt.text.includes(`Issued by ${BRAND.legalName} (Commercial Registration ${BRAND.registrationNumber}, ${BRAND.agentLicense}), collecting agent, on behalf of Nile Tours S.A.E., license no. TL-4471.`), receipt.text);
   const stored = await reqOf(p);
   assert.deepEqual([stored.seller_legal_name, stored.seller_licence_no, stored.receipt_no], ["Nile Tours S.A.E.", "TL-4471", paid.receipt.receiptNo]);
-  page = (await (await fetch(`${on}/api/public/bookings/${code}`)).json()).booking.payAtGoAhead;
+  assert.equal((await one("SELECT COUNT(*)::int AS n FROM payment_receipts WHERE request_id = $1 AND superseded_at IS NULL", [r.id])).n, 1, "the receipt is kept");
+  page = await pageOf();
   assert.deepEqual([page.voucher.bookingCode, page.voucher.seller, page.voucher.payee, page.voucher.receiptNo],
     [code, "Sold by Nile Tours S.A.E., license no. TL-4471", payee, paid.receipt.receiptNo]);
   // The reminder carries the same lines (another booking, still unpaid).
@@ -874,10 +904,99 @@ test("seller disclosure: 'a licensed Sawa partner' before assignment; from it, t
   assert.ok(reminder.text.includes("Sold by Nile Tours S.A.E., license no. TL-4471.") && reminder.text.includes(`Payee: ${payee}.`), reminder.text);
 });
 
+test("reassigned after travelers paid: once the new operator acknowledges, each paid traveler is told, the receipt is reissued naming the new seller (the original kept, superseded), and a full refund is offered for 48 hours; logged", { skip }, async () => {
+  const Y = (await ops.createOperator(db, { legalName: "Delta Nile Travel", email: "dispatch@delta-nile.test" }, "it")).id;
+  for (const kind of ["tourism_license", "etaa_membership", "liability_insurance", "vehicle_insurance"]) {
+    await ops.addDocument(db, Y, { kind, number: "2", expiresOn: shiftDate(today(), 400) }, { by: "it" });
+  }
+  await ops.setApprovals(db, Y, [productId], "it");
+  await ops.setOperatorStatus(db, Y, "active", { by: "it" });
+  await ops.updateOperator(db, Y, { travellerLicenceNo: "TL-9000" });
+
+  const d = await freshDeparture();
+  const p = await book(d, 2, { email: "leaves@example.test" });
+  const q = await book(d, 2, { email: "stays@example.test" });
+  await cat.runStatusJob({});
+  const a = await asg.assignByAdmin(db, { departureId: d.id, operatorId: X, by: "ops" });
+  await asg.acknowledge(db, { assignmentId: a.id, operatorId: X, by: "dispatch" });
+  const t0 = Date.now();
+  await link(p, t0); await link(q, t0);
+  await pay(p); await pay(q);
+  const firstNo = (await reqOf(p)).receipt_no;
+  const code = (await one("SELECT booking_code FROM pledges WHERE id = $1", [p])).booking_code;
+  const pageOf = async (c) => (await (await fetch(`${on}/api/public/bookings/${c}`)).json()).booking.payAtGoAhead;
+
+  // X can't run it; Sawa reassigns to Y. Until Y acknowledges, nobody is named and nothing is sent.
+  sent.length = 0;
+  const b = await asg.assignByAdmin(db, { departureId: d.id, operatorId: Y, by: "ops" });
+  let page = await pageOf(code);
+  assert.deepEqual([page.seller, page.sellerChange], [null, null]);
+  assert.ok(!sent.some((m) => m.kind === "pay_at_goahead_seller_changed"));
+
+  const ackAt = Date.now();
+  const acked = await asg.acknowledge(db, { assignmentId: b.id, operatorId: Y, by: "dispatch@delta-nile.test", now: ackAt, send });
+  assert.equal(acked.sellerChanges.length, 2, "both paid travelers");
+  const mail = sent.find((m) => m.kind === "pay_at_goahead_seller_changed" && m.to === "leaves@example.test");
+  assert.ok(mail, "the traveler is emailed");
+  assert.match(mail.text, /Nile Tours S\.A\.E\. can no longer run it; Delta Nile Travel now sells and operates it/);
+  assert.ok(mail.text.includes(`receipt ${firstNo}-2`) && mail.text.includes(`replaces receipt ${firstNo}, which is kept on record and marked superseded`), mail.text);
+  assert.match(mail.text, /on behalf of Delta Nile Travel, license no\. TL-9000/);
+  assert.match(mail.text, /cancel with a full refund of €190 until/);
+
+  // The receipts: the original superseded by the new one, which the request now carries.
+  const req = await reqOf(p);
+  const receipts = (await db.query("SELECT * FROM payment_receipts WHERE request_id = $1 ORDER BY id", [req.id])).rows;
+  assert.deepEqual(receipts.map((x) => [x.receipt_no, x.seller_legal_name, x.superseded_at != null]),
+    [[firstNo, "Nile Tours S.A.E.", true], [`${firstNo}-2`, "Delta Nile Travel", false]]);
+  assert.equal(Number(receipts[0].superseded_by), Number(receipts[1].id));
+  assert.deepEqual([req.receipt_no, req.seller_legal_name, req.seller_licence_no], [`${firstNo}-2`, "Delta Nile Travel", "TL-9000"]);
+  const offer = await one("SELECT * FROM seller_change_offers WHERE request_id = $1", [req.id]);
+  assert.equal(new Date(offer.expires_at).getTime(), ackAt + 48 * HOUR);
+  const log = await one("SELECT * FROM audit_log WHERE action = 'booking.seller_changed' AND entity_id = $1", [code]);
+  assert.ok(log, "logged");
+  assert.deepEqual([log.detail.from.legalName, log.detail.to.legalName, log.detail.receiptNo, log.detail.supersededReceiptNo],
+    ["Nile Tours S.A.E.", "Delta Nile Travel", `${firstNo}-2`, firstNo]);
+
+  page = await pageOf(code);
+  assert.deepEqual([page.sellerChange.open, page.sellerChange.from, page.sellerChange.receiptNo, page.voucher.seller],
+    [true, "Nile Tours S.A.E.", `${firstNo}-2`, "Sold by Delta Nile Travel, license no. TL-9000"]);
+
+  // The traveler takes the offer: canceled, everything refunded, no fee kept.
+  const res = await fetch(`${on}/api/public/bookings/${code}/seller-change/cancel`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+  const body = await res.json();
+  assert.equal(res.status, 200, JSON.stringify(body));
+  assert.equal(body.refundEur, 190);
+  const pl = await one("SELECT status, cancelled_reason FROM pledges WHERE id = $1", [p]);
+  assert.deepEqual([pl.status, pl.cancelled_reason], ["cancelled", "operator"]);
+  const refund = await one("SELECT * FROM payment_refunds WHERE request_id = $1", [req.id]);
+  assert.deepEqual([Number(refund.amount_eur), Number(refund.retained_pct), Number(refund.fee_retained_eur)], [190, 0, 0]);
+  assert.equal((await one("SELECT state FROM seller_change_offers WHERE id = $1", [offer.id])).state, "accepted");
+  assert.ok(await one("SELECT 1 FROM audit_log WHERE action = 'booking.seller_change_cancel' AND entity_id = $1", [code]), "logged");
+  assert.equal((await fetch(`${on}/api/public/bookings/${code}/seller-change/cancel`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" })).status, 409);
+
+  // The other traveler lets it pass: after 48 hours the offer expires and the route refuses.
+  const qCode = (await one("SELECT booking_code FROM pledges WHERE id = $1", [q])).booking_code;
+  await tick(ackAt + 48 * HOUR + MIN);
+  assert.equal((await one("SELECT s.state FROM seller_change_offers s JOIN pledges p ON p.id = s.pledge_id WHERE p.id = $1", [q])).state, "expired");
+  assert.equal((await fetch(`${on}/api/public/bookings/${qCode}/seller-change/cancel`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" })).status, 409);
+  assert.equal((await one("SELECT status FROM pledges WHERE id = $1", [q])).status, "confirmed", "the booking stands");
+});
+
 test("the settlement statement distributes the collections: gross, payment costs, agency commission, the operator entitlement and the agent's commission", { skip }, async () => {
   const { BRAND } = await import("./brand.js");
   // Departure D (the guarantee test): 2 travelers paid €190, agency commission €20, entitlement 5,900 EGP.
+  // The entitlement converts at the CBE rate on each traveler's charge date
+  // (the margin report's rule): no rate for that day, no figure.
+  const chargeDays = (await db.query(
+    "SELECT DISTINCT to_char(paid_at AT TIME ZONE 'Africa/Cairo', 'YYYY-MM-DD') AS day FROM payment_requests WHERE departure_id = $1 AND state = 'paid'", [deps.d.id])).rows.map((r) => r.day);
+  assert.equal(chargeDays.length, 1);
+  const [paidDay] = chargeDays;
+  await db.query("DELETE FROM fx_rates WHERE day = $1", [paidDay]);
   await fin.setFxRate(db, { day: deps.d.date, egpPerEur: 50, by: "it" });
+  const none = await settle.departureDistribution(db, deps.d.id, { entitlementEgp: 5900 });
+  assert.equal(none.problem, `exchange rate missing for ${paidDay}`, "the departure date's rate isn't used");
+  assert.equal(none.agentCommissionEur, null);
+  await fin.setFxRate(db, { day: paidDay, egpPerEur: 50, by: "it" });
   const f = await settle.departureDistribution(db, deps.d.id, { entitlementEgp: 5900 });
   assert.deepEqual([f.grossEur, f.agencyCommissionEur, f.entitlementEur, f.paymentCostsEur], [190, 20, 118, 0]);
   assert.equal(f.agentCommissionEur, 52, "190 − 20 − 118");
@@ -885,7 +1004,7 @@ test("the settlement statement distributes the collections: gross, payment costs
   assert.equal(f.lines.at(-1).label, `${BRAND.legalName} commission`);
   // With a 3% fee and a higher rate, collections fall short: the guarantee.
   await fin.setFeeSetting(db, { percent: 3, fixedEur: 0, by: "it" });
-  await fin.setFxRate(db, { day: deps.d.date, egpPerEur: 25, by: "it" });
+  await fin.setFxRate(db, { day: paidDay, egpPerEur: 25, by: "it" });
   const g = await settle.departureDistribution(db, deps.d.id, { entitlementEgp: 5900 });
   assert.deepEqual([g.paymentCostsEur, g.entitlementEur, g.agentCommissionEur, g.guaranteeEur], [5.7, 236, 0, 71.7]);
   assert.ok(g.lines.some((l) => l.key === "minimum_departure_guarantee" && l.label === `Minimum Departure Guarantee, paid by ${BRAND.legalName}`));
@@ -899,6 +1018,37 @@ test("the settlement statement distributes the collections: gross, payment costs
   assert.ok(pdf.includes(`Sawa \\(${BRAND.legalName}\\)`), "the header names Sawa's operating company");
   assert.ok(!/Capital Travel/.test(pdf));
   await db.query("DELETE FROM finance_settings WHERE key = 'payment_fees'");
+});
+
+test("the statement converts the entitlement per traveler, at the CBE rate on each charge date (the margin report's rule)", { skip }, async () => {
+  const d = await freshDeparture();
+  const early = await book(d, 2, { email: "early@example.test" });
+  const late = await book(d, 2, { email: "late@example.test" });
+  await goAhead();
+  const now = Date.now();
+  await tick(now);
+  await link(early, now); await link(late, now);
+  await pay(early, now); await pay(late, now);
+  // The first paid a day earlier: each €190 carries half the 5,900 EGP entitlement,
+  // at its own day's rate: 2,950 / 60 + 2,950 / 50 = 49.17 + 59.00.
+  await db.query("UPDATE payment_requests SET paid_at = paid_at - interval '1 day' WHERE pledge_id = $1", [early]);
+  const day = (p) => one("SELECT to_char(paid_at AT TIME ZONE 'Africa/Cairo', 'YYYY-MM-DD') AS d FROM payment_requests WHERE pledge_id = $1", [p]).then((r) => r.d);
+  const [dEarly, dLate] = [await day(early), await day(late)];
+  assert.notEqual(dEarly, dLate);
+  await fin.setFxRate(db, { day: dEarly, egpPerEur: 60, by: "it" });
+  await db.query("DELETE FROM fx_rates WHERE day = $1", [dLate]);
+  const missing = await settle.departureDistribution(db, d.id, { entitlementEgp: 5900 });
+  assert.equal(missing.problem, `exchange rate missing for ${dLate}`);
+  await fin.setFxRate(db, { day: dLate, egpPerEur: 50, by: "it" });
+  const f = await settle.departureDistribution(db, d.id, { entitlementEgp: 5900 });
+  assert.equal(f.grossEur, 380);
+  assert.equal(f.entitlementEur, 108.17, "49.17 + 59.00");
+  assert.deepEqual(f.fx.rates, [{ day: dEarly, egpPerEur: 60 }, { day: dLate, egpPerEur: 50 }]);
+  assert.equal(f.agentCommissionEur, 271.83, "380 − 108.17");
+  // The margin report's conversion gives the same figure.
+  const { departureMargin } = await import("../shared/settlement-rules.js");
+  const same = departureMargin({ charges: [{ amountEur: 190, day: dEarly }, { amountEur: 190, day: dLate }], operatorEgp: 5900, rates: new Map([[dEarly, 60], [dLate, 50]]) });
+  assert.equal(same.operatorEur, f.entitlementEur);
 });
 
 test("the Capital Travel Service operator record stays pending and can't be activated", { skip }, async () => {

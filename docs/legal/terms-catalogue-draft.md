@@ -17,7 +17,7 @@ Markers: **[LAWYER n]** is a point that needs the lawyer's confirmation. The que
 
 1. **Online Era** (Commercial Registration 148500, General Sales Agent license no. 32241), trading as Sawa Tours ("Sawa", "we"), runs the platform. It takes reservations, and collects payment **as agent for the operator** that sells your departure. It is not the seller of the tour. **[LAWYER 2]**
 2. **The operator** is a licensed Egyptian tour company that Sawa assigns to your departure when it goes ahead. **The operator is the seller**: your contract for the tour is with the operator. It delivers the tour, or arranges its delivery. **[LAWYER 3]**
-3. **Before GoAhead** your booking pages say "operated by a licensed Sawa partner", because no operator is assigned yet. **From GoAhead**, your payment request, receipt, voucher and booking page name the operator's legal name and license number as **seller**, and "Online Era, collecting agent (General Sales Agent license no. 32241)" as **payee**. **[LAWYER 4]**
+3. **Until the operator has confirmed** your departure, your booking pages say "operated by a licensed Sawa partner", because no operator is committed yet. **From the operator's confirmation**, your payment request, receipt, voucher and booking page name the operator's legal name and license number as **seller**, and "Online Era, collecting agent (General Sales Agent license no. 32241)" as **payee**. **[LAWYER 4]**
 4. If you book through a travel agency, the agency acts for you. It must show you these Terms and the cancellation terms before it reserves (Agency Reseller Agreement, clause 4.2), and you confirm them yourself before you pay. **[LAWYER 5]**
 
 ## C2. A reservation, not yet a sale
@@ -31,14 +31,14 @@ Markers: **[LAWYER n]** is a point that needs the lawyer's confirmation. The que
 ## C3. GoAhead: the sale is made with the named operator
 
 1. A departure goes ahead when **4 travelers** have reserved it, unless the tour page shows a different minimum. **[LAWYER 8]**
-2. At GoAhead, Sawa assigns a licensed operator to the departure. **The sale of your seats is then made between you and that operator.** Online Era acts as the operator's agent in making it and in collecting the price.
+2. At GoAhead, Sawa assigns a licensed operator to the departure, and the operator confirms it (normally within 4 hours). **Once it has confirmed, the sale of your seats is made between you and that operator.** Online Era acts as the operator's agent in making it and in collecting the price. Until then your booking page says "Operated by a licensed Sawa partner. Your payment request will follow shortly."
 3. We tell you the operator's name and license number in your payment request, and on your booking page from then on.
-4. If the assigned operator can't run the departure and Sawa assigns another before the tour, we tell you. The new operator becomes the seller on the same terms and at the same price. **[LAWYER 9]**
+4. If the operator can't run the departure and Sawa assigns another before the tour, the new operator becomes the seller on the same terms and at the same price. If you have already paid, once the new operator confirms we email you, reissue your receipt naming the new seller (the original receipt is kept, marked superseded), and you may **cancel with a full refund within 48 hours** of that email (never after the start). **[LAWYER 9]**
 5. If a departure doesn't reach its minimum by its booking cut-off, or its earlier GoAhead deadline for cruises and multi-day tours, the reservation lapses. No sale is made, nothing is charged, and we offer another date where we can. Sawa may choose to run a departure below its minimum; if it does, it is a GoAhead like any other.
 
 ## C4. Paying: the payment request, paid to Online Era as collecting agent
 
-1. At GoAhead we email you a **payment request** for the full price, in euros. It names the seller (the operator) and the payee (Online Era, collecting agent). Your booking code is the payment's reference.
+1. Once the operator has confirmed the departure (C3.2), we email you a **payment request** for the full price, in euros. It names the seller (the operator) and the payee (Online Era, collecting agent). Your booking code is the payment's reference.
 2. The request has a **deadline**, stated in the email and on your booking page: normally **48 hours** after it is sent, never later than the booking cut-off. **You always have at least 12 hours**. If we can't give you that, we don't start a deadline; we contact you (C5.3). **[LAWYER 10]**
 3. We send one reminder halfway to the deadline.
 4. You pay by card through the payment provider used by Online Era. Paying Online Era as the operator's collecting agent **settles the price with the operator**. **[LAWYER 11]**
@@ -88,7 +88,7 @@ Markers: **[LAWYER n]** is a point that needs the lawyer's confirmation. The que
 | 6 | ***New.* Reservation vs. sale:** do C2 and C3 hold? Is a reservation with no payment and no seller a binding contract with anyone, and with whom (Online Era, as the platform)? |
 | 7 | ***New.* Personal data:** under the Personal Data Protection Law (151/2020), what are the roles (controller, processor) of Online Era, the operator and the agency, before and after assignment? |
 | 8 | Must the GoAhead minimum (4) be in the Terms, or may it be shown per departure? |
-| 9 | ***New.* Reassignment:** if the operator is replaced after GoAhead, and possibly after payment, does the sale transfer to the new operator? Is the traveler's consent needed, and what must the receipt then say? |
+| 9 | ***New.* Reassignment:** if the operator is replaced after GoAhead, and possibly after payment, does the sale transfer to the new operator? The draft (C3.4) tells a paid traveler, reissues the receipt naming the new seller (the original kept, marked superseded) and offers cancellation with a full refund for 48 hours. Is that enough, or is the traveler's express consent needed? Is a reissued receipt the right document, or a credit note and a new receipt? |
 | 10 | The payment period (48 hours or 24) and the 12-hour minimum: fair, and stated as numbers or as "the deadline in your email"? |
 | 11 | ***New.* Payment to the agent:** does payment to Online Era as collecting agent discharge the traveler's debt to the operator, including if Online Era fails to pay the operator? |
 | 12 | Release for non-payment as a lapse with no sale and no charge: sufficient, with our notice? |

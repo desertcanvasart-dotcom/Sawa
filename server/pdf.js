@@ -136,7 +136,10 @@ export function statementPdf(statement) {
       { text: "Distribution of collections (EUR)", size: 11, bold: true, gap: 4 },
       ...(s.distribution.lines || []).map((l) => ({ text: `${l.label}: ${eur(l.amountEur)}`, size: 10, bold: l.key === "agent_commission" || l.key === "minimum_departure_guarantee", gap: 0 })),
       ...(s.distribution.problem ? [{ text: `Not complete: ${s.distribution.problem}.`, size: 9 }] : []),
-      ...(s.distribution.fx ? [{ text: `Operator entitlement ${egp(s.distribution.entitlementEgp)} at ${s.distribution.fx.egpPerEur} EGP per EUR (${s.distribution.fx.day}).`, size: 8 }] : []),
+      ...(s.distribution.fx?.rates?.length ? [{
+        text: `Operator entitlement ${egp(s.distribution.entitlementEgp)}, converted per traveler at the CBE rate on each charge date: ${s.distribution.fx.rates.map((r) => `${r.day} ${r.egpPerEur ?? "missing"}`).join("; ")} (EGP per EUR).`,
+        size: 8,
+      }] : []),
       { text: "", gap: 6 },
     ] : []),
     { text: "", gap: 4 },

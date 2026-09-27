@@ -424,6 +424,8 @@ export async function auditEmailTemplates() {
     level: "no_link", detail: { operatorName: "An Operator" },
     receiptNo: "R-2026-000001", paidAt: "2026-08-30T09:00:00Z", issuer: "Sawa, collecting agent", onBehalfOf: "Sold by An Operator, license no. 1",
     seller: "Sold by An Operator, license no. 1", payee: "Sawa, collecting agent",
+    previousSeller: "A Former Operator", supersededReceiptNo: "R-2026-000001", issuedAt: "2026-08-30T09:00:00Z",
+    cancelBy: "2026-09-01T09:00:00Z",
     terms: { version: 1, tiers: [{ window: "30 days or more before", retainedPct: 0 }, { window: "Under 30 days", retainedPct: 50 }] },
     items: [{ reference: "SAWA-ABCDE", title: "Aswan Highlights", date: "2026-09-01", amount: 190, dueAt: "2026-08-30T10:00:00Z" }],
   };
@@ -458,7 +460,7 @@ export async function auditEmailTemplates() {
     "payAtGoAheadReleasedEmail", "waitlistOfferEmail", "payAtGoAheadOpsEmail",
     "payAtGoAheadBookingEmail", "payAtGoAheadEscalationEmail", "payAtGoAheadApologyEmail",
     // The receipt Sawa issues as collecting agent, listed the day it was written.
-    "payAtGoAheadReceiptEmail"];
+    "payAtGoAheadReceiptEmail", "payAtGoAheadSellerChangedEmail"];
   // Where one shared fixture can't serve: `kind` means a different thing to
   // each of these, so each gets the value its own caller passes.
   const FX_FOR = {
