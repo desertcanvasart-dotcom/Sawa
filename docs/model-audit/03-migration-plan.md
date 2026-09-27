@@ -502,6 +502,22 @@ How these map onto the open questions below:
 
 Still open: D3, D7, D8, D11, D12, D13, D16, D17, D18, D22, D23.
 
+### Phase 2 decisions (recorded 27 Sep 2026)
+
+As supplied, all CONFIRM (recommended, awaiting final confirmation). Phase 2 builds on them.
+
+```
+CONFIRM   Cruise and multi-day GoAhead deadline: 30 days (matches current site copy); per-product override allowed
+CONFIRM   Site-wide spelling: US English   (change to British if preferred; applies to all new and phase-1 copy)
+CONFIRM   Roster is published monthly by the 15th of the previous month
+CONFIRM   Operator must acknowledge an assignment within 12 hours; a miss = one strike, and admin may reassign
+CONFIRM   Strikes: 3 in 90 days = fewer roster days next month (admin decision, flagged in the UI); removal is manual
+CONFIRM   Rate card in EGP; a rate version is locked to a departure when its first seat is sold
+CONFIRM   Assignment notices by email and in the operator portal now; WhatsApp later
+```
+
+These replace the phase 1 placeholders: the 21-day deadline (now 30) and British English for new copy (now US). "Rate card in EGP" settles the operator side of D1; travellers still pay in EUR.
+
 ## 4a. Decisions needed from you (as first written; superseded where §4 answers them)
 
 "Draft" = what the *Operator Supply & Agency Reseller Agreements* draft (26 Sep 2026) already says or suggests. Where it settles a question, the item is marked **settled by draft**; confirm it and nothing else is needed. Everything else is still open.
