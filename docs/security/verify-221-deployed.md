@@ -20,6 +20,7 @@
   - Whether a merge to main deploys by itself is a setting in Railway's dashboard (the service's GitHub source, branch and automatic deploys), and it isn't visible from here.
   - `.railwayignore` exists and says "Never upload local env or dev-only preview data". A `.railwayignore` only matters when the **Railway CLI uploads a local folder** (`railway up`). So deploys have been made that way at least sometimes, by hand, from a local checkout.
   - Both paths are possible; step 1 below tells you which one is in use.
+- **Since [#226](https://github.com/desertcanvasart-dotcom/Sawa/pull/226), once deployed, `/api/health` reports the commit**, `{"ok":true,"commit":"<sha>"}`, from Railway's `RAILWAY_GIT_COMMIT_SHA`. It reports `"unknown"` for a CLI upload. With a SHA, go straight to step 2. Before that deploy:
 - **The app doesn't report its own commit.** `/api/health` answers `{"ok":true}`, and `/api/modes` (admin session) reports modes, not a version. The commit is read from Railway.
 - **Migrations never run on deploy** (B5, `docs/RUNBOOK.md`). #221 has none, so a deploy alone is enough.
 
