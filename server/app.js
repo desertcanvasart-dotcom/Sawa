@@ -3474,15 +3474,35 @@ const groupBy = (rows, key) => {
   return m;
 };
 
+// Catalog departures (catalogue_v2) are settled by the rate card, under
+// Operators and Finance, and never by this module: the old profit share would
+// pay the same date twice. A departure is a catalog one by TYPE (it backs a
+// catalogue_departures row), whatever its payments or cost sheet say. Its cost
+// sheet and receipts still work: force-majeure reimbursements point at them,
+// and they feed the new settlement only.
+const CATALOGUE_REFUSAL = "This is a catalog departure. It is settled under Operators and Finance (the rate card), not in Settlements.";
+async function hasCatalogueTable(db) {
+  return (await db.query("SELECT to_regclass('public.catalogue_departures') AS t")).rows[0].t != null;
+}
+async function catalogueDepartureIds(db, ids) {
+  if (!ids.length || !(await hasCatalogueTable(db))) return new Set();
+  return new Set((await db.query(
+    "SELECT legacy_departure_id AS id FROM catalogue_departures WHERE legacy_departure_id = ANY($1::int[])", [ids])).rows.map((r) => Number(r.id)));
+}
+async function refuseCatalogueDeparture(db, depId) {
+  if ((await catalogueDepartureIds(db, [depId])).size) throw new AppError(409, CATALOGUE_REFUSAL);
+}
+
 // Everything the settlement of these departures needs, in one read. Without
 // `ids`: every departure confirmed to run (GoAhead), and any other with money
-// collected, a cost line or a sign-off.
+// collected, a cost line or a sign-off. Catalog departures are left out either
+// way, and listed in `excludedCatalogue` (the payout run logs them).
 //
 // GoAhead is what puts a date on the list. It used to take money collected or
 // a cost line — but cost lines (and their receipts) are only added from this
 // list, so a new tour never appeared and there was nowhere to enter its costs.
 async function loadSettlements(db, ids = null) {
-  const depRows = (await db.query(
+  let depRows = (await db.query(
     ids
       ? `SELECT * FROM departures WHERE id = ANY($1::int[]) ORDER BY COALESCE(end_date, start_date, date) DESC, id DESC`
       : `SELECT * FROM departures d WHERE
@@ -3493,6 +3513,9 @@ async function loadSettlements(db, ids = null) {
            OR EXISTS (SELECT 1 FROM departure_settlements s WHERE s.departure_id = d.id)
          ORDER BY COALESCE(d.end_date, d.start_date, d.date) DESC, d.id DESC`,
     ids ? [ids] : [])).rows;
+  const catalogue = await catalogueDepartureIds(db, depRows.map((d) => d.id));
+  const excludedCatalogue = depRows.filter((d) => catalogue.has(Number(d.id))).map((d) => Number(d.id));
+  depRows = depRows.filter((d) => !catalogue.has(Number(d.id)));
   const depIds = depRows.map((d) => d.id);
   const [pledgeRows, costRows, adjRows, signRows, paidRows, agencies, inputs] = await Promise.all([
     db.query(`SELECT * FROM pledges WHERE departure_id = ANY($1::int[]) ORDER BY created_at ASC, id ASC`, [depIds]),
@@ -3512,6 +3535,7 @@ async function loadSettlements(db, ids = null) {
     [[...new Set(depRows.map((d) => d.tour_product_id).filter(Boolean))]])).rows.map((r) => [r.id, mapProduct(r)]));
   return {
     departures: depRows.map((r) => mapDeparture(r, [])),
+    excludedCatalogue,
     productOf: (d) => products.get(d.tourProductId) || null,
     pledgesByDep,
     payments,
@@ -3715,6 +3739,11 @@ app.post("/api/agency/departures/:depId/costs", requireAuth, requireRole("agency
   const input = parse(costSchema, req.body);
   const depId = Number(req.params.depId);
   await departureExists(depId);
+  // Who "operates" a date here is the old profit-share rule; a catalog date's
+  // operator is its rate-card assignment, and Sawa records its costs.
+  if ((await catalogueDepartureIds(pool, [depId])).size) {
+    throw new AppError(409, "This is a catalog departure: Sawa records its costs (Operators and Finance). Send the receipts to Sawa.");
+  }
   const row = await withSettlements(async () => {
     const L = await loadSettlements(pool, [depId]);
     const d = L.departures[0];
@@ -3756,6 +3785,7 @@ app.post("/api/admin/settlements/:depId/costs-final", requireAuth, requireRole("
   const depId = Number(req.params.depId);
   const final = req.body?.final !== false;
   await departureExists(depId);
+  await refuseCatalogueDeparture(pool, depId);
   await withSettlements(async () => {
     if (final) {
       const pending = (await pool.query(`SELECT COUNT(*)::int AS n FROM departure_costs WHERE departure_id = $1 AND state = 'submitted'`, [depId])).rows[0].n;
@@ -3779,6 +3809,7 @@ app.post("/api/admin/settlements/:depId/adjustments", requireAuth, requireRole("
   const input = parse(adjustmentSchema, req.body);
   const depId = Number(req.params.depId);
   await departureExists(depId);
+  await refuseCatalogueDeparture(pool, depId);
   if (input.agencyId && !(await pool.query(`SELECT 1 FROM agencies WHERE id = $1`, [input.agencyId])).rowCount) throw new AppError(422, "Unknown agency.");
   const row = await withSettlements(async () => (await pool.query(
     `INSERT INTO settlement_adjustments (departure_id, agency_id, amount, reason, created_by) VALUES ($1, $2, $3, $4, $5) RETURNING *`,
@@ -3792,6 +3823,7 @@ app.post("/api/admin/settlements/:depId/loss-decision", requireAuth, requireRole
   if (note.length < 3) throw new AppError(422, "Record Sawa's decision — who absorbs the loss, and why.");
   const depId = Number(req.params.depId);
   await departureExists(depId);
+  await refuseCatalogueDeparture(pool, depId);
   await withSettlements(() => pool.query(
     `INSERT INTO departure_settlements (departure_id, loss_decided_at, loss_decided_by, loss_note, updated_at) VALUES ($1, now(), $2, $3, now())
      ON CONFLICT (departure_id) DO UPDATE SET loss_decided_at = now(), loss_decided_by = $2, loss_note = $3, updated_at = now()`,
@@ -3844,6 +3876,7 @@ app.post("/api/admin/payout-runs", requireAuth, requireRole("super_admin", "ops_
   const payDate = asked || payDateOnOrAfter(cairoDay(Date.now()));
   let win;
   try { win = runWindow(payDate); } catch { throw new AppError(422, "Payouts are on Wednesdays — pick a Wednesday."); }
+  let skipped = [];
   const run = await withSettlements(() => withTransaction(async (c) => {
     const existing = (await c.query(`SELECT * FROM payout_runs WHERE pay_date = $1 FOR UPDATE`, [payDate])).rows[0];
     if (existing?.state === "approved") throw new AppError(409, `The run for ${payDate} is already approved.`);
@@ -3856,6 +3889,10 @@ app.post("/api/admin/payout-runs", requireAuth, requireRole("super_admin", "ops_
     await c.query(`DELETE FROM payout_lines WHERE run_id = $1`, [runRow.id]);
 
     const L = await loadSettlements(c);
+    // Catalog departures are never paid out here (they're settled under
+    // Operators and Finance): skipped, and said so.
+    skipped = L.excludedCatalogue;
+    if (skipped.length) console.log(`payout run ${payDate}: skipped ${skipped.length} catalog departure${skipped.length === 1 ? "" : "s"} (${skipped.join(", ")}); they are settled under Operators and Finance`);
     const entitled = [];
     const inScope = new Set();
     for (const d of L.departures) {
@@ -3878,9 +3915,9 @@ app.post("/api/admin/payout-runs", requireAuth, requireRole("super_admin", "ops_
     }
     return runRow;
   }));
-  await logAudit(req, { action: "payout.run_built", entity: "payout_run", entityId: String(run.id), detail: { payDate } });
+  await logAudit(req, { action: "payout.run_built", entity: "payout_run", entityId: String(run.id), detail: { payDate, skippedCatalogueDepartures: skipped } });
   const agencyName = new Map((await pool.query(`SELECT id, name FROM agencies`)).rows.map((a) => [a.id, a.name]));
-  res.status(201).json({ run: await runDetail(pool, run, agencyName) });
+  res.status(201).json({ run: await runDetail(pool, run, agencyName), skippedCatalogueDepartures: skipped });
 }));
 
 app.post("/api/admin/payout-runs/:id/approve", requireAuth, requireRole("super_admin", "ops_staff"), h(async (req, res) => {
@@ -3889,6 +3926,12 @@ app.post("/api/admin/payout-runs/:id/approve", requireAuth, requireRole("super_a
     const r = (await c.query(`SELECT * FROM payout_runs WHERE id = $1 FOR UPDATE`, [id])).rows[0];
     if (!r) throw new AppError(404, "Run not found.");
     if (r.state !== "draft") throw new AppError(409, "This run is already approved.");
+    // A draft built before catalog departures were excluded could still hold one.
+    const lineDeps = (await c.query("SELECT DISTINCT departure_id FROM payout_lines WHERE run_id = $1", [id])).rows.map((x) => Number(x.departure_id));
+    const catalogueLines = [...await catalogueDepartureIds(c, lineDeps)];
+    if (catalogueLines.length) {
+      throw new AppError(409, `This run includes catalog departure${catalogueLines.length === 1 ? "" : "s"} ${catalogueLines.join(", ")}, which ${catalogueLines.length === 1 ? "is" : "are"} settled under Operators and Finance. Rebuild the run to drop ${catalogueLines.length === 1 ? "it" : "them"}.`);
+    }
     const totals = (await c.query(`SELECT agency_id, SUM(amount) AS amount FROM payout_lines WHERE run_id = $1 GROUP BY agency_id`, [id])).rows;
     for (const t of totals) {
       await c.query(`INSERT INTO payout_transfers (run_id, agency_id, amount) VALUES ($1, $2, $3)`, [id, t.agency_id, Number(t.amount)]);

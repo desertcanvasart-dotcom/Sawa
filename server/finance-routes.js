@@ -146,6 +146,9 @@ export function registerFinanceRoutes(app, { requireAuth, requireRole, h, logAud
       advance: f.advance, balance: f.balance, payables, statement: await statementFor(pool, depId),
       receivables: (await pool.query("SELECT * FROM operator_receivables WHERE departure_id = $1 AND state <> 'cancelled' ORDER BY id", [depId])).rows.map(mapReceivable),
       penalties: await listPenaltyRates(pool), costLines,
+      // The cost sheet lives on the legacy departure row; lines are added
+      // through POST /api/admin/settlements/:legacyId/costs.
+      legacyDepartureId: legacy != null ? Number(legacy) : null,
     });
   }));
 

@@ -310,13 +310,43 @@ export async function marginReport(db = pool, { from, to }) {
 }
 
 // ---------------------------------------------------------------- legacy
-// Legacy departures (not sold through the catalog) that are still open, and
-// the date of the last one. They keep the existing settlement tools.
-export async function legacyOpenDepartures(db = pool) {
+// Legacy departures (not sold through the catalog) still to run, and the date
+// of the last one. They keep the old Settlements module until they are done.
+//
+// "Still to run" is not canceled or closed AND ending today or later: nothing
+// marks a date closed after it runs, so without the date a tour that ran long
+// ago would count as open for ever.
+//
+// canRetire: none still to run, and every legacy payout paid: no Wednesday run
+// in draft, no transfer due, and no ended date that went ahead with money
+// collected but has never been in an approved run. Shown on Admin → Finance;
+// switching the old module off is a separate, deliberate decision.
+export async function legacyOpenDepartures(db = pool, { today = todayIn() } = {}) {
   const r = (await db.query(
     `SELECT COUNT(*)::int AS n, MAX(COALESCE(d.end_date, d.start_date, d.date)) AS last
        FROM departures d
       WHERE d.status NOT IN ('cancelled', 'closed')
-        AND NOT EXISTS (SELECT 1 FROM catalogue_departures cd WHERE cd.legacy_departure_id = d.id)`)).rows[0];
-  return { open: r.n, lastDate: ymd(r.last) };
+        AND COALESCE(d.end_date, d.start_date, d.date) >= $1::date
+        AND NOT EXISTS (SELECT 1 FROM catalogue_departures cd WHERE cd.legacy_departure_id = d.id)`, [today])).rows[0];
+  const has = async (t) => (await db.query("SELECT to_regclass($1) AS t", [`public.${t}`])).rows[0].t != null;
+  let draftRuns = 0, duePayouts = 0, unsettled = 0;
+  if (await has("payout_runs")) {
+    draftRuns = (await db.query("SELECT COUNT(*)::int AS n FROM payout_runs WHERE state = 'draft'")).rows[0].n;
+    duePayouts = (await db.query("SELECT COUNT(*)::int AS n FROM payout_transfers WHERE state = 'due'")).rows[0].n;
+    if (await has("booking_payments")) {
+      unsettled = (await db.query(
+        `SELECT COUNT(*)::int AS n FROM departures d
+          WHERE d.status IN ('minimum_reached', 'supplier_confirmed')
+            AND COALESCE(d.end_date, d.start_date, d.date) < $1::date
+            AND NOT EXISTS (SELECT 1 FROM catalogue_departures cd WHERE cd.legacy_departure_id = d.id)
+            AND EXISTS (SELECT 1 FROM pledges p JOIN booking_payments b ON b.pledge_id = p.id
+                         WHERE p.departure_id = d.id AND b.state = 'paid')
+            AND NOT EXISTS (SELECT 1 FROM payout_lines l JOIN payout_runs pr ON pr.id = l.run_id
+                             WHERE l.departure_id = d.id AND pr.state = 'approved')`, [today])).rows[0].n;
+    }
+  }
+  return {
+    open: r.n, lastDate: ymd(r.last), draftRuns, duePayouts, unsettled,
+    canRetire: r.n === 0 && draftRuns === 0 && duePayouts === 0 && unsettled === 0,
+  };
 }
