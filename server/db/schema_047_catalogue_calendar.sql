@@ -90,7 +90,9 @@ CREATE TABLE IF NOT EXISTS catalogue_spec_versions (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS uq_catalogue_spec_one_draft
   ON catalogue_spec_versions (product_id) WHERE state = 'draft';
-CREATE UNIQUE INDEX IF NOT EXISTS uq_catalogue_spec_effective
+-- Several versions may take effect on the same day (a same-day correction):
+-- the highest version number wins (activeSpec in shared/catalogue.js).
+CREATE INDEX IF NOT EXISTS idx_catalogue_spec_effective
   ON catalogue_spec_versions (product_id, effective_from) WHERE state = 'published';
 
 -- A published version never changes. Refused in the database, not only in the

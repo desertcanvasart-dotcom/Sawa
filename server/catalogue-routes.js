@@ -12,7 +12,7 @@ import {
 } from "./catalogue.js";
 import { catalogueV2Enabled } from "./features.js";
 import {
-  PRODUCT_TYPES, PRODUCT_STATUSES, activeSpec, specGaps, publicDateLabel, addDays,
+  PRODUCT_TYPES, PRODUCT_STATUSES, activeSpec, specGaps, publicDateLabel, shiftDate,
 } from "../shared/catalogue.js";
 
 const notSwitchedOn = () => Object.assign(
@@ -159,7 +159,7 @@ export function registerCatalogueRoutes(app, { requireAuth, requireRole, h, logA
   app.get("/api/admin/catalogue/departures", ...staff, route(async (req, res) => {
     const today = todayIn();
     const from = req.query.from ? ymdSchema.parse(String(req.query.from)) : today;
-    const to = req.query.to ? ymdSchema.parse(String(req.query.to)) : addDays(from, 55);
+    const to = req.query.to ? ymdSchema.parse(String(req.query.to)) : shiftDate(from, 55);
     const productId = req.query.productId ? id(req.query.productId) : undefined;
     const [departures, products, listings] = await Promise.all([
       listDepartures(pool, { from, to, productId }),

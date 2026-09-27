@@ -8,11 +8,11 @@
 // Bookings stay in the existing tables. A catalogue departure is sold through
 // an ordinary `departures` row (legacy_departure_id), created here only when
 // the catalogue_v2 flag is on, and its seats are counted from `pledges`.
-import { pool } from "./db/index.js";
+import { pool, withTransaction } from "./db/index.js";
 import { TOUR_TIMEZONE, zonedDateTimeToUtc } from "./tz.js";
 import { cancelDepartureAndPledges } from "./departure-cancel.js";
 import {
-  PRODUCT_TYPES, PRODUCT_STATUSES, addDays, plannedDates, nextStatus, canRunBelowMinimum,
+  PRODUCT_TYPES, PRODUCT_STATUSES, shiftDate, plannedDates, nextStatus, canRunBelowMinimum,
   activeSpec, publishBlockers, specGaps, usesDeadline, legacyTypeFor,
 } from "../shared/catalogue.js";
 
@@ -29,6 +29,10 @@ export const isMissingCatalogueTables = (e) => e?.code === "42P01" || e?.code ==
 export function todayIn(now = Date.now(), timeZone = TOUR_TIMEZONE) {
   return new Intl.DateTimeFormat("en-CA", { timeZone }).format(new Date(now));
 }
+
+// On the shared pool, a transaction of its own. Given a client (a test, or a
+// caller already inside a transaction), run on that client as it is.
+const inTransaction = (db, fn) => (db === pool ? withTransaction(fn) : fn(db));
 
 const ymd = (v) => (v instanceof Date ? v.toISOString().slice(0, 10) : v ? String(v).slice(0, 10) : null);
 const HOUR_MS = 3600000;
@@ -118,7 +122,7 @@ export function departureInstants(dep, product, { startTime, nights } = {}) {
   const deadlineAt = usesDeadline(product.type) && product.goaheadDeadlineDays != null
     ? startsAt - Number(product.goaheadDeadlineDays) * DAY_MS
     : NaN;
-  const lastDay = addDays(dep.date, Math.max(0, Number(nights) || 0));
+  const lastDay = shiftDate(dep.date, Math.max(0, Number(nights) || 0));
   const endsAt = zonedDateTimeToUtc(lastDay, "23:59");
   return { startsAt, cutoffAt, deadlineAt, endsAt };
 }
@@ -227,6 +231,24 @@ export async function generateDepartures({ db = pool, now = Date.now(), material
     // Adopt first, for any status: a held product's existing bookings still
     // need to be visible in the calendar view.
     if (product.legacyProductId) {
+      // A date the generator already made but hasn't made bookable, that has
+      // since got an ordinary departure (an admin booking, say): link that one
+      // rather than making a second departure on the same day.
+      const linked = await db.query(
+        `UPDATE catalogue_departures cd SET legacy_departure_id = d.id, origin = 'adopted',
+                status = CASE WHEN d.status IN ('minimum_reached', 'supplier_confirmed') THEN 'go_ahead' ELSE cd.status END
+           FROM (SELECT DISTINCT ON (d.date) d.id, d.date, d.status FROM departures d
+                  WHERE d.tour_product_id = $2
+                    AND d.status NOT IN ('cancelled', 'pending_review', 'closed')
+                    AND d.date >= $3
+                    AND NOT EXISTS (SELECT 1 FROM catalogue_departures x WHERE x.legacy_departure_id = d.id)
+                  ORDER BY d.date,
+                           (SELECT COALESCE(SUM(p.seats), 0) FROM pledges p WHERE p.departure_id = d.id AND p.status <> 'cancelled') DESC,
+                           d.id) d
+          WHERE cd.product_id = $1 AND cd.date = d.date AND cd.legacy_departure_id IS NULL AND cd.status = 'open'`,
+        [product.id, product.legacyProductId, today]
+      );
+      out.adopted += linked.rowCount;
       const adopted = await db.query(
         `INSERT INTO catalogue_departures (product_id, date, spec_version_id, status, origin, legacy_departure_id)
          SELECT DISTINCT ON (d.date) $1, d.date, $2,
@@ -292,16 +314,15 @@ async function materialiseBookable({ db, today, world, log }) {
     const product = world.products.find((p) => p.id === Number(row.product_id));
     const t = product && world.legacy.get(product.legacyProductId);
     if (!t) continue;
-    const client = db === pool ? await pool.connect() : db;
     try {
-      if (client !== db) await client.query("BEGIN");
+      made += await inTransaction(db, async (client) => {
       // Re-read under lock: two overlapping runs must not make two rows.
       const again = await client.query(
         "SELECT legacy_departure_id FROM catalogue_departures WHERE id = $1 FOR UPDATE", [row.id]);
       if (again.rows[0]?.legacy_departure_id == null) {
         const date = ymd(row.date);
         const isPkg = t.type === "package";
-        const endDate = isPkg && t.nights ? addDays(date, Number(t.nights)) : null;
+        const endDate = isPkg && t.nights ? shiftDate(date, Number(t.nights)) : null;
         const id = (await client.query("SELECT nextval('departures_id_seq') AS id")).rows[0].id;
         await client.query(
           `INSERT INTO departures
@@ -316,14 +337,13 @@ async function materialiseBookable({ db, today, world, log }) {
             t.quality, t.deposit_percent]
         );
         await client.query("UPDATE catalogue_departures SET legacy_departure_id = $1 WHERE id = $2", [id, row.id]);
-        made += 1;
+        return 1;
       }
-      if (client !== db) await client.query("COMMIT");
+      return 0;
+      });
     } catch (e) {
-      if (client !== db) await client.query("ROLLBACK").catch(() => {});
+      // One bad row must not stop the rest; it is retried on the next run.
       log(`catalogue: could not make departure ${row.id} bookable — ${e.message}`);
-    } finally {
-      if (client !== db) client.release();
     }
   }
   return made;
@@ -382,10 +402,8 @@ export async function runStatusJob({ db = pool, now = Date.now(), log = () => {}
   return out;
 }
 
-async function transition(db, dep, next, product) {
-  const client = db === pool ? await pool.connect() : db;
-  try {
-    if (client !== db) await client.query("BEGIN");
+function transition(db, dep, next, product) {
+  return inTransaction(db, async (client) => {
     // Only from the status we read: a concurrent run or an admin override that
     // got there first wins, and this one does nothing.
     const upd = await client.query(
@@ -393,10 +411,7 @@ async function transition(db, dep, next, product) {
         WHERE id = $2 AND status = $3`,
       [next.status, dep.id, dep.status]
     );
-    if (!upd.rowCount) {
-      if (client !== db) await client.query("ROLLBACK");
-      return false;
-    }
+    if (!upd.rowCount) return false;
     const payload = { productId: product.id, code: product.code, date: dep.date, reason: next.reason, seatsSold: dep.seatsSold };
 
     if (next.status === "cancelled_below_minimum") {
@@ -421,14 +436,8 @@ async function transition(db, dep, next, product) {
     } else if (next.status === "completed") {
       await addEvent(client, dep.id, "completed", payload);
     }
-    if (client !== db) await client.query("COMMIT");
     return true;
-  } catch (e) {
-    if (client !== db) await client.query("ROLLBACK").catch(() => {});
-    throw e;
-  } finally {
-    if (client !== db) client.release();
-  }
+  });
 }
 
 function addEvent(db, departureId, type, payload) {
@@ -453,9 +462,7 @@ export async function runBelowMinimum({ db = pool, departureId, by, reason, now 
   if (!by) throw new CatalogueError(403, "Signed-in staff only.");
   if (why.length < 5) throw new CatalogueError(422, "Say why this departure should run below its minimum.");
 
-  const client = db === pool ? await pool.connect() : db;
-  try {
-    if (client !== db) await client.query("BEGIN");
+  return inTransaction(db, async (client) => {
     const r = await client.query(
       `SELECT cd.*, s.seats_sold FROM catalogue_departures cd
          JOIN catalogue_departure_seats s ON s.catalogue_departure_id = cd.id
@@ -499,14 +506,8 @@ export async function runBelowMinimum({ db = pool, departureId, by, reason, now 
     await addEvent(client, dep.id, "go_ahead", {
       productId: product.id, code: product.code, date: dep.date, reason: "admin_override", seatsSold: dep.seatsSold,
     });
-    if (client !== db) await client.query("COMMIT");
     return { ...dep, status: "go_ahead", runBelowMinimum: true, overrideBy: by, overrideReason: why };
-  } catch (e) {
-    if (client !== db) await client.query("ROLLBACK").catch(() => {});
-    throw e;
-  } finally {
-    if (client !== db) client.release();
-  }
+  });
 }
 
 // ---------------------------------------------------------------- admin writes
@@ -594,9 +595,7 @@ export async function publishDraft({ db = pool, productId, versionId, effectiveF
   const from = ymd(effectiveFrom) || today;
   if (from < today) throw new CatalogueError(422, "A specification can't take effect in the past.");
 
-  const client = db === pool ? await pool.connect() : db;
-  try {
-    if (client !== db) await client.query("BEGIN");
+  return inTransaction(db, async (client) => {
     const r = await client.query(
       "SELECT * FROM catalogue_spec_versions WHERE id = $1 AND product_id = $2 FOR UPDATE", [versionId, productId]);
     if (!r.rows.length) throw new CatalogueError(404, "Specification version not found.");
@@ -604,10 +603,6 @@ export async function publishDraft({ db = pool, productId, versionId, effectiveF
     if (spec.state !== "draft") throw new CatalogueError(409, "That version is already published.");
     const blockers = publishBlockers(spec.content);
     if (blockers.length) throw new CatalogueError(422, `Add ${blockers.join(" and ")} before publishing: the public page prints them from the specification.`);
-    const clash = await client.query(
-      "SELECT version FROM catalogue_spec_versions WHERE product_id = $1 AND state = 'published' AND effective_from = $2",
-      [productId, from]);
-    if (clash.rows.length) throw new CatalogueError(409, `Version ${clash.rows[0].version} already takes effect on ${from}. Pick another date.`);
 
     const pub = await client.query(
       `UPDATE catalogue_spec_versions SET state = 'published', effective_from = $2, published_by = $3, published_at = now()
@@ -618,17 +613,12 @@ export async function publishDraft({ db = pool, productId, versionId, effectiveF
       `UPDATE catalogue_departures cd SET spec_version_id = $1
         WHERE cd.product_id = $2 AND cd.date >= $3 AND cd.status = 'open'
           AND NOT EXISTS (SELECT 1 FROM pledges p WHERE p.departure_id = cd.legacy_departure_id AND p.status <> 'cancelled')
-          AND (cd.spec_version_id IS NULL OR (SELECT s.effective_from FROM catalogue_spec_versions s WHERE s.id = cd.spec_version_id) <= $3)`,
+          AND (cd.spec_version_id IS NULL
+               OR (SELECT s.effective_from FROM catalogue_spec_versions s WHERE s.id = cd.spec_version_id) <= $3)`,
       [versionId, productId, from]
     );
-    if (client !== db) await client.query("COMMIT");
     return { spec: mapSpec(pub.rows[0]), departuresMoved: moved.rowCount };
-  } catch (e) {
-    if (client !== db) await client.query("ROLLBACK").catch(() => {});
-    throw e;
-  } finally {
-    if (client !== db) client.release();
-  }
+  });
 }
 
 export async function addRule(db, productId, rule) {

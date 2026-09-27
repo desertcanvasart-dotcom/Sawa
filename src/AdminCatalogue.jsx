@@ -473,7 +473,8 @@ export function CalendarSection({ flash }) {
     } catch (e) { setErr(e.message); }
   }
   useEffect(() => { load(); }, [from, productId]);
-  useEffect(() => { call("/admin/catalogue").then((j) => setProducts(j.products)).catch(() => {}); }, []);
+  // The product filter is a convenience: if it can't load, say so and keep the calendar.
+  useEffect(() => { call("/admin/catalogue").then((j) => setProducts(j.products)).catch((e) => setErr(e.message)); }, []);
 
   async function generate() {
     setBusy(true);

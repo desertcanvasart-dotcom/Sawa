@@ -3740,6 +3740,12 @@ app.post("/api/admin/uploads", requireAuth, requireRole("super_admin", "ops_staf
 }));
 
 // Unknown /api/* path -> JSON 404.
+// ============================ CATALOGUE (model phase 1) ============================
+// Admin routes for the catalogue and departure calendar. The public side is
+// behind the catalogue_v2 flag (see catalogue-public.js); with it off nothing
+// here reaches a traveller. Registered before the /api 404 below.
+registerCatalogueRoutes(app, { requireAuth, requireRole, h, logAudit, invalidatePublic: () => invalidatePublicBootstrap() });
+
 app.use("/api", (_req, res) => res.status(404).json({ error: "Not found." }));
 
 // ============================ AI-readability files ============================
@@ -3849,12 +3855,6 @@ if (existsSync(siteDir)) {
   // extensions:["html"] serves /operators from operators.html, etc.
   app.use(express.static(siteDir, { extensions: ["html"] }));
 }
-
-// ============================ CATALOGUE (model phase 1) ============================
-// Admin routes for the catalogue and departure calendar. The public side is
-// behind the catalogue_v2 flag (see catalogue-public.js); with it off nothing
-// here reaches a traveller.
-registerCatalogueRoutes(app, { requireAuth, requireRole, h, logAudit, invalidatePublic: () => invalidatePublicBootstrap() });
 
 // catalogue_v2: a retired product's old URL goes to the product it was merged
 // into (301); a product whose catalogue title changed its slug moves to the new

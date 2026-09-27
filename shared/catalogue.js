@@ -35,7 +35,7 @@ const DAY_MS = 86400000;
 const toUtcMs = (ymd) => Date.parse(`${ymd}T00:00:00Z`);
 const fromUtcMs = (ms) => new Date(ms).toISOString().slice(0, 10);
 
-export function addDays(ymd, n) {
+export function shiftDate(ymd, n) {
   return fromUtcMs(toUtcMs(ymd) + n * DAY_MS);
 }
 
@@ -84,7 +84,7 @@ export function datesForRule(rule, from, to) {
 // its window. Held and retired products generate nothing.
 export function plannedDates(product, rules, today) {
   if (product.status !== "active") return [];
-  const to = addDays(today, windowDaysFor(product.type));
+  const to = shiftDate(today, windowDaysFor(product.type));
   const all = new Set();
   for (const rule of rules) for (const d of datesForRule(rule, today, to)) all.add(d);
   return [...all].sort();
