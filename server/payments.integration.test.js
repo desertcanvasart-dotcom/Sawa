@@ -63,7 +63,9 @@ before(async () => {
     env: { ...env, PORT: String(PORT), NODE_ENV: "test", PAGE_WARM_INTERVAL_MS: "0",
       SUPABASE_URL: authUrl, SUPABASE_ANON_KEY: "x", SUPABASE_SERVICE_ROLE_KEY: "x",
       RESEND_API_KEY: "", TWILIO_ACCOUNT_SID: "", ENABLE_JOB_SCHEDULER: "",
-      NO_PROXY: "127.0.0.1,localhost", no_proxy: "127.0.0.1,localhost" },
+      NO_PROXY: "127.0.0.1,localhost", no_proxy: "127.0.0.1,localhost",
+      // No default since 27 Sep 2026; the rules below are for an environment that names one.
+      DIRECT_BOOKINGS_OPERATOR: "Direct Partner" },
     stdio: ["ignore", "pipe", "pipe"],
   });
   let out = "";
@@ -256,7 +258,7 @@ test("a cancelled booking can't be sent a link", { skip }, async () => {
 // agency whose code it carries.
 test("the operator follows widget bookings and paid deposits", { skip }, async () => {
   const DEP2 = 910002;
-  await db.query(`INSERT INTO agencies (id, name) VALUES ('ag_it_cts', 'Capital Travel Service')`);
+  await db.query(`INSERT INTO agencies (id, name) VALUES ('ag_it_direct', 'Direct Partner')`);
   await db.query(`INSERT INTO referrals (code, name, agency_id) VALUES ('integration-agency', 'Integration Agency', 'ag_it')`);
   await db.query(`INSERT INTO departures (id, type, tour_product_id, route, date, time, city, min_seats, max_seats, published_rate, break_price, status)
                   VALUES ($1,'day_tour',$2,'Payment Tour',$3,'08:00','Cairo',4,12,100,80,'open')`, [DEP2, TOUR, cairoDay(25)]);
@@ -264,7 +266,7 @@ test("the operator follows widget bookings and paid deposits", { skip }, async (
 
   const direct2 = await call("POST", `/public/departures/${DEP2}/bookings`, { customerName: "Direct Dee", customerEmail: "dee@example.com", seats: 2 });
   assert.equal(direct2.status, 201);
-  assert.equal(await operatorOf(), "ag_it_cts", "two direct seats: Capital Travel Service");
+  assert.equal(await operatorOf(), "ag_it_direct", "two direct seats: Direct Partner");
   assert.equal((await call("POST", `/departures/${DEP2}/pledges`, { seats: 1, customers: "I-1", customerEmail: "c1@x.com", customerPhone: "+201000000001" }, "agency-token")).status, 201);
   const widget = await call("POST", `/public/departures/${DEP2}/bookings`, { customerName: "Widget Wes", customerEmail: "wes@example.com", seats: 2, refCode: "integration-agency" });
   assert.equal(widget.status, 201);
@@ -273,7 +275,7 @@ test("the operator follows widget bookings and paid deposits", { skip }, async (
   const link = await ops("POST", `/admin/bookings/${direct2.body.booking.id}/payment-links`, { kind: "deposit", url: "https://pay.tab.travel/dee" });
   assert.equal(link.status, 201);
   assert.equal((await ops("POST", `/admin/payments/${link.body.payment.id}/paid`, { reference: "TAB-OP-1" })).status, 200);
-  assert.equal(await operatorOf(), "ag_it_cts", "only the paid passengers count now");
+  assert.equal(await operatorOf(), "ag_it_direct", "only the paid passengers count now");
 });
 
 // Not payments, but this file has a signed-in admin: a new day tour typed the

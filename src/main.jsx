@@ -40,6 +40,7 @@ import { DEFAULT_GO_AHEAD, MAX_GROUP_SIZE, GROUP_MAX_WORD, numberWord } from "..
 // three of the four variants that were live, including the only one that
 // contradicted the others outright ("9am - 9pm Cairo time" against "24/7").
 import { INTERIM_COPY } from "../shared/site-copy.js";
+import { UNNAMED_OPERATOR } from "../shared/operator-label.js";
 const SUPPORT_AVAILABILITY = INTERIM_COPY["support-availability"];
 // NN2.1 — the board rules, from the one module that declares them. This file
 // used to carry hand-written copies of seatsTotal and goAheadFor with a comment
@@ -1911,7 +1912,20 @@ function TourDetailV2({ isSaving, navigate, phoneVerification = false, onBookPub
                     </div>
                   </div></div>
                 </section>
-              ) : null}
+              ) : (
+                // No operator named: a direct booking with no operator record
+                // behind it, or catalogue_v2, which names none before GoAhead.
+                // Say who, in general terms, rather than leave it silent.
+                <section className="sec rv">
+                  <h2>Your operator</h2>
+                  <div className="op-card"><div className="op-inner">
+                    <div className="op-meta">
+                      <h3>Run by {UNNAMED_OPERATOR}</h3>
+                      <p>An Egyptian travel company licensed by the Ministry of Tourism and Antiquities. The company running your date is confirmed to you before you travel.</p>
+                    </div>
+                  </div></div>
+                </section>
+              )}
 
               {tour.guide ? (
                 <section className="sec rv">
@@ -1919,7 +1933,7 @@ function TourDetailV2({ isSaving, navigate, phoneVerification = false, onBookPub
                   <div className="op-card"><div className="op-inner">
                     <div className="op-meta">
                       <h3>{tour.guide}</h3>
-                      <p>Every Sawa departure is run by an Egyptian travel company licensed by the Ministry of Tourism and Antiquities. {operator ? "The company responsible for this departure is named above." : "The company responsible for this departure is named before you book."}</p>
+                      <p>Every Sawa departure is run by an Egyptian travel company licensed by the Ministry of Tourism and Antiquities. {operator ? "The company responsible for this departure is named above." : "The company responsible for your date is confirmed to you before you travel."}</p>
                     </div>
                     <SpaLink navigate={navigate} to="/about" className="btn plain">About Sawa<span className="chip" aria-hidden="true"><SxArrow /></span></SpaLink>
                   </div></div>

@@ -607,7 +607,9 @@ export function directOperatorId(agencies = [], name = "") {
 }
 
 export function publicOperator(agency) {
-  if (!agency || !agency.name) return null;
+  // 054: a record taken off the traveler-facing surfaces (public_listed =
+  // false) is never named, wherever it would otherwise appear.
+  if (!agency || !agency.name || agency.publicListed === false) return null;
   const verified = agency.verificationState === "verified";
   return {
     name: agency.name,

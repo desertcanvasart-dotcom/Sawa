@@ -4,10 +4,10 @@
 // Runs when TEST_DATABASE_URL is set (see test-db.js) and skips otherwise.
 //
 // The departure: 12 passengers (the group maximum) — agency A 6 (its own
-// booking, so A operates), Capital Travel Service 4 (direct), agency B 2
+// booking, so A operates), Direct Partner 4 (direct), agency B 2
 // (through B's widget) — at €250, so €3,000 collected. A submits €1,600 of
 // costs; Sawa approves €1,500. Gross profit €1,500, Sawa €150, and €1,350
-// shared 6/4/2: A €675, CTS €450, B €225.
+// shared 6/4/2: A €675, the direct partner €450, B €225.
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { spawn, execFileSync } from "node:child_process";
@@ -83,7 +83,7 @@ before(async () => {
   execFileSync(process.execPath, [join(ROOT, "server", "db", "migrate.js")], { env, stdio: "pipe" });
   db = new pg.Client({ connectionString: dbUrl });
   await db.connect();
-  await db.query(`INSERT INTO agencies (id, name) VALUES ('ag_cts','Capital Travel Service'), ('ag_a','Agency A'), ('ag_b','Agency B')`);
+  await db.query(`INSERT INTO agencies (id, name) VALUES ('ag_direct','Direct Partner'), ('ag_a','Agency A'), ('ag_b','Agency B')`);
   for (const u of Object.values(USERS)) await db.query(`INSERT INTO app_users (id, email, role, agency_id) VALUES ($1,$2,$3,$4)`, [u.id, u.email, u.role, u.agency]);
   await db.query(`INSERT INTO referrals (code, name, agency_id) VALUES ('agency-b', 'Agency B', 'ag_b')`);
   // A flat €250 a head, so the booking totals are round numbers.
@@ -95,7 +95,9 @@ before(async () => {
   server = spawn(process.execPath, [join(ROOT, "server", "app.js")], {
     env: { ...env, PORT: String(PORT), NODE_ENV: "test", PAGE_WARM_INTERVAL_MS: "0",
       SUPABASE_URL: `http://127.0.0.1:${fakeAuth.address().port}`, SUPABASE_ANON_KEY: "x", SUPABASE_SERVICE_ROLE_KEY: "x",
-      RESEND_API_KEY: "", ENABLE_JOB_SCHEDULER: "", NO_PROXY: "127.0.0.1,localhost", no_proxy: "127.0.0.1,localhost" },
+      RESEND_API_KEY: "", ENABLE_JOB_SCHEDULER: "", NO_PROXY: "127.0.0.1,localhost", no_proxy: "127.0.0.1,localhost",
+      // No default since 27 Sep 2026; the rules below are for an environment that names one.
+      DIRECT_BOOKINGS_OPERATOR: "Direct Partner" },
     stdio: ["ignore", "pipe", "pipe"],
   });
   let out = "";
@@ -186,7 +188,7 @@ test("only the operator submits costs; Sawa approves a different amount", { skip
   v = await settlementOf();
   assert.equal(v.blocker, "costs_not_final");
   assert.deepEqual([v.settlement.cost, v.settlement.gross, v.settlement.sawaCut, v.settlement.pool], [1500, 1500, 150, 1350]);
-  assert.deepEqual([shareOf(v, "ag_a").total, shareOf(v, "ag_cts").total, shareOf(v, "ag_b").total], [675, 450, 225]);
+  assert.deepEqual([shareOf(v, "ag_a").total, shareOf(v, "ag_direct").total, shareOf(v, "ag_b").total], [675, 450, 225]);
 });
 
 test("receipts: the operator uploads a file privately; only staff and the uploader can open it", { skip }, async () => {
@@ -228,7 +230,7 @@ test("a Wednesday run pays signed-off tours; approving it creates the transfers"
   const run = await ops("POST", "/admin/payout-runs", { payDate: WED1 });
   assert.equal(run.status, 201);
   const lines = Object.fromEntries(run.body.run.lines.map((l) => [l.agencyId, l.amount]));
-  assert.deepEqual(lines, { ag_a: 675, ag_cts: 450, ag_b: 225 });
+  assert.deepEqual(lines, { ag_a: 675, ag_direct: 450, ag_b: 225 });
 
   const ok = await ops("POST", `/admin/payout-runs/${run.body.run.id}/approve`);
   assert.equal(ok.status, 200);

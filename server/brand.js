@@ -171,4 +171,10 @@ export function websiteSchema() {
 // record of this name (matched against agencies.name). U01, decided by the
 // client on 25 Sep 2026 — see operatorForDeparture() in domain.js for the rule.
 // Overridable per environment; an unmatched name simply names nobody.
-export const DIRECT_BOOKINGS_OPERATOR = process.env.DIRECT_BOOKINGS_OPERATOR || "Capital Travel Service";
+//
+// No default since 27 Sep 2026: Capital Travel Service, the former default, is
+// not involved in Sawa. With none set, a direct traveler's date names no
+// operator, the pages and emails say "a licensed Sawa partner"
+// (shared/operator-label.js), and in the profit split (settlement.js) direct
+// travelers count for no agency, so their share stays with Sawa.
+export const DIRECT_BOOKINGS_OPERATOR = process.env.DIRECT_BOOKINGS_OPERATOR || "";
