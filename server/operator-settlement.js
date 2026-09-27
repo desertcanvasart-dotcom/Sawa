@@ -310,7 +310,7 @@ async function statementSnapshot(c, departureId, figures = null) {
     })() : { setoffs: [], receivables: [], netBalance: f.balance }),
     // The distribution of the departure's collections (27 Sep 2026).
     distribution: await departureDistribution(c, departureId, { entitlementEgp: f.expected.total }),
-    collectingAgent: { name: BRAND.legalName, registrationNo: BRAND.registrationNumber },
+    collectingAgent: { name: BRAND.legalName, registrationNo: BRAND.registrationNumber, license: BRAND.agentLicense },
     generatedAt: new Date().toISOString(),
   };
 }

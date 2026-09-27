@@ -833,7 +833,7 @@ test("the Terms are versioned: catalog and legacy series; each booking records t
 // ---------------------------------------------------------------- the seller and the collecting agent (27 Sep 2026)
 test("seller disclosure: 'a licensed Sawa partner' before assignment; from it, the operator's legal name and licence as seller and the collecting agent as payee, on the request, receipt, voucher and booking page", { skip }, async () => {
   const { BRAND } = await import("./brand.js");
-  const payee = `${BRAND.legalName}, collecting agent`;
+  const payee = `${BRAND.legalName}, collecting agent (${BRAND.agentLicense})`;
   await ops.updateOperator(db, X, { travellerLicenceNo: "TL-4471" });
   const d = await freshDeparture();
   const p = await book(d, 4, { email: "seller@example.test" });
@@ -851,18 +851,18 @@ test("seller disclosure: 'a licensed Sawa partner' before assignment; from it, t
   // Assigned: the operator is named from now on.
   await asg.assignByAdmin(db, { departureId: d.id, operatorId: X, by: "ops" });
   page = (await (await fetch(`${on}/api/public/bookings/${code}`)).json()).booking.payAtGoAhead;
-  assert.equal(page.sellerLine, "Sold by Nile Tours S.A.E., licence no. TL-4471");
+  assert.equal(page.sellerLine, "Sold by Nile Tours S.A.E., license no. TL-4471");
   sent.length = 0;
   const r = await reqOf(p);
   const paid = await pag.markRequestPaid(db, { requestId: Number(r.id), providerReference: "TAB-SELLER", by: "ops", send });
   assert.match(paid.receipt.receiptNo, /^R-\d{4}-\d{6}$/);
   const receipt = sent.find((m) => m.kind === "pay_at_goahead_receipt");
-  assert.ok(receipt.text.includes(`Issued by ${BRAND.legalName} (Commercial Registration ${BRAND.registrationNumber}), collecting agent, on behalf of Nile Tours S.A.E., licence no. TL-4471.`), receipt.text);
+  assert.ok(receipt.text.includes(`Issued by ${BRAND.legalName} (Commercial Registration ${BRAND.registrationNumber}, ${BRAND.agentLicense}), collecting agent, on behalf of Nile Tours S.A.E., license no. TL-4471.`), receipt.text);
   const stored = await reqOf(p);
   assert.deepEqual([stored.seller_legal_name, stored.seller_licence_no, stored.receipt_no], ["Nile Tours S.A.E.", "TL-4471", paid.receipt.receiptNo]);
   page = (await (await fetch(`${on}/api/public/bookings/${code}`)).json()).booking.payAtGoAhead;
   assert.deepEqual([page.voucher.bookingCode, page.voucher.seller, page.voucher.payee, page.voucher.receiptNo],
-    [code, "Sold by Nile Tours S.A.E., licence no. TL-4471", payee, paid.receipt.receiptNo]);
+    [code, "Sold by Nile Tours S.A.E., license no. TL-4471", payee, paid.receipt.receiptNo]);
   // The reminder carries the same lines (another booking, still unpaid).
   const p2 = await book(d, 1, { email: "remind@example.test" });
   const now = Date.now();
@@ -871,7 +871,7 @@ test("seller disclosure: 'a licensed Sawa partner' before assignment; from it, t
   sent.length = 0;
   await tick(now + 24 * HOUR + MIN);
   const reminder = sent.find((m) => m.kind === "pay_at_goahead_reminder" && m.to === "remind@example.test");
-  assert.ok(reminder.text.includes("Sold by Nile Tours S.A.E., licence no. TL-4471.") && reminder.text.includes(`Payee: ${payee}.`), reminder.text);
+  assert.ok(reminder.text.includes("Sold by Nile Tours S.A.E., license no. TL-4471.") && reminder.text.includes(`Payee: ${payee}.`), reminder.text);
 });
 
 test("the settlement statement distributes the collections: gross, payment costs, agency commission, the operator entitlement and the agent's commission", { skip }, async () => {

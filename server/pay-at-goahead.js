@@ -172,7 +172,8 @@ export async function sellerOf(c, departureId) {
 }
 
 export const collectingAgent = () => ({
-  name: BRAND.legalName, registrationNo: BRAND.registrationNumber, payee: payeeLine(BRAND.legalName),
+  name: BRAND.legalName, registrationNo: BRAND.registrationNumber, license: BRAND.agentLicense,
+  payee: payeeLine(BRAND.legalName, BRAND.agentLicense),
 });
 
 // The two lines every traveler document carries.
@@ -403,8 +404,8 @@ async function issueReceipt(c, { request, now, send }) {
   const agent = collectingAgent();
   const out = {
     receiptNo, issuedAt: new Date(now).toISOString(), amountEur: Number(request.amount_eur), reference: request.reference,
-    issuer: `${agent.name} (Commercial Registration ${agent.registrationNo}), collecting agent`,
-    onBehalfOf: seller ? `${seller.legalName}${seller.licenceNo ? `, licence no. ${seller.licenceNo}` : ""}` : SELLER_PENDING.replace(/^Operated by /, "").replace(/^a /, "the ") + " operating this departure",
+    issuer: `${agent.name} (Commercial Registration ${agent.registrationNo}, ${agent.license}), collecting agent`,
+    onBehalfOf: seller ? `${seller.legalName}${seller.licenceNo ? `, license no. ${seller.licenceNo}` : ""}` : SELLER_PENDING.replace(/^Operated by /, "").replace(/^a /, "the ") + " operating this departure",
     seller, payee: agent.payee,
   };
   if (send && request.emailed_to) {

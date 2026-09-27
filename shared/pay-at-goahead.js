@@ -152,11 +152,11 @@ export function shortDeadlineError({ dueAtMs, cutoffAtMs, now }) {
 // operating company is its commercial and payment-collection agent (decided
 // 27 Sep 2026). Before the assignment no operator is named.
 export const SELLER_PENDING = `Operated by ${UNNAMED_OPERATOR}`;
-export const payeeLine = (agentName) => `${agentName}, collecting agent`;
+export const payeeLine = (agentName, license = "") => `${agentName}, collecting agent${license ? ` (${license})` : ""}`;
 
 // What a document says about the seller: the operator's legal name and the
 // licence number shown to travelers, or the pending line before assignment.
 export function sellerLine(seller) {
   if (!seller?.legalName) return SELLER_PENDING;
-  return `Sold by ${seller.legalName}${seller.licenceNo ? `, licence no. ${seller.licenceNo}` : ""}`;
+  return `Sold by ${seller.legalName}${seller.licenceNo ? `, license no. ${seller.licenceNo}` : ""}`;
 }

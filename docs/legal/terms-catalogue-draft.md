@@ -4,7 +4,7 @@
 Version 2, 27 Sep 2026. It follows the legal structure decided that day:
 
 - **The operator assigned at GoAhead is the seller** of each departure.
-- **Online Era** (Commercial Registration 148500), trading as Sawa Tours, holds a licence to collect payments as an agent. It is the operator's **commercial and payment-collection agent**. It operates the platform, and it is not the seller of the tour.
+- **Online Era** (Commercial Registration 148500), trading as Sawa Tours, holds a license to collect payments as an agent: **General Sales Agent license no. 32241** (supplied 27 Sep 2026). It is the operator's **commercial and payment-collection agent**. It operates the platform, and it is not the seller of the tour.
 - Capital Travel Service is **not involved in Sawa**.
 
 Once approved, the wording is published as **catalog Terms version 2** in Admin → Finance → Tiers and Terms. Catalog bookings then record that version; legacy bookings keep their own series. These sections replace, for catalog bookings, sections 6, 8, 9, 11, 12 and 13 of the current Terms (`/terms`). The rest is assumed to stay. **[LAWYER 1]**
@@ -15,9 +15,9 @@ Markers: **[LAWYER n]** is a point that needs the lawyer's confirmation. The que
 
 ## C1. Who does what
 
-1. **Online Era** (Commercial Registration 148500), trading as Sawa Tours ("Sawa", "we"), runs the platform. It takes reservations, and collects payment **as agent for the operator** that sells your departure. It is not the seller of the tour. **[LAWYER 2]**
+1. **Online Era** (Commercial Registration 148500, General Sales Agent license no. 32241), trading as Sawa Tours ("Sawa", "we"), runs the platform. It takes reservations, and collects payment **as agent for the operator** that sells your departure. It is not the seller of the tour. **[LAWYER 2]**
 2. **The operator** is a licensed Egyptian tour company that Sawa assigns to your departure when it goes ahead. **The operator is the seller**: your contract for the tour is with the operator. It delivers the tour, or arranges its delivery. **[LAWYER 3]**
-3. **Before GoAhead** your booking pages say "operated by a licensed Sawa partner", because no operator is assigned yet. **From GoAhead**, your payment request, receipt, voucher and booking page name the operator's legal name and licence number as **seller**, and "Online Era, collecting agent" as **payee**. **[LAWYER 4]**
+3. **Before GoAhead** your booking pages say "operated by a licensed Sawa partner", because no operator is assigned yet. **From GoAhead**, your payment request, receipt, voucher and booking page name the operator's legal name and license number as **seller**, and "Online Era, collecting agent (General Sales Agent license no. 32241)" as **payee**. **[LAWYER 4]**
 4. If you book through a travel agency, the agency acts for you. It must show you these Terms and the cancellation terms before it reserves (Agency Reseller Agreement, clause 4.2), and you confirm them yourself before you pay. **[LAWYER 5]**
 
 ## C2. A reservation, not yet a sale
@@ -32,7 +32,7 @@ Markers: **[LAWYER n]** is a point that needs the lawyer's confirmation. The que
 
 1. A departure goes ahead when **4 travelers** have reserved it, unless the tour page shows a different minimum. **[LAWYER 8]**
 2. At GoAhead, Sawa assigns a licensed operator to the departure. **The sale of your seats is then made between you and that operator.** Online Era acts as the operator's agent in making it and in collecting the price.
-3. We tell you the operator's name and licence number in your payment request, and on your booking page from then on.
+3. We tell you the operator's name and license number in your payment request, and on your booking page from then on.
 4. If the assigned operator can't run the departure and Sawa assigns another before the tour, we tell you. The new operator becomes the seller on the same terms and at the same price. **[LAWYER 9]**
 5. If a departure doesn't reach its minimum by its booking cut-off, or its earlier GoAhead deadline for cruises and multi-day tours, the reservation lapses. No sale is made, nothing is charged, and we offer another date where we can. Sawa may choose to run a departure below its minimum; if it does, it is a GoAhead like any other.
 
@@ -81,9 +81,9 @@ Markers: **[LAWYER n]** is a point that needs the lawyer's confirmation. The que
 | # | Question |
 |---|---|
 | 1 | A separate catalog document, or a schedule replacing sections 6, 8, 9, 11, 12 and 13 of the current Terms? |
-| 2 | ***New.* The agent licence:** does Online Era's licence to collect payments as an agent cover all of the following, and what must its licence number or wording on the documents be? <br>• collecting card payments in EUR from foreign travelers for Egyptian tour operators; <br>• holding them until the operator is paid (in a segregated or trust account?); <br>• paying refunds on the operator's behalf. |
+| 2 | ***New.* The agent license:** Online Era holds **General Sales Agent license no. 32241**. Does a General Sales Agent license cover all of the following, and is "General Sales Agent license no. 32241" the right wording on the payment request, receipt and privacy page? <br>• collecting card payments in EUR from foreign travelers for Egyptian tour operators; <br>• holding them until the operator is paid (in a segregated or trust account?); <br>• paying refunds on the operator's behalf. |
 | 3 | ***New.* The operator as seller:** is it enough that the operator is named at GoAhead (C3) and not at reservation? Is a traveler's consent at reservation, to a sale with "a licensed Sawa partner" named later, valid under the Consumer Protection Law (181/2018) and the tourism companies law? |
-| 4 | ***New.* Disclosure:** what must the payment request, receipt and voucher state about the seller (legal name, licence number, address, tax number?) and about the agent? |
+| 4 | ***New.* Disclosure:** what must the payment request, receipt and voucher state about the seller (legal name, license number, address, tax number?) and about the agent? |
 | 5 | Does the agency's showing of the terms bind the traveler, or is the traveler's own confirmation needed before GoAhead? |
 | 6 | ***New.* Reservation vs. sale:** do C2 and C3 hold? Is a reservation with no payment and no seller a binding contract with anyone, and with whom (Online Era, as the platform)? |
 | 7 | ***New.* Personal data:** under the Personal Data Protection Law (151/2020), what are the roles (controller, processor) of Online Era, the operator and the agency, before and after assignment? |
@@ -93,7 +93,7 @@ Markers: **[LAWYER n]** is a point that needs the lawyer's confirmation. The que
 | 11 | ***New.* Payment to the agent:** does payment to Online Era as collecting agent discharge the traveler's debt to the operator, including if Online Era fails to pay the operator? |
 | 12 | Release for non-payment as a lapse with no sale and no charge: sufficient, with our notice? |
 | 13 | Sawa's delay: compensation on cancellation, and terms for "travel and pay afterwards"? |
-| 14 | ***New.* The Minimum Departure Guarantee:** Online Era pays the operator's shortfall. How is that characterized: a guarantee, a commission adjustment, or an operator subsidy? Does it affect the agent's licence or tax position? |
+| 14 | ***New.* The Minimum Departure Guarantee:** Online Era pays the operator's shortfall. How is that characterized: a guarantee, a commission adjustment, or an operator subsidy? Does it affect the agent's license or tax position? |
 | 15 | Do the existing force majeure and cancellation-by-us sections apply unchanged, with Online Era refunding as agent? |
 | 16 | Does a versioned tier table, shown at reservation, bind as cancellation terms? |
 | 17 | May the seller claim the kept percentage from a traveler who cancels after GoAhead but before paying? |
