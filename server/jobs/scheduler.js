@@ -320,7 +320,7 @@ export function startJobScheduler(env = process.env) {
   });
   const catalogueStatusTick = () => runSafely("catalogue-status", async (opts) => {
     const { runCatalogueStatus } = await import("./catalogue-calendar.js");
-    return runCatalogueStatus({ log: opts.log });
+    return runCatalogueStatus({ log: opts.log, env });
   });
   const catGenFirst = setTimeout(catalogueGenerateTick, FIRST_RUN_DELAY_MS * 2);
   const catGenRepeat = setInterval(catalogueGenerateTick, DAY_MS);

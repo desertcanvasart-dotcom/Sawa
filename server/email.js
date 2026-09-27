@@ -889,6 +889,53 @@ export function operatorApplicationReceiptEmail({ to, reference, ...app }) {
   return { to, subject, html, text, kind: "operator_application_receipt" };
 }
 
+// Model phase 1 gap — a catalogue departure canceled because it was still
+// below its GoAhead minimum at the cut-off (or a cruise's deadline). Says the
+// tour won't run, what happens to money, and what the traveler can book
+// instead. `paid` is true only when this booking has a recorded payment that
+// hasn't been refunded yet; before the GoAhead nothing is normally taken.
+//
+// `agencyCopy` makes it the copy an agency gets for its own client.
+export function belowMinimumCancellationEmail({
+  to, travelerName, title, dateLabel, paid = false, nextDates = [], alternative = null, agencyCopy = null,
+}) {
+  const who = agencyCopy ? `your client ${travelerName || ""}`.trim() : "your";
+  const subject = agencyCopy
+    ? `Copy: ${title} on ${dateLabel} won't run (${travelerName || "your client"})`
+    : `${title} on ${dateLabel} won't run`;
+  const money = paid
+    ? "A payment was recorded for this booking. It is being refunded in full to the card it was paid with; we'll email when the refund has been sent."
+    : "Nothing was charged for this booking: no payment is taken before a date reaches its GoAhead.";
+  const opener = agencyCopy
+    ? `This is a copy of the notice we sent to ${travelerName || "your client"}, booked through ${agencyCopy.agencyName || "your agency"}.`
+    : `Hello${travelerName ? ` ${travelerName}` : ""},`;
+  const lines = [
+    opener,
+    `${title} on ${dateLabel} won't run: it didn't reach the minimum number of travelers it needs by its deadline, so ${agencyCopy ? `${who}'s` : "your"} booking has been canceled.`,
+    money,
+    nextDates.length ? `Other dates for this tour:\n${nextDates.map((d) => `- ${d.dateLabel} (${d.label}): ${d.url}`).join("\n")}` : "There are no other open dates for this tour right now.",
+    alternative ? `Or try ${alternative.title}${alternative.dateLabel ? ` (next date ${alternative.dateLabel})` : ""}: ${alternative.url}` : null,
+    "Reply to this email if you have any questions.",
+  ].filter(Boolean);
+  const text = lines.join("\n\n");
+  const html = shell(
+    `${title} won't run on ${dateLabel}`,
+    `<p style="margin:0 0 16px">${esc(opener)}</p>
+     <p style="margin:0 0 16px"><strong>${esc(title)}</strong> on ${esc(dateLabel)} won't run: it didn't reach the minimum number of travelers it needs by its deadline, so ${agencyCopy ? `${esc(who)}'s` : "your"} booking has been canceled.</p>
+     <p style="margin:0 0 20px">${esc(money)}</p>
+     ${nextDates.length
+      ? `<p style="margin:0 0 8px"><strong>Other dates for this tour</strong></p>
+         <ul style="margin:0 0 20px;padding-left:20px">${nextDates.map((d) => `<li style="margin:0 0 4px"><a href="${esc(d.url)}">${esc(d.dateLabel)}</a> · ${esc(d.label)}</li>`).join("")}</ul>`
+      : `<p style="margin:0 0 20px">There are no other open dates for this tour right now.</p>`}
+     ${alternative ? `<p style="margin:0 0 8px"><strong>Or try instead</strong></p>
+       <p style="margin:0 0 20px"><a href="${esc(alternative.url)}">${esc(alternative.title)}</a>${alternative.dateLabel ? ` · next date ${esc(alternative.dateLabel)}` : ""}</p>` : ""}
+     ${nextDates[0] ? button(nextDates[0].url, "Choose another date") : ""}
+     ${note("Reply to this email if you have any questions.")}`,
+    { eyebrow: "Tour not running", preheader: `${title} on ${dateLabel} didn't reach its minimum. ${paid ? "Your payment is being refunded." : "Nothing was charged."}` }
+  );
+  return { to, subject, html, text, kind: agencyCopy ? "below_minimum_cancellation_agency" : "below_minimum_cancellation" };
+}
+
 export function cancellationEmail({ to, route, dateLabel }) {
   const subject = `Cancellation — ${route}`;
   const text = `This confirms your booking for ${route} on ${dateLabel} has been canceled.`;

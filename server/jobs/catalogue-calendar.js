@@ -2,8 +2,9 @@
 //
 //   catalogue-generate  daily: departures from the calendar rules, over a
 //                       rolling window (idempotent)
-//   catalogue-status    every 15 minutes: GoAhead, cancelled below minimum at
-//                       the cut-off or GoAhead deadline, completed
+//   catalogue-status    every 15 minutes: GoAhead, canceled below minimum at
+//                       the cut-off or GoAhead deadline, completed; then the
+//                       below-minimum cancellation notices
 //
 // Both are no-ops until migration 047 is applied. Neither moves money.
 //
@@ -29,8 +30,15 @@ export function runCatalogueGenerate({ log = console.log, env = process.env, now
   return guarded(() => generateDepartures({ log, now, materialise: catalogueV2Enabled(env) }), log);
 }
 
-export function runCatalogueStatus({ log = console.log, now } = {}) {
-  return guarded(() => runStatusJob({ log, now }), log);
+// Statuses first, then the notices the cancellations owe (behind catalogue_v2),
+// in the same tick so a traveler hears within a quarter of an hour.
+export function runCatalogueStatus({ log = console.log, now, env = process.env } = {}) {
+  return guarded(async () => {
+    const statuses = await runStatusJob({ log, now });
+    const { runCancellationNotices } = await import("../catalogue-notices.js");
+    const notices = await runCancellationNotices({ log, now, env });
+    return { ...statuses, notices };
+  }, log);
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

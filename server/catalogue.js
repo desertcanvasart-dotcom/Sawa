@@ -416,7 +416,14 @@ function transition(db, dep, next, product) {
 
     if (next.status === "cancelled_below_minimum") {
       let released = 0;
+      let releasedPledgeIds = [];
       if (dep.legacyDepartureId && dep.origin === "generated") {
+        // Exactly the bookings this cancellation releases, read before it
+        // happens: the notice goes to them, not to anyone who had already
+        // cancelled on their own.
+        releasedPledgeIds = (await client.query(
+          "SELECT id FROM pledges WHERE departure_id = $1 AND status <> 'cancelled' ORDER BY created_at, id",
+          [dep.legacyDepartureId])).rows.map((r) => r.id);
         released = (await cancelDepartureAndPledges(client, dep.legacyDepartureId)).pledgesCancelled;
       }
       const nextDate = await client.query(
@@ -427,7 +434,7 @@ function transition(db, dep, next, product) {
       );
       // Only a departure somebody booked has anybody to tell.
       if (dep.seatsSold > 0 || released > 0) {
-        await addEvent(client, dep.id, "traveller_notice.cancelled_below_minimum", { ...payload, bookingsReleased: released });
+        await addEvent(client, dep.id, "traveller_notice.cancelled_below_minimum", { ...payload, bookingsReleased: released, releasedPledgeIds });
         await addEvent(client, dep.id, "next_date_offer", { ...payload, nextDate: ymd(nextDate.rows[0]?.date) || null });
       }
     } else if (next.status === "go_ahead") {
