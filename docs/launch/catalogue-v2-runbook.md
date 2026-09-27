@@ -18,7 +18,7 @@ Conventions:
 
 ## 0. Before anything
 
-1. **Main contains phases 1–3** (PRs #219, #220 and #222) **and the security fix** (#221), and that build is deployed. Check that the deployed commit is main's head.
+1. **Main contains phases 1–4** (PRs #219, #220, #222 and the phase 4 PR) **and the security fix** (#221), and that build is deployed. Check that the deployed commit is main's head.
 2. **Take a backup.** Use Supabase → Database → Backups, or:
    ```bash
    pg_dump "$PROD" --format=custom --file=sawa-before-catalogue-v2-$(date +%F).dump
@@ -30,7 +30,7 @@ Conventions:
    PRODUCTION_DB_HOST=<supabase host> DATABASE_URL="$PROD" npm run check:applied-schema
    ```
    ```sql
-   -- check: the last applied migrations; 046 must be there, 047–050 must not
+   -- check: the last applied migrations; 046 must be there, 047–051 must not
    SELECT name, applied_at FROM schema_migrations ORDER BY id DESC LIMIT 5;
    ```
 5. **Count the legacy departures still open.** They keep the existing settlement tools until the last one completes. Note the numbers.
@@ -52,7 +52,7 @@ Conventions:
 
 ---
 
-## 1. Migrations 047–050
+## 1. Migrations 047–051
 
 `npm run db:migrate` applies every pending migration in one go, and is safe to re-run. To check between them, apply them one at a time as below instead. Each file is idempotent. Stop at the first error: `-v ON_ERROR_STOP=1` does that.
 
@@ -178,6 +178,39 @@ PRODUCTION_DB_HOST=<supabase host> DATABASE_URL="$PROD" npm run check:applied-sc
 
 Re-run checks 0.5 (the full query now) and 0.6. Open sawa.tours and book nothing: the site must look exactly as before.
 
+### 1e. 051: pay at GoAhead and the cancellation tiers
+
+Apply 051 **before** deploying a build that contains phase 4 with the flag on: with the flag on, phase 4's booking routes and jobs expect its tables.
+
+**Pre-check:**
+```sql
+-- check
+SELECT to_regclass('payment_requests') AS requests, to_regclass('cancellation_tier_versions') AS tiers;   -- expect null, null
+SELECT COUNT(*) FROM pledges WHERE cancelled_reason IS NOT NULL;   -- note the number
+```
+
+**Apply and record:** 051 has no transaction of its own, so use `--single-transaction`.
+```bash
+psql "$PROD" -v ON_ERROR_STOP=1 --single-transaction -f server/db/schema_051_pay_at_goahead.sql
+psql "$PROD" -c "INSERT INTO schema_migrations (name) VALUES ('051_pay_at_goahead') ON CONFLICT (name) DO NOTHING"
+```
+
+**Post-check:**
+```sql
+-- check: tier version 1, published, from 2026-01-01, ten rows (day and one-way tours 48 h → 0%, then 10%; cruise and multi-day 30 d → 0%, 15 d → 12.5%, then 25%)
+SELECT v.version, v.state, v.effective_from, t.product_type, t.min_before_hours, t.unit, t.retained_pct
+  FROM cancellation_tier_versions v JOIN cancellation_tiers t ON t.version_id = v.id ORDER BY t.product_type, t.min_before_hours DESC;
+-- check: every existing booking is on the legacy flow
+SELECT payment_mode, COUNT(*) FROM pledges GROUP BY payment_mode;            -- expect only legacy_link
+-- check: the payment window and waitlist hold
+SELECT value FROM finance_settings WHERE key = 'pay_at_goahead';            -- {"windowHours": 48, "offerHours": 12}
+-- check: RLS on
+SELECT relname, relrowsecurity FROM pg_class WHERE relname IN
+  ('cancellation_tier_versions','cancellation_tiers','payment_requests','payment_refunds','payment_tasks','departure_waitlist');
+```
+
+Re-run check 0.6.
+
 ---
 
 ## 2. Publish the specifications
@@ -244,6 +277,9 @@ In **Admin → Finance → Rates and settings:**
 2. **Public holidays:** enter the year's Egyptian public holidays. The operator advance is due 2 business days (Sun–Thu) after acknowledgement, skipping these.
 3. **Penalty amounts (Schedule 6):** enter the four amounts in EGP once agreed. They are 0 until set.
 4. **Payment provider fees:** the percentage and fixed amount per charge, for the margin report.
+5. **Pay at GoAhead** (super admin, Admin → Finance → Pay at GoAhead → Settings): the payment window (48 or 24 hours) and how long a waitlist offer is held (12 hours).
+
+In **Admin → Finance → Cancellation tiers**, read the tiers in force (version 1, seeded) and the **loss check** under them. It flags each product where a cancellation after the cut-off (or GoAhead deadline) keeps less than Sawa still owes the operator for that seat. It needs today's exchange rate and the rate card. With the rate card's example (€95, 2,200 EGP a traveler, 55 EGP/EUR), 10% under 48 hours loses €30.50 a seat: decide whether to publish new tiers before the flag. A change is a draft, published by a super admin from today or a later date; bookings keep the version they were made under.
 
 In **Admin → Finance → Agency commission** (super admin), for each agency:
 - set its country code (`EG` for Egyptian agencies);
@@ -294,7 +330,9 @@ SELECT cd.id, c.code, cd.date FROM catalogue_departures cd JOIN catalogue_produc
 - [ ] Launch operators are active, approved, with verified bank details and logins (step 4).
 - [ ] Today's CBE rate, the holidays, penalties and fees are set (step 5).
 - [ ] This month's and next month's rosters are published (step 6).
-- [ ] Traveler charging hasn't changed: travelers still pay by the manual Tab link. Traveler charging is a separate phase (`docs/phase4/payments-readiness.md`).
+- [ ] Pay at GoAhead is understood by ops (`docs/phase4/REPORT.md`): catalog bookings pay the full price after GoAhead; ops make each Tab link with the booking code as its reference, paste it into Admin → Finance → Pay at GoAhead, mark payments with Tab's reference, and make refunds in Tab from the task list. Legacy bookings keep the deposit and balance links in Admin → Payments.
+- [ ] The cancellation tiers and their loss check are reviewed (step 5).
+- [ ] The Terms' payment and cancellation wording for pay at GoAhead is approved (open item in `docs/phase4/REPORT.md`).
 
 ## 9. Set the flag
 
@@ -324,7 +362,9 @@ Roll back **only as far as needed**, in this order. Each step stops at the small
 **1. Turn the flag off.** Remove `catalogue_v2` from `FEATURES` and let Railway redeploy. This alone stops everything outside the staff screens:
 - public catalog labels and required booking fields;
 - operator, agency and booking-details routes (404);
-- all phase 2–3 jobs: assignment, advances, balances, statements, commission, completion requests.
+- all phase 2–4 jobs: assignment, advances, balances, statements, commission, completion requests, payment requests, reminders, releases and waitlist offers.
+
+Payment requests already sent stay as they are: ops can still mark them paid in Admin → Finance → Pay at GoAhead, and nothing is released while the flag is off.
 
 Nothing is deleted. Bookings made meanwhile stay ordinary bookings on ordinary departures. Try this first, and investigate with the data intact.
 
@@ -334,10 +374,11 @@ Nothing is deleted. Bookings made meanwhile stay ordinary bookings on ordinary d
 
 | Order | Rollback | Loses |
 |---|---|---|
-| 1st | `psql "$PROD" -v ON_ERROR_STOP=1 -f server/db/down/schema_050_settlements_commissions.down.sql` | payables, receivables, set-offs, statements, commissions, invoices, recorded payments, bank details and their log, FX rates, holidays, penalties, completion requests; agencies' billing columns |
-| 2nd | `…/down/schema_049_operators_roster_rates.down.sql` | operators, documents, approvals, strikes, notices, roster, rate versions, assignments, manifests and their access log, the lock trigger; **operator logins (deleted)**; the three booking-detail columns on pledges |
-| 3rd | `…/down/schema_048_catalogue_notices.down.sql` | the cancellation-notice log. Cruise and multi-day deadlines stay at 30, the decided value. |
-| 4th | `…/down/schema_047_catalogue_calendar.down.sql` | the catalog, specs, rules, catalog departures and events. Ordinary departures and bookings created for catalog dates stay, as ordinary rows. |
+| 1st | `psql "$PROD" -v ON_ERROR_STOP=1 -f server/db/down/schema_051_pay_at_goahead.down.sql` | payment requests, refunds, ops tasks, the waitlist, every tier version; the bookings' payment mode and tier version; `unpaid` cancellations become `admin` |
+| 2nd | `psql "$PROD" -v ON_ERROR_STOP=1 -f server/db/down/schema_050_settlements_commissions.down.sql` | payables, receivables, set-offs, statements, commissions, invoices, recorded payments, bank details and their log, FX rates, holidays, penalties, completion requests; agencies' billing columns |
+| 3rd | `…/down/schema_049_operators_roster_rates.down.sql` | operators, documents, approvals, strikes, notices, roster, rate versions, assignments, manifests and their access log, the lock trigger; **operator logins (deleted)**; the three booking-detail columns on pledges |
+| 4th | `…/down/schema_048_catalogue_notices.down.sql` | the cancellation-notice log. Cruise and multi-day deadlines stay at 30, the decided value. |
+| 5th | `…/down/schema_047_catalogue_calendar.down.sql` | the catalog, specs, rules, catalog departures and events. Ordinary departures and bookings created for catalog dates stay, as ordinary rows. |
 
 Each rollback deletes its own `schema_migrations` row. **`npm run db:migrate` re-applies every migration it finds**, so after a rollback don't run it until the problem is fixed and you mean to re-apply.
 

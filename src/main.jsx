@@ -65,6 +65,7 @@ const AdminDashboard = lazy(() => import("./AdminDashboard").then((m) => ({ defa
 const AgencyDashboard = lazy(() => import("./AgencyDashboard").then((m) => ({ default: m.AgencyDashboard })));
 const OperatorDashboard = lazy(() => import("./OperatorDashboard.jsx").then((m) => ({ default: m.OperatorDashboard })));
 import { TravelerDetailsFields, emptyTravelerDetails, travelerDetailsBody, travelerDetailsError } from "./TravelerDetails.jsx";
+import { BookingPayAtGoAhead, WaitlistJoin, WaitlistOfferPage } from "./PayAtGoAheadPublic.jsx";
 
 
 // Three named traveler quotes lived here — Valencia, Munich, Abu Dhabi, each
@@ -965,6 +966,9 @@ function App() {
   // Model phase 3: the private link to complete a booking's details.
   const detailsMatch = path.match(/^\/booking-details\/([^/?#]+)$/);
   if (detailsMatch) return <BookingDetailsPage token={decodeURIComponent(detailsMatch[1])} />;
+  // Model phase 4: the page behind a waitlist offer.
+  const waitlistMatch = path.match(/^\/waitlist\/([^/?#]+)$/);
+  if (waitlistMatch && catalogueV2()) return <WaitlistOfferPage token={decodeURIComponent(waitlistMatch[1])} />;
 
   const isPortalRoute = path.startsWith("/admin") || path.startsWith("/agency") || path.startsWith("/portal");
   // Editorial pages do not need the tour catalogue to load successfully.
@@ -1985,6 +1989,14 @@ function TourDetailV2({ isSaving, navigate, phoneVerification = false, onBookPub
                           </button>
                         );
                       })}
+
+                      {/* Model phase 4: a full date's waitlist. */}
+                      {!reqMode && catalogueV2() && (
+                        <WaitlistJoin dates={tour.dates.map((d) => ({
+                          id: d.id, full: d.maxSeats - seatsTotal(d.pledges) <= 0,
+                          label: `${formatDate(d.date, { alwaysYear: true })}${d.time ? ` · ${d.time}` : ""}`,
+                        }))} />
+                      )}
 
                       {/* Traveler-initiated date request (Phase A) */}
                       {reqDone ? (
@@ -3818,6 +3830,7 @@ function BookingLookupPage({ navigate, path }) {
                 transport are booked". */}
             <p className="booking-note">{b.note}</p>
             <BookingPayment payment={b.payment} />
+            {b.payAtGoAhead && <BookingPayAtGoAhead code={b.code} view={b.payAtGoAhead} onChanged={() => lookup()} />}
             {/* Whether this is offered at all comes from the server (canCancel),
                 for the same reason the note does: only it knows the state, and
                 a page that decided for itself is how a cancelled date came to

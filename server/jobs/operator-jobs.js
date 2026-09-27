@@ -1,7 +1,9 @@
 // The model phase 2 jobs, run by the scheduler, all behind catalogue_v2:
 //
 //   operator-assignments  every 15 minutes, after the catalogue status job:
-//                         lock rates, freeze manifests at the cut-off, offer
+//                         pay at GoAhead (phase 4: requests, reminders,
+//                         releases, waitlist offers), then lock rates, freeze
+//                         manifests at the cut-off, offer
 //                         GoAhead departures to the rostered operator, expire
 //                         missed acknowledgements (strike + admin alert)
 //   operator-daily        daily: document expiry (suspend, 30- and 7-day
@@ -37,12 +39,17 @@ export function runOperatorAssignments({ log = console.log, now, env = process.e
     const { runSettlementTick } = await import("../operator-settlement.js");
     const { decideCommissions } = await import("../commissions.js");
     const { sendEmail } = await import("../email.js");
+    // Model phase 4 first: payment requests at GoAhead, reminders, warnings
+    // and releases at the deadline, so a manifest frozen in the same tick
+    // holds manifest seats only (clause 10.1).
+    const { runPayAtGoAheadTick } = await import("../pay-at-goahead.js");
+    const payAtGoAhead = await runPayAtGoAheadTick({ log, now, send: sendEmail, env });
     const assignments = await runAssignmentTick({ log, now, send: sendEmail });
     // Model phase 3: advances priced, balances and statements after the
     // departure, statements accepted at 30 days, commissions decided.
     const settlement = await runSettlementTick({ log, now });
     const commissions = await decideCommissions({ log, now });
-    return { ...assignments, ...settlement, ...commissions };
+    return { payAtGoAhead, ...assignments, ...settlement, ...commissions };
   }, log, env);
 }
 

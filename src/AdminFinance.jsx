@@ -6,6 +6,7 @@
 import React, { useEffect, useState } from "react";
 import { AlertTriangle } from "lucide-react";
 import { apiFetch } from "./supabaseClient";
+import { PayAtGoAhead, CancellationTiers, LossWarnings } from "./AdminPayAtGoAhead";
 
 const money = (currency, n) => (n == null ? "—" : `${currency} ${Number(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
 const dayLabel = (ymd) => (ymd ? new Intl.DateTimeFormat("en-US", { timeZone: "UTC", month: "short", day: "numeric", year: "numeric" }).format(new Date(`${ymd}T12:00:00Z`)) : "—");
@@ -21,7 +22,8 @@ async function call(path, method = "GET", body) {
 
 export function FinanceSection({ flash, isSuperAdmin }) {
   const [tab, setTab] = useState("owed");
-  const tabs = [["owed", "Owed and paid"], ["commissions", "Agency commission"], ["margin", "Margin"], ["settings", "Rates and settings"]];
+  const tabs = [["owed", "Owed and paid"], ["pay", "Pay at GoAhead"], ["commissions", "Agency commission"], ["margin", "Margin"],
+    ["tiers", "Cancellation tiers"], ["settings", "Rates and settings"]];
   return (
     <>
       <div className="dash-head"><div><h1>Finance</h1><p>Operator advances and balances, agency commission and invoices. Finance pays by bank transfer and records each payment here.</p></div></div>
@@ -29,6 +31,8 @@ export function FinanceSection({ flash, isSuperAdmin }) {
         {tabs.map(([k, label]) => <button key={k} className={tab === k ? "btn-primary sm" : "btn-ghost sm"} onClick={() => setTab(k)}>{label}</button>)}
       </div>
       {tab === "owed" && <Owed flash={flash} isSuperAdmin={isSuperAdmin} />}
+      {tab === "pay" && <PayAtGoAhead flash={flash} isSuperAdmin={isSuperAdmin} />}
+      {tab === "tiers" && <CancellationTiers flash={flash} isSuperAdmin={isSuperAdmin} />}
       {tab === "commissions" && <Commissions flash={flash} isSuperAdmin={isSuperAdmin} />}
       {tab === "margin" && <Margin />}
       {tab === "settings" && <Settings flash={flash} />}
@@ -254,7 +258,7 @@ function Margin() {
             <thead><tr><th>Departure</th><th>Charged</th><th>Operator</th><th>Commissions</th><th>Fees</th><th>Margin</th></tr></thead>
             <tbody>{data.rows.map((r) => (
               <tr key={r.departure.id}>
-                <td>{r.departure.label}<div className="field-hint">{dayLabel(r.departure.date)} · {r.departure.status}</div></td>
+                <td>{r.departure.label}<div className="field-hint">{dayLabel(r.departure.date)} · {r.departure.status}</div><LossWarnings warnings={r.lossWarnings} /></td>
                 <td className="tnum">{money("EUR", r.revenueEur)}</td>
                 <td className="tnum">{money("EGP", r.operatorEgp)}<div className="field-hint">{r.operatorEur == null ? "" : money("EUR", r.operatorEur)}</div></td>
                 <td className="tnum">{money("EUR", r.commissionsEur)}</td>
