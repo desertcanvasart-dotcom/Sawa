@@ -124,10 +124,36 @@ Registers updated:
 - `docs/audit/latent-defects.md` L-4: two new `cancelled_reason` writes, both on pay-at-GoAhead bookings only, and the test that pins them;
 - `docs/audit/repo-truth-register.json`: one internal statement.
 
+## Follow-up (after #223): safeguards, versioned Terms, the rehearsal
+
+Built on `feat/pay-at-goahead-safeguards` after #223 was merged. Migration 052 is additive, with a rollback; it was applied, re-applied and rolled back on a scratch Postgres. **Not run against production.**
+
+- **A link never made.** The rule stands: an unlinked seat isn't released, because the traveler did nothing wrong. The gap is made impossible to miss:
+  - alerts to ops and every super admin 6 hours and 12 hours after GoAhead;
+  - a count of "unpaid seats with no payment link" on the admin home and in Finance;
+  - 24 hours before the cut-off, each such seat needs an **admin decision**, recorded with a reason and in the audit log. The choices:
+    - **send the link now with a short deadline**, which can't be after the cut-off; the release then follows it;
+    - **let the traveler travel and collect later**: the seat is marked "unsecured", is never released, stays on the frozen manifest, and can be marked paid afterwards;
+    - **cancel**: nothing was charged, so nothing is refunded, and the traveler gets an apology email.
+- **The 12-hour minimum.** A link that would leave the traveler under 12 hours starts no deadline. The link is kept, the traveler isn't emailed, and the seat goes to the same decision.
+- **Versioned Terms.** `terms_versions` holds two series, `catalogue` and `legacy`, each seeded with version 1 (the current `/terms`). Every booking records the version it accepted:
+  - a legacy booking, at booking;
+  - a catalog booking, when its tiers are fixed (the traveler's acceptance, or the agency's booking).
+  Admin → Finance → Tiers and Terms edits and publishes them; publishing is for a super admin, from today or later.
+- **`docs/legal/terms-catalogue-draft.md`:** the booking-and-payment sections for catalog bookings, in plain English, with 16 points marked for the lawyer. It is not published.
+- **`docs/launch/rehearsal.md`:** a staging dry run of one complete departure, with a named person in each role.
+
+Tests added to `pay-at-goahead.integration.test.js`:
+- the 6- and 12-hour alerts, the count and the decision point;
+- each of the three decisions;
+- a link made too late;
+- the Terms versions.
+Two unit tests cover the new rules.
+
 ## Open items (not built, or for you to decide)
 
-1. **The Terms and site copy.** The Terms' payment and cancellation sections (`site/terms.html`, the SPA's terms summary, the FAQ, `shared/site-copy.js`) still describe deposit and balance. They are shared with legacy bookings and are legal text, so they weren't changed. The booking confirmation and the booking page state the pay-at-GoAhead terms from the booking's tier version. The Terms need the lawyer's wording before the flag goes on.
-2. **A link never made.** A request waits for ops to paste the Tab link, and its deadline runs from then. If ops never make it, the seat is never released and stays on the manifest: Sawa's miss, not the traveler's. Ops get the task, an email, and the "Link to make" state in admin.
+1. **The Terms and site copy.** The published Terms still describe deposit and balance. The catalog wording is drafted for the lawyer in `docs/legal/terms-catalogue-draft.md`; once approved, it is published as catalog Terms version 2. Its first question is the **seller's identity**: the draft names Capital Travel Service as seller, while the current Terms say Online Era operates the platform.
+2. **A link never made:** resolved by the follow-up above (alerts, a count, and an admin decision 24 hours before the cut-off).
 3. **Reinstating a released booking** is an ordinary booking edit (Admin → Bookings), which checks capacity. It then gets a fresh request from the job.
 4. **The loss check's cruise estimate** assumes the traveler shares a twin room. A single traveler costs Sawa more (the single supplement, decided earlier).
 5. **Provider adapters** (Paymob, Kashier, Geidea) and webhooks: not built, as asked. Section 10 of `payments-readiness.md` compares them.
