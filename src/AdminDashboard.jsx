@@ -48,7 +48,7 @@ const NAV_GROUPS = [
     items: [
       { id: "overview", label: "Overview", icon: LayoutDashboard },
       { id: "tours", label: "Tours & Packages", icon: Package },
-      { id: "catalogue", label: "Catalogue", icon: BookOpen },
+      { id: "catalogue", label: "Catalog", icon: BookOpen },
       { id: "calendar", label: "Calendar", icon: CalendarRange },
       { id: "archive", label: "Archive", icon: Archive },
       { id: "listings", label: "Listing requests", icon: Inbox, alert: (s) => s?.pendingListings || 0 },

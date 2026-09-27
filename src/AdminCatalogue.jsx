@@ -11,7 +11,7 @@ import { TYPE_LABELS, SPEC_FIELDS, usesDeadline, specGaps, DEFAULT_GOAHEAD_DEADL
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const STATUS_TONE = { active: "tag-on", held: "tag-warn", retired: "tag-off" };
-const DEP_LABEL = { open: "Open", go_ahead: "Going ahead", cancelled_below_minimum: "Cancelled — below minimum", completed: "Completed" };
+const DEP_LABEL = { open: "Open", go_ahead: "Going ahead", cancelled_below_minimum: "Canceled — below minimum", completed: "Completed" };
 const DEP_TONE = { open: "", go_ahead: "tag-on", cancelled_below_minimum: "tag-off", completed: "tag-off" };
 const FIELD_LABEL = Object.fromEntries(SPEC_FIELDS);
 const cairo = (iso, opts) => (iso ? new Intl.DateTimeFormat("en-GB", { timeZone: "Africa/Cairo", ...opts }).format(new Date(iso)) : "—");
@@ -58,13 +58,13 @@ export function CatalogueSection({ flash }) {
 
   return (
     <>
-      <Head title="Catalogue"
+      <Head title="Catalog"
         sub="The fixed products Sawa sells. Each product's specification, calendar and departures are managed here." />
       {err && <div className="auth-error">{err}</div>}
       {data && (
         <p className="field-hint" style={{ marginBottom: 12 }}>
-          Public catalogue (<code>catalogue_v2</code>): <b>{data.flag ? "on" : "off"}</b>.
-          {data.flag ? " Travellers see active products with a published specification." : " Travellers still see the current Tours & Packages; nothing here is public yet."}
+          Public catalog (<code>catalogue_v2</code>): <b>{data.flag ? "on" : "off"}</b>.
+          {data.flag ? " Travelers see active products with a published specification." : " Travelers still see the current Tours & Packages; nothing here is public yet."}
         </p>
       )}
       {data && (
@@ -152,7 +152,7 @@ function CatalogueEditor({ id, listings, products, flash, onClose }) {
     <>
       <Head title={`#${detail.product.catalogueNo} ${detail.product.title}`}
         sub={`${detail.product.code} · sold through /${detail.legacyType === "package" ? "package" : "tour"}/${detail.product.slug}`}
-        action={<button className="btn-ghost" onClick={onClose}><ArrowLeft size={16} />Back to catalogue</button>} />
+        action={<button className="btn-ghost" onClick={onClose}><ArrowLeft size={16} />Back to catalog</button>} />
       {err && <div className="auth-error">{err}</div>}
 
       <form className="dash-card" onSubmit={saveFields}>
@@ -192,7 +192,7 @@ function CatalogueEditor({ id, listings, products, flash, onClose }) {
           {usesDeadline(form.type) && (
             <label className="field"><span>GoAhead deadline (days before departure)</span>
               <input type="number" min="1" max="365" value={form.goaheadDeadlineDays ?? ""} onChange={set("goaheadDeadlineDays")} required />
-              <em className="field-hint">Below the minimum at this point, the departure is cancelled and nobody is charged.</em>
+              <em className="field-hint">Below the minimum at this point, the departure is canceled and nobody is charged.</em>
             </label>
           )}
           <label className="field field-full"><span>Sold through listing</span>
@@ -331,9 +331,9 @@ function DraftEditor({ product, draft, reload, flash }) {
         <label className="field"><span>Pickup window</span><input value={f.pickupWindow} onChange={set("pickupWindow")} placeholder="to complete, e.g. 07:15–07:45" /></label>
         <label className="field"><span>Inclusions (one per line)</span><textarea rows={5} value={f.inclusions} onChange={set("inclusions")} placeholder="to complete" /></label>
         <label className="field"><span>Exclusions (one per line)</span><textarea rows={5} value={f.exclusions} onChange={set("exclusions")} placeholder="to complete" /></label>
-        <label className="field"><span>Vehicle, 4–6 travellers</span><input value={f.band46} onChange={set("band46")} placeholder="to complete" /></label>
-        <label className="field"><span>Vehicle, 7–9 travellers</span><input value={f.band79} onChange={set("band79")} placeholder="to complete" /></label>
-        <label className="field"><span>Vehicle, 10–12 travellers</span><input value={f.band1012} onChange={set("band1012")} placeholder="to complete" /></label>
+        <label className="field"><span>Vehicle, 4–6 travelers</span><input value={f.band46} onChange={set("band46")} placeholder="to complete" /></label>
+        <label className="field"><span>Vehicle, 7–9 travelers</span><input value={f.band79} onChange={set("band79")} placeholder="to complete" /></label>
+        <label className="field"><span>Vehicle, 10–12 travelers</span><input value={f.band1012} onChange={set("band1012")} placeholder="to complete" /></label>
         <label className="field"><span>Guide languages (comma-separated)</span><input value={f.guideLanguages} onChange={set("guideLanguages")} placeholder="to complete, e.g. English, French" /></label>
         <label className="field field-full"><span>Meals</span><input value={f.meals} onChange={set("meals")} placeholder="to complete, e.g. Lunch included" /></label>
         <label className="field field-full"><span>Listed paid add-ons (one per line: name | price in EUR)</span>
@@ -488,7 +488,7 @@ export function CalendarSection({ flash }) {
     setBusy(true);
     try {
       const r = await call("/admin/catalogue/generate", "POST", {});
-      flash(`Generator: ${r.generated.created} created, ${r.generated.adopted} adopted, ${r.generated.materialised} made bookable. Statuses: ${r.statuses.go_ahead} going ahead, ${r.statuses.cancelled_below_minimum} cancelled, ${r.statuses.completed} completed.`);
+      flash(`Generator: ${r.generated.created} created, ${r.generated.adopted} adopted, ${r.generated.materialised} made bookable. Statuses: ${r.statuses.go_ahead} going ahead, ${r.statuses.cancelled_below_minimum} canceled, ${r.statuses.completed} completed.`);
       await load();
     } catch (e) { setErr(e.message); } finally { setBusy(false); }
   }
@@ -515,7 +515,7 @@ export function CalendarSection({ flash }) {
 
   return (
     <>
-      <Head title="Calendar" sub="Departures created from the catalogue calendar, with seats sold and where each stands."
+      <Head title="Calendar" sub="Departures created from the catalog calendar, with seats sold and where each stands."
         action={<button className="btn-ghost" onClick={generate} disabled={busy}><RefreshCw size={16} />Run generator now</button>} />
       {err && <div className="auth-error">{err}</div>}
       <div className="form-grid" style={{ marginBottom: 12 }}>
@@ -569,7 +569,7 @@ export function CalendarSection({ flash }) {
             </tbody>
           </table>
         </div>
-      ) : <div className="dash-empty">No departures in this range. Add calendar rules in the Catalogue, then run the generator.</div>)}
+      ) : <div className="dash-empty">No departures in this range. Add calendar rules in the Catalog, then run the generator.</div>)}
     </>
   );
 }

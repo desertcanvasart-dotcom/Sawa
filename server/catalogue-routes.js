@@ -16,7 +16,7 @@ import {
 } from "../shared/catalogue.js";
 
 const notSwitchedOn = () => Object.assign(
-  new CatalogueError(503, "The catalogue isn't switched on yet: migration 047 has not been applied to this database."),
+  new CatalogueError(503, "The catalog isn't switched on yet: migration 047 has not been applied to this database."),
   { expose: true });
 
 const productPatch = z.object({

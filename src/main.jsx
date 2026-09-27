@@ -1453,7 +1453,7 @@ function CatalogueFacts({ facts }) {
     facts.meals ? ["Meals", facts.meals] : null,
     facts.pickupArea ? ["Pickup", facts.pickupWindow ? `${facts.pickupArea} (${facts.pickupWindow})` : facts.pickupArea] : null,
     facts.endCity ? ["Ends in", facts.endCity] : null,
-    bands.length ? ["Vehicle", bands.map(([b, v]) => `${b} travellers: ${v}`).join("; ")] : null,
+    bands.length ? ["Vehicle", bands.map(([b, v]) => `${b} travelers: ${v}`).join("; ")] : null,
     facts.roomCategories?.length ? ["Rooms", facts.roomCategories.map((r) => r.name).join(", ")] : null,
     facts.addons?.length ? ["Optional extras", facts.addons.map((a) => (a.price != null ? `${a.name} (${CURRENCY_SYMBOL}${a.price})` : a.name)).join(", ")] : null,
   ].filter(Boolean);
