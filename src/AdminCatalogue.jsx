@@ -7,6 +7,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Plus, Trash2, RefreshCw, Check } from "lucide-react";
 import { apiFetch } from "./supabaseClient";
+import { DepartureOperatorPanel } from "./AdminOperators.jsx";
 import { TYPE_LABELS, SPEC_FIELDS, usesDeadline, specGaps, DEFAULT_GOAHEAD_DEADLINE_DAYS } from "../shared/catalogue.js";
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -14,6 +15,7 @@ const STATUS_TONE = { active: "tag-on", held: "tag-warn", retired: "tag-off" };
 const DEP_LABEL = { open: "Open", go_ahead: "Going ahead", cancelled_below_minimum: "Canceled — below minimum", completed: "Completed" };
 const DEP_TONE = { open: "", go_ahead: "tag-on", cancelled_below_minimum: "tag-off", completed: "tag-off" };
 const FIELD_LABEL = Object.fromEntries(SPEC_FIELDS);
+const ASSIGN_STATE = { offered: "awaiting acknowledgement", acknowledged: "acknowledged", expired: "not acknowledged" };
 const cairo = (iso, opts) => (iso ? new Intl.DateTimeFormat("en-GB", { timeZone: "Africa/Cairo", ...opts }).format(new Date(iso)) : "—");
 const dayLabel = (ymd) => cairo(`${ymd}T12:00:00Z`, { weekday: "short", day: "numeric", month: "short", year: "numeric" });
 
@@ -131,6 +133,7 @@ function CatalogueEditor({ id, listings, products, flash, onClose }) {
         goaheadMin: num(p.goaheadMin), maxGroup: num(p.maxGroup), cutoffHours: num(p.cutoffHours),
         goaheadDeadlineDays: usesDeadline(p.type) ? num(p.goaheadDeadlineDays) : null,
         legacyProductId: p.legacyProductId || null,
+        ...(typeof p.needsNationality === "boolean" ? { needsNationality: p.needsNationality } : {}),
       });
       flash("Product saved.");
       await load();
@@ -193,6 +196,12 @@ function CatalogueEditor({ id, listings, products, flash, onClose }) {
             <label className="field"><span>GoAhead deadline (days before departure)</span>
               <input type="number" min="1" max="365" value={form.goaheadDeadlineDays ?? ""} onChange={set("goaheadDeadlineDays")} required />
               <em className="field-hint">Below the minimum at this point, the departure is canceled and nobody is charged.</em>
+            </label>
+          )}
+          {typeof form.needsNationality === "boolean" && (
+            <label className="field-check">
+              <input type="checkbox" checked={form.needsNationality} onChange={(e) => setForm({ ...form, needsNationality: e.target.checked })} />
+              {" "}Ask travelers for their nationality (site tickets need it)
             </label>
           )}
           <label className="field field-full"><span>Sold through listing</span>
@@ -470,6 +479,7 @@ export function CalendarSection({ flash }) {
   const [overriding, setOverriding] = useState(null);
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
+  const [panelId, setPanelId] = useState(null);
 
   async function load() {
     try {
@@ -541,10 +551,15 @@ export function CalendarSection({ flash }) {
         </form>
       )}
 
+      {panelId && data?.departures.find((d) => d.id === panelId) && (
+        <DepartureOperatorPanel departure={data.departures.find((d) => d.id === panelId)} operators={data.operators}
+          flash={flash} onChange={load} onClose={() => setPanelId(null)} />
+      )}
+
       {data && (byDate.length ? (
         <div className="table-wrap">
           <table className="dash-table">
-            <thead><tr><th>Date</th><th>Product</th><th>Seats</th><th>Status</th><th>Decided at</th><th></th></tr></thead>
+            <thead><tr><th>Date</th><th>Product</th><th>Seats</th><th>Status</th><th>Decided at</th>{data.operators && <th>Operator</th>}<th></th></tr></thead>
             <tbody>
               {byDate.map(([date, deps]) => deps.map((d, i) => (
                 <tr key={d.id}>
@@ -559,7 +574,16 @@ export function CalendarSection({ flash }) {
                   </td>
                   <td>{usesDeadline(d.type) ? `Deadline ${cairo(d.deadlineAt, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}`
                     : `Cut-off ${cairo(d.cutoffAt, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}`}</td>
+                  {data.operators && (
+                    <td>
+                      {d.assignment ? <>{d.assignment.name}<div className="field-hint">{ASSIGN_STATE[d.assignment.state]}</div></>
+                        : d.rostered ? <>{d.rostered.name}<div className="field-hint">rostered{d.rostered.published ? "" : ", not published"}</div></> : null}
+                      {d.unrostered && <span className="tag tag-warn">No rostered operator</span>}
+                      {(d.alerts || []).map((k) => <span key={k} className="tag tag-off">{k === "missed_acknowledgement" ? "Not acknowledged" : "Needs an operator"}</span>)}
+                    </td>
+                  )}
                   <td className="row-actions">
+                    {data.operators && <button className="btn-ghost sm" onClick={() => setPanelId(d.id)}>Operator</button>}
                     {(d.status === "open" || (d.status === "cancelled_below_minimum" && !d.seatsSold)) && d.seatsSold < d.goaheadMin && (
                       <button className="btn-ghost sm" onClick={() => { setOverriding(d); setReason(""); }}>Run below minimum</button>
                     )}

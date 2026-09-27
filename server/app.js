@@ -356,6 +356,28 @@ const publicBookingSchema = z.object({
   refCode: z.string().trim().max(60).optional(),
 });
 
+// Model phase 2 — what the operator's manifest needs, all optional. Read only
+// with catalogue_v2 on; with it off these keys are ignored as before.
+const manifestFieldsSchema = z.object({
+  pickupPoint: z.string().trim().max(200).optional().or(z.literal("")),
+  nationality: z.string().trim().max(80).optional().or(z.literal("")),
+  safetyNeeds: z.string().trim().max(1000).optional().or(z.literal("")),
+  travelerNames: z.array(z.string().trim().max(120)).max(12).optional(),
+});
+function manifestFields(body) {
+  if (!catalogueV2Enabled()) return null;
+  const f = parse(manifestFieldsSchema, {
+    pickupPoint: body?.pickupPoint, nationality: body?.nationality,
+    safetyNeeds: body?.safetyNeeds, travelerNames: body?.travelerNames,
+  });
+  return {
+    pickupPoint: f.pickupPoint || null,
+    nationality: f.nationality || null,
+    safetyNeeds: f.safetyNeeds || null,
+    travelerNames: (f.travelerNames || []).filter(Boolean),
+  };
+}
+
 // Operator verification application (site/verify.html). Every field is bounded:
 // this endpoint is open to the internet and the values land in an email and an
 // ops table, so an unbounded `about` is a free megabyte per request.
@@ -1197,6 +1219,7 @@ app.post("/api/admin/departures/:id/confirm", requireAuth, requireRole("super_ad
 // Agency pledge — identity (agency) comes from the token, never the body.
 app.post("/api/departures/:id/pledges", requireAuth, requireRole("agency_owner", "agency_agent"), h(async (req, res) => {
   const input = parse(pledgeSchema, req.body);
+  const manifest = manifestFields(req.body);
   let agencyName = null;
   const departure = await withTransaction(async (c) => {
     const dep = await loadDeparture(c, Number(req.params.id), { forUpdate: true });
@@ -1221,6 +1244,7 @@ app.post("/api/departures/:id/pledges", requireAuth, requireRole("agency_owner",
       customerEmail: input.customerEmail || null,
       customerPhone: input.customerPhone || null,
       createdByUserId: req.user.id,
+      manifest,
       ...pricing,
     });
     return loadDeparture(c, dep.id);
@@ -1306,6 +1330,7 @@ app.post("/api/public/phone-verifications/check", writeLimiter, h(async (req, re
 // stricter write limiter guards this and the public cancel below from abuse.
 app.post("/api/public/departures/:id/bookings", writeLimiter, h(async (req, res) => {
   const input = parse(publicBookingSchema, req.body);
+  const manifest = manifestFields(req.body);
   input.customerPhone = verifiedPhoneFor(input);
   const result = await withTransaction(async (c) => {
     const dep = await loadDeparture(c, Number(req.params.id), { forUpdate: true });
@@ -1341,6 +1366,7 @@ app.post("/api/public/departures/:id/bookings", writeLimiter, h(async (req, res)
       source: "public",
       bookingCode: await uniqueBookingCode(c),
       refCode: refCode || null,
+      manifest,
       ...pricing,
     };
     await insertPledge(c, dep.id, booking);
@@ -2272,6 +2298,14 @@ async function insertPledge(c, departureId, p) {
       p.status ?? "confirmed",
     ]
   );
+  if (p.manifest) {
+    // Only with catalogue_v2 on (see manifestFields); columns from migration 049.
+    await c.query(
+      `UPDATE pledges SET pickup_point = $2, nationality = $3, safety_needs = $4,
+              traveller_names = CASE WHEN jsonb_array_length($5::jsonb) > 0 THEN $5::jsonb ELSE traveller_names END
+        WHERE id = $1`,
+      [p.id, p.manifest.pickupPoint, p.manifest.nationality, p.manifest.safetyNeeds, JSON.stringify(p.manifest.travelerNames)]);
+  }
   await refreshStatus(c, departureId);
 }
 

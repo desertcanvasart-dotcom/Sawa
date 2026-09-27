@@ -143,6 +143,7 @@ function publicSpec(entry) {
     type: entry.product.type,
     endCity: entry.product.endCity,
     specVersion: entry.spec?.version ?? null,
+    needsNationality: entry.product.needsNationality === true,
     guideLanguages: specList(c.guideLanguages),
     meals: c.meals || null,
     pickupArea: c.pickupArea || null,

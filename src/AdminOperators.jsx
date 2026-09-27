@@ -1,0 +1,740 @@
+// Admin → Operators, Roster and Rate card (model phase 2), and the operator
+// panel on a calendar departure (assignment, manifest, expected amount).
+//
+// The rules behind every screen are in shared/operators.js; the server side is
+// server/operators.js, roster.js, rates.js and assignments.js. Nothing here
+// charges, refunds or pays: the expected amount is shown, never paid.
+import React, { useEffect, useMemo, useState } from "react";
+import { ArrowLeft, RefreshCw, Upload, Check, X, AlertTriangle } from "lucide-react";
+import { apiFetch } from "./supabaseClient";
+import {
+  DOCUMENT_KINDS, DOCUMENT_LABELS, STRIKE_KINDS, STRIKE_LABELS, STRIKE_FLAG_AT, rateFieldsFor,
+} from "../shared/operators.js";
+import { TYPE_LABELS } from "../shared/catalogue.js";
+
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const STATUS_TONE = { pending: "tag-warn", active: "tag-on", suspended: "tag-off", removed: "tag-off" };
+const STATUS_LABEL = { pending: "Pending", active: "Active", suspended: "Suspended", removed: "Removed" };
+const ASSIGN_LABEL = { offered: "Offered, awaiting acknowledgement", acknowledged: "Acknowledged", expired: "Not acknowledged in time" };
+const RATE_LABELS = {
+  perTraveler: "Per traveler", landPerTraveler: "Land services per traveler",
+  roomTwin: "Twin room or cabin, per trip", roomSingle: "Single room or cabin, per trip",
+  fee4_6: "Departure fee, 4–6 travelers", fee7_9: "Departure fee, 7–9 travelers", fee10_12: "Departure fee, 10–12 travelers",
+  commissionPerSeat: "Agency commission per seat (reference)",
+};
+const egp = (n) => (n == null ? "—" : `EGP ${Number(n).toLocaleString("en-US", { maximumFractionDigits: 2 })}`);
+const dayLabel = (ymd) => (ymd ? new Intl.DateTimeFormat("en-US", { timeZone: "Africa/Cairo", weekday: "short", month: "short", day: "numeric", year: "numeric" }).format(new Date(`${ymd}T12:00:00Z`)) : "—");
+const stamp = (iso) => (iso ? new Intl.DateTimeFormat("en-US", { timeZone: "Africa/Cairo", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).format(new Date(iso)) : "—");
+const thisMonth = () => new Date().toISOString().slice(0, 7);
+const nextMonth = () => { const d = new Date(); d.setUTCDate(1); d.setUTCMonth(d.getUTCMonth() + 1); return d.toISOString().slice(0, 7); };
+
+async function call(path, method = "GET", body) {
+  const r = await apiFetch(path, body === undefined ? { method } : {
+    method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+  });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw Object.assign(new Error(j.error || "That didn't work. Please try again."), { problems: j.problems });
+  return j;
+}
+
+const readFile = (file) => new Promise((resolve, reject) => {
+  const fr = new FileReader();
+  fr.onload = () => resolve(fr.result);
+  fr.onerror = () => reject(new Error("Couldn't read that file."));
+  fr.readAsDataURL(file);
+});
+
+function Head({ title, sub, action }) {
+  return (
+    <div className="dash-head">
+      <div><h1>{title}</h1>{sub && <p>{sub}</p>}</div>
+      {action}
+    </div>
+  );
+}
+
+function DocGaps({ gaps }) {
+  if (!gaps?.length) return <span className="tag tag-on">All current</span>;
+  return (
+    <span className="tag tag-warn" title={gaps.map((g) => `${DOCUMENT_LABELS[g.kind]}: ${g.problem}`).join(", ")}>
+      {gaps.length} missing or expired
+    </span>
+  );
+}
+
+function StrikeFlag({ n }) {
+  if (!n) return <span className="field-hint">0</span>;
+  return n >= STRIKE_FLAG_AT
+    ? <span className="tag tag-off" title="Flagged for fewer roster days. Removal is an admin decision."><AlertTriangle size={12} /> {n} in 90 days</span>
+    : <span className="tag tag-warn">{n} in 90 days</span>;
+}
+
+// ============================================================ Operators
+export function OperatorsSection({ flash, isSuperAdmin }) {
+  const [data, setData] = useState(null);
+  const [err, setErr] = useState("");
+  const [openId, setOpenId] = useState(null);
+  const [adding, setAdding] = useState(false);
+  const [legalName, setLegalName] = useState("");
+
+  async function load() {
+    try { setErr(""); setData(await call("/admin/operators")); } catch (e) { setErr(e.message); }
+  }
+  useEffect(() => { load(); }, []);
+
+  async function create(e) {
+    e.preventDefault();
+    try {
+      const { operator } = await call("/admin/operators", "POST", { legalName });
+      flash(`${operator.legalName} added as pending. Upload its four documents, then activate it.`);
+      setAdding(false); setLegalName("");
+      setOpenId(operator.id);
+    } catch (e2) { setErr(e2.message); }
+  }
+
+  if (openId) {
+    return <OperatorEditor id={openId} products={data?.products || []} agencies={data?.agencies || []}
+      flash={flash} isSuperAdmin={isSuperAdmin} onClose={() => { setOpenId(null); load(); }} />;
+  }
+
+  return (
+    <>
+      <Head title="Operators"
+        sub="Licensed operators who run catalog departures. Only active operators with current documents and product approval can be rostered."
+        action={<button className="btn-primary" onClick={() => setAdding(true)}>Add operator</button>} />
+      {err && <div className="auth-error">{err}</div>}
+      {adding && (
+        <form className="dash-card" onSubmit={create} style={{ marginBottom: 12 }}>
+          <label className="field field-full"><span>Legal name</span>
+            <input value={legalName} onChange={(e) => setLegalName(e.target.value)} required maxLength={200} autoFocus />
+          </label>
+          <div className="cat-actions">
+            <button type="button" className="btn-ghost" onClick={() => setAdding(false)}>Cancel</button>
+            <button className="btn-primary">Add</button>
+          </div>
+        </form>
+      )}
+      {data && (data.operators.length ? (
+        <div className="table-wrap">
+          <table className="dash-table">
+            <thead><tr><th>Operator</th><th>Status</th><th>Documents</th><th>Approved products</th><th>Strikes</th></tr></thead>
+            <tbody>
+              {data.operators.map((o) => (
+                <tr key={o.id} className="cat-row-link" tabIndex={0} onClick={() => setOpenId(o.id)}
+                  onKeyDown={(e) => { if (e.key === "Enter") setOpenId(o.id); }}>
+                  <td><strong>{o.legalName}</strong>{o.tradingName && <div className="field-hint">{o.tradingName}</div>}</td>
+                  <td><span className={`tag ${STATUS_TONE[o.status]}`}>{STATUS_LABEL[o.status]}</span>
+                    {o.statusReason && <div className="field-hint">{o.statusReason.replace("document_expired:", "expired: ").replace(/_/g, " ")}</div>}</td>
+                  <td><DocGaps gaps={o.documentGaps} /></td>
+                  <td className="tnum">{o.approvedProductIds.length}</td>
+                  <td><StrikeFlag n={o.strikes90} /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : <div className="dash-empty">No operators yet. Migration 049 creates one for each operator agency; add others here.</div>)}
+    </>
+  );
+}
+
+const OPERATOR_TEXT_FIELDS = [
+  ["legalName", "Legal name"], ["tradingName", "Trading name"],
+  ["tourismLicenseNo", "Ministry of Tourism license no."], ["etaaNo", "ETAA membership no."],
+  ["commercialRegistrationNo", "Commercial registration no."], ["taxRegistrationNo", "Tax registration no."],
+  ["email", "Email (assignment notices)"], ["phone", "Phone"], ["whatsapp", "WhatsApp (stored; not used yet)"],
+];
+
+function OperatorEditor({ id, products, agencies, flash, isSuperAdmin, onClose }) {
+  const [d, setD] = useState(null);
+  const [form, setForm] = useState({});
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [docForm, setDocForm] = useState(null);
+  const [strike, setStrike] = useState({ kind: "service_failure", note: "" });
+  const [login, setLogin] = useState({ email: "", fullName: "", role: "operator_owner" });
+  const [tempPw, setTempPw] = useState(null);
+
+  async function load() {
+    try {
+      setErr("");
+      const j = await call(`/admin/operators/${id}`);
+      setD(j);
+      setForm({ ...Object.fromEntries(OPERATOR_TEXT_FIELDS.map(([k]) => [k, j.operator[k] || ""])), agencyId: j.operator.agencyId || "", notes: j.operator.notes || "" });
+    } catch (e) { setErr(e.message); }
+  }
+  useEffect(() => { load(); }, [id]);
+
+  const run = async (fn, msg) => {
+    setBusy(true); setErr("");
+    try { await fn(); if (msg) flash(msg); await load(); } catch (e) { setErr(e.message); } finally { setBusy(false); }
+  };
+
+  if (!d) return <>{err ? <div className="auth-error">{err}</div> : <div className="dash-empty">Loading…</div>}</>;
+  const op = d.operator;
+  const current = new Map(d.documents.filter((x) => !x.supersededAt).map((x) => [x.kind, x]));
+
+  return (
+    <>
+      <Head title={op.legalName}
+        sub={<><span className={`tag ${STATUS_TONE[op.status]}`}>{STATUS_LABEL[op.status]}</span>{op.statusChangedBy && <> · changed by {op.statusChangedBy} {stamp(op.statusChangedAt)}</>}</>}
+        action={<button className="btn-ghost" onClick={onClose}><ArrowLeft size={16} />All operators</button>} />
+      {err && <div className="auth-error">{err}</div>}
+
+      <div className="dash-card" style={{ marginBottom: 12 }}>
+        <h2>Status</h2>
+        <p className="field-hint">Activating needs all four documents current. The daily check suspends an operator whose document expires and reactivates it when you upload a valid replacement. Removal is always a manual decision.</p>
+        <div className="cat-actions">
+          {op.status !== "active" && op.status !== "removed" && <button className="btn-primary" disabled={busy} onClick={() => run(() => call(`/admin/operators/${id}/status`, "POST", { status: "active" }), "Operator activated.")}>Activate</button>}
+          {op.status === "active" && <button className="btn-ghost" disabled={busy} onClick={() => { const reason = window.prompt("Reason for suspending"); if (reason) run(() => call(`/admin/operators/${id}/status`, "POST", { status: "suspended", reason }), "Operator suspended."); }}>Suspend</button>}
+          {op.status !== "removed" && <button className="btn-ghost" disabled={busy} onClick={() => { const reason = window.prompt("Reason for removing this operator from the roster"); if (reason) run(() => call(`/admin/operators/${id}/status`, "POST", { status: "removed", reason }), "Operator removed."); }}>Remove</button>}
+          {op.status === "removed" && <button className="btn-ghost" disabled={busy} onClick={() => run(() => call(`/admin/operators/${id}/status`, "POST", { status: "pending" }), "Operator moved back to pending.")}>Reinstate as pending</button>}
+        </div>
+      </div>
+
+      <form className="dash-card" style={{ marginBottom: 12 }} onSubmit={(e) => { e.preventDefault(); run(() => call(`/admin/operators/${id}`, "PATCH", { ...form, agencyId: form.agencyId || null }), "Saved."); }}>
+        <h2>Record</h2>
+        <div className="form-grid">
+          {OPERATOR_TEXT_FIELDS.map(([k, label]) => (
+            <label className="field" key={k}><span>{label}</span>
+              <input value={form[k] || ""} onChange={(e) => setForm({ ...form, [k]: e.target.value })} required={k === "legalName"} />
+            </label>
+          ))}
+          <label className="field"><span>Linked agency record</span>
+            <select value={form.agencyId || ""} onChange={(e) => setForm({ ...form, agencyId: e.target.value })}>
+              <option value="">None</option>
+              {agencies.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+            </select>
+          </label>
+          <label className="field field-full"><span>Notes</span><textarea rows={2} value={form.notes || ""} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></label>
+        </div>
+        <div className="cat-actions"><button className="btn-primary" disabled={busy}>Save</button></div>
+      </form>
+
+      <div className="dash-card" style={{ marginBottom: 12 }}>
+        <h2>Documents</h2>
+        <div className="table-wrap">
+          <table className="dash-table">
+            <thead><tr><th>Document</th><th>Number</th><th>Expires</th><th>File</th><th></th></tr></thead>
+            <tbody>
+              {DOCUMENT_KINDS.map((kind) => {
+                const doc = current.get(kind);
+                const gap = d.documentGaps.find((g) => g.kind === kind);
+                return (
+                  <tr key={kind}>
+                    <td>{DOCUMENT_LABELS[kind]}</td>
+                    <td>{doc?.number || "—"}</td>
+                    <td>{doc ? dayLabel(doc.expiresOn) : "—"} {gap && <span className="tag tag-warn">{gap.problem}</span>}</td>
+                    <td>{doc?.hasFile ? <button className="btn-ghost sm" onClick={() => call(`/admin/operators/${id}/documents/${doc.id}/file`).then((j) => window.open(j.url, "_blank", "noopener")).catch((e) => setErr(e.message))}>Open</button> : "—"}</td>
+                    <td className="row-actions"><button className="btn-ghost sm" onClick={() => setDocForm({ kind, number: "", expiresOn: "", file: null })}><Upload size={14} />{doc ? "Replace" : "Add"}</button></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        {docForm && (
+          <form onSubmit={(e) => {
+            e.preventDefault();
+            run(async () => {
+              const body = { kind: docForm.kind, number: docForm.number || null, expiresOn: docForm.expiresOn };
+              if (docForm.file) { body.dataUrl = await readFile(docForm.file); body.filename = docForm.file.name; }
+              const r = await call(`/admin/operators/${id}/documents`, "POST", body);
+              setDocForm(null);
+              if (r.reactivated) flash("Document saved. All documents are current again, so the operator is active.");
+            }, "Document saved.");
+          }}>
+            <h3>{DOCUMENT_LABELS[docForm.kind]}</h3>
+            <div className="form-grid">
+              <label className="field"><span>Number</span><input value={docForm.number} onChange={(e) => setDocForm({ ...docForm, number: e.target.value })} /></label>
+              <label className="field"><span>Expires on</span><input type="date" required value={docForm.expiresOn} onChange={(e) => setDocForm({ ...docForm, expiresOn: e.target.value })} /></label>
+              <label className="field"><span>File (PDF or image)</span><input type="file" accept="application/pdf,image/*" onChange={(e) => setDocForm({ ...docForm, file: e.target.files?.[0] || null })} /></label>
+            </div>
+            <div className="cat-actions">
+              <button type="button" className="btn-ghost" onClick={() => setDocForm(null)}>Cancel</button>
+              <button className="btn-primary" disabled={busy}>Save document</button>
+            </div>
+          </form>
+        )}
+      </div>
+
+      <ApprovalsCard id={id} products={products} approved={d.approvedProductIds} run={run} busy={busy} />
+
+      <div className="dash-card" style={{ marginBottom: 12 }}>
+        <h2>Strikes <StrikeFlag n={d.strikes90} /></h2>
+        <p className="field-hint">A missed acknowledgement is recorded automatically. {STRIKE_FLAG_AT} strikes in 90 days flags the operator for fewer roster days; removal is your decision.</p>
+        {d.strikes.length ? (
+          <div className="table-wrap">
+            <table className="dash-table">
+              <thead><tr><th>When</th><th>Kind</th><th>Note</th><th>By</th><th></th></tr></thead>
+              <tbody>
+                {d.strikes.map((s) => (
+                  <tr key={s.id} style={s.voidedAt ? { opacity: 0.5 } : undefined}>
+                    <td>{stamp(s.createdAt)}</td>
+                    <td>{STRIKE_LABELS[s.kind]}</td>
+                    <td>{s.note}{s.voidedAt && <div className="field-hint">Voided by {s.voidedBy}: {s.voidReason}</div>}</td>
+                    <td>{s.createdBy || "system"}</td>
+                    <td className="row-actions">{!s.voidedAt && <button className="btn-ghost sm" onClick={() => { const reason = window.prompt("Why void this strike?"); if (reason) run(() => call(`/admin/operator-strikes/${s.id}/void`, "POST", { reason }), "Strike voided."); }}>Void</button>}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : <p className="field-hint">No strikes.</p>}
+        <form onSubmit={(e) => { e.preventDefault(); run(() => call(`/admin/operators/${id}/strikes`, "POST", strike).then(() => setStrike({ ...strike, note: "" })), "Strike recorded."); }}>
+          <div className="form-grid">
+            <label className="field"><span>Kind</span>
+              <select value={strike.kind} onChange={(e) => setStrike({ ...strike, kind: e.target.value })}>
+                {STRIKE_KINDS.filter((k) => k !== "missed_acknowledgement").map((k) => <option key={k} value={k}>{STRIKE_LABELS[k]}</option>)}
+              </select>
+            </label>
+            <label className="field"><span>What happened</span><input value={strike.note} onChange={(e) => setStrike({ ...strike, note: e.target.value })} required minLength={3} /></label>
+          </div>
+          <div className="cat-actions"><button className="btn-ghost" disabled={busy}>Record strike</button></div>
+        </form>
+      </div>
+
+      <div className="dash-card">
+        <h2>Portal logins</h2>
+        {d.users.length ? <ul>{d.users.map((u) => <li key={u.id}>{u.email} · {u.role === "operator_owner" ? "Owner" : "Staff"} · {u.status}</li>)}</ul> : <p className="field-hint">No logins yet.</p>}
+        {tempPw && <div className="dash-flash" role="status">Temporary password for {tempPw.email}: <code>{tempPw.password}</code>. Share it once; they change it at first sign-in.</div>}
+        {isSuperAdmin ? (
+          <form onSubmit={(e) => {
+            e.preventDefault();
+            run(async () => {
+              const r = await call(`/admin/operators/${id}/users`, "POST", login);
+              setTempPw({ email: login.email, password: r.tempPassword });
+              setLogin({ email: "", fullName: "", role: "operator_owner" });
+            }, "Login created.");
+          }}>
+            <div className="form-grid">
+              <label className="field"><span>Email</span><input type="email" required value={login.email} onChange={(e) => setLogin({ ...login, email: e.target.value })} /></label>
+              <label className="field"><span>Name</span><input value={login.fullName} onChange={(e) => setLogin({ ...login, fullName: e.target.value })} /></label>
+              <label className="field"><span>Role</span>
+                <select value={login.role} onChange={(e) => setLogin({ ...login, role: e.target.value })}>
+                  <option value="operator_owner">Owner</option><option value="operator_staff">Staff</option>
+                </select>
+              </label>
+            </div>
+            <div className="cat-actions"><button className="btn-ghost" disabled={busy}>Create login</button></div>
+          </form>
+        ) : <p className="field-hint">A super admin creates operator logins.</p>}
+      </div>
+    </>
+  );
+}
+
+function ApprovalsCard({ id, products, approved, run, busy }) {
+  const [sel, setSel] = useState(new Set(approved));
+  useEffect(() => { setSel(new Set(approved)); }, [approved.join(",")]);
+  const toggle = (pid) => { const n = new Set(sel); n.has(pid) ? n.delete(pid) : n.add(pid); setSel(n); };
+  return (
+    <div className="dash-card" style={{ marginBottom: 12 }}>
+      <h2>Approved products</h2>
+      <p className="field-hint">The products this operator may be rostered on.</p>
+      <div className="form-grid">
+        {products.filter((p) => p.status !== "retired").map((p) => (
+          <label key={p.id} className="field-check">
+            <input type="checkbox" checked={sel.has(p.id)} onChange={() => toggle(p.id)} /> #{p.catalogue_no} {p.title}
+          </label>
+        ))}
+      </div>
+      <div className="cat-actions">
+        <button className="btn-primary" disabled={busy} onClick={() => run(() => call(`/admin/operators/${id}/approvals`, "PUT", { productIds: [...sel] }), "Approvals saved.")}>Save approvals</button>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================ Roster
+export function RosterSection({ flash }) {
+  const [month, setMonth] = useState(nextMonth());
+  const [data, setData] = useState(null);
+  const [err, setErr] = useState("");
+  const [problems, setProblems] = useState([]);
+  const [busy, setBusy] = useState(false);
+
+  async function load() {
+    try { setErr(""); setData(await call(`/admin/roster?month=${month}`)); } catch (e) { setErr(e.message); }
+  }
+  useEffect(() => { load(); }, [month]);
+
+  const run = async (fn, msg) => {
+    setBusy(true); setErr(""); setProblems([]);
+    try { const r = await fn(); if (msg) flash(typeof msg === "function" ? msg(r) : msg); await load(); } catch (e) { setErr(e.message); setProblems(e.problems || []); } finally { setBusy(false); }
+  };
+
+  const eligible = (productId) => (data?.operators || []).filter((o) => o.status === "active" && o.approvedProductIds.includes(productId));
+  const opName = useMemo(() => new Map((data?.operators || []).map((o) => [o.id, o])), [data]);
+  const planOf = (productId, weekday) => data?.plan.find((l) => l.productId === productId && l.weekday === weekday)?.operatorId || "";
+
+  return (
+    <>
+      <Head title="Roster"
+        sub="Who runs each catalog product on each date. Plan the weekdays, build the month, adjust single dates, then publish by the 15th of the month before."
+        action={<input type="month" value={month} onChange={(e) => setMonth(e.target.value || thisMonth())} />} />
+      {err && <div className="auth-error">{err}{problems.length > 0 && <ul>{problems.map((p, i) => <li key={i}>{p}</li>)}</ul>}</div>}
+      {data && (
+        <>
+          <p className="field-hint" style={{ marginBottom: 12 }}>
+            {data.state === "published"
+              ? <>Published {stamp(data.publishedAt)} by {data.publishedBy}. Operators can see their own dates.</>
+              : <>Draft. Publish by <b>{dayLabel(data.deadline)}</b>.{data.late && <span className="tag tag-off" style={{ marginLeft: 8 }}>Past the deadline</span>}</>}
+          </p>
+
+          <div className="dash-card" style={{ marginBottom: 12 }}>
+            <h2>Operators</h2>
+            <div className="table-wrap">
+              <table className="dash-table">
+                <thead><tr><th>Operator</th><th>Status</th><th>Strikes</th></tr></thead>
+                <tbody>
+                  {data.operators.map((o) => (
+                    <tr key={o.id}><td>{o.legalName}</td><td><span className={`tag ${STATUS_TONE[o.status]}`}>{STATUS_LABEL[o.status]}</span></td><td><StrikeFlag n={o.strikes90} /></td></tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div className="dash-card" style={{ marginBottom: 12 }}>
+            <h2>Weekday plan</h2>
+            <div className="table-wrap">
+              <table className="dash-table">
+                <thead><tr><th>Product</th>{WEEKDAYS.map((w) => <th key={w}>{w}</th>)}</tr></thead>
+                <tbody>
+                  {data.products.map((p) => (
+                    <tr key={p.id}>
+                      <td>#{p.catalogue_no} {p.title}</td>
+                      {WEEKDAYS.map((_, wd) => (
+                        <td key={wd}>
+                          <select value={planOf(p.id, wd)} disabled={busy} aria-label={`${p.title}, ${WEEKDAYS[wd]}`}
+                            onChange={(e) => run(() => call(`/admin/roster/${month}/plan`, "PUT", { productId: p.id, weekday: wd, operatorId: e.target.value ? Number(e.target.value) : null }))}>
+                            <option value="">—</option>
+                            {eligible(p.id).map((o) => <option key={o.id} value={o.id}>{o.legalName}</option>)}
+                          </select>
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="cat-actions">
+              <button className="btn-ghost" disabled={busy} onClick={() => run(() => call(`/admin/roster/${month}/build`, "POST", {}),
+                (r) => `Built ${r.written} dates.${r.skipped?.length ? ` ${r.skipped.length} skipped (kept an override or swap, or the operator isn't eligible).` : ""}`)}>
+                <RefreshCw size={14} />Build month from plan
+              </button>
+              <button className="btn-primary" disabled={busy} onClick={() => run(() => call(`/admin/roster/${month}/publish`, "POST", {}), "Roster published.")}>
+                {data.state === "published" ? "Republish" : "Publish"}
+              </button>
+            </div>
+          </div>
+
+          <div className="dash-card" style={{ marginBottom: 12 }}>
+            <h2>Dates</h2>
+            {data.entries.length ? (
+              <div className="table-wrap">
+                <table className="dash-table">
+                  <thead><tr><th>Date</th><th>Product</th><th>Operator</th><th>Source</th></tr></thead>
+                  <tbody>
+                    {data.entries.map((e) => {
+                      const p = data.products.find((x) => x.id === e.productId);
+                      return (
+                        <tr key={e.id}>
+                          <td>{dayLabel(e.date)}</td>
+                          <td>{p ? `#${p.catalogue_no} ${p.title}` : e.productId}</td>
+                          <td>
+                            <select value={e.operatorId} disabled={busy}
+                              onChange={(ev) => run(() => call("/admin/roster/entries", "PUT", { productId: e.productId, date: e.date, operatorId: ev.target.value ? Number(ev.target.value) : null }), "Date updated.")}>
+                              <option value="">Remove</option>
+                              {!eligible(e.productId).some((o) => o.id === e.operatorId) && <option value={e.operatorId}>{e.operatorName} (not eligible)</option>}
+                              {eligible(e.productId).map((o) => <option key={o.id} value={o.id}>{o.legalName}</option>)}
+                            </select>
+                          </td>
+                          <td>{e.source}{e.updatedBy && <div className="field-hint">{e.updatedBy}</div>}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            ) : <p className="field-hint">No dates yet. Plan the weekdays and build the month.</p>}
+          </div>
+
+          <div className="dash-card">
+            <h2>Swap requests</h2>
+            {data.swaps.length ? (
+              <div className="table-wrap">
+                <table className="dash-table">
+                  <thead><tr><th>Date</th><th>From</th><th>To</th><th>Note</th><th>State</th><th></th></tr></thead>
+                  <tbody>
+                    {data.swaps.map((s) => (
+                      <tr key={s.id}>
+                        <td>{dayLabel(s.date)}</td>
+                        <td>{opName.get(s.fromOperatorId)?.legalName || s.fromOperatorId}</td>
+                        <td>{opName.get(s.toOperatorId)?.legalName || s.toOperatorId}</td>
+                        <td>{s.note || "—"}</td>
+                        <td>{s.state}{s.decidedBy && <div className="field-hint">by {s.decidedBy}, {stamp(s.decidedAt)}</div>}</td>
+                        <td className="row-actions">
+                          {s.state === "requested" && <>
+                            <button className="btn-ghost sm" disabled={busy} onClick={() => run(() => call(`/admin/roster/swaps/${s.id}/decide`, "POST", { approve: true }), "Swap approved.")}><Check size={14} />Approve</button>
+                            <button className="btn-ghost sm" disabled={busy} onClick={() => run(() => call(`/admin/roster/swaps/${s.id}/decide`, "POST", { approve: false }), "Swap rejected.")}><X size={14} />Reject</button>
+                          </>}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : <p className="field-hint">No swap requests this month.</p>}
+          </div>
+        </>
+      )}
+    </>
+  );
+}
+
+// ============================================================ Rate card
+export function RatesSection({ flash }) {
+  const [data, setData] = useState(null);
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [report, setReport] = useState(null);
+  const [editing, setEditing] = useState(null);
+
+  async function load() {
+    try { setErr(""); setData(await call("/admin/rates")); } catch (e) { setErr(e.message); }
+  }
+  useEffect(() => { load(); }, []);
+
+  async function importFile(file) {
+    if (!file) return;
+    setBusy(true); setErr("");
+    try {
+      const r = await call("/admin/rates/import", "POST", { dataUrl: await readFile(file), filename: file.name });
+      setReport(r);
+      flash(`Imported ${r.imported.length} products as drafts; ${r.skipped.length} rows skipped.`);
+      await load();
+    } catch (e) { setErr(e.message); } finally { setBusy(false); }
+  }
+
+  if (editing) {
+    return <RateEditor product={editing} flash={flash} onClose={() => { setEditing(null); load(); }} />;
+  }
+
+  return (
+    <>
+      <Head title="Rate card"
+        sub="What each operator is paid per product, in EGP. A departure keeps the version in force when its first seat sold. Shown for reference; nothing is paid from here yet."
+        action={<label className="btn-ghost" style={{ cursor: "pointer" }}><Upload size={16} />Import spreadsheet
+          <input type="file" accept=".xlsx" hidden disabled={busy} onChange={(e) => importFile(e.target.files?.[0])} /></label>} />
+      {err && <div className="auth-error">{err}</div>}
+      {report && (
+        <div className="dash-card" style={{ marginBottom: 12 }}>
+          <h2>Import</h2>
+          <p>{report.imported.length} imported as drafts, {report.skipped.length} skipped.</p>
+          {report.notes.length > 0 && <><h3>Notes</h3><ul>{report.notes.map((n, i) => <li key={i}>{n}</li>)}</ul></>}
+          {report.problems.length > 0 && <><h3>Check these</h3><ul>{report.problems.map((n, i) => <li key={i}>{n}</li>)}</ul></>}
+          {report.skipped.length > 0 && <><h3>Skipped</h3><ul>{report.skipped.map((s, i) => <li key={i}>{s.sheet} row {s.row}: {s.reason}</li>)}</ul></>}
+          {report.imported.some((r) => r.blank.length) && <p className="field-hint">{report.imported.filter((r) => r.blank.length).length} drafts still have blank amounts; fill them in before publishing.</p>}
+          <div className="cat-actions"><button className="btn-ghost" onClick={() => setReport(null)}>Close</button></div>
+        </div>
+      )}
+      {data && (
+        <div className="table-wrap">
+          <table className="dash-table">
+            <thead><tr><th>#</th><th>Product</th><th>Type</th><th>In force</th><th>Draft</th></tr></thead>
+            <tbody>
+              {data.products.map((p) => {
+                const published = p.versions.filter((v) => v.state === "published");
+                const latest = published[published.length - 1];
+                const draft = p.versions.find((v) => v.state === "draft");
+                return (
+                  <tr key={p.id} className="cat-row-link" tabIndex={0} onClick={() => setEditing(p)} onKeyDown={(e) => { if (e.key === "Enter") setEditing(p); }}>
+                    <td className="tnum">{p.catalogue_no}</td>
+                    <td><strong>{p.title}</strong></td>
+                    <td>{TYPE_LABELS[p.type] || p.type}</td>
+                    <td>{latest ? `v${latest.version} from ${dayLabel(latest.effectiveFrom)}` : <span className="tag tag-warn">None</span>}</td>
+                    <td>{draft ? `v${draft.version}` : "—"}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </>
+  );
+}
+
+function RateEditor({ product, flash, onClose }) {
+  const [versions, setVersions] = useState(product.versions);
+  const draft = versions.find((v) => v.state === "draft");
+  const fields = [...rateFieldsFor(product.type), "commissionPerSeat"];
+  const [values, setValues] = useState(() => Object.fromEntries(fields.map((k) => [k, draft?.[k] ?? versions[versions.length - 1]?.[k] ?? ""])));
+  const [effectiveFrom, setEffectiveFrom] = useState("");
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function reload() {
+    const j = await call("/admin/rates");
+    setVersions(j.products.find((p) => p.id === product.id)?.versions || []);
+  }
+  async function save(e) {
+    e?.preventDefault();
+    setBusy(true); setErr("");
+    try {
+      const clean = Object.fromEntries(Object.entries(values).map(([k, v]) => [k, v === "" ? null : Number(v)]));
+      await call(`/admin/rates/${product.id}/draft`, "PUT", { values: clean });
+      flash("Draft saved."); await reload();
+    } catch (e2) { setErr(e2.message); } finally { setBusy(false); }
+  }
+  async function publish() {
+    setBusy(true); setErr("");
+    try {
+      const clean = Object.fromEntries(Object.entries(values).map(([k, v]) => [k, v === "" ? null : Number(v)]));
+      const { version } = await call(`/admin/rates/${product.id}/draft`, "PUT", { values: clean });
+      await call(`/admin/rates/${product.id}/versions/${version.id}/publish`, "POST", { effectiveFrom: effectiveFrom || undefined });
+      flash(`Version ${version.version} published.`); await reload();
+    } catch (e2) { setErr(e2.message); } finally { setBusy(false); }
+  }
+
+  return (
+    <>
+      <Head title={`#${product.catalogue_no} ${product.title}`} sub={`${TYPE_LABELS[product.type] || product.type} · rates in EGP`}
+        action={<button className="btn-ghost" onClick={onClose}><ArrowLeft size={16} />Rate card</button>} />
+      {err && <div className="auth-error">{err}</div>}
+      <form className="dash-card" style={{ marginBottom: 12 }} onSubmit={save}>
+        <h2>{draft ? `Draft v${draft.version}` : "New draft"}</h2>
+        <div className="form-grid">
+          {fields.map((k) => (
+            <label className="field" key={k}><span>{RATE_LABELS[k]} (EGP)</span>
+              <input type="number" min="0" step="0.01" value={values[k] ?? ""} onChange={(e) => setValues({ ...values, [k]: e.target.value })} />
+            </label>
+          ))}
+          <label className="field"><span>Takes effect</span><input type="date" value={effectiveFrom} onChange={(e) => setEffectiveFrom(e.target.value)} /></label>
+        </div>
+        <p className="field-hint">A published version applies to departures that haven't sold a seat yet. Departures already sold keep the version they were locked to.</p>
+        <div className="cat-actions">
+          <button className="btn-ghost" disabled={busy}>Save draft</button>
+          <button type="button" className="btn-primary" disabled={busy} onClick={publish}>Publish</button>
+        </div>
+      </form>
+      <div className="dash-card">
+        <h2>Versions</h2>
+        {versions.length ? (
+          <div className="table-wrap">
+            <table className="dash-table">
+              <thead><tr><th>Version</th><th>State</th><th>From</th>{fields.map((k) => <th key={k}>{RATE_LABELS[k]}</th>)}</tr></thead>
+              <tbody>
+                {versions.map((v) => (
+                  <tr key={v.id}>
+                    <td>v{v.version}</td><td>{v.state}{v.publishedBy && <div className="field-hint">{v.publishedBy}</div>}</td>
+                    <td>{v.effectiveFrom ? dayLabel(v.effectiveFrom) : "—"}</td>
+                    {fields.map((k) => <td key={k} className="tnum">{v[k] == null ? "—" : Number(v[k]).toLocaleString("en-US")}</td>)}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : <p className="field-hint">No versions yet.</p>}
+      </div>
+    </>
+  );
+}
+
+// ============================================================ Calendar panel
+// The operator side of one calendar departure: who holds it, reassign,
+// manifest and expected amount.
+export function DepartureOperatorPanel({ departure, operators, flash, onChange, onClose }) {
+  const [manifest, setManifest] = useState(null);
+  const [expected, setExpected] = useState(null);
+  const [operatorId, setOperatorId] = useState("");
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+  const a = departure.assignment;
+
+  useEffect(() => {
+    setErr("");
+    call(`/admin/catalogue/departures/${departure.id}/expected`).then(setExpected).catch((e) => setErr(e.message));
+    call(`/admin/catalogue/departures/${departure.id}/manifest`).then(setManifest).catch(() => setManifest(null));
+  }, [departure.id]);
+
+  async function assign(e) {
+    e.preventDefault();
+    setBusy(true); setErr("");
+    try {
+      await call(`/admin/catalogue/departures/${departure.id}/assign`, "POST", { operatorId: Number(operatorId) });
+      flash("Assigned. The operator has 12 hours to acknowledge.");
+      onChange();
+    } catch (e2) { setErr(e2.message); } finally { setBusy(false); }
+  }
+
+  return (
+    <div className="dash-card" style={{ marginBottom: 12 }}>
+      <div className="dash-card-head">
+        <h2>{departure.code} {departure.title}, {dayLabel(departure.date)}</h2>
+        <button className="btn-ghost sm" onClick={onClose}><X size={14} />Close</button>
+      </div>
+      {err && <div className="auth-error">{err}</div>}
+      <p>
+        Rostered: {departure.rostered ? `${departure.rostered.name}${departure.rostered.published ? "" : " (roster not published)"}` : "nobody"}.{" "}
+        {a ? <>Assigned to <b>{a.name}</b>: {ASSIGN_LABEL[a.state]}{a.state === "offered" && <> (due {stamp(a.ackDueAt)})</>}.</> : "Not assigned."}
+      </p>
+      {departure.status === "go_ahead" && (
+        <form onSubmit={assign} className="cat-actions">
+          <select value={operatorId} onChange={(e) => setOperatorId(e.target.value)} required aria-label="Operator">
+            <option value="">Choose an operator</option>
+            {(operators || []).map((o) => <option key={o.id} value={o.id}>{o.legalName}</option>)}
+          </select>
+          <button className="btn-primary" disabled={busy || !operatorId}>{a ? "Reassign" : "Assign"}</button>
+        </form>
+      )}
+      {expected && (
+        <>
+          <h3>Expected operator amount {expected.frozen ? "(manifest frozen)" : "(live)"}</h3>
+          <p className="field-hint">Rate version {expected.rateVersion ?? "none"} · {expected.travelers} travelers{expected.band ? ` · band ${expected.band.replace("-", "–")}` : ""}. Reference only; nothing is paid from here.</p>
+          {expected.lines.length > 0 && (
+            <table className="dash-table">
+              <tbody>
+                {expected.lines.map((l, i) => <tr key={i}><td>{l.label}</td><td className="tnum">{l.qty} × {egp(l.unit)}</td><td className="tnum">{egp(l.amount)}</td></tr>)}
+                <tr><td><b>Total</b></td><td></td><td className="tnum"><b>{expected.total == null ? `Missing: ${expected.missing.join(", ")}` : egp(expected.total)}</b></td></tr>
+              </tbody>
+            </table>
+          )}
+          {!expected.lines.length && <p className="field-hint">Missing: {expected.missing.join(", ")}</p>}
+        </>
+      )}
+      {manifest && (
+        <>
+          <h3>Manifest {manifest.frozen ? `(frozen ${stamp(manifest.frozenAt)})` : "(live until the cut-off)"}</h3>
+          <ManifestTable travelers={manifest.travelers} />
+        </>
+      )}
+    </div>
+  );
+}
+
+export function ManifestTable({ travelers }) {
+  if (!travelers?.length) return <p className="field-hint">No travelers yet.</p>;
+  const nationality = travelers.some((t) => t.nationality !== undefined);
+  return (
+    <div className="table-wrap">
+      <table className="dash-table">
+        <thead><tr><th>Booking</th><th>Name</th><th>Pickup</th><th>Contact</th>{nationality && <th>Nationality</th>}<th>Safety needs</th></tr></thead>
+        <tbody>
+          {travelers.map((t, i) => (
+            <tr key={i} style={t.canceledAfterCutoff ? { opacity: 0.6 } : undefined}>
+              <td>{t.booking}</td>
+              <td>{t.name}{t.canceledAfterCutoff && <div className="field-hint">canceled after the cut-off</div>}</td>
+              <td>{t.pickupPoint || "—"}</td>
+              <td>{t.contactNumber || (t.lead ? "—" : "")}</td>
+              {nationality && <td>{t.nationality || "—"}</td>}
+              <td>{t.safetyNeeds || (t.lead ? "—" : "")}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}

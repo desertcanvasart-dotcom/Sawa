@@ -56,7 +56,8 @@ export function mapCatalogueProduct(r) {
     cutoffHours: r.cutoff_hours,
     goaheadDeadlineDays: r.goahead_deadline_days,
     legacyProductId: r.legacy_product_id,
-    needsNationality: r.needs_nationality === true,
+    // Model phase 2 (migration 049); absent before it is applied.
+    ...(r.needs_nationality === undefined ? {} : { needsNationality: r.needs_nationality === true }),
     updatedAt: r.updated_at,
   };
 }
