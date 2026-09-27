@@ -150,7 +150,29 @@ test("the former entity is never presented as the operator of the platform", () 
     const src = readFileSync(join(ROOT, f), "utf8").replace(/<!--[\s\S]*?-->/g, " ").replace(/^\s*\/\/.*$/gm, " ");
     assert.doesNotMatch(src, new RegExp(`[Oo]perated by ${FORMER}`), `${f} still says the platform is operated by ${FORMER}`);
     assert.doesNotMatch(src, new RegExp(`${FORMER}, trading as`), `${f} still names ${FORMER} as the trading entity`);
-    assert.doesNotMatch(src, /ETAA 2179/, `${f} presents Capital Travel Service's ETAA licence as the platform's`);
+    assert.doesNotMatch(src, ETAA_2179, `${f} presents Capital Travel Service's ETAA licence as the platform's`);
+  }
+});
+
+// Any wording of CTS's ETAA number: "ETAA 2179", "ETAA license: 2179",
+// "ETAA licence no. 2179". The privacy page carried the second form under
+// the platform's own name until 27 Sep 2026, and the old /ETAA 2179/ missed it.
+const ETAA_2179 = /ETAA[^\d\n]{0,24}2179\b/i;
+
+test("the ETAA check catches every wording of the number", () => {
+  for (const s of ["ETAA 2179", "ETAA license: 2179", "ETAA licence no. 2179", "etaa License No: 2179"]) {
+    assert.match(s, ETAA_2179, s);
+  }
+  assert.doesNotMatch("General Sales Agent license no. 32241", ETAA_2179);
+});
+
+test("no public page presents ETAA 2179, in any wording", () => {
+  const pages = readdirSync(join(ROOT, "site"), { recursive: true })
+    .filter((f) => String(f).endsWith(".html")).map((f) => join("site", String(f)));
+  assert.ok(pages.length > 20, "the walker found the site pages");
+  for (const f of pages) {
+    const src = readFileSync(join(ROOT, f), "utf8").replace(/<!--[\s\S]*?-->/g, " ");
+    assert.doesNotMatch(src, ETAA_2179, `${f} presents Capital Travel Service's ETAA licence`);
   }
 });
 

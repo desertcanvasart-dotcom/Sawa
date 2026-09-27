@@ -116,9 +116,12 @@ test("the product page names an operator only when there is one", () => {
   assert.match(src, /\{operator \? \(/, "the card must be conditional on the record");
   assert.match(src, /\{operator\.verified && \(/, "the badge must be conditional on the verification");
   // and it must not fall back to the guide field, which is a job description
-  const card = /\{operator \? \([\s\S]*?\) : null\}/.exec(src);
+  const card = /\{operator \? \([\s\S]*?\) : \(([\s\S]*?)\)\}/.exec(src);
   assert.ok(card, "the operator card is gone");
   assert.ok(!/tour\.guide/.test(card[0]), "the card fell back to tour.guide again");
+  // Without a record it names no company: "Run by a licensed Sawa partner".
+  assert.match(card[1], /Run by \{UNNAMED_OPERATOR\}/);
+  assert.doesNotMatch(card[1], /operator\.name|Capital Travel/);
 });
 
 test("the write path is admin-only and rate-limited", () => {

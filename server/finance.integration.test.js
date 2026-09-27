@@ -20,6 +20,7 @@ import { zonedDateTimeToUtc } from "./tz.js";
 import { shiftDate } from "../shared/catalogue.js";
 import { egyptBusinessDaysAfter } from "../shared/settlement-rules.js";
 import { statementPdf } from "./pdf.js";
+import { BRAND } from "./brand.js";
 
 const statementPdfText = (st) => statementPdf(st).toString("latin1");
 
@@ -579,6 +580,9 @@ test("a negative balance becomes a receivable, set off against the operator's ne
   assert.equal(sentF.snapshot.receivables[0].amountEgp, 140);
   assert.deepEqual(sentF.snapshot.receivables[0].setOffAgainst.map((x) => [x.payable, x.amountEgp]), [["advance", 140]]);
   assert.match(statementPdfText(sentF), /recovered EGP 140\.00 from the advance/);
+  // PDF text escapes parentheses.
+  assert.ok(statementPdfText(sentF).includes(`Sawa \\(${BRAND.legalName}\\)`), "the header names Sawa's operating company");
+  assert.doesNotMatch(statementPdfText(sentF), /Capital Travel/);
   // G's balance statement lists the set-off taken from its advance.
   await asg.freezeManifests({ db, now: (await cutoffOf(deps.g)) + 60000 });
   await db.query("UPDATE catalogue_departures SET status = 'completed' WHERE id = $1", [deps.g.id]);
@@ -710,4 +714,11 @@ test("with catalogue_v2 off the phase 3 jobs do nothing and an acknowledgement c
     process.env.FEATURES = saved;
   }
   assert.equal(await one("SELECT 1 FROM operator_payables WHERE assignment_id = $1", [a.id]), undefined);
+});
+
+test("/api/health names the deployed commit, and says unknown without one", { skip }, async () => {
+  const deployed = await startServer({ RAILWAY_GIT_COMMIT_SHA: "0123456789abcdef0123456789abcdef01234567" });
+  assert.deepEqual(await (await fetch(`${deployed}/api/health`)).json(), { ok: true, commit: "0123456789abcdef0123456789abcdef01234567" });
+  const uploaded = await startServer({ RAILWAY_GIT_COMMIT_SHA: "" });
+  assert.deepEqual(await (await fetch(`${uploaded}/api/health`)).json(), { ok: true, commit: "unknown" });
 });

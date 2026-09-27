@@ -74,15 +74,18 @@ await check("itineraries → tour detail journey", async () => {
   await page.close();
 });
 
-// 3 — The partners directory: both operators named, registry links present.
+// 3 — The partners directory: the operators named, registry links present.
+// Capital Travel Service is not involved in Sawa (27 Sep 2026), so it is no
+// longer required here; it goes from the page once its record is unlisted
+// (docs/ops/remove-cts-from-partners.md), and this passes either way.
 await check("partners directory lists the operators", async () => {
   const { page, errors } = await openPage("/partners");
   const text = await page.locator("body").innerText();
-  for (const name of ["Capital Travel Service", "El Agamy Travel"]) {
+  for (const name of ["El Agamy Travel"]) {
     if (!text.includes(name)) throw new Error(`"${name}" not rendered`);
   }
   const etaa = await page.locator('a[href*="etaa-egypt.org"]').count();
-  if (etaa < 2) throw new Error(`expected 2 ETAA registry links, found ${etaa}`);
+  if (etaa < 1) throw new Error(`expected at least 1 ETAA registry link, found ${etaa}`);
   if (errors.length) throw new Error(`console: ${errors[0]}`);
   await page.close();
 });

@@ -1,0 +1,19 @@
+-- 054: whether an operator record is shown to travelers (live site, not
+-- behind catalogue_v2).
+--
+-- ⚠️ Migrations do not run on deploy (B5). Apply by hand:
+--
+--   DATABASE_URL=<production> npm run db:migrate
+--
+-- Rollback: server/db/down/schema_054_partner_listing.down.sql. Additive: one
+-- column, defaulting to shown, so every existing record keeps its place.
+--
+-- public_listed = false keeps an agency record (its bookings, settlements and
+-- history stay attached) but takes it off every traveler-facing surface:
+-- /partners, the tour page's operator card, the booking and GoAhead emails and
+-- the JSON-LD. publicOperator() in server/domain.js is the one gate.
+--
+-- Capital Travel Service is not involved in Sawa (decided 27 Sep 2026). Taking
+-- it off is a data change, deliberately NOT made here: the exact statement and
+-- its rollback are in docs/ops/remove-cts-from-partners.md.
+ALTER TABLE agencies ADD COLUMN IF NOT EXISTS public_listed BOOLEAN NOT NULL DEFAULT true;

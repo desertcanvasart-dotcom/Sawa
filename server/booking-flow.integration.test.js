@@ -160,8 +160,12 @@ test("a date request can't be bigger than the tour", { skip }, async () => {
 
 test("the operator named in the emails comes from the live bookings", { skip }, async () => {
   // Against the real schema: the lookup's four queries, and U01's rule — the
-  // listing agency until someone books, then the partner with most travellers
-  // (direct travellers count as Capital Travel Service's).
+  // listing agency until someone books, then the partner with most travellers.
+  // Direct travellers count for the direct-bookings operator, and there is
+  // none by default since 27 Sep 2026 (Capital Travel Service, the former
+  // default, is not involved in Sawa): they count for no one, so the listing
+  // agency stays named. A record taken off the public surfaces (054) is never
+  // named.
   const { operatorFor } = await import("./operator-lookup.js");
   const dep = 900010;
   await db.query(`INSERT INTO agencies (id, name, verification_state) VALUES ('ag_it_cts','Capital Travel Service','verified'), ('ag_it_list','Listing Agency',NULL)`);
@@ -172,6 +176,8 @@ test("the operator named in the emails comes from the live bookings", { skip }, 
   assert.equal((await operatorFor(dep, db))?.name, "Listing Agency", "no bookings: the listing agency");
   assert.equal((await book(dep, 2, "direct")).status, 201);
   const op = await operatorFor(dep, db);
-  assert.equal(op?.name, "Capital Travel Service", "direct travellers are CTS's");
-  assert.equal(op.verified, true);
+  assert.equal(op?.name, "Listing Agency", "direct travellers are no one's: the listing agency stays");
+  await db.query(`UPDATE agencies SET public_listed=false WHERE id='ag_it_list'`);
+  assert.equal(await operatorFor(dep, db), null, "an unlisted record is never named");
+  await db.query(`UPDATE agencies SET public_listed=true WHERE id='ag_it_list'`);
 });

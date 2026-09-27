@@ -6,6 +6,8 @@
 //
 // Characters outside Latin-1 are replaced (the standard Helvetica font has no
 // Arabic glyphs); names are kept as close as the font allows.
+import { BRAND } from "./brand.js";
+
 const W = 595.28;
 const H = 841.89;
 const MARGIN = 50;
@@ -86,7 +88,7 @@ export function statementPdf(statement) {
   const s = statement.snapshot || {};
   const egp = (n) => (n == null ? "-" : `EGP ${Number(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
   const items = [
-    { text: "Sawa - Capital Travel Service", size: 9 },
+    { text: `Sawa (${BRAND.legalName})`, size: 9 },
     { text: "Settlement statement", size: 18, bold: true, gap: 6 },
     { text: `${s.operator?.legalName || ""}`, size: 12, bold: true },
     { text: `${s.departure?.code || ""} ${s.departure?.title || ""}`, size: 11 },
