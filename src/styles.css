@@ -7058,3 +7058,11 @@ button:disabled {
 .cat-facts dt { font-weight: 600; color: var(--ink-soft); }
 .cat-facts dd { margin: 0; }
 @media (max-width: 560px) { .cat-facts { grid-template-columns: 1fr; gap: 2px; } .cat-facts dd { margin-bottom: 8px; } }
+
+/* Bookings: sort, bulk actions, selection. */
+.bk-sort { margin-left: 6px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--ink); font: inherit; font-size: 13px; }
+.bk-bulk { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: -4px 0 14px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--sand-50); }
+.bk-bulk strong { margin-right: 6px; }
+.bk-bulk .bk-danger { color: #a3261b; border-color: #e3b3ad; }
+.dash-table .bk-check { width: 36px; text-align: center; }
+.dash-table tr.selected td { background: var(--sand-50); }

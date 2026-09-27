@@ -70,7 +70,13 @@ test("F02: a date request can't be bigger than the date it creates", () => {
 });
 
 test("F03: reinstating a booking locks the date and checks the seats", () => {
-  const body = route('app.patch("/api/admin/bookings/:id"');
+  // The status change lives in changeBookingStatus, which the single and the
+  // bulk routes both call; the rule is asserted there, and the calls below.
+  assert.match(route('app.patch("/api/admin/bookings/:id"'), /changeBookingStatus\(/);
+  assert.match(route('app.post("/api/admin/bookings/bulk"'), /changeBookingStatus\(/);
+  const f = app.indexOf("async function changeBookingStatus(");
+  assert.ok(f > 0, "changeBookingStatus not found");
+  const body = app.slice(f, app.indexOf("\n}\n", f));
   const lock = body.indexOf("{ forUpdate: true }");
   const check = body.indexOf("taken + wanted > dep.maxSeats");
   const write = body.indexOf("UPDATE pledges SET status=$1");

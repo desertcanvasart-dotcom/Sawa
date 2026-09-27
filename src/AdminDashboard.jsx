@@ -149,7 +149,7 @@ export function AdminDashboard({ user, agency, signOut, navigate }) {
             {section === "destinations" && <DestinationsSection destinations={destinations} reload={loadAll} flash={flash} />}
             {section === "blog" && <BlogSection posts={posts} reload={loadAll} flash={flash} />}
             {section === "departures" && <DeparturesSection data={data} reload={loadAll} flash={flash} />}
-            {section === "bookings" && <BookingsSection data={data} stats={stats} />}
+            {section === "bookings" && <BookingsSection data={data} stats={stats} reload={loadAll} flash={flash} isSuperAdmin={user.role === "super_admin"} />}
             {section === "payments" && <PaymentsSection flash={flash} />}
             {section === "settlements" && <SettlementsSection flash={flash} />}
             {section === "referrals" && <ReferralsSection flash={flash} />}
@@ -1871,13 +1871,42 @@ function bookingStatusLabel(b) {
   return b.status;
 }
 
+// "Active" is the default: a canceled booking leaves the working list and is
+// found under "Canceled" (or "All").
 const BOOKING_FILTERS = [
-  { id: "all", label: "All" },
+  { id: "active", label: "Active" },
   { id: "pending", label: "Requests" },
   { id: "confirmed", label: "Confirmed" },
   { id: "paid", label: "Paid" },
   { id: "cancelled", label: "Canceled" },
+  { id: "all", label: "All" },
 ];
+const BOOKING_SORTS = [
+  { id: "booked", label: "Newest booked first" },
+  { id: "tour", label: "Tour date, soonest first" },
+];
+const BULK_ACTIONS = [
+  { id: "confirmed", label: "Confirm" },
+  { id: "paid", label: "Mark paid" },
+  { id: "pending", label: "Back to request" },
+  { id: "cancelled", label: "Cancel" },
+];
+// The tour's date, and how far off it is.
+function tourDateLabel(b) {
+  const start = fmtDate(b.date);
+  const end = b.endDate && b.endDate !== b.date ? ` – ${fmtDate(b.endDate)}` : "";
+  return `${start}${end}`;
+}
+function daysUntil(value) {
+  if (!value) return "";
+  const day = String(value).slice(0, 10);
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(new Date());
+  const n = Math.round((Date.parse(`${day}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86400000);
+  if (n === 0) return "today";
+  if (n === 1) return "tomorrow";
+  if (n > 0) return `in ${n} days`;
+  return n === -1 ? "yesterday" : `${-n} days ago`;
+}
 function depFillStatus(d) {
   const seats = seatsOf(d), min = Math.max(1, d.minSeats || 4);
   if (d.status === "cancelled") return { key: "cancelled", label: "Canceled", tone: "off", seats, min };
@@ -1885,11 +1914,14 @@ function depFillStatus(d) {
   if (seats >= min) return { key: "ready", label: "Ready to confirm", tone: "ready", seats, min };
   return { key: "forming", label: `${min - seats} more to GoAhead`, tone: "warn", seats, min };
 }
-function BookingsSection({ data, stats }) {
+function BookingsSection({ data, stats, reload, flash = () => {}, isSuperAdmin = false }) {
   const [rows, setRows] = useState(null);
   const [q, setQ] = useState("");
   const [view, setView] = useState("list");   // list | tours
-  const [filter, setFilter] = useState("all");
+  const [filter, setFilter] = useState("active");
+  const [sort, setSort] = useState("booked");
+  const [selected, setSelected] = useState(() => new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
   const [open, setOpen] = useState(null); // selected booking
   useBackToClose(!!open, () => setOpen(null));
 
@@ -1924,11 +1956,48 @@ function BookingsSection({ data, stats }) {
   const truncated = total > all.length;
 
   const shown = all.filter((b) => {
-    if (filter !== "all" && b.status !== filter) return false;
+    if (filter === "active" && b.status === "cancelled") return false;
+    if (!["all", "active"].includes(filter) && b.status !== filter) return false;
     if (!q) return true;
     const t = `${b.route} ${b.customers} ${b.customerEmail} ${b.customerPhone} ${b.agency} ${b.bookingCode}`.toLowerCase();
     return t.includes(q.toLowerCase());
-  });
+  }).sort((a, b) => (sort === "tour"
+    ? String(a.date || "").localeCompare(String(b.date || "")) || String(a.createdAt).localeCompare(String(b.createdAt))
+    : String(b.createdAt || "").localeCompare(String(a.createdAt || ""))));
+  const activeCount = all.filter((b) => b.status !== "cancelled").length;
+
+  // Selection for bulk actions: only rows on screen can be selected, and a
+  // change of filter or search clears it, so nothing hidden is acted on.
+  const shownIds = shown.map((b) => b.id);
+  const selectedShown = shownIds.filter((id) => selected.has(id));
+  const allShownSelected = shownIds.length > 0 && selectedShown.length === shownIds.length;
+  useEffect(() => { setSelected(new Set()); }, [filter, q, view]);
+  const toggle = (id) => setSelected((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const toggleAll = () => setSelected(allShownSelected ? new Set() : new Set(shownIds));
+
+  async function bulk(action) {
+    const ids = selectedShown;
+    if (!ids.length) return;
+    const body = { action, ids };
+    if (action === "delete") {
+      const typed = window.prompt(`Delete ${ids.length} booking${ids.length === 1 ? "" : "s"} permanently? This can't be undone. Bookings with a recorded payment are skipped (cancel those instead).\n\nType DELETE to confirm.`);
+      if (typed !== "DELETE") return;
+    } else if (action === "cancelled") {
+      if (!window.confirm(`Cancel ${ids.length} booking${ids.length === 1 ? "" : "s"}? Their seats are freed.`)) return;
+      if (catalogueOn) body.cancelledReason = window.confirm("Did the travelers ask to cancel?\n\nOK: the travelers canceled.\nCancel: Sawa canceled them.") ? "traveler" : "admin";
+    }
+    setBulkBusy(true);
+    try {
+      const r = await apiFetch("/admin/bookings/bulk", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) { flash(j.error || "That didn't work. Please try again."); return; }
+      const verb = action === "delete" ? "deleted" : action === "cancelled" ? "canceled" : `set to ${action}`;
+      flash(`${j.done.length} booking${j.done.length === 1 ? "" : "s"} ${verb}.${j.failed.length ? ` ${j.failed.length} not changed: ${j.failed[0].error}${j.failed.length > 1 ? " (and others)" : ""}` : ""}`);
+      setSelected(new Set(j.failed.map((f) => f.id)));
+      await load();
+      reload?.();
+    } finally { setBulkBusy(false); }
+  }
 
   // Per-departure roll-up: how each date is filling + its booking value.
   const revByDep = all.reduce((m, b) => {
@@ -1952,13 +2021,20 @@ function BookingsSection({ data, stats }) {
       body.cancelledReason = window.confirm("Did the traveler ask to cancel?\n\nOK: the traveler canceled (the cancellation schedule and the agency's commission follow from it).\nCancel: Sawa canceled it.") ? "traveler" : "admin";
     }
     const r = await apiFetch(`/admin/bookings/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-    if (r.ok) { const list = await load(); setOpen((o) => (o ? list.find((b) => b.id === o.id) || null : null)); }
+    if (!r.ok) { const j = await r.json().catch(() => ({})); flash(j.error || "That didn't work. Please try again."); return; }
+    const list = await load();
+    reload?.();
+    // A canceled booking leaves the Active list, so its drawer closes with it.
+    if (status === "cancelled" && filter === "active") { setOpen(null); flash("Booking canceled. It's under Canceled now."); return; }
+    setOpen((o) => (o ? list.find((b) => b.id === o.id) || null : null));
   }
 
   function exportCsv() {
     const cols = ["bookingCode", "customers", "customerEmail", "customerPhone", "route", "date", "seats", "bookingTotal", "depositDue", "balanceDue", "status", "agency", "source", "createdAt"];
     const esc = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
-    const csv = [cols.join(","), ...shown.map((b) => cols.map((c) => esc(b[c])).join(","))].join("\n");
+    // With a selection, only the selected rows; otherwise what's on screen.
+    const out = selectedShown.length ? shown.filter((b) => selected.has(b.id)) : shown;
+    const csv = [cols.join(","), ...out.map((b) => cols.map((c) => esc(b[c])).join(","))].join("\n");
     const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
     const a = document.createElement("a");
     a.href = url; a.download = "sawa-bookings.csv"; a.click();
@@ -1971,7 +2047,7 @@ function BookingsSection({ data, stats }) {
         action={
           <div className="head-actions">
             <div className="search-box"><Search size={16} /><input placeholder="Search name, email, route…" value={q} onChange={(e) => setQ(e.target.value)} /></div>
-            <button className="btn-ghost" onClick={exportCsv} disabled={!shown.length}>Export CSV</button>
+            <button className="btn-ghost" onClick={exportCsv} disabled={!shown.length}>{selectedShown.length ? `Export ${selectedShown.length} selected` : "Export CSV"}</button>
           </div>
         } />
 
@@ -1998,33 +2074,57 @@ function BookingsSection({ data, stats }) {
             </div>
             {view === "list" && (
               <div className="chip-row">
-                {BOOKING_FILTERS.map((f) => (
-                  <button key={f.id} className={`chip ${filter === f.id ? "on" : ""}`} onClick={() => setFilter(f.id)}>
-                    {f.label}{f.id !== "all" && counts[f.id] ? <span className="chip-n">{counts[f.id]}</span> : null}
-                  </button>
-                ))}
+                {BOOKING_FILTERS.map((f) => {
+                  const n = f.id === "active" ? activeCount : f.id === "all" ? all.length : counts[f.id];
+                  return (
+                    <button key={f.id} className={`chip ${filter === f.id ? "on" : ""}`} onClick={() => setFilter(f.id)}>
+                      {f.label}{n ? <span className="chip-n">{n}</span> : null}
+                    </button>
+                  );
+                })}
+                <select className="bk-sort" aria-label="Sort bookings" value={sort} onChange={(e) => setSort(e.target.value)}>
+                  {BOOKING_SORTS.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+                </select>
               </div>
             )}
           </div>
 
+          {view === "list" && selectedShown.length > 0 && (
+            <div className="bk-bulk" role="toolbar" aria-label="Bulk actions">
+              <strong>{selectedShown.length} selected</strong>
+              {BULK_ACTIONS.map((a) => (
+                <button key={a.id} className="btn-ghost" disabled={bulkBusy} onClick={() => bulk(a.id)}>{a.label}</button>
+              ))}
+              {isSuperAdmin && <button className="btn-ghost bk-danger" disabled={bulkBusy} onClick={() => bulk("delete")}>Delete</button>}
+              <button className="btn-ghost" disabled={bulkBusy} onClick={() => setSelected(new Set())}>Clear</button>
+            </div>
+          )}
+
           {view === "list" ? (
             <div className="table-wrap">
               <table className="dash-table">
-                <thead><tr><th>Customer</th><th>Route</th><th>Booked by</th><th>Received</th><th>Seats</th><th>Total</th><th>Balance</th><th>Status</th></tr></thead>
+                <thead><tr>
+                  <th className="bk-check"><input type="checkbox" aria-label="Select all shown" checked={allShownSelected} onChange={toggleAll} /></th>
+                  <th>Customer</th><th>Tour</th><th>Tour date</th><th>Booked on</th><th>Booked by</th><th>Seats</th><th>Total</th><th>Balance</th><th>Status</th>
+                </tr></thead>
                 <tbody>
                   {shown.map((b) => (
-                    <tr key={b.id} className="clickable" onClick={() => setOpen(b)}>
+                    <tr key={b.id} className={`clickable${selected.has(b.id) ? " selected" : ""}`} onClick={() => setOpen(b)}>
+                      <td className="bk-check" onClick={(e) => e.stopPropagation()}>
+                        <input type="checkbox" aria-label={`Select ${b.bookingCode || b.customers || "booking"}`} checked={selected.has(b.id)} onChange={() => toggle(b.id)} />
+                      </td>
                       <td><strong>{b.customers || "—"}</strong>{b.customerEmail && <div className="sub">{b.customerEmail}</div>}{b.bookingCode && <div className="sub">{b.bookingCode}</div>}</td>
-                      <td>{b.route}<div className="sub">{fmtDate(b.date)}</div></td>
-                      <td>{b.source === "public" || b.source === "public_request" ? <span className="tag">Direct</span> : b.agency}</td>
+                      <td>{b.route}</td>
+                      <td><strong>{tourDateLabel(b)}</strong><div className="sub">{b.time ? `${b.time} · ` : ""}{daysUntil(b.date)}</div></td>
                       <td className="sub">{fmtReceived(b.createdAt)}</td>
+                      <td>{b.source === "public" || b.source === "public_request" ? <span className="tag">Direct</span> : b.agency}</td>
                       <td>{b.seats}</td>
                       <td>{money(b.bookingTotal)}</td>
                       <td>{money(b.balanceDue)}{b.balanceDueDate && <div className="sub">by {fmtDate(b.balanceDueDate)}</div>}</td>
                       <td><span className={`tag ${bookingStatusTag(b.status)}`}>{bookingStatusLabel(b)}</span></td>
                     </tr>
                   ))}
-                  {shown.length === 0 && <tr><td colSpan={8}><Empty label="No bookings found." /></td></tr>}
+                  {shown.length === 0 && <tr><td colSpan={10}><Empty label="No bookings found." /></td></tr>}
                 </tbody>
               </table>
             </div>
