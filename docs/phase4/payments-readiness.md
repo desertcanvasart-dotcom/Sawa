@@ -175,6 +175,13 @@ Both modes can live behind a per-product flag, starting with one day tour, as th
 
 **The design in one line.** The traveler books with no card and no payment. When the departure reaches GoAhead, each traveler gets a Tab payment link for the full published price, with a deadline and a reminder. Unpaid seats are released at the deadline and offered to the departure's waitlist. The departure stays guaranteed.
 
+**Decided (27 Sep 2026):**
+1. **A seat released for non-payment is treated exactly like a cancellation before cut-off** (Operator Supply Agreement, clause 10.1: "removed from the manifest, and the departure fee band is recalculated"). The operator isn't paid for it. The deadline is capped at the cut-off, so a release always happens before cut-off.
+2. **The guarantee:** a departure that drops below 4 still runs. The operator is paid the 4–6 band plus the per-traveler amount for everyone on the manifest at cut-off.
+3. **Agency-billed invoices** fall due at the mode C deadline after GoAhead.
+4. **Refunds:** mode C has no deposit. The fee kept on a cancellation is the full price × the tier's retained percentage.
+5. **Scope:** mode C applies only to catalog departures. Legacy bookings stay on the current deposit-plus-balance flow.
+
 **Why it fits today's constraints:**
 - **The promise stays literally true.** "Pay nothing until it goes ahead" is what the site says today (`shared/booking-policy.js` `CANCELLATION_BEFORE_GOAHEAD`, `site/terms.html`).
 - **The lawyer's Q3 disappears.** No card is stored or charged later.
@@ -189,7 +196,7 @@ Both modes can live behind a per-product flag, starting with one day tour, as th
    - No card and no payment. The traveler accepts the Terms at booking; this is already recorded on the public booking route.
    - The booking counts toward GoAhead at once. Every booking already does: `catalogue_departure_seats` sums live bookings, and so does the legacy `refreshStatus`.
    - The phase 3 traveler details stay required under the flag, as built.
-2. **GoAhead** (the phase 1 status job, or `refreshStatus` for legacy dates). Each live booking needs one payment link for the **full published price**. That follows the settled decision "charge at GoAhead = full published price", replacing today's deposit link plus balance link.
+2. **GoAhead** (the phase 1 status job; catalog departures only). Each live booking needs one payment link for the **full published price**, following the settled decision "charge at GoAhead = full published price". Legacy departures keep today's deposit link plus balance link.
    - **Agency-billed seats:** the agency gets the link, for its phase 3 invoice amount (published price less commission).
    - **Standard agency seats:** the traveler gets it, as for direct bookings.
 3. **Deadline.** 48 hours after the link is sent (configurable, 24 or 48), capped at the departure's cut-off, so a manifest never freezes with a seat still pending (9.5).
@@ -199,9 +206,7 @@ Both modes can live behind a per-product flag, starting with one day tour, as th
    - the booking is canceled with reason `unpaid`;
    - the traveler is emailed;
    - the seat is offered to the departure's waitlist first (9.4), then goes back on sale.
-5. **The departure stays guaranteed** even if releases take it below 4. The departure is not canceled, and the operator's pay is not reduced (9.5). This already holds in the code, on both paths:
-   - catalog departures: `nextStatus` in `shared/catalogue.js` treats `go_ahead` as sticky;
-   - legacy departures: `refreshStatus` in `server/departure-status.js` never moves `minimum_reached` back down.
+5. **The departure stays guaranteed** even if releases take it below 4: it is not canceled. This already holds in the code: `nextStatus` in `shared/catalogue.js` treats `go_ahead` as sticky, and `refreshStatus` in `server/departure-status.js` never moves the ordinary departure's `minimum_reached` back down. The operator is paid for the manifest at cut-off: the 4–6 band plus the per-traveler amount for each traveler on it (9.5).
 6. **Admin sees each departure's seats** as paid, awaiting payment (with its deadline), released or short window. Admin can **extend one traveler's deadline**, with a reason. The original deadline is kept, not overwritten: this code base deliberately stores deadlines so one "can't quietly move itself" (`shared/payment-window.js`).
 7. **A booking made after GoAhead** gets its link at once, with the same deadline rule.
 
@@ -224,9 +229,20 @@ No Tab API was found (sections 1–3), so link creation and the "paid" signal st
 
 - **Recording payment** is unchanged: `POST /api/admin/payments/:id/paid` with Tab's reference, and the booking moves to "paid in full".
   - A booking released for non-payment can't be marked paid. It must first be reinstated in Admin → Bookings, which checks capacity.
-- **Refunds.** The traveler has paid the full price, so the default schedule (`CANCELLATION_SCHEDULE` in `shared/booking-policy.js`), which is written as a share of the deposit rate, applies to the full payment.
-  - **Fee kept:** `depositPct × band.ofDeposit × price`; the refund is the payment less that fee.
-  - **Examples:** a day tour canceled under 48 hours before keeps 10% and refunds 90%. A package canceled 20 days before keeps half of the 25% deposit rate (12.5%) and refunds 87.5%.
+- **Refunds.** Mode C has no deposit, so the tiers are stated as a **retained percentage of the full price**:
+  - **Fee kept:** full price × the tier's retained percentage. The refund is what was paid, less that fee.
+  - **Today's schedule, as percentages of the price** (the same money the deposit-based wording keeps today):
+
+    | Product | Tier | Kept | Refunded |
+    |---|---|---|---|
+    | Day tour | 48 hours or more before | 0% | 100% |
+    | Day tour | less than 48 hours, or no-show | 10% | 90% |
+    | Package (cruise, multi-day) | 30 days or more | 0% | 100% |
+    | Package | 29–15 days | 12.5% | 87.5% |
+    | Package | 14 days or fewer, or no-show | 25% | 75% |
+
+  - **Examples:** a €100 day tour canceled 24 hours before keeps €10 and refunds €90. A €900 cruise canceled 20 days before keeps €112.50 and refunds €787.50.
+  - The build adds a `retainedPct` to each tier of `CANCELLATION_SCHEDULE`, so the Terms' mode C table is generated from the same numbers.
   - **How:** refunds are made by hand in Tab's dashboard, which supports partial refunds (section 4), and recorded in Sawa.
   - **What changes:** today `/refund` marks the whole payment refunded. Mode C records the **refunded amount**, and shows ops the computed fee before they refund. The phase 3 commission rule can then read whether a fee was actually kept.
 - **A date that doesn't reach GoAhead:** nothing was paid, so nothing is refunded. The phase 2 cancellation notice already says "Nothing was charged".
@@ -243,10 +259,16 @@ No Tab API was found (sections 1–3), so link creation and the "paid" signal st
 
 ### 9.5 The operator manifest, and phases 2 and 3
 
-- **Manifest before the deadline.** An unpaid seat is listed with "Payment due by …", because the operator plans for everyone booked. It's removed if released before the operator acknowledged.
-- **At the freeze.** The deadline is capped at the cut-off, so every seat is either paid or released; none is still pending.
-- **Operator pay is not reduced by non-payment.** A seat released for non-payment after the operator acknowledged counts in the operator's band and per-traveler amount, exactly as a late cancellation already does (in phase 2 a canceled seat stays on the frozen manifest). The manifest shows it as "released: not traveling (paid by Sawa)", and Sawa absorbs the gap. This is how "the operator's pay isn't affected" is read here.
-- **A decision for you:** if you'd rather pay the operator only for seats that travel, drop that rule. The phase 3 advance and set-off then absorb the difference, as a smaller balance or a receivable.
+- **Manifest before cut-off.** Paid seats and unpaid seats (marked "Payment due by …"), so the operator can plan for everyone booked.
+- **Released seats (clause 10.1).** A seat released for non-payment is treated exactly like a cancellation before cut-off:
+  - it is removed from the manifest;
+  - the departure fee band is recalculated;
+  - the operator isn't paid for it.
+
+  The deadline is capped at the cut-off, so a release always happens before cut-off, and the frozen manifest holds only the seats that were paid (or are agency-billed).
+- **At cut-off.** The manifest freezes with those seats only, and the operator is paid on it as in phase 2.
+- **Below 4.** A departure that drops below 4 still runs (the guarantee). The operator is paid the 4–6 band plus the per-traveler amount for each traveler on the manifest at cut-off. `bandFor` already returns 4–6 for any count under 7, so this needs no new arithmetic.
+- **The advance.** It was 50% of the expected amount at acknowledgement. If releases then shrink the manifest, the balance is smaller, or negative. A negative balance becomes a receivable, set off against the operator's next payment (phase 3, clause 9.4).
 
 How the phase 2 and 3 rules change:
 
@@ -256,10 +278,10 @@ How the phase 2 and 3 rules change:
 | Rate-version lock (phase 2) | At the first seat sold (booking), by the `pledges` insert trigger | **Unchanged.** The first booked seat still fixes the rate the operator is paid on. A departure whose seats are all released keeps its locked version, which is harmless. |
 | Agency commission lock (phase 3) | Locked at booking, EUR per seat | **Unchanged** (locked at booking) |
 | When an agency seat "travels" | Earned when the departure completes and the booking is live | **Earned only if the seat was paid (or agency-billed and its invoice paid) and it traveled.** A seat released for non-payment has its commission voided, and its agency invoice voided. |
-| Agency-billed seats | Count at booking; invoiced at booking, due after N days | Count at booking. **The invoice falls due at the mode C deadline after GoAhead,** not N days after booking, so agencies never pay earlier than travelers. The agency's billing approval still decides whether it is invoiced at all. **This changes the phase 3 due-date rule; confirm it.** |
+| Agency-billed seats | Count at booking; invoiced at booking, due after N days | Count at booking. **The invoice falls due at the mode C deadline after GoAhead** (decided), not N days after booking, so agencies never pay earlier than travelers. The agency's billing approval still decides whether it is invoiced at all. |
 | "Standard agency seats count toward GoAhead only once the link is paid, with a 48-hour hold" (decided earlier, not built) | not built | **Superseded.** Under mode C every booking counts at booking, and nobody pays before GoAhead. |
-| Operator advance (phase 3) | 50% of the expected amount at acknowledgement | **Unchanged.** It is 50% of the expected amount on booked seats; seats released for non-payment keep counting, per the rule above. |
-| Margin report (phase 3) | EUR charged, by charge date | **Unchanged.** Seats that ran unpaid show as lower revenue against the same operator cost: the visible cost of mode C. |
+| Operator advance (phase 3) | 50% of the expected amount at acknowledgement | **Unchanged.** It is 50% of the expected amount on booked seats. Releases shrink the final amount (clause 10.1), and any excess advance is set off (clause 9.4). |
+| Margin report (phase 3) | EUR charged, by charge date | **Unchanged.** A departure that runs below 4 shows the guarantee's cost: the 4–6 band against fewer paying travelers. |
 
 ### 9.6 Code changes against the existing modules (not made)
 
@@ -274,11 +296,7 @@ How the phase 2 and 3 rules change:
   - a new `departure_waitlist` table: departure, contact, seats, details, position, offered_at, offer_expires_at, state;
   - a `finance_settings` key `pay_at_goahead_hours` (24 or 48).
 - **`shared/payment-window.js`:** a mode C due-date function. It takes the window in hours, caps it at the cut-off, keeps the 24-hour floor, and records `boundBy` as `window`, `cutoff` or `minimum`. Traveler copy is generated from it, as today.
-- **`server/payments.js`:**
-  - `paymentSummary` gets mode C stages: `link_needed`, `awaiting_payment` (with deadline and short window), `paid`, `released_unpaid`;
-  - `defaultAmount` returns the full outstanding price;
-  - `linkDueAt` uses the new function for mode C bookings;
-  - a new `refundFor(pledge, product, cancelledAtMs)` computed from `CANCELLATION_SCHEDULE`.
+- **`server/payments.js`:** unchanged for legacy bookings. Mode C gets its own module, with the fee from a new `retainedPct` on each `CANCELLATION_SCHEDULE` tier: full price × retained percentage.
 - **A new job, `server/jobs/pay-at-goahead.js`**, in the 15-minute tick and behind the flag:
   - the ops email listing links needed;
   - the halfway reminder, once;
@@ -295,7 +313,7 @@ How the phase 2 and 3 rules change:
 - **`server/email.js`:**
   - the link email states the deadline and says "your seat is released if unpaid by …";
   - new emails: the reminder, the release notice and the waitlist offer.
-- **`server/assignments.js`:** `manifestRows` marks unpaid rows ("Payment due by …") and released-unpaid rows. `freezeManifests` keeps released-unpaid rows in the counts (9.5).
+- **`server/assignments.js`:** `manifestRows` marks unpaid rows ("Payment due by …") before cut-off. Released rows are canceled bookings, so they drop out of the live manifest, and `freezeManifests` freezes only the remaining seats (clause 10.1).
 - **`server/commissions.js`** (`decideCommissions`, `recordAgencyBooking`) **and `shared/settlement-rules.js`** (`commissionOutcome`): `unpaid` voids the commission and the agency invoice. The invoice due date moves to the mode C deadline (9.5).
 - **UI:**
   - Admin → Payments shows, per departure, paid, awaiting, released and short-window seats, with an "extend" action;
@@ -336,16 +354,21 @@ How the phase 2 and 3 rules change:
    - the offer order and offer expiry;
    - the seat goes back on sale after the waitlist;
    - a waitlisted booking goes straight to "pay now".
-7. **Manifest and operator pay:**
-   - before the deadline the manifest shows "Payment due by …";
-   - released rows count in the operator's frozen band and per-traveler amount;
-   - the operator's balance is unchanged by a release.
-8. **Commission:**
+7. **Manifest and operator pay (clause 10.1):**
+   - before cut-off the manifest shows paid seats, and unpaid ones as "Payment due by …";
+   - a released seat is removed from the manifest, and the band is recalculated;
+   - the operator isn't paid for a released seat;
+   - at cut-off the frozen manifest holds manifest seats only.
+8. **Guarantee below 4:**
+   - releases take the departure to 2 travelers, and it stays going ahead;
+   - the operator is paid the 4–6 band plus 2 × the per-traveler amount;
+   - an advance paid on 8 travelers becomes a receivable and is set off.
+9. **Commission:**
    - void on `unpaid`;
    - earned when paid and traveled;
    - an agency-billed invoice falls due at the mode C deadline and is voided on release.
-9. **Refunds:** the amount per tier for day tours and for packages; a partial refund is recorded with its amount.
-10. **Flag off, or `payment_mode = legacy_link`:** the existing deposit and balance link flow is unchanged, and the current `server/payments.test.js` passes as is.
+10. **Refunds:** full price × the tier's retained percentage, for day tours and for packages; a partial refund is recorded with its amount.
+11. **Flag off, or a legacy departure:** the existing deposit and balance link flow is unchanged, and the current `server/payments.test.js` passes as is.
 
 ---
 
