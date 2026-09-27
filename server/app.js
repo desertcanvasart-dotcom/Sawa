@@ -39,6 +39,7 @@ import { supabaseAdmin } from "./supabase.js";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import { logAudit } from "./audit.js";
+import { registerCatalogueRoutes } from "./catalogue-routes.js";
 import {
   sendEmail, sendEmailInBackground, emailMode,
   inviteEmail, bookingConfirmationEmail, goAheadEmail, cancellationEmail,
@@ -3837,6 +3838,12 @@ if (existsSync(siteDir)) {
   // extensions:["html"] serves /operators from operators.html, etc.
   app.use(express.static(siteDir, { extensions: ["html"] }));
 }
+
+// ============================ CATALOGUE (model phase 1) ============================
+// Admin routes for the catalogue and departure calendar. The public side is
+// behind the catalogue_v2 flag (see catalogue-public.js); with it off nothing
+// here reaches a traveller.
+registerCatalogueRoutes(app, { requireAuth, requireRole, h, logAudit, invalidatePublic: () => invalidatePublicBootstrap() });
 
 // ============================ LEGACY TOUR URL → SEO SLUG (301) ============================
 // Old ugly URLs (/tour/<db-id>) permanently redirect to the clean slug URL so any

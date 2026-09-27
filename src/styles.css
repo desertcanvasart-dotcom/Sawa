@@ -7043,3 +7043,13 @@ button:disabled {
 .cf-dir-out { background: #f3f3f1; color: #6b6f73; }
 .cf-dir-in { background: #e3f4ea; color: #1f7a52; }
 @media (max-width: 600px) { .cf-kind-hint { display: none; } }
+
+/* Admin → Catalogue / Calendar (model phase 1, src/AdminCatalogue.jsx) */
+.cat-actions { display: flex; justify-content: flex-end; align-items: flex-end; gap: 10px; margin-top: 16px; }
+.cat-check { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; margin-top: 6px; }
+.cat-days { display: flex; flex-wrap: wrap; gap: 4px 12px; }
+.cat-mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+.cat-row-link { cursor: pointer; }
+.cat-row-link:hover td, .cat-row-link:focus td { background: var(--sand-100, #f6f1e7); }
+.cat-draft { border-top: 1px solid var(--line); padding-top: 16px; margin-top: 8px; }
+.cat-draft h3 { margin: 0 0 6px; }
