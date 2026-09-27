@@ -93,9 +93,9 @@ or cancelled by the unattended job** — which it could be, until BBBB4 fixed it
 | | |
 |---|---|
 | **What is divergent** | Two questions share one field: *is this date running* and *why is this person not on it*. Answering them in the wrong order tells a traveller with an active booking on a cancelled date about **their pledge state** instead of the cancellation. |
-| **What masks it** | Nothing writes `cancelled_reason`. The columns exist — 023 was applied on 10 Aug 2026 — and no code path fills them. |
-| **What would arm it** | **The first write.** Departure status must be asked first, always; pledge reason second, when it has one. Collapsing them is the shorter code, which is why this is written down. |
-| **Where that is defined** | `server/db/schema_023_write_time_capture.sql`; [DIR-4](payment-window-and-hold.md) |
+| **What masks it** | The first write has landed (model phase 3, 27 Sep 2026): with `catalogue_v2` on, a traveler's own cancellation and a staff cancellation in Admin → Bookings stamp `cancelled_at` and `cancelled_reason` (`traveler` or `admin`). The one reader is the agency-commission decision (`commissionOutcome` in `shared/settlement-rules.js`), and it asks the departure first: a date that didn't reach GoAhead voids the commission whatever the booking's reason. No traveler-facing view reads the reason. With the flag off, nothing writes it. |
+| **What would arm it** | **A second reader that asks the pledge first**, above all a traveler-facing one. Departure status must be asked first, always; pledge reason second, when it has one. Collapsing them is the shorter code, which is why this is written down. `latent-defects.test.js` fails if the commission rule stops asking the departure first, or if the writes leave the flag. |
+| **Where that is defined** | `server/db/schema_023_write_time_capture.sql`; `shared/settlement-rules.js` `commissionOutcome`; [DIR-4](payment-window-and-hold.md) |
 
 ---
 

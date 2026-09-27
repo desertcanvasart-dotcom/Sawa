@@ -344,6 +344,9 @@ export async function buildHead(pathname) {
   } else if (/^\/(admin|agency|portal)(\/|$)/.test(path)) {
     // Real, working app routes — they must not read (or respond) as "not found".
     m = { ...m, noindex: true, title: `Sign in | ${BRAND.name}`, description: "Sign in to your Sawa dashboard." };
+  } else if (/^\/booking-details\/[^/]+$/.test(path)) {
+    // Model phase 3: the private link to complete a booking's details.
+    m = { ...m, noindex: true, title: `Booking details | ${BRAND.name}`, description: "Complete your booking details." };
   } else if (/^\/embed(\/|$)/.test(path)) {
     m = { ...m, noindex: true, title: `Shared departures | ${BRAND.name}` };
   } else if (path === "/packages" || path === "/tours") {

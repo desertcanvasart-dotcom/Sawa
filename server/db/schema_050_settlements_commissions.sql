@@ -279,4 +279,21 @@ CREATE TABLE IF NOT EXISTS finance_settings (
   updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- Every table here is read and written by the server only (as 024 set for
+-- the Data API): RLS on, no policies.
+ALTER TABLE booking_completion_requests ENABLE ROW LEVEL SECURITY;
+ALTER TABLE operator_bank_accounts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE operator_bank_access_log ENABLE ROW LEVEL SECURITY;
+ALTER TABLE egypt_holidays ENABLE ROW LEVEL SECURITY;
+ALTER TABLE fx_rates ENABLE ROW LEVEL SECURITY;
+ALTER TABLE operator_penalty_rates ENABLE ROW LEVEL SECURITY;
+ALTER TABLE operator_payables ENABLE ROW LEVEL SECURITY;
+ALTER TABLE operator_adjustments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE settlement_statements ENABLE ROW LEVEL SECURITY;
+ALTER TABLE commission_statements ENABLE ROW LEVEL SECURITY;
+ALTER TABLE agency_commissions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE agency_invoices ENABLE ROW LEVEL SECURITY;
+ALTER TABLE finance_payments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE finance_settings ENABLE ROW LEVEL SECURITY;
+
 COMMIT;

@@ -67,7 +67,7 @@ export function textPdf(items, { title = "Statement" } = {}) {
   }
   objects[catalog - 1] = `<< /Type /Catalog /Pages ${pagesObj} 0 R >>`;
   objects[pagesObj - 1] = `<< /Type /Pages /Kids [${kids.map((k) => `${k} 0 R`).join(" ")}] /Count ${kids.length} >>`;
-  const info = add(`<< /Title (${esc(title)}) /Producer (Sawa) >>`);
+  const info = add(`<< /Title (${esc(title)})/Producer (Sawa) >>`);
 
   let out = "%PDF-1.4\n%\xe2\xe3\xcf\xd3\n";
   const offsets = [];

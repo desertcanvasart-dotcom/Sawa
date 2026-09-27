@@ -398,7 +398,7 @@ test("with catalogue_v2 off the jobs do nothing, the operator portal is not ther
   const legacy = deps.swapped.legacy;
   const book = (base, name) => fetch(`${base}/api/public/departures/${legacy}/bookings`, {
     method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ customerName: name, customerEmail: `${name.toLowerCase()}@example.test`, seats: 1,
+    body: JSON.stringify({ customerName: name, customerEmail: `${name.toLowerCase()}@example.test`, seats: 1, customerPhone: "+201001112233",
       pickupPoint: "Marriott Zamalek", nationality: "Canadian", safetyNeeds: "wheelchair", travelerNames: [name] }),
   });
 

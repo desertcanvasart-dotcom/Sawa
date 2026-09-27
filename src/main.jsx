@@ -64,6 +64,7 @@ const LoginGate = lazy(() => import("./LoginGate").then((m) => ({ default: m.Log
 const AdminDashboard = lazy(() => import("./AdminDashboard").then((m) => ({ default: m.AdminDashboard })));
 const AgencyDashboard = lazy(() => import("./AgencyDashboard").then((m) => ({ default: m.AgencyDashboard })));
 const OperatorDashboard = lazy(() => import("./OperatorDashboard.jsx").then((m) => ({ default: m.OperatorDashboard })));
+import { TravelerDetailsFields, emptyTravelerDetails, travelerDetailsBody, travelerDetailsError } from "./TravelerDetails.jsx";
 
 
 // Three named traveler quotes lived here — Valencia, Munich, Abu Dhabi, each
@@ -961,6 +962,10 @@ function App() {
     return <EmbedWidget type={embedType} product={embedProduct} />;
   }
 
+  // Model phase 3: the private link to complete a booking's details.
+  const detailsMatch = path.match(/^\/booking-details\/([^/?#]+)$/);
+  if (detailsMatch) return <BookingDetailsPage token={decodeURIComponent(detailsMatch[1])} />;
+
   const isPortalRoute = path.startsWith("/admin") || path.startsWith("/agency") || path.startsWith("/portal");
   // Editorial pages do not need the tour catalogue to load successfully.
   const isBlogRoute = /^\/blog(?:\/|$)/.test(path);
@@ -1533,9 +1538,9 @@ function TourDetailV2({ isSaving, navigate, phoneVerification = false, onBookPub
   const [tierId, setTierId] = useState(pkgTiers[0]?.id || "");
   const [roomingType, setRoomingType] = useState("double");
   // Model phase 2 — what the operator's manifest needs; optional, catalog only.
-  const [pickupPoint, setPickupPoint] = useState("");
-  const [nationality, setNationality] = useState("");
-  const [safetyNeeds, setSafetyNeeds] = useState("");
+  // Phase 3: required on catalog bookings (every name, pickup, nationality
+  // where needed, safety needs or an explicit "none"; the phone too).
+  const [details, setDetails] = useState(emptyTravelerDetails);
   const manifestForm = catalogueV2() && tour.catalogue;
   // Keep the selection valid if the tour (and therefore its tiers) changes.
   useEffect(() => {
@@ -1626,12 +1631,16 @@ function TourDetailV2({ isSaving, navigate, phoneVerification = false, onBookPub
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return setErr("Enter a valid email.");
     if (Number(seats) > remaining) return setErr(`Only ${remaining} seat${remaining === 1 ? "" : "s"} left on this date.`);
     if (!phoneConfirmed) return setErr("Confirm your phone number with the code we send you first.");
+    if (manifestForm) {
+      const missing = travelerDetailsError(details, nSeats, { needsNationality: tour.catalogue.needsNationality, phone });
+      if (missing) return setErr(missing);
+    }
     const result = await onBookPublicDeparture({
       departureId: dep.id, customerName: name.trim(), customerEmail: email.trim(),
       customerPhone: phone.trim(), phoneToken: phoneToken || undefined, seats: nSeats,
       // Only meaningful for packages; the server ignores them for day tours.
       ...(isPackage(tour) ? { roomingType, accommodationTier: tierId } : {}),
-      ...(manifestForm ? { manifest: { pickupPoint: pickupPoint.trim(), nationality: nationality.trim(), safetyNeeds: safetyNeeds.trim() } } : {}),
+      ...(manifestForm ? { manifest: travelerDetailsBody(details) } : {}),
     });
     // F01 — the form used to clear straight away, before the server answered:
     // a full date, a closed cutoff or a dropped connection left the traveller
@@ -1640,7 +1649,7 @@ function TourDetailV2({ isSaving, navigate, phoneVerification = false, onBookPub
       if (result?.error) setErr(result.error);
       return;
     }
-    setName(""); setEmail(""); setPhone(""); setSeats(1);
+    setName(""); setEmail(""); setPhone(""); setSeats(1); setDetails(emptyTravelerDetails());
   }
 
   const reqIso = (days) => { const d = new Date(); d.setDate(d.getDate() + days); return d.toISOString().slice(0, 10); };
@@ -2078,29 +2087,13 @@ function TourDetailV2({ isSaving, navigate, phoneVerification = false, onBookPub
                           <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@email.com" required aria-required="true" autoComplete="email" />
                         </label>
                         <label className="bk-field">
-                          <span>{phoneVerification ? "Mobile" : <>Phone <i className="opt">(optional)</i></>}</span>
-                          <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+20 1XX XXX XXXX" autoComplete="tel" required={phoneVerification} aria-required={phoneVerification} />
+                          <span>{phoneVerification ? "Mobile" : manifestForm ? "Phone" : <>Phone <i className="opt">(optional)</i></>}</span>
+                          <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+20 1XX XXX XXXX" autoComplete="tel" required={phoneVerification || !!manifestForm} aria-required={phoneVerification || !!manifestForm} />
                         </label>
                       </div>
                       {manifestForm && (
-                        <>
-                          <div className="frow">
-                            <label className="bk-field">
-                              <span>Pickup point <i className="opt">(optional)</i></span>
-                              <input value={pickupPoint} onChange={(e) => setPickupPoint(e.target.value)} placeholder={tour.catalogue.pickupArea || "Hotel name and area"} maxLength={200} />
-                            </label>
-                            {tour.catalogue.needsNationality && (
-                              <label className="bk-field">
-                                <span>Nationality <i className="opt">(optional; site tickets need it)</i></span>
-                                <input value={nationality} onChange={(e) => setNationality(e.target.value)} placeholder="e.g. Canadian" maxLength={80} autoComplete="country-name" />
-                              </label>
-                            )}
-                          </div>
-                          <label className="bk-field">
-                            <span>Health or safety needs <i className="opt">(optional)</i></span>
-                            <input value={safetyNeeds} onChange={(e) => setSafetyNeeds(e.target.value)} placeholder="e.g. uses a wheelchair, severe nut allergy" maxLength={1000} />
-                          </label>
-                        </>
+                        <TravelerDetailsFields value={details} onChange={setDetails} seats={nSeats} leadName={name}
+                          needsNationality={tour.catalogue.needsNationality} pickupHint={tour.catalogue.pickupArea || ""} />
                       )}
                       {phoneVerification && (
                         <PhoneCodeStep
@@ -2842,6 +2835,63 @@ function EmbedWidget({ type, product }) {
   );
 }
 
+// ---- Complete a booking's details (/booking-details/:token), phase 3 --------
+function BookingDetailsPage({ token }) {
+  const [info, setInfo] = useState(null);
+  const [err, setErr] = useState("");
+  const [details, setDetails] = useState(emptyTravelerDetails);
+  const [phone, setPhone] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState(false);
+  useEffect(() => {
+    fetch(`${API_BASE}/public/booking-details/${encodeURIComponent(token)}`)
+      .then(async (r) => {
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(j.error || "This link isn't valid.");
+        setInfo(j);
+        const d = j.details || {};
+        setPhone(d.phone || "");
+        setDetails({
+          names: Array.from({ length: j.seats }, (_, i) => (d.travelerNames || [])[i] || ""),
+          pickupPoint: d.pickupPoint || "", nationality: d.nationality || "",
+          safetyNeeds: d.safetyNeeds && d.safetyNeeds !== "None" ? d.safetyNeeds : "", safetyNone: d.safetyNeeds === "None",
+        });
+      })
+      .catch((e) => setErr(e.message));
+  }, [token]);
+  async function save(e) {
+    e.preventDefault();
+    const missing = travelerDetailsError(details, info.seats, { needsNationality: info.needsNationality, phone });
+    if (missing) return setErr(missing);
+    setBusy(true); setErr("");
+    try {
+      const r = await fetch(`${API_BASE}/public/booking-details/${encodeURIComponent(token)}`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...travelerDetailsBody(details), customerPhone: phone.trim() }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.error || "That didn't save. Please try again.");
+      setDone(true);
+    } catch (e2) { setErr(e2.message); } finally { setBusy(false); }
+  }
+  return (
+    <main className="bk-details-page" style={{ maxWidth: 560, margin: "40px auto", padding: "0 16px" }}>
+      <h1>Booking details</h1>
+      {!info && !err && <p>Loading…</p>}
+      {err && <div className="auth-error" role="alert">{err}</div>}
+      {done ? <p>Thank you. Your guide has everything they need.</p> : info && (
+        <form onSubmit={save}>
+          <p><strong>{info.title}</strong>, {info.dateLabel} · {info.seats} traveler{info.seats === 1 ? "" : "s"}</p>
+          <label className="bk-field"><span>Phone number</span>
+            <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} required autoComplete="tel" placeholder="+20 1XX XXX XXXX" />
+          </label>
+          <TravelerDetailsFields value={details} onChange={setDetails} seats={info.seats} needsNationality={info.needsNationality} />
+          <button className="btn-primary" disabled={busy} style={{ marginTop: 16 }}>{busy ? "Saving…" : "Save details"}</button>
+        </form>
+      )}
+    </main>
+  );
+}
+
 // ---- Book inside the widget (/embed/book, /embed/book/:type/:id) ----------
 // The card above is a link out: the visitor leaves the partner's site for
 // sawa.tours in a new tab, and the partner is credited only if the ?ref code
@@ -2958,6 +3008,8 @@ function EmbedBook({ products = [], productId = null, phoneVerification = false 
 
 function EmbedBookTour({ product, refCode, phoneVerification }) {
   const pkg = isPackage(product);
+  // Phase 3: a catalog booking carries every traveler's details.
+  const [details, setDetails] = useState(emptyTravelerDetails);
   const dates = openDates(product);
   const tiers = pkg ? (product.accommodationTiers || []) : [];
   // "join" an open date, or "request" a new one. A tour with nothing open
@@ -2980,6 +3032,7 @@ function EmbedBookTour({ product, refCode, phoneVerification }) {
   const [done, setDone] = useState(null);
 
   const requesting = mode === "request";
+  const detailsForm = catalogueV2() && !!product.catalogue && !requesting;
   const dep = requesting ? null : dates.find((d) => Number(d.id) === Number(depId)) || null;
   const booked = dep ? seatsTotal(dep.pledges) : 0;
   const remaining = dep ? Math.max(0, Number(dep.maxSeats || 0) - booked) : 0;
@@ -3012,6 +3065,7 @@ function EmbedBookTour({ product, refCode, phoneVerification }) {
     if (name.trim().length < 2) return "Enter the lead traveler's name.";
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return "Enter a valid email.";
     if (!phoneConfirmed) return "Confirm your phone number with the code we send you first.";
+    if (detailsForm) return travelerDetailsError(details, nSeats, { needsNationality: product.catalogue.needsNationality, phone });
     return "";
   }
 
@@ -3026,6 +3080,7 @@ function EmbedBookTour({ product, refCode, phoneVerification }) {
     phoneToken: phoneToken || undefined, seats: nSeats,
     ...(pkg ? { roomingType, accommodationTier: tierId } : {}),
     refCode: refCode || undefined,
+    ...(detailsForm ? travelerDetailsBody(details) : {}),
   });
 
   async function book() {
@@ -3173,10 +3228,16 @@ function EmbedBookTour({ product, refCode, phoneVerification }) {
           <label>Email
             <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" placeholder="you@email.com" />
           </label>
-          <label>{phoneVerification ? "Mobile" : "Phone (optional)"}
+          <label>{phoneVerification ? "Mobile" : detailsForm ? "Phone" : "Phone (optional)"}
             <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} autoComplete="tel" placeholder="+20 1XX XXX XXXX" />
           </label>
         </div>
+        {detailsForm && (
+          <div className="eb-details">
+            <TravelerDetailsFields value={details} onChange={setDetails} seats={nSeats} leadName={name} className="eb-field"
+              needsNationality={product.catalogue.needsNationality} pickupHint={product.catalogue.pickupArea || ""} />
+          </div>
+        )}
         {phoneVerification && (preview
           ? <p className="eb-note">Customers confirm their mobile number with a one-time code here.</p>
           : <PhoneCodeStep phone={phone} confirmed={phoneConfirmed} onVerified={(token, num) => { setPhoneToken(token); setVerifiedPhone(num); }} />

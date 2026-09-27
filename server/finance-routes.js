@@ -65,7 +65,7 @@ export function registerFinanceRoutes(app, { requireAuth, requireRole, h, logAud
   app.get("/api/admin/finance", ...staff, route(async (req, res) => {
     const q = z.object({
       from: ymdSchema.optional(), to: ymdSchema.optional(), party: z.string().max(120).optional(),
-      status: z.enum(["due", "overdue", "paid", "on_hold", "draft"]).optional(),
+      standing: z.enum(["due", "overdue", "paid", "on_hold", "draft"]).optional(),
     }).parse(req.query || {});
     const [items, overdue, legacy] = await Promise.all([financeItems(pool, q), overdueSummary(pool), legacyOpenDepartures(pool)]);
     res.json({ items, overdue, legacy, today: todayIn() });

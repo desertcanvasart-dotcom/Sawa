@@ -80,8 +80,8 @@ export async function setFeeSetting(db, { percent, fixedEur, by }) {
 // ---------------------------------------------------------------- what is owed
 // One list for operator advances and balances, agency commission statements
 // and agency invoices. Status: due, overdue (past its due date), paid, or on
-// hold / draft where it can't be paid yet.
-export async function financeItems(db = pool, { from = null, to = null, party = null, status = null, now = Date.now() } = {}) {
+// hold / draft where it can't be paid yet (its "standing").
+export async function financeItems(db = pool, { from = null, to = null, party = null, standing = null, now = Date.now() } = {}) {
   const today = todayIn(now);
   const [payables, statements, invoices, payments] = await Promise.all([
     db.query(
@@ -96,7 +96,7 @@ export async function financeItems(db = pool, { from = null, to = null, party = 
     db.query("SELECT * FROM finance_payments"),
   ]);
   const paidBy = new Map(payments.rows.map((p) => [`${p.payable_kind}:${p.payable_id}`, p]));
-  const statusOf = (state, dueOn) => (state === "paid" ? "paid" : state === "on_hold" ? "on_hold" : state === "draft" ? "draft"
+  const standingOf = (state, dueOn) => (state === "paid" ? "paid" : state === "on_hold" ? "on_hold" : state === "draft" ? "draft"
     : dueOn && dueOn < today ? "overdue" : "due");
   const payment = (kind, id) => {
     const p = paidBy.get(`${kind}:${id}`);
@@ -107,7 +107,7 @@ export async function financeItems(db = pool, { from = null, to = null, party = 
       kind: "operator_payable", id: Number(p.id), type: p.kind === "advance" ? "Operator advance" : "Operator balance",
       direction: "out", party: { kind: "operator", id: Number(p.operator_id), name: p.legal_name },
       departure: { id: Number(p.departure_id), date: ymd(p.date), label: `${p.code} ${p.title}` },
-      currency: "EGP", amount: num(p.amount), dueOn: ymd(p.due_on), status: statusOf(p.state, ymd(p.due_on)),
+      currency: "EGP", amount: num(p.amount), dueOn: ymd(p.due_on), standing: standingOf(p.state, ymd(p.due_on)),
       holdReason: p.hold_reason, payment: payment("operator_payable", p.id),
     })),
     ...statements.rows.map((s) => {
@@ -117,14 +117,14 @@ export async function financeItems(db = pool, { from = null, to = null, party = 
         kind: "commission_statement", id: Number(s.id), type: `Agency commission, ${s.period}`, direction: "out",
         party: { kind: "agency", id: s.agency_id, name: s.agency_name }, departure: null,
         currency: s.currency, amount: s.currency === "EGP" ? num(s.total_egp) : num(s.total_eur), amountEur: num(s.total_eur),
-        dueOn: due, status: statusOf(s.state, due), holdReason: s.hold_reason, payment: payment("commission_statement", s.id),
+        dueOn: due, standing: standingOf(s.state, due), holdReason: s.hold_reason, payment: payment("commission_statement", s.id),
       };
     }),
     ...invoices.rows.map((i) => ({
       kind: "agency_invoice", id: Number(i.id), type: "Agency invoice (receivable)", direction: "in",
       party: { kind: "agency", id: i.agency_id, name: i.agency_name },
       departure: { id: Number(i.departure_id), date: ymd(i.date), label: `${i.code} ${i.title}` },
-      currency: "EUR", amount: num(i.amount_eur), dueOn: ymd(i.due_on), status: statusOf(i.state, ymd(i.due_on)),
+      currency: "EUR", amount: num(i.amount_eur), dueOn: ymd(i.due_on), standing: standingOf(i.state, ymd(i.due_on)),
       holdReason: null, payment: payment("agency_invoice", i.id),
     })),
   ];
@@ -132,12 +132,12 @@ export async function financeItems(db = pool, { from = null, to = null, party = 
     .filter((x) => !from || (x.dueOn && x.dueOn >= from))
     .filter((x) => !to || (x.dueOn && x.dueOn <= to))
     .filter((x) => !party || `${x.party.kind}:${x.party.id}` === party || x.party.name?.toLowerCase().includes(String(party).toLowerCase()))
-    .filter((x) => !status || x.status === status)
+    .filter((x) => !standing || x.standing === standing)
     .sort((a, b) => String(a.dueOn || "9999").localeCompare(String(b.dueOn || "9999")));
 }
 
 export async function overdueSummary(db = pool, now = Date.now()) {
-  const items = await financeItems(db, { now, status: "overdue" });
+  const items = await financeItems(db, { now, standing: "overdue" });
   return { overdue: items.length, operator: items.filter((i) => i.party.kind === "operator").length, agency: items.filter((i) => i.party.kind === "agency").length };
 }
 

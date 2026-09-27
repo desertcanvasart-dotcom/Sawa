@@ -3,7 +3,7 @@ import {
   LayoutDashboard, Package, CalendarDays, Users, ClipboardList, ScrollText,
   Plus, Check, X, Search, Archive, ArchiveRestore, Euro, ShieldCheck,
   TrendingUp, AlertTriangle, MapPin, Hotel, ArrowUpRight, ArrowLeft, Trash2, Pencil,
-  Newspaper, Share2, Copy, Inbox, Eye, Clock3, Download, BookOpen, CalendarRange, Truck, CalendarCheck, Coins,
+  Newspaper, Share2, Copy, Inbox, Eye, Clock3, Download, BookOpen, CalendarRange, Truck, CalendarCheck, Coins, Landmark,
 } from "lucide-react";
 import { apiFetch, uploadImage } from "./supabaseClient";
 import { DashSidebar } from "./DashSidebar";
@@ -14,6 +14,7 @@ import { PaymentsSection } from "./AdminPayments.jsx";
 import { SettlementsSection } from "./AdminSettlements.jsx";
 import { CatalogueSection, CalendarSection } from "./AdminCatalogue.jsx";
 import { OperatorsSection, RosterSection, RatesSection } from "./AdminOperators.jsx";
+import { FinanceSection } from "./AdminFinance.jsx";
 // Date-only departure values need a local-noon anchor or they render a day
 // early west of UTC — see src/dates.js.
 import { fmtDate, fmtReceived } from "./dates.js";
@@ -54,6 +55,7 @@ const NAV_GROUPS = [
       { id: "operators", label: "Operators", icon: Truck },
       { id: "roster", label: "Roster", icon: CalendarCheck },
       { id: "rates", label: "Rate card", icon: Coins },
+      { id: "finance", label: "Finance", icon: Landmark, alert: (s) => s?.financeOverdue || 0 },
       { id: "archive", label: "Archive", icon: Archive },
       { id: "listings", label: "Listing requests", icon: Inbox, alert: (s) => s?.pendingListings || 0 },
       { id: "daterequests", label: "Date requests", icon: Clock3 },
@@ -85,14 +87,16 @@ export function AdminDashboard({ user, agency, signOut, navigate }) {
     setLoading(true);
     try {
       const okJson = (r) => (r.ok ? r.json() : Promise.reject(new Error(`Request failed (${r.status})`)));
-      const [boot, st, dest, blog] = await Promise.all([
+      const [boot, st, dest, blog, fin] = await Promise.all([
         apiFetch("/bootstrap").then(okJson),
         apiFetch("/admin/stats").then(okJson),
         apiFetch("/admin/destinations").then(okJson).catch(() => ({ destinations: [] })),
         apiFetch("/admin/blog").then(okJson).catch(() => ({ posts: [] })),
+        // Model phase 3: overdue payments (none before migration 050).
+        apiFetch("/admin/finance/overdue").then(okJson).catch(() => ({ overdue: 0 })),
       ]);
       setData(boot);
-      setStats(st);
+      setStats({ ...st, financeOverdue: fin.overdue || 0 });
       setDestinations(dest.destinations || []);
       setPosts(blog.posts || []);
     } catch (e) {
@@ -124,6 +128,11 @@ export function AdminDashboard({ user, agency, signOut, navigate }) {
         {loading && <DashSkeleton />}
         {!loading && data && (
           <>
+            {section === "overview" && stats?.financeOverdue > 0 && (
+              <div className="auth-error" role="status" style={{ cursor: "pointer" }} onClick={() => setSection("finance")}>
+                <AlertTriangle size={14} /> {stats.financeOverdue} payment{stats.financeOverdue === 1 ? " is" : "s are"} overdue. Open Finance.
+              </div>
+            )}
             {section === "overview" && <Overview stats={stats} data={data} onGo={setSection} />}
             {section === "tours" && <ToursSection data={data} destinations={destinations} reload={loadAll} flash={flash} />}
             {section === "catalogue" && <CatalogueSection flash={flash} />}
@@ -131,6 +140,7 @@ export function AdminDashboard({ user, agency, signOut, navigate }) {
             {section === "operators" && <OperatorsSection flash={flash} isSuperAdmin={user.role === "super_admin"} />}
             {section === "roster" && <RosterSection flash={flash} />}
             {section === "rates" && <RatesSection flash={flash} />}
+            {section === "finance" && <FinanceSection flash={flash} isSuperAdmin={user.role === "super_admin"} />}
             {section === "archive" && <ArchiveSection data={data} reload={loadAll} flash={flash} />}
             {section === "listings" && <ListingRequestsSection data={data} reload={loadAll} flash={flash} />}
             {section === "daterequests" && <DateRequestsSection data={data} reload={loadAll} flash={flash} />}

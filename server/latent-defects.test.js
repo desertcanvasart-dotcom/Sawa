@@ -43,12 +43,26 @@ test("L-3's mask is still in place — every read enriches", () => {
     "L-3 is armed: loadDeparture no longer recomputes status before serving");
 });
 
-test("L-4 is still unwritten — the columns exist and nothing fills them", () => {
-  for (const f of ["server/app.js", "server/departure-cancel.js", "server/jobs/cancel-unconfirmed.js"]) {
+test("L-4: cancelled_reason is written only under catalogue_v2, and its reader asks the departure first", async () => {
+  // The first write landed in model phase 3. The register's rule now binds:
+  // departure status first, pledge reason second.
+  for (const f of ["server/departure-cancel.js", "server/jobs/cancel-unconfirmed.js"]) {
     const src = readFileSync(join(ROOT, f), "utf8").replace(/\/\/[^\n]*/g, "");
-    assert.ok(!/cancelled_reason/.test(src),
-      `${f} now writes cancelled_reason — L-4's precedence rule applies from this commit`);
+    assert.ok(!/cancelled_reason/.test(src), `${f} now writes cancelled_reason — revisit L-4 in docs/audit/latent-defects.md`);
   }
+  const lines = readFileSync(join(ROOT, "server", "app.js"), "utf8").split("\n");
+  const writes = lines.map((l, i) => [l, i]).filter(([l]) => /cancelled_reason\s*=/.test(l));
+  assert.equal(writes.length, 4, "L-4: a new write of cancelled_reason — revisit the register");
+  for (const [, i] of writes) {
+    // Each write sits under the flag: on its own line, or in the flag's block.
+    assert.ok(lines.slice(Math.max(0, i - 6), i + 1).some((l) => /catalogueV2Enabled\(\)/.test(l)),
+      `L-4: server/app.js:${i + 1} writes cancelled_reason outside catalogue_v2`);
+  }
+  const { commissionOutcome } = await import("../shared/settlement-rules.js");
+  const late = { pledgeStatus: "cancelled", cancelledReason: "traveler", cancelledAtMs: 10, goAheadAtMs: 5, startMs: 10 + 3600000, productType: "day_tour" };
+  assert.equal(commissionOutcome({ ...late, departureStatus: "cancelled_below_minimum", reachedGoAhead: false }).state, "void",
+    "L-4 is armed: the commission rule read the booking's reason before the departure's status");
+  assert.equal(commissionOutcome({ ...late, departureStatus: "completed", reachedGoAhead: true }).state, "half");
 });
 
 test("L-5's bound is what the register says it is", () => {
