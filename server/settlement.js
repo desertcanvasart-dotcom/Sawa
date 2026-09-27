@@ -13,7 +13,8 @@
 //
 // Headcount is paid passengers: seats on a live booking whose money, net of
 // refunds, is above zero. A refunded passenger is not counted. Direct
-// travellers count for Capital Travel Service, widget travellers for the
+// travellers count for the direct-bookings operator (none by default since
+// 27 Sep 2026, when their share stays with Sawa), widget travellers for the
 // agency whose widget they used (passengerOwner in domain.js — the operator
 // rule's own answer).
 //

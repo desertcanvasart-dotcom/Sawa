@@ -8,6 +8,9 @@ import { fileURLToPath } from "node:url";
 // The pool is never queried here (every lookup is handed a stand-in), but
 // importing it needs a URL; a closed port, as in email-contract.test.js.
 process.env.DATABASE_URL ||= "postgres://nobody:nobody@127.0.0.1:1/none";
+// The direct-bookings operator has no default since 27 Sep 2026; an
+// environment may still name one, and that is what these cases exercise.
+process.env.DIRECT_BOOKINGS_OPERATOR = "Direct Partner";
 const { bookingConfirmationEmail, goAheadEmail } = await import("./email.js");
 const { operatorFor } = await import("./operator-lookup.js");
 
@@ -16,28 +19,32 @@ const booking = {
   to: "a@b.c", route: "Giza", dateLabel: "2026-10-12", seats: 2,
   depositDue: 14, balanceDue: 112, balanceDueDate: "2026-10-01", bookingCode: "SAWA-ABCD2345",
 };
-const cts = { name: "Capital Travel Service", verified: true };
+const direct = { name: "Direct Partner", verified: true };
 
 test("the booking confirmation names the operator, and says it can change until bookings close", () => {
-  const mail = bookingConfirmationEmail({ ...booking, operator: cts });
+  const mail = bookingConfirmationEmail({ ...booking, operator: direct });
   for (const part of [mail.html, mail.text]) {
     assert.match(part, /Run by:/);
-    assert.match(part, /Capital Travel Service/);
+    assert.match(part, /Direct Partner/);
     assert.match(part, /Until bookings close, the date is run by the partner with the most confirmed travelers/);
   }
   assert.match(mail.text, /\(verified operator\)/);
 });
 
-test("without an operator the confirmation reads as before", () => {
+test("without an operator the confirmation says a licensed Sawa partner runs it", () => {
   const mail = bookingConfirmationEmail(booking);
-  assert.ok(!/Run by:/.test(mail.html) && !/Run by:/.test(mail.text));
-  assert.ok(!/most confirmed travellers on it/.test(mail.text));
+  for (const part of [mail.html, mail.text]) {
+    assert.match(part, /Run by:/);
+    assert.match(part, /a licensed Sawa partner/);
+    assert.doesNotMatch(part, /Capital Travel Service/);
+  }
+  assert.ok(!/most confirmed travel+ers on it/.test(mail.text), "no 'can change' note without a named partner");
 });
 
 test("the GoAhead email names the operator running it, and says it can still change until bookings close", () => {
-  const mail = goAheadEmail({ to: "a@b.c", route: "Giza", dateLabel: "2026-10-12", operator: cts });
+  const mail = goAheadEmail({ to: "a@b.c", route: "Giza", dateLabel: "2026-10-12", operator: direct });
   for (const part of [mail.html, mail.text]) {
-    assert.match(part, /Capital Travel Service \(verified operator\) is running this date/);
+    assert.match(part, /Direct Partner \(verified operator\) is running this date/);
     assert.match(part, /Until bookings close, the date can pass to another partner/);
   }
   const plain = goAheadEmail({ to: "a@b.c", route: "Giza", dateLabel: "2026-10-12" });
@@ -67,14 +74,14 @@ function fakeDb({ pledges, agencies, listing = null, fail = null }) {
   };
 }
 const agencies = [
-  { id: "ag_cts", name: "Capital Travel Service", verification_state: "verified" },
+  { id: "ag_direct", name: "Direct Partner", verification_state: "verified" },
   { id: "ag_nile", name: "Nile Partners", verification_state: null },
 ];
 const pledge = (agency_id, seats, at) => ({ id: `p${at}`, agency_id, seats, status: "confirmed", created_at: `2026-09-0${at}T10:00:00Z` });
 
 test("operatorFor: the partner with the most travellers, public fields only", async () => {
   const op = await operatorFor(1, fakeDb({ agencies, listing: "ag_nile", pledges: [pledge("ag_nile", 1, 1), pledge(null, 2, 2)] }));
-  assert.equal(op.name, "Capital Travel Service", "two direct seats beat one agency seat");
+  assert.equal(op.name, "Direct Partner", "two direct seats beat one agency seat");
   assert.equal(op.verified, true);
   assert.deepEqual(Object.keys(op).sort(), ["etaaUrl", "licensedSince", "name", "verified", "verifiedAt"].sort());
 });

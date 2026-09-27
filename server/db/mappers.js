@@ -49,6 +49,8 @@ export function mapAgency(r) {
     verificationState: r.verification_state || null,
     verificationEvidence: r.verification_evidence || null,
     verifiedAt: r.verified_at || null,
+    // 054. Missing column (054 not yet applied) reads as shown.
+    publicListed: r.public_listed !== false,
   };
 }
 

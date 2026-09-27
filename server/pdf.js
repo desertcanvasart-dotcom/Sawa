@@ -89,9 +89,7 @@ export function statementPdf(statement) {
   const egp = (n) => (n == null ? "-" : `EGP ${Number(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
   const eur = (n) => (n == null ? "-" : `EUR ${Number(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
   const items = [
-    // The collecting agent issues the statement; the entity's name comes from
-    // BRAND, the one place it is written (entity-disclosure.test.js).
-    { text: `Sawa - ${s.collectingAgent?.name || BRAND.legalName}, collecting agent`, size: 9 },
+    { text: `Sawa (${BRAND.legalName})`, size: 9 },
     { text: "Settlement statement", size: 18, bold: true, gap: 6 },
     { text: `${s.operator?.legalName || ""}`, size: 12, bold: true },
     { text: `${s.departure?.code || ""} ${s.departure?.title || ""}`, size: 11 },

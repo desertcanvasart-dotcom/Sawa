@@ -177,18 +177,17 @@ The legal structure: **the operator assigned at GoAhead is the seller** of each 
   The rule that CTS is never shown as the platform's operator is unchanged, and still enforced by `entity-disclosure.test.js`.
 - **`docs/legal/terms-catalogue-draft.md` v2:** a reservation with no payment; the sale made with the named operator at GoAhead; Online Era as collecting agent. It has 23 lawyer questions, 11 of them new, including Competition Law 3/2005 on a common retail price for competing operators.
 
-**Not changed, and still naming CTS** (`docs/legal/cts-references.md` has the full list):
-- **live today:**
-  - the privacy page's "ETAA license: 2179" under Online Era;
-  - Capital Travel Service on `/partners` (a database row);
-  - direct bookings shown as "Run by Capital Travel Service" (`DIRECT_BOOKINGS_OPERATOR`);
-- **the agreements draft** (`docs/model/…Agreements-draft.docx`): CTS is still the contracting party (lawyer question 23).
+**Live-site items, fixed separately in #226** (merged into this branch):
+- the privacy page shows Online Era's own General Sales Agent license no. 32241, in place of "ETAA license: 2179";
+- `DIRECT_BOOKINGS_OPERATOR` has no default, and unnamed operators read "a licensed Sawa partner" (the same wording as the seller line here, from `shared/operator-label.js`);
+- `/partners`: migration 054 and `docs/ops/remove-cts-from-partners.md`, the SQL to unlist CTS, to be run by hand;
+- the statement PDF header reads "Sawa (Online Era)".
 
-These are outside "seller or merchant", or need Online Era's own licence number, or a database change. They are listed for your decision.
+**Still naming CTS:** the agreements draft (`docs/model/…Agreements-draft.docx`), where CTS is still the contracting party (lawyer question 23).
 
 ## Open items (not built, or for you to decide)
 
-1. **The Terms and site copy.** The published Terms still describe deposit and balance. The catalog wording is drafted for the lawyer in `docs/legal/terms-catalogue-draft.md`; once approved, it is published as catalog Terms version 2. Its first question is the **seller's identity**: the draft names Capital Travel Service as seller, while the current Terms say Online Era operates the platform.
+1. **The Terms and site copy.** The published Terms still describe deposit and balance. The catalog wording is drafted for the lawyer in `docs/legal/terms-catalogue-draft.md`; once approved, it is published as catalog Terms version 2. Version 2 of the draft follows the agent structure: the operator sells, and Online Era collects as its agent.
 2. **A link never made:** resolved by the follow-up above (alerts, a count, and an admin decision 24 hours before the cut-off).
 3. **Reinstating a released booking** is an ordinary booking edit (Admin → Bookings), which checks capacity. It then gets a fresh request from the job.
 4. **The loss check's cruise estimate** assumes the traveler shares a twin room. A single traveler costs Sawa more (the single supplement, decided earlier).

@@ -9,6 +9,7 @@ import "dotenv/config";
 import { pool } from "./db/index.js";
 import { BRAND } from "./brand.js";
 import { CURRENCY, CURRENCY_SYMBOL } from "../shared/currency.js";
+import { UNNAMED_OPERATOR } from "../shared/operator-label.js";
 import {
   cancellationBandsFor, chargeText, depositPctFor, CANCELLATION_COLUMNS,
   CANCELLATION_BEFORE_GOAHEAD, CANCELLATION_QUALIFIER, CANCELLATION_CAP,
@@ -496,7 +497,7 @@ export function bookingConfirmationEmail({ to, customerName, route, dateLabel, s
   const text =
     `Hi ${customerName || ""},\n\nWe've recorded your booking for ${route} on ${dateLabel}.\n` +
     `Seats: ${seats}\n${bookingCode ? `Booking code: ${bookingCode}\n` : ""}` +
-    (operatorName ? `Run by: ${operatorName}${operator.verified ? " (verified operator)" : ""}\n${operatorNote}\n` : "") +
+    (operatorName ? `Run by: ${operatorName}${operator.verified ? " (verified operator)" : ""}\n${operatorNote}\n` : `Run by: ${UNNAMED_OPERATOR}\n`) +
     `Deposit at GoAhead: ${CURRENCY_SYMBOL}${depositDue} ${CURRENCY}\nBalance: ${CURRENCY_SYMBOL}${balanceDue} ${CURRENCY} (due ${balanceDueDate})\n\n` +
     `Nothing has been charged. Your seat is held free — the deposit only falls due once this ` +
     `date reaches its minimum travelers (GoAhead), and we'll email you when that happens.` +
@@ -516,7 +517,7 @@ export function bookingConfirmationEmail({ to, customerName, route, dateLabel, s
      ${panel(
        `${row("Seats:", esc(seats))}<br/>
         ${bookingCode ? `${row("Booking code:", esc(bookingCode))}<br/>` : ""}
-        ${operatorName ? `${row("Run by:", `${esc(operatorName)}${operator.verified ? " ✓" : ""}`)}<br/>` : ""}
+        ${row("Run by:", operatorName ? `${esc(operatorName)}${operator.verified ? " ✓" : ""}` : esc(UNNAMED_OPERATOR))}<br/>
         ${row("Deposit at GoAhead:", `${CURRENCY_SYMBOL}${esc(depositDue)} ${CURRENCY}`)}<br/>
         ${row("Balance:", `${CURRENCY_SYMBOL}${esc(balanceDue)} ${CURRENCY}`)} <span style="color:${C.muted}">(due ${esc(balanceDueDate)})</span>`
      )}

@@ -63,7 +63,11 @@ const AS_JSON = process.argv.includes("--json");
 export const RULES = [
   { id: "guarantee", why: "GoAhead confirms a date at its threshold; it does not promise a date reaches it",
     re: /guarantee\w*/gi,
-    ok: (ctx) => /not guarantee|no .{0,12}guarantee|never guarantee/i.test(ctx) },
+    // The Minimum Departure Guarantee is a real undertaking, and not this
+    // claim: once a date has gone ahead, the collecting agent pays the operator any
+    // shortfall (settlement statement, staff-only). It promises nothing about
+    // a date reaching GoAhead.
+    ok: (ctx) => /not guarantee|no .{0,12}guarantee|never guarantee|minimum[ _]departure[ _]guarantee/i.test(ctx) },
   { id: "absolute-claim", why: "an unconditional promise the model cannot keep",
     re: /100%\s*(guaranteed|safe|refund)|risk[- ]free|hassle[- ]free/gi },
   { id: "rating", why: "no reviews table exists; a rating cannot be evidenced or sourced",
@@ -409,6 +413,19 @@ export async function auditEmailTemplates() {
       depositTotal: 45, portalLink: "https://sawa.tours/admin/departures/7",
       unknowns: ["operator not recorded"],
     },
+    // The operator, settlement and pay-at-GoAhead templates.
+    name: "A Traveller", travelerName: "A Traveller", operatorName: "An Operator",
+    amount: 190, total: 190, outstanding: 0, dueAt: "2026-08-30T10:00:00Z", expiresAt: "2026-08-30T10:00:00Z",
+    url: "https://pay.example.com/SAWA-ABCDE", link: "https://sawa.tours/booking/SAWA-ABCDE/details",
+    missing: ["pickup point"], document: "Tourism licence", expiresOn: "2026-10-01", days: 30,
+    specVersion: 1, ackBy: "2026-08-29T10:00:00Z", portalUrl: "https://sawa.tours/portal",
+    bankName: "A Bank", lastDigits: "1234", submittedBy: "op@example.com",
+    period: "August 2026", totalLabel: "EUR 24.00", balance: "EGP 1,000.00",
+    level: "no_link", detail: { operatorName: "An Operator" },
+    receiptNo: "R-2026-000001", paidAt: "2026-08-30T09:00:00Z", issuer: "Sawa, collecting agent", onBehalfOf: "Sold by An Operator, license no. 1",
+    seller: "Sold by An Operator, license no. 1", payee: "Sawa, collecting agent",
+    terms: { version: 1, tiers: [{ window: "30 days or more before", retainedPct: 0 }, { window: "Under 30 days", retainedPct: 50 }] },
+    items: [{ reference: "SAWA-ABCDE", title: "Aswan Highlights", date: "2026-09-01", amount: 190, dueAt: "2026-08-30T10:00:00Z" }],
   };
   // An explicit ALLOW-list, not a name pattern. The pattern /Email$|Text$/
   // matched sendEmail — so the audit CALLED it, which wrote a row to the
@@ -430,7 +447,25 @@ export async function auditEmailTemplates() {
     // check doing exactly what "add it, do not skip it" is for.
     "goAheadPaymentLinkEmail",
     // The ops notice for new requests and bookings, listed the day it was written.
-    "opsNewBookingEmail", "opsNewListingEmail"];
+    "opsNewBookingEmail", "opsNewListingEmail",
+    // Listed 27 Sep 2026. Eighteen templates from the operator, settlement and
+    // pay-at-GoAhead work shipped without being added, and the unlisted check
+    // turned the daily production check red once it could reach this step.
+    "paymentLinkEmail", "paymentReceivedEmail", "belowMinimumCancellationEmail",
+    "documentExpiryEmail", "operatorAssignmentEmail", "catalogueAdminAlertEmail",
+    "bookingDetailsRequestEmail", "bankDetailsChangedEmail", "settlementStatementEmail",
+    "commissionStatementEmail", "payAtGoAheadLinkEmail", "payAtGoAheadReminderEmail",
+    "payAtGoAheadReleasedEmail", "waitlistOfferEmail", "payAtGoAheadOpsEmail",
+    "payAtGoAheadBookingEmail", "payAtGoAheadEscalationEmail", "payAtGoAheadApologyEmail",
+    // The receipt Sawa issues as collecting agent, listed the day it was written.
+    "payAtGoAheadReceiptEmail"];
+  // Where one shared fixture can't serve: `kind` means a different thing to
+  // each of these, so each gets the value its own caller passes.
+  const FX_FOR = {
+    paymentLinkEmail: { kind: "deposit" },
+    catalogueAdminAlertEmail: { kind: "no_rostered_operator" },
+    payAtGoAheadOpsEmail: { kind: "links" },
+  };
   const templates = TEMPLATES.filter((k) => typeof t[k] === "function").map((k) => [k, t[k]]);
   const missing = TEMPLATES.filter((k) => typeof t[k] !== "function");
   const unlisted = Object.keys(t).filter((k) => /Email$|Text$/.test(k) && k !== "sendEmail" && !TEMPLATES.includes(k));
@@ -438,7 +473,7 @@ export async function auditEmailTemplates() {
   const rendered = [];
   for (const [name, fn] of templates) {
     let out;
-    try { out = fn(fx); } catch (e) {
+    try { out = fn({ ...fx, ...(FX_FOR[name] || {}) }); } catch (e) {
       findings.push({ rule: "template-error", why: "a template that cannot render cannot be audited",
         where: `email:${name}`, match: e.message, context: "" });
       continue;

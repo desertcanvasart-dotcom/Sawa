@@ -896,7 +896,7 @@ test("the settlement statement distributes the collections: gross, payment costs
   const pdf = statementPdf({ ...st, snapshot: { ...st.snapshot, distribution: g } }).toString("latin1");
   assert.match(pdf, /Distribution of collections/);
   assert.match(pdf, /Minimum Departure Guarantee/);
-  assert.ok(pdf.includes(`Sawa - ${BRAND.legalName}, collecting agent`));
+  assert.ok(pdf.includes(`Sawa \\(${BRAND.legalName}\\)`), "the header names Sawa's operating company");
   assert.ok(!/Capital Travel/.test(pdf));
   await db.query("DELETE FROM finance_settings WHERE key = 'payment_fees'");
 });

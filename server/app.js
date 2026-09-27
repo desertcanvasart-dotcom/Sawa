@@ -554,9 +554,14 @@ function resolvedModes() {
 // learning whether the rate limiter is keyed per visitor, whether an external
 // mirror is running, or whether email is live. Each of those is useful to
 // someone probing the system and to nobody else.
+//
+// The one exception is the deployed commit: which code is live is public in
+// the repository anyway, and it answers "is the fix deployed?" without a
+// dashboard login. Railway sets RAILWAY_GIT_COMMIT_SHA on a deploy from
+// GitHub; a CLI upload (`railway up`) has no commit, so it reads "unknown".
 app.get("/api/health", h(async (_req, res) => {
   await pool.query("SELECT 1");
-  res.json({ ok: true });
+  res.json({ ok: true, commit: process.env.RAILWAY_GIT_COMMIT_SHA || "unknown" });
 }));
 
 // The resolved configuration, behind auth. The drift argument for publishing
