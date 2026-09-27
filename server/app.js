@@ -1056,9 +1056,13 @@ app.post("/api/agency/tour-products", requireAuth, requireRole("agency_owner", "
   let agencyName = null;
   const product = await withTransaction(async (c) => {
     if (body.id) {
-      const owner = await c.query(`SELECT agency_id FROM tour_products WHERE id=$1`, [body.id]);
+      // Locked so the owner can't change between this check and the write.
+      const owner = await c.query(`SELECT agency_id FROM tour_products WHERE id=$1 FOR UPDATE`, [body.id]);
       if (!owner.rows.length) throw new AppError(404, "Listing not found.");
-      if (owner.rows[0].agency_id && owner.rows[0].agency_id !== req.user.agencyId) {
+      // Only a listing this agency owns. A Sawa-owned listing has no agency, and
+      // used to pass this check: any agency could overwrite it, take it offline
+      // and become its operator (docs/security/agency-listing-takeover.md).
+      if (owner.rows[0].agency_id !== req.user.agencyId) {
         throw new AppError(403, "You can only edit your own listings.");
       }
     }
@@ -2504,7 +2508,9 @@ app.delete("/api/agency/staff/:id", requireAuth, requireRole("agency_owner"), h(
 async function loadAgencyStaff(id, agencyId) {
   const r = await pool.query(`SELECT * FROM app_users WHERE id=$1`, [id]);
   const row = r.rows[0];
-  if (!row || row.agency_id !== agencyId) throw new AppError(404, "Team member not found.");
+  // `!agencyId` first: a platform user has no agency, so a caller without one
+  // would otherwise match them (docs/security/agency-listing-takeover.md).
+  if (!agencyId || !row || row.agency_id !== agencyId) throw new AppError(404, "Team member not found.");
   return row;
 }
 
@@ -3424,7 +3430,9 @@ app.get("/api/cost-receipts/:costId", requireAuth, requireRole("super_admin", "o
   const row = await withSettlements(async () =>
     (await pool.query(`SELECT receipt_url, submitted_by_agency_id FROM departure_costs WHERE id = $1`, [Number(req.params.costId)])).rows[0]);
   if (!row || !isReceiptRef(row.receipt_url)) throw new AppError(404, "No receipt file on this cost line.");
-  if (!isPlatform(req.user) && row.submitted_by_agency_id !== req.user.agencyId) throw new AppError(403, "This receipt isn't yours to open.");
+  // An agency login with no agency must not match a Sawa-entered line (no
+  // agency either): the same NULL-owner gap as the listing takeover.
+  if (!isPlatform(req.user) && (!req.user.agencyId || row.submitted_by_agency_id !== req.user.agencyId)) throw new AppError(403, "This receipt isn't yours to open.");
   if (!supabaseAdmin) throw new AppError(500, "Storage is not configured.");
   const { data, error } = await supabaseAdmin.storage.from(RECEIPT_BUCKET).createSignedUrl(receiptRefKey(row.receipt_url), SIGNED_LINK_SECONDS);
   if (error || !data?.signedUrl) throw new AppError(502, "Couldn't open the receipt. Please try again.");
