@@ -14,6 +14,7 @@ import pg from "pg";
 import { freshDatabase, dropDatabase, testDbSkip } from "./test-db.js";
 import { zonedDateTimeToUtc } from "./tz.js";
 import { shiftDate } from "../shared/catalogue.js";
+import { ACK_HOURS } from "../shared/operators.js";
 import { datesInMonth } from "../shared/operators.js";
 
 const skip = testDbSkip;
@@ -293,7 +294,7 @@ test("GoAhead assigns the rostered operator, who is notified; a missed acknowled
   const a = (await db.query("SELECT * FROM catalogue_assignments WHERE departure_id = $1", [deps.main.id])).rows[0];
   assert.equal(Number(a.operator_id), B);
   assert.equal(a.state, "offered");
-  assert.equal(new Date(a.ack_due_at).getTime(), now + 12 * HOUR);
+  assert.equal(new Date(a.ack_due_at).getTime(), now + ACK_HOURS * HOUR, "4 hours to acknowledge");
   const note = (await db.query("SELECT * FROM operator_notifications WHERE operator_id = $1 AND kind = 'assignment'", [B])).rows[0];
   assert.match(note.body, /specification v1/);
   assert.match(note.body, /8 seats sold/);
@@ -307,22 +308,22 @@ test("GoAhead assigns the rostered operator, who is notified; a missed acknowled
   // Once per GoAhead.
   assert.equal((await asg.runAssignmentTick({ db, now, send })).assigned, 0);
 
-  // Past the 12 hours: B can no longer acknowledge; a strike, a notice, an alert.
-  await assert.rejects(asg.acknowledge(db, { assignmentId: Number(a.id), operatorId: B, by: "b", now: now + 13 * HOUR }), /time to acknowledge has passed/);
-  const late = await asg.expireAcknowledgements({ db, now: now + 13 * HOUR, send });
+  // Past the 4 hours: B can no longer acknowledge; a strike, a notice, an alert.
+  await assert.rejects(asg.acknowledge(db, { assignmentId: Number(a.id), operatorId: B, by: "b", now: now + (ACK_HOURS + 1) * HOUR }), /time to acknowledge has passed/);
+  const late = await asg.expireAcknowledgements({ db, now: now + (ACK_HOURS + 1) * HOUR, send });
   assert.equal(late.expired, 1);
   const strikes = await ops.strikesFor(db, B);
   assert.equal(strikes.filter((s) => s.kind === "missed_acknowledgement").length, 1);
-  assert.equal((await asg.expireAcknowledgements({ db, now: now + 14 * HOUR, send })).expired, 0);
+  assert.equal((await asg.expireAcknowledgements({ db, now: now + (ACK_HOURS + 2) * HOUR, send })).expired, 0);
   assert.equal((await db.query("SELECT COUNT(*)::int AS n FROM catalogue_admin_alerts WHERE departure_id = $1 AND kind = 'missed_acknowledgement' AND resolved_at IS NULL", [deps.main.id])).rows[0].n, 1);
 
   // The admin reassigns to A; the alerts close; A acknowledges in time.
   await assert.rejects(asg.assignByAdmin(db, { departureId: deps.main.id, operatorId: C, by: "ops" }), /suspended/);
-  const re = await asg.assignByAdmin(db, { departureId: deps.main.id, operatorId: A, by: "ops@sawa.test", now: now + 14 * HOUR, send });
+  const re = await asg.assignByAdmin(db, { departureId: deps.main.id, operatorId: A, by: "ops@sawa.test", now: now + (ACK_HOURS + 2) * HOUR, send });
   assert.equal(re.source, "admin");
   assert.equal((await db.query("SELECT COUNT(*)::int AS n FROM catalogue_admin_alerts WHERE departure_id = $1 AND resolved_at IS NULL", [deps.main.id])).rows[0].n, 0);
-  await assert.rejects(asg.acknowledge(db, { assignmentId: re.id, operatorId: B, by: "b", now: now + 14 * HOUR }), /not found/);
-  assert.equal((await asg.acknowledge(db, { assignmentId: re.id, operatorId: A, by: "a", now: now + 15 * HOUR })).state, "acknowledged");
+  await assert.rejects(asg.acknowledge(db, { assignmentId: re.id, operatorId: B, by: "b", now: now + (ACK_HOURS + 2) * HOUR }), /not found/);
+  assert.equal((await asg.acknowledge(db, { assignmentId: re.id, operatorId: A, by: "a", now: now + (ACK_HOURS + 3) * HOUR })).state, "acknowledged");
 
   // Two more strikes put B at three in 90 days: flagged for fewer days.
   await ops.addStrike(db, { operatorId: B, kind: "shopping_stop", note: "unscheduled stop", by: "ops" });

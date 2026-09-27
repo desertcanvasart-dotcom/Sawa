@@ -8,6 +8,7 @@
 //   never less than 24 hours unless the cut-off is sooner. A reminder at the
 //   halfway point, a warning to ops 2 hours before a release, and at the
 //   deadline an unpaid seat is released (Operator Supply Agreement 10.1).
+import { UNNAMED_OPERATOR } from "./operator-label.js";
 export const DEFAULT_WINDOW_HOURS = 48;
 export const WINDOW_HOURS_CHOICES = [24, 48];
 export const PAY_FLOOR_HOURS = 24;
@@ -144,4 +145,18 @@ export function shortDeadlineError({ dueAtMs, cutoffAtMs, now }) {
   if (Number(dueAtMs) <= now) return "The deadline must be in the future.";
   if (Number(dueAtMs) > Number(cutoffAtMs)) return "The deadline can't be after the cut-off.";
   return null;
+}
+
+// ---------------------------------------------------------------- the seller
+// The operator assigned at GoAhead is the seller of each departure; Sawa's
+// operating company is its commercial and payment-collection agent (decided
+// 27 Sep 2026). Before the assignment no operator is named.
+export const SELLER_PENDING = `Operated by ${UNNAMED_OPERATOR}`;
+export const payeeLine = (agentName, license = "") => `${agentName}, collecting agent${license ? ` (${license})` : ""}`;
+
+// What a document says about the seller: the operator's legal name and the
+// licence number shown to travelers, or the pending line before assignment.
+export function sellerLine(seller) {
+  if (!seller?.legalName) return SELLER_PENDING;
+  return `Sold by ${seller.legalName}${seller.licenceNo ? `, license no. ${seller.licenceNo}` : ""}`;
 }

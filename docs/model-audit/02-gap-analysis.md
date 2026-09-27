@@ -1,5 +1,7 @@
 # 02 · Gap analysis: current build against the target model
 
+> **Superseded on the seller (27 Sep 2026).** The operator assigned at GoAhead is the seller of each departure; **Online Era** (Commercial Registration 148500), licensed to collect payments as an agent, is its commercial and payment-collection agent and holds the merchant account. **Capital Travel Service is not involved in Sawa.** Where this document says CTS is the seller of record, the merchant or the invoicing party, read the operator as seller and Online Era as collecting agent. See `docs/legal/terms-catalogue-draft.md` (v2) and `docs/phase4/REPORT.md`.
+
 Each area has one table. File references point to the as-built evidence in [`01-current-state.md`](01-current-state.md).
 
 §1–24 follow the brief. §25 adds the requirements that come from the *Operator Supply & Agency Reseller Agreements* draft (26 Sep 2026), cited as OSA / ARA clause numbers.
@@ -183,9 +185,9 @@ Each area has one table. File references point to the as-built evidence in [`01-
 
 | Target capability | Current state | Gap | Effort | Risk | Notes |
 |---|---|---|---|---|---|
-| CTS (ETAA 2179) sells every seat | Platform presented as "Online Era, trading as Sawa Tours" (`site/_partials/footer.html:45`; `site/terms.html:101`; `server/email.js:447`; `server/brand.js:44-54`). **A test forbids** "ETAA 2179" and "Capital Travel Service, trading as" in public files (`server/entity-disclosure.test.js:148-165`) | modify | M | **H** (legal) | Change brand constants, test, footer, Terms, Privacy, JSON-LD `seller` (`server/seo.js:261-283`) together. Needs counsel's wording (D3) |
-| Merchant account in CTS's name | Not recorded in code; DIR-18 "Sawa's own merchant account" vs DIR-22 "on the operator's behalf" (`docs/audit/open-directives.md`) | new | M | H | Provider account opened by CTS; config per environment |
-| Invoices and receipts in CTS's name | No invoices; receipts name no entity (`server/email.js:768-787`) | new | M | M | Sequential invoice numbering, tax treatment (D3) |
+| ~~CTS (ETAA 2179) sells every seat~~ superseded: the assigned operator sells, Online Era collects as agent | Platform presented as "Online Era, trading as Sawa Tours" (`site/_partials/footer.html:45`; `site/terms.html:101`; `server/email.js:447`; `server/brand.js:44-54`). **A test forbids** "ETAA 2179" and "Capital Travel Service, trading as" in public files (`server/entity-disclosure.test.js:148-165`) | modify | M | **H** (legal) | Change brand constants, test, footer, Terms, Privacy, JSON-LD `seller` (`server/seo.js:261-283`) together. Needs counsel's wording (D3) |
+| Merchant account in Online Era's name, as collecting agent (was: CTS) | Not recorded in code; DIR-18 "Sawa's own merchant account" vs DIR-22 "on the operator's behalf" (`docs/audit/open-directives.md`) | new | M | H | Provider account opened by CTS; config per environment |
+| Receipts by Online Era on behalf of the operator (was: in CTS's name) | No invoices; receipts name no entity (`server/email.js:768-787`) | new | M | M | Sequential invoice numbering, tax treatment (D3) |
 | CTS as operator record | `DIRECT_BOOKINGS_OPERATOR="Capital Travel Service"` (`server/brand.js:174`) | remove | S | M | CTS stops being "the operator for direct bookings"; if CTS also runs tours it gets an operator role like anyone else |
 
 ## 22. Data retention and access limits for operators

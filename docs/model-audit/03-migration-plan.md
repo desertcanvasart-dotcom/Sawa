@@ -1,5 +1,7 @@
 # 03 · Proposed migration plan
 
+> **Superseded on the seller (27 Sep 2026).** The operator assigned at GoAhead is the seller of each departure; **Online Era** (Commercial Registration 148500), licensed to collect payments as an agent, is its commercial and payment-collection agent and holds the merchant account. **Capital Travel Service is not involved in Sawa.** Where this document says CTS is the seller of record, the merchant or the invoicing party, read the operator as seller and Online Era as collecting agent. See `docs/legal/terms-catalogue-draft.md` (v2) and `docs/phase4/REPORT.md`.
+
 This is a plan to review, not a spec. Table sketches show intent; they are not migrations. File references point to [`01-current-state.md`](01-current-state.md) and [`02-gap-analysis.md`](02-gap-analysis.md).
 
 ---
@@ -88,7 +90,7 @@ charges
 refunds
   id, charge_id, amount_minor, reason, provider_refund_id, state, created_by
 
-invoices                       (seller of record = CTS)
+invoices                       (seller = the assigned operator; receipts by Online Era as collecting agent, decided 27 Sep 2026)
   id, number (sequential per series), pledge_id | agency_id, issuer_entity,
   lines jsonb, total_minor, currency, tax jsonb, issued_at, pdf_path
 
@@ -220,9 +222,9 @@ A **phase 0** of prerequisites comes first.
 - **Scope:**
   - Fix the listing-takeover authorisation defect (01 §3). This could ship today, independent of the model.
   - Answer the decisions in §4.
-  - Choose the payment provider and open the merchant account in CTS's name (§3); this has lead time.
-  - Get counsel's Terms and Privacy wording for CTS as seller of record.
-  - Get the Egyptian lawyer's answers to the draft's questions. **Question 3 gates phase 3:** can CTS save a card at booking and charge it later, under Central Bank rules and Consumer Protection Law 181/2018? Question 5 (PDPL 151/2020 roles) shapes the data schedules and the 90-day deletion.
+  - Choose the payment provider and open the merchant account in Online Era's name, as collecting agent (§3); this has lead time.
+  - Get counsel's Terms and Privacy wording for the operator as seller and Online Era as collecting agent (`docs/legal/terms-catalogue-draft.md`).
+  - Get the Egyptian lawyer's answers to the draft's questions. **Question 3 gates phase 3:** can Online Era, as collecting agent, save a card at booking and charge it later, under Central Bank rules and Consumer Protection Law 181/2018? Question 5 (PDPL 151/2020 roles) shapes the data schedules and the 90-day deletion.
   - Fill the rate card and commission amounts, plus the other `[●]` values in the agreements (penalties, insurance minimum, payment currency, dispute route).
   - Run the read-only production counts from §1.4.
 - **Files:** `server/app.js:1018-1039` (defect only).
@@ -297,7 +299,7 @@ A **phase 0** of prerequisites comes first.
   - At GoAhead a charge job runs with the idempotency key `departure:booking:attempt`. It retries, sends an update-card link and applies the failure rule (D5).
   - A booking made after GoAhead is charged at once.
   - Cancellation fees computed and refunded through the provider API.
-  - Invoices and receipts in CTS's name.
+  - Receipts issued by Online Era on behalf of the operator (built); invoices per the lawyer's answer.
   - Legacy link flow kept for `legacy_link` bookings.
   - Agency bookings: booking code plus a transactional confirmation; agency-billing bookings are not charged to the traveller (billing itself comes in phase 5).
   - **Seller-of-record switch-over:** brand constants, `server/entity-disclosure.test.js`, footer partial, Terms §§ 3, 6, 9, 12, 13, 15, Privacy (processor, controller, health data), JSON-LD `seller`.
@@ -320,7 +322,7 @@ A **phase 0** of prerequisites comes first.
   - cancellation-fee arithmetic per tier;
   - the legacy link path is unaffected;
   - no card data touches the server (only tokens);
-  - the entity-disclosure test is inverted to assert CTS;
+  - the entity-disclosure test keeps asserting Online Era, never CTS (CTS is not involved);
   - a rehearsal against the provider's test mode (in the style of `scripts/rehearse-goahead-alert.sh`).
 - **Could break (highest risk in the programme):**
   - double charges;
@@ -454,7 +456,7 @@ The current provider is **Tab (tab.travel), used only through links made by hand
 | Webhooks (charge succeeded/failed, refund, dispute) | Charge state; failed-charge flow | **No webhooks today** (the only webhook in code is Autoura) |
 | Partial refunds by API | Cancellation tiers, late-cancel fees | Refunds are done by hand in Tab and recorded with a reference (`app.js:3076-3088`); by API: **can't tell** |
 | Card update link for failed charges | D5 | **Can't tell** |
-| Merchant account in CTS's name; settlement currency (EUR vs USD, D1); Egyptian entity eligibility | Seller of record | **Not recorded in code** (DIR-18 vs DIR-22) |
+| Merchant account in Online Era's name, as collecting agent; settlement currency (EUR vs USD, D1); Egyptian entity eligibility | Seller of record | **Not recorded in code** (DIR-18 vs DIR-22) |
 | Statements / payout reports (per charge, fees, net) for reconciliation | Settlement, accounting | **Can't tell**; the rate card assumes a 3% placeholder fee |
 | Disputes / chargebacks API | Operations | **Can't tell** |
 | Split payments to several payees (marketplace/connect style) | Only if counsel later approves Sawa as a disclosed agent with the provider splitting each payment (draft overview; lawyer Q4). Not needed for launch | **Can't tell**. Worth asking now, so the provider doesn't have to change later |

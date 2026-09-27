@@ -45,6 +45,10 @@ export const BRAND = {
   // would be a claim about a company's registered form that nobody made.
   legalName: "Online Era",
   registrationNumber: "148500",
+  // Its license to collect payments as an agent for the operators that sell
+  // Sawa departures. Supplied by the client on 27 Sep 2026, and shown on the
+  // privacy page, the payment request and the receipt.
+  agentLicense: "General Sales Agent license no. 32241",
 
   // ⚠️ ETAA 2179 IS NOT ONLINE ERA'S. It is Capital Travel Service's travel-agency
   // registration, and it used to sit in the footer because CTS was presented as

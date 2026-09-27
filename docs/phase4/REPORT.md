@@ -150,9 +150,50 @@ Tests added to `pay-at-goahead.integration.test.js`:
 - the Terms versions.
 Two unit tests cover the new rules.
 
+## Online Era as collecting agent (decided 27 Sep 2026)
+
+The legal structure: **the operator assigned at GoAhead is the seller** of each departure. **Online Era** (Commercial Registration 148500), licensed to collect payments as an agent, is its commercial and payment-collection agent. **Capital Travel Service is not involved in Sawa.** Built on `feat/online-era-agent`, behind `catalogue_v2`. Migration 053 is additive, with a rollback; it was applied, re-applied and rolled back on a scratch Postgres. **Not run against production.**
+
+- **Acknowledgement first.** The seller is named, and payment requests go out, only once the operator has **acknowledged** the assignment. The acknowledgement window is now **4 hours** (it was 12). GoAhead alone, or an offer not yet acknowledged, makes no request; the booking page says "Operated by a licensed Sawa partner. Your payment request will follow shortly." The acknowledgement makes the requests at once (the job also catches any it missed). The 48-hour payment deadline, capped at the cut-off, runs from when the request reaches the payer, as before.
+- **Seller disclosure.** From the acknowledgement, these name the operator's legal name and the **license number shown to travelers** as seller, and "Online Era, collecting agent (General Sales Agent license no. 32241)" as payee:
+  - the payment request and its reminder;
+  - the receipt;
+  - the voucher (printable, on the booking page once paid);
+  - the booking page.
+  Before the acknowledgement they say "Operated by a licensed Sawa partner". This reverses "operator names hidden" for these documents only; the public catalog still names no operator.
+  The operator record has a new field, **License no. shown to travelers (as seller)**, in Admin → Operators. When it's empty, the Ministry of Tourism license number is used.
+- **Receipts** are issued by Online Era, "collecting agent, on behalf of" the operator, when a payment is recorded. Each receipt has a number (`R-<year>-<request>`), is kept in `payment_receipts`, and the seller as it stood is kept on the request.
+- **Reassignment after payment.** When the operator fails after travelers paid and Sawa reassigns, nothing is sent until the new operator acknowledges. Then, for each paid booking:
+  - the traveler (or the agency that paid) is emailed that the seller has changed;
+  - the receipt is reissued naming the new seller (`R-<year>-<request>-2`); the original is kept in `payment_receipts`, marked superseded, and points at its replacement;
+  - the traveler may **cancel with a full refund within 48 hours** (never past the start), from the booking page. The booking is canceled as the operator's failure (`operator`): no tier fee is kept, and no agency commission is earned. After 48 hours the offer expires and the booking stands;
+  - each change is written to `audit_log` (`booking.seller_changed`) in the same transaction, and each acceptance is logged by its route (`booking.seller_change_cancel`).
+- **The settlement statement** now distributes the departure's collections, in EUR:
+  - Gross Collections (paid, less refunds);
+  - payment costs (the provider fee setting);
+  - agency commission;
+  - the operator entitlement (the rate card, unchanged), converted to EUR **per traveler at the CBE rate on each charge date**, the margin report's rule: the entitlement is shared across the travelers' payments in proportion to their amounts, and each share converts at its own day's rate. A day with no rate is shown as missing, never guessed; a refund lowers Gross Collections but carries no share. The PDF lists the rates used;
+  - Online Era's commission, the remainder, never negative;
+  - where collections fall short, a **Minimum Departure Guarantee** line, paid by Online Era.
+  It is on the statement snapshot, the PDF and the admin statement view. Tested with the v2 examples: 8 travelers, €760 → **€181.20** commission; 2 travelers, €190 against €230 → **€45.70** guarantee.
+- **Capital Travel Service:**
+  - the statement PDF's header is now the collecting agent (from `BRAND`);
+  - the payment notes, the migration plan, the model-audit summary and gap analysis, the phase 3 report and the runbook no longer name CTS as seller or merchant;
+  - the operator record 049 would create for CTS stays **pending** and **can't be activated**: 053 marks it, activation is refused, and the automatic reactivation skips it.
+  The rule that CTS is never shown as the platform's operator is unchanged, and still enforced by `entity-disclosure.test.js`.
+- **`docs/legal/terms-catalogue-draft.md` v2:** a reservation with no payment; the sale made with the named operator at GoAhead; Online Era as collecting agent. It has 23 lawyer questions, 11 of them new, including Competition Law 3/2005 on a common retail price for competing operators.
+
+**Live-site items, fixed separately in #226** (merged into this branch):
+- the privacy page shows Online Era's own General Sales Agent license no. 32241, in place of "ETAA license: 2179";
+- `DIRECT_BOOKINGS_OPERATOR` has no default, and unnamed operators read "a licensed Sawa partner" (the same wording as the seller line here, from `shared/operator-label.js`);
+- `/partners`: migration 054 and `docs/ops/remove-cts-from-partners.md`, the SQL to unlist CTS, to be run by hand;
+- the statement PDF header reads "Sawa (Online Era)".
+
+**Still naming CTS:** the agreements draft (`docs/model/…Agreements-draft.docx`), where CTS is still the contracting party (lawyer question 23).
+
 ## Open items (not built, or for you to decide)
 
-1. **The Terms and site copy.** The published Terms still describe deposit and balance. The catalog wording is drafted for the lawyer in `docs/legal/terms-catalogue-draft.md`; once approved, it is published as catalog Terms version 2. Its first question is the **seller's identity**: the draft names Capital Travel Service as seller, while the current Terms say Online Era operates the platform.
+1. **The Terms and site copy.** The published Terms still describe deposit and balance. The catalog wording is drafted for the lawyer in `docs/legal/terms-catalogue-draft.md`; once approved, it is published as catalog Terms version 2. Version 2 of the draft follows the agent structure: the operator sells, and Online Era collects as its agent.
 2. **A link never made:** resolved by the follow-up above (alerts, a count, and an admin decision 24 hours before the cut-off).
 3. **Reinstating a released booking** is an ordinary booking edit (Admin → Bookings), which checks capacity. It then gets a fresh request from the job.
 4. **The loss check's cruise estimate** assumes the traveler shares a twin room. A single traveler costs Sawa more (the single supplement, decided earlier).

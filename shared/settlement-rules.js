@@ -184,3 +184,36 @@ export function departureMargin({ charges = [], operatorEgp = null, commissionsE
   const margin = problem ? null : round2(revenueEur - operatorEur - Number(commissionsEur || 0) - Number(feesEur || 0));
   return { revenueEur, operatorEgp, operatorEur, commissionsEur: round2(commissionsEur || 0), feesEur, margin, missingRates, problem, feesMissing: feesEur == null };
 }
+
+// ---------------------------------------------------------------- distribution
+// How a departure's collections are distributed (decided 27 Sep 2026). The
+// operator assigned at GoAhead is the seller; Sawa's operating company is its
+// commercial and payment-collection agent. From Gross Collections come the
+// payment costs, the agency commission and the operator entitlement (the rate
+// card, unchanged); the agent's commission is the remainder, never negative.
+// Where collections fall short, the agent pays the gap as the Minimum
+// Departure Guarantee. All amounts in one currency (EUR on the statement).
+//
+//   8 travelers: 760 gross − 22.80 costs − 36 agency − 520 entitlement → 181.20 commission
+//   2 travelers: 190 gross − 5.70 costs − 0 agency − 230 entitlement → 45.70 guarantee
+export function collectionsDistribution({ grossEur, paymentCostsEur = 0, agencyCommissionEur = 0, entitlementEur, agentName = "Sawa" }) {
+  if (grossEur == null || entitlementEur == null) {
+    return { lines: [], agentCommissionEur: null, guaranteeEur: null, problem: entitlementEur == null ? "operator entitlement unknown" : "collections unknown" };
+  }
+  const gross = round2(grossEur);
+  const costs = round2(paymentCostsEur || 0);
+  const agency = round2(agencyCommissionEur || 0);
+  const entitlement = round2(entitlementEur);
+  const remainder = round2(gross - costs - agency - entitlement);
+  const agentCommissionEur = Math.max(0, remainder);
+  const guaranteeEur = Math.max(0, round2(-remainder));
+  const lines = [
+    { key: "gross_collections", label: "Gross Collections", amountEur: gross },
+    { key: "payment_costs", label: "Payment costs", amountEur: -costs },
+    { key: "agency_commission", label: "Agency commission", amountEur: -agency },
+    { key: "operator_entitlement", label: "Operator entitlement (rate card)", amountEur: -entitlement },
+    ...(guaranteeEur > 0 ? [{ key: "minimum_departure_guarantee", label: `Minimum Departure Guarantee, paid by ${agentName}`, amountEur: guaranteeEur }] : []),
+    { key: "agent_commission", label: `${agentName} commission`, amountEur: agentCommissionEur },
+  ];
+  return { lines, grossEur: gross, paymentCostsEur: costs, agencyCommissionEur: agency, entitlementEur: entitlement, agentCommissionEur, guaranteeEur, problem: null };
+}

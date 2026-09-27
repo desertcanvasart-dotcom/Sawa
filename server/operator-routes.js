@@ -369,8 +369,9 @@ export function registerOperatorRoutes(app, { requireAuth, requireRole, h, logAu
   }));
 
   app.post("/api/operator/assignments/:id/acknowledge", ...operatorOnly, portal(async (req, res) => {
-    const a = await acknowledge(pool, { assignmentId: id(req.params.id), operatorId: req.user.operatorId, by: req.user.email });
-    await logAudit(req, { action: "operator.assignment.acknowledge", entity: "catalogue_assignment", entityId: a.id, detail: { departureId: a.departureId } });
+    const a = await acknowledge(pool, { assignmentId: id(req.params.id), operatorId: req.user.operatorId, by: req.user.email, send: send() });
+    await logAudit(req, { action: "operator.assignment.acknowledge", entity: "catalogue_assignment", entityId: a.id,
+      detail: { departureId: a.departureId, paymentRequests: a.paymentRequests ?? 0, sellerChanges: (a.sellerChanges || []).map((x) => x.bookingCode) } });
     res.json({ assignment: a });
   }));
 

@@ -63,7 +63,11 @@ const AS_JSON = process.argv.includes("--json");
 export const RULES = [
   { id: "guarantee", why: "GoAhead confirms a date at its threshold; it does not promise a date reaches it",
     re: /guarantee\w*/gi,
-    ok: (ctx) => /not guarantee|no .{0,12}guarantee|never guarantee/i.test(ctx) },
+    // The Minimum Departure Guarantee is a real undertaking, and not this
+    // claim: once a date has gone ahead, the collecting agent pays the operator any
+    // shortfall (settlement statement, staff-only). It promises nothing about
+    // a date reaching GoAhead.
+    ok: (ctx) => /not guarantee|no .{0,12}guarantee|never guarantee|minimum[ _]departure[ _]guarantee/i.test(ctx) },
   { id: "absolute-claim", why: "an unconditional promise the model cannot keep",
     re: /100%\s*(guaranteed|safe|refund)|risk[- ]free|hassle[- ]free/gi },
   { id: "rating", why: "no reviews table exists; a rating cannot be evidenced or sourced",
@@ -418,6 +422,10 @@ export async function auditEmailTemplates() {
     bankName: "A Bank", lastDigits: "1234", submittedBy: "op@example.com",
     period: "August 2026", totalLabel: "EUR 24.00", balance: "EGP 1,000.00",
     level: "no_link", detail: { operatorName: "An Operator" },
+    receiptNo: "R-2026-000001", paidAt: "2026-08-30T09:00:00Z", issuer: "Sawa, collecting agent", onBehalfOf: "Sold by An Operator, license no. 1",
+    seller: "Sold by An Operator, license no. 1", payee: "Sawa, collecting agent",
+    previousSeller: "A Former Operator", supersededReceiptNo: "R-2026-000001", issuedAt: "2026-08-30T09:00:00Z",
+    cancelBy: "2026-09-01T09:00:00Z",
     terms: { version: 1, tiers: [{ window: "30 days or more before", retainedPct: 0 }, { window: "Under 30 days", retainedPct: 50 }] },
     items: [{ reference: "SAWA-ABCDE", title: "Aswan Highlights", date: "2026-09-01", amount: 190, dueAt: "2026-08-30T10:00:00Z" }],
   };
@@ -450,7 +458,9 @@ export async function auditEmailTemplates() {
     "bookingDetailsRequestEmail", "bankDetailsChangedEmail", "settlementStatementEmail",
     "commissionStatementEmail", "payAtGoAheadLinkEmail", "payAtGoAheadReminderEmail",
     "payAtGoAheadReleasedEmail", "waitlistOfferEmail", "payAtGoAheadOpsEmail",
-    "payAtGoAheadBookingEmail", "payAtGoAheadEscalationEmail", "payAtGoAheadApologyEmail"];
+    "payAtGoAheadBookingEmail", "payAtGoAheadEscalationEmail", "payAtGoAheadApologyEmail",
+    // The receipt Sawa issues as collecting agent, listed the day it was written.
+    "payAtGoAheadReceiptEmail", "payAtGoAheadSellerChangedEmail"];
   // Where one shared fixture can't serve: `kind` means a different thing to
   // each of these, so each gets the value its own caller passes.
   const FX_FOR = {

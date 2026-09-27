@@ -955,7 +955,7 @@ export function documentExpiryEmail({ to, operatorName, document, expiresOn, day
 }
 
 // Model phase 2 — a departure has reached GoAhead and is assigned to the
-// rostered operator, who must acknowledge it in the portal within 12 hours.
+// rostered operator, who must acknowledge it in the portal within ACK_HOURS.
 export function operatorAssignmentEmail({ to, operatorName, title, dateLabel, specVersion, seats, ackBy, portalUrl }) {
   const subject = `Assigned: ${title} on ${dateLabel} — please acknowledge`;
   const text = [
@@ -1080,7 +1080,7 @@ const cairoTime = (iso) => new Intl.DateTimeFormat("en-US", {
 }).format(new Date(iso)) + " Cairo time";
 
 // The link. To the traveler, or to the agency for an agency-billed seat.
-export function payAtGoAheadLinkEmail({ to, name, title, dateLabel, amount, dueAt, url, bookingCode, agencyBilled = false, termsLink = null }) {
+export function payAtGoAheadLinkEmail({ to, name, title, dateLabel, amount, dueAt, url, bookingCode, agencyBilled = false, termsLink = null, seller = null, payee = null }) {
   const due = cairoTime(dueAt);
   const subject = `Pay for ${title} on ${dateLabel} by ${due}`;
   const opener = agencyBilled
@@ -1091,6 +1091,8 @@ export function payAtGoAheadLinkEmail({ to, name, title, dateLabel, amount, dueA
     `Please pay ${eur(amount)} by ${due}. If it isn't paid by then, the seat${agencyBilled ? "s are" : " is"} released and offered to other travelers.`,
     `Pay here: ${url}`,
     `Booking code: ${bookingCode}. It is the payment's reference.`,
+    // Seller disclosure (27 Sep 2026): who sells, and who collects.
+    ...(seller ? [`${seller}. Payee: ${payee}.`] : []),
     ...(termsLink ? [`Before you pay, please review and accept the cancellation terms your booking was made under: ${termsLink}`] : []),
   ];
   const html = shell(
@@ -1099,19 +1101,21 @@ export function payAtGoAheadLinkEmail({ to, name, title, dateLabel, amount, dueA
      <p style="margin:0 0 20px">Please pay <strong>${esc(eur(amount))}</strong> by <strong>${esc(due)}</strong>. If it isn't paid by then, the seat${agencyBilled ? "s are" : " is"} released and offered to other travelers.</p>
      ${button(url, `Pay ${eur(amount)}`)}
      ${note(`Booking code: <strong>${esc(bookingCode)}</strong>. It is the payment's reference.`)}
+     ${seller ? note(`${esc(seller)}. Payee: <strong>${esc(payee)}</strong>.`) : ""}
      ${termsLink ? note(`Before you pay, please <a href="${esc(termsLink)}">review and accept the cancellation terms</a> your booking was made under.`) : ""}`,
     { eyebrow: "Going ahead", preheader: `Pay ${eur(amount)} by ${due}.` }
   );
   return { to, subject, html, text: lines.join("\n\n"), kind: "pay_at_goahead_link" };
 }
 
-export function payAtGoAheadReminderEmail({ to, name, title, dateLabel, amount, dueAt, url, bookingCode }) {
+export function payAtGoAheadReminderEmail({ to, name, title, dateLabel, amount, dueAt, url, bookingCode, seller = null, payee = null }) {
   const due = cairoTime(dueAt);
   const subject = `Reminder: pay for ${title} by ${due}`;
+  const parties = seller ? ` ${seller}. Payee: ${payee}.` : "";
   const text = `Hello${name ? ` ${name}` : ""}, a reminder that ${eur(amount)} for ${title} on ${dateLabel} is due by ${due}. `
-    + `After that the seat is released. Pay here: ${url} (booking code ${bookingCode}).`;
+    + `After that the seat is released. Pay here: ${url} (booking code ${bookingCode}).${parties}`;
   const html = shell(subject,
-    `<p style="margin:0 0 20px">${esc(text.split(" Pay here")[0])}</p>${button(url, `Pay ${eur(amount)}`)}${note(`Booking code: ${esc(bookingCode)}`)}`,
+    `<p style="margin:0 0 20px">${esc(text.split(" Pay here")[0])}</p>${button(url, `Pay ${eur(amount)}`)}${note(`Booking code: ${esc(bookingCode)}`)}${seller ? note(esc(`${seller}. Payee: ${payee}.`)) : ""}`,
     { eyebrow: "Reminder", preheader: `Due by ${due}.` });
   return { to, subject, html, text, kind: "pay_at_goahead_reminder" };
 }
@@ -1210,4 +1214,53 @@ export function payAtGoAheadApologyEmail({ to, name, title, dateLabel, bookingCo
     + "Nothing was charged, so there is nothing to refund. Reply to this email and we'll help you find another date.";
   const html = shell(subject, `<p style="margin:0 0 16px">${esc(text)}</p>`, { eyebrow: "Our apologies", preheader: "Nothing was charged." });
   return { to, subject, html, text, kind: "pay_at_goahead_apology" };
+}
+
+
+// The receipt for a pay-at-GoAhead payment. Issued by Sawa's operating
+// company as collecting agent, on behalf of the seller (the operator assigned
+// at GoAhead). The issuer and seller lines are built by the caller from
+// BRAND and the operator record: this file doesn't name the entity itself.
+export function payAtGoAheadReceiptEmail({ to, name, title, dateLabel, amount, bookingCode, receiptNo, paidAt, issuer, onBehalfOf }) {
+  const subject = `Receipt ${receiptNo}: ${title} on ${dateLabel}`;
+  const lines = [
+    `Hello${name ? ` ${name}` : ""}, thank you: we've received your payment.`,
+    `Receipt ${receiptNo}, ${new Date(paidAt).toISOString().slice(0, 10)}`,
+    `${title}, ${dateLabel} · booking ${bookingCode}`,
+    `Amount received: ${eur(amount)}`,
+    `Issued by ${issuer}, on behalf of ${onBehalfOf}.`,
+  ];
+  const html = shell(subject,
+    `<p style="margin:0 0 16px">${esc(lines[0])}</p>
+     ${panel(`${row("Receipt:", esc(receiptNo))}<br/>${row("Tour:", `${esc(title)}, ${esc(dateLabel)}`)}<br/>${row("Booking:", esc(bookingCode))}<br/>${row("Amount received:", esc(eur(amount)))}`)}
+     ${note(esc(lines[4]))}`,
+    { eyebrow: "Receipt", preheader: `${eur(amount)} received for ${title}.` });
+  return { to, subject, html, text: lines.join("\n"), kind: "pay_at_goahead_receipt" };
+}
+
+// The operator changed after the traveler paid (decided 27 Sep 2026): the new
+// seller, the reissued receipt (the original is kept, marked superseded), and
+// the right to cancel with a full refund until `cancelBy` (48 hours).
+export function payAtGoAheadSellerChangedEmail({
+  to, name, title, dateLabel, bookingCode, amount, previousSeller, seller, receiptNo, supersededReceiptNo,
+  issuedAt, issuer, onBehalfOf, cancelBy, url,
+}) {
+  const subject = `The operator of your ${title} on ${dateLabel} has changed`;
+  const deadline = cairoTime(cancelBy);
+  const lines = [
+    `Hello${name ? ` ${name}` : ""},`,
+    `The company operating your ${title} on ${dateLabel} (booking ${bookingCode}) has changed. ${previousSeller} can no longer run it; ${seller} now sells and operates it. Your date, your seats and the price are unchanged.`,
+    `Your receipt has been reissued to name the new seller: receipt ${receiptNo}, ${new Date(issuedAt).toISOString().slice(0, 10)}, for ${eur(amount)}. It replaces receipt ${supersededReceiptNo}, which is kept on record and marked superseded.`,
+    `Issued by ${issuer}, on behalf of ${onBehalfOf}.`,
+    `If you'd rather not travel with the new operator, you can cancel with a full refund of ${eur(amount)} until ${deadline}: ${url}`,
+  ];
+  const html = shell(subject,
+    `<p style="margin:0 0 16px">${esc(lines[0])}</p>
+     <p style="margin:0 0 16px">${esc(lines[1])}</p>
+     ${panel(`${row("New receipt:", esc(receiptNo))}<br/>${row("Replaces:", `${esc(supersededReceiptNo)} (superseded)`)}<br/>${row("Seller:", esc(seller))}<br/>${row("Amount:", esc(eur(amount)))}`)}
+     ${note(esc(lines[3]))}
+     <p style="margin:0 0 16px">If you'd rather not travel with the new operator, you can cancel with a <strong>full refund of ${esc(eur(amount))}</strong> until <strong>${esc(deadline)}</strong>.</p>
+     ${button(url, "See your booking")}`,
+    { eyebrow: "Your booking", preheader: `${seller} now operates your ${title}.` });
+  return { to, subject, html, text: lines.join("\n\n"), kind: "pay_at_goahead_seller_changed" };
 }

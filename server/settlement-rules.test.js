@@ -121,3 +121,27 @@ test("the statement PDF is a well-formed PDF with the figures in it", () => {
   assert.equal(text.slice(xref, xref + 4), "xref", "the xref offset points at the table");
   assert.ok(Number(textPdf(Array.from({ length: 200 }, (_, i) => ({ text: `line ${i}` }))).toString("latin1").match(/\/Count (\d+)/)[1]) > 1, "long statements run to more pages");
 });
+
+// ---------------------------------------------------------------- distribution (27 Sep 2026)
+test("the statement's distribution: 8 travelers, €760 gross → €181.20 commission, no guarantee", async () => {
+  const { collectionsDistribution } = await import("../shared/settlement-rules.js");
+  const d = collectionsDistribution({ grossEur: 760, paymentCostsEur: 22.8, agencyCommissionEur: 36, entitlementEur: 520, agentName: "Agent" });
+  assert.equal(d.agentCommissionEur, 181.2);
+  assert.equal(d.guaranteeEur, 0);
+  assert.deepEqual(d.lines.map((l) => [l.key, l.amountEur]), [
+    ["gross_collections", 760], ["payment_costs", -22.8], ["agency_commission", -36], ["operator_entitlement", -520], ["agent_commission", 181.2],
+  ]);
+});
+
+test("the statement's distribution: 2 travelers, €190 gross against €230 entitlement → a €45.70 Minimum Departure Guarantee, commission 0", async () => {
+  const { collectionsDistribution } = await import("../shared/settlement-rules.js");
+  const d = collectionsDistribution({ grossEur: 190, paymentCostsEur: 5.7, agencyCommissionEur: 0, entitlementEur: 230, agentName: "Agent" });
+  assert.equal(d.guaranteeEur, 45.7);
+  assert.equal(d.agentCommissionEur, 0, "commission is never negative");
+  const g = d.lines.find((l) => l.key === "minimum_departure_guarantee");
+  assert.equal(g.label, "Minimum Departure Guarantee, paid by Agent");
+  assert.equal(g.amountEur, 45.7);
+  // The lines balance: gross less deductions plus the guarantee is the commission.
+  assert.equal(Math.round(d.lines.filter((l) => l.key !== "agent_commission").reduce((s, l) => s + l.amountEur, 0) * 100) / 100, d.agentCommissionEur);
+  assert.equal(collectionsDistribution({ grossEur: 190, entitlementEur: null }).problem, "operator entitlement unknown");
+});

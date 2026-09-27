@@ -32,6 +32,7 @@ import {
   DEFAULT_WINDOW_HOURS, WINDOW_HOURS_CHOICES, DEFAULT_OFFER_HOURS, payDeadline, reminderDue, releaseWarningDue,
   releaseDue, extensionError, paymentStanding, nextOffer, offerExpiresAt,
   linkAlertDue, decisionDueAt, tooLateToStart, shortDeadlineError, UNLINKED_DECISIONS, MIN_TRAVELER_HOURS,
+  sellerLine, payeeLine, SELLER_PENDING,
 } from "../shared/pay-at-goahead.js";
 import { tierAt, hoursBeforeStart, refundFor } from "../shared/cancellation-tiers.js";
 
@@ -155,15 +156,44 @@ async function payerFor(c, pledge) {
   return { payer: "traveller", amount: Number(pledge.booking_total) || 0, to, name: pledge.customers || null, invoiceId: null };
 }
 
+// ---------------------------------------------------------------- the seller
+// The operator assigned at GoAhead sells the departure; Sawa's operating
+// company (BRAND.legalName) is its commercial and payment-collection agent
+// (decided 27 Sep 2026). The seller is named only once the operator has
+// ACKNOWLEDGED the assignment; an offer not yet acknowledged names nobody, and
+// the documents say "a licensed Sawa partner". The licence shown is the one
+// entered for travelers (migration 053), else the tourism licence on the record.
+export async function sellerOf(c, departureId) {
+  const r = (await c.query(
+    `SELECT o.* FROM catalogue_assignments a JOIN operators o ON o.id = a.operator_id
+      WHERE a.departure_id = $1 AND a.state = 'acknowledged' ORDER BY a.id DESC LIMIT 1`, [departureId])).rows[0];
+  if (!r) return null;
+  return { operatorId: Number(r.id), legalName: r.legal_name, licenceNo: r.traveller_licence_no || r.tourism_license_no || null };
+}
+
+export const collectingAgent = () => ({
+  name: BRAND.legalName, registrationNo: BRAND.registrationNumber, license: BRAND.agentLicense,
+  payee: payeeLine(BRAND.legalName, BRAND.agentLicense),
+});
+
+// The two lines every traveler document carries.
+export function sellerAndPayee(seller) {
+  return { seller: sellerLine(seller), payee: collectingAgent().payee };
+}
+
 // ---------------------------------------------------------------- requests
-// One request for a booking on a departure that is going ahead. Idempotent:
-// a booking with a live request (awaiting a link, sent or paid) gets none.
+// One request for a booking on a departure that is going ahead AND whose
+// operator has acknowledged the assignment (decided 27 Sep 2026): no request,
+// and no seller named, before that. Idempotent: a booking with a live request
+// (awaiting a link, sent or paid) gets none. The payment deadline (48 hours,
+// capped at the cut-off) runs from when the request reaches the payer.
 export async function requestPayment(c, { pledgeId, departure, now = Date.now(), send = null, env = process.env }) {
   const pledge = (await c.query("SELECT * FROM pledges WHERE id = $1 FOR UPDATE", [pledgeId])).rows[0];
   if (!pledge || pledge.status === "cancelled" || pledge.payment_mode !== "pay_at_goahead") return null;
   const live = (await c.query("SELECT id FROM payment_requests WHERE pledge_id = $1 AND state IN ('awaiting_link', 'sent', 'paid', 'unsecured')", [pledgeId])).rows[0];
   if (live) return null;
   if (!(now < departure.cutoffAt)) return null;
+  if (!(await sellerOf(c, departure.id))) return null;
   const who = await payerFor(c, pledge);
   if (!(who.amount > 0)) return null;
   const reference = await ensureBookingCode(c, pledgeId);
@@ -192,6 +222,11 @@ async function sendLink(c, { requestId, linkUrl, by, now, send, decided = null }
   if (pledge.status === "cancelled") throw new CatalogueError(409, "This booking was canceled.");
   const departure = await departureFor(c, { id: Number(r.departure_id) });
   if (!(now < departure.cutoffAt)) throw new CatalogueError(409, "The cut-off has passed: the manifest is frozen.");
+  // The request names its seller: none goes out while a (replacement)
+  // operator has yet to acknowledge.
+  if (!(await sellerOf(c, departure.id))) {
+    throw new CatalogueError(409, "The operator hasn't acknowledged this departure yet. The payment request goes out once they do.");
+  }
   const { windowHours } = await payAtGoAheadSettings(c);
   // An admin decision sets its own short deadline; otherwise the window,
   // capped at the cut-off.
@@ -226,11 +261,13 @@ async function sendLink(c, { requestId, linkUrl, by, now, send, decided = null }
   const request = mapPayRequest(upd);
   if (send && who.to) {
     const { payAtGoAheadLinkEmail } = await import("./email.js");
+    const parties = sellerAndPayee(await sellerOf(c, departure.id));
     const agencyTraveller = who.payer === "traveller" && pledge.terms_fixed_by === "agency" && !pledge.traveller_terms_accepted_at;
     await send(payAtGoAheadLinkEmail({
       to: who.to, name: who.name, title: departure.product.title, dateLabel: dateLabel(departure.date), amount: request.amountEur,
       dueAt: request.dueAt, url: linkUrl, bookingCode: request.reference, agencyBilled: who.payer === "agency",
       termsLink: agencyTraveller ? `${site()}/booking/${encodeURIComponent(request.reference)}` : null,
+      ...parties,
     })).catch(() => ({ ok: false }));
   }
   return { ...request, shortWindow: deadline.shortWindow };
@@ -332,7 +369,7 @@ export async function attachLink(db, { requestId, linkUrl, by, now = Date.now(),
 
 // The payment arrived: ops mark it paid with the provider's reference (a
 // webhook later). A released seat can't be marked paid; reinstate it first.
-export async function markRequestPaid(db, { requestId, providerReference, by, now = Date.now() }) {
+export async function markRequestPaid(db, { requestId, providerReference, by, now = Date.now(), send = null }) {
   return inTx(db, async (c) => {
     const r = (await c.query("SELECT * FROM payment_requests WHERE id = $1 FOR UPDATE", [requestId])).rows[0];
     if (!r) throw new CatalogueError(404, "Payment request not found.");
@@ -354,8 +391,171 @@ export async function markRequestPaid(db, { requestId, providerReference, by, no
     if (r.payer === "agency") {
       await c.query("UPDATE agency_invoices SET state = 'paid', paid_at = $2 WHERE pledge_id = $1 AND state = 'due'", [r.pledge_id, new Date(now)]);
     }
-    return mapPayRequest(upd);
+    const receipt = await issueReceipt(c, { request: upd, now, send });
+    return { ...mapPayRequest(upd), receipt };
   });
+}
+
+// The receipt: issued by the collecting agent on behalf of the seller, with
+// the seller as it stood when the payment was recorded (migration 053). The
+// number is the year and the request id; a receipt reissued after a change of
+// seller adds "-2", "-3". Every receipt is kept in payment_receipts.
+const hasTable = async (c, name) => (await c.query("SELECT to_regclass($1) AS t", [`public.${name}`])).rows[0].t != null;
+
+function receiptParties(seller) {
+  const agent = collectingAgent();
+  return {
+    issuer: `${agent.name} (Commercial Registration ${agent.registrationNo}, ${agent.license}), collecting agent`,
+    onBehalfOf: seller ? `${seller.legalName}${seller.licenceNo ? `, license no. ${seller.licenceNo}` : ""}` : SELLER_PENDING.replace(/^Operated by /, "").replace(/^a /, "the ") + " operating this departure",
+    payee: agent.payee,
+  };
+}
+
+async function recordReceipt(c, { request, seller, receiptNo, now, first }) {
+  const upd = await c.query(
+    `UPDATE payment_requests SET seller_operator_id = $2, seller_legal_name = $3, seller_licence_no = $4, receipt_no = $5, receipt_issued_at = $6
+      WHERE id = $1 ${first ? "AND receipt_no IS NULL" : ""}`,
+    [request.id, seller?.operatorId ?? null, seller?.legalName ?? null, seller?.licenceNo ?? null, receiptNo, new Date(now)]);
+  if (!upd.rowCount || !(await hasTable(c, "payment_receipts"))) return null;
+  return (await c.query(
+    `INSERT INTO payment_receipts (request_id, receipt_no, seller_operator_id, seller_legal_name, seller_licence_no, amount_eur, issued_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+    [request.id, receiptNo, seller?.operatorId ?? null, seller?.legalName ?? null, seller?.licenceNo ?? null, Number(request.amount_eur), new Date(now)])).rows[0];
+}
+
+async function issueReceipt(c, { request, now, send }) {
+  const hasColumns = (await c.query(
+    "SELECT 1 FROM information_schema.columns WHERE table_name = 'payment_requests' AND column_name = 'receipt_no'")).rowCount > 0;
+  const seller = await sellerOf(c, Number(request.departure_id));
+  const receiptNo = `R-${new Date(now).getUTCFullYear()}-${String(request.id).padStart(6, "0")}`;
+  if (hasColumns) await recordReceipt(c, { request, seller, receiptNo, now, first: true });
+  const out = {
+    receiptNo, issuedAt: new Date(now).toISOString(), amountEur: Number(request.amount_eur), reference: request.reference,
+    ...receiptParties(seller), seller,
+  };
+  if (send && request.emailed_to) {
+    const pledge = (await c.query("SELECT customers FROM pledges WHERE id = $1", [request.pledge_id])).rows[0];
+    const departure = await departureFor(c, { id: Number(request.departure_id) });
+    const { payAtGoAheadReceiptEmail } = await import("./email.js");
+    await send(payAtGoAheadReceiptEmail({
+      to: request.emailed_to, name: request.payer === "traveller" ? pledge?.customers : null, title: departure.product.title,
+      dateLabel: dateLabel(departure.date), amount: out.amountEur, bookingCode: request.reference, receiptNo,
+      paidAt: out.issuedAt, issuer: out.issuer, onBehalfOf: out.onBehalfOf,
+    })).catch(() => ({ ok: false }));
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------- acknowledgement
+// The operator acknowledged the assignment (called by acknowledge(), in its
+// transaction). The seller is named from now on, so:
+//   1. travelers who paid under a previous seller (it failed, and Sawa
+//      reassigned) are told, get a reissued receipt naming the new seller
+//      (the original kept, marked superseded), and may cancel with a full
+//      refund within 48 hours (never past the start);
+//   2. every booking without a request gets one.
+export const SELLER_CHANGE_OFFER_HOURS = 48;
+
+export async function onOperatorAcknowledged(c, { departureId, by, now = Date.now(), send = null, env = process.env }) {
+  if (!(await hasTable(c, "payment_requests"))) return { requested: 0, sellerChanges: [] };
+  const departure = await departureFor(c, { id: departureId });
+  const seller = await sellerOf(c, departureId);
+  if (!departure || !seller) return { requested: 0, sellerChanges: [] };
+  const sellerChanges = await reissueForSellerChange(c, { departure, seller, by, now, send });
+  let requested = 0;
+  if (departure.status === "go_ahead") {
+    const pledges = (await c.query(
+      `SELECT id FROM pledges WHERE departure_id = $1 AND payment_mode = 'pay_at_goahead' AND status <> 'cancelled' ORDER BY created_at, id`,
+      [departure.legacyDepartureId])).rows;
+    for (const p of pledges) if (await requestPayment(c, { pledgeId: p.id, departure, now, send, env })) requested += 1;
+  }
+  return { requested, sellerChanges };
+}
+
+async function reissueForSellerChange(c, { departure, seller, by, now, send }) {
+  if (!(await hasTable(c, "seller_change_offers"))) return [];
+  const paid = (await c.query(
+    `SELECT r.* FROM payment_requests r JOIN pledges p ON p.id = r.pledge_id
+      WHERE r.departure_id = $1 AND r.state = 'paid' AND p.status <> 'cancelled'
+        AND r.receipt_no IS NOT NULL AND r.seller_operator_id IS NOT NULL AND r.seller_operator_id <> $2
+      ORDER BY r.id FOR UPDATE OF r`, [departure.id, seller.operatorId])).rows;
+  const out = [];
+  for (const r of paid) {
+    // The receipt being replaced; one issued before the history existed is
+    // recorded first, from the request's snapshot.
+    let previous = (await c.query(
+      "SELECT * FROM payment_receipts WHERE request_id = $1 AND superseded_at IS NULL FOR UPDATE", [r.id])).rows[0];
+    if (!previous) {
+      previous = (await c.query(
+        `INSERT INTO payment_receipts (request_id, receipt_no, seller_operator_id, seller_legal_name, seller_licence_no, amount_eur, issued_at)
+         VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7, now())) RETURNING *`,
+        [r.id, r.receipt_no, r.seller_operator_id, r.seller_legal_name, r.seller_licence_no, Number(r.amount_eur), r.receipt_issued_at])).rows[0];
+    }
+    const issued = Number((await c.query("SELECT COUNT(*)::int AS n FROM payment_receipts WHERE request_id = $1", [r.id])).rows[0].n);
+    const base = /^(R-\d{4}-\d+?)(?:-\d+)?$/.exec(String(r.receipt_no))?.[1] || String(r.receipt_no);
+    const receiptNo = `${base}-${issued + 1}`;
+    // The old receipt is superseded, the new one issued, and the old one
+    // points at it.
+    await c.query(
+      "UPDATE payment_receipts SET superseded_at = $2, supersede_reason = $3 WHERE id = $1",
+      [previous.id, new Date(now), `Seller changed to ${seller.legalName} (operator ${seller.operatorId}).`]);
+    const current = await recordReceipt(c, { request: r, seller, receiptNo, now, first: false });
+    await c.query("UPDATE payment_receipts SET superseded_by = $2 WHERE id = $1", [previous.id, current.id]);
+    const expiresAt = Math.min(now + SELLER_CHANGE_OFFER_HOURS * 3600000, departure.startsAt);
+    const offer = (await c.query(
+      `INSERT INTO seller_change_offers (request_id, pledge_id, departure_id, from_operator_id, to_operator_id, receipt_id, offered_at, expires_at, emailed_to)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) ON CONFLICT (request_id, to_operator_id) DO NOTHING RETURNING *`,
+      [r.id, r.pledge_id, departure.id, r.seller_operator_id, seller.operatorId, current.id, new Date(now), new Date(expiresAt), r.emailed_to])).rows[0];
+    const change = {
+      requestId: Number(r.id), bookingCode: r.reference, from: { operatorId: Number(r.seller_operator_id), legalName: r.seller_legal_name },
+      to: { operatorId: seller.operatorId, legalName: seller.legalName }, receiptNo, supersededReceiptNo: previous.receipt_no,
+      offerId: offer ? Number(offer.id) : null, offerExpiresAt: new Date(expiresAt).toISOString(),
+    };
+    // Logged in the transaction, so the record can't be lost apart from the change.
+    await c.query(
+      `INSERT INTO audit_log (actor_email, actor_role, action, entity, entity_id, detail) VALUES ($1, $2, 'booking.seller_changed', 'booking', $3, $4)`,
+      [by || "system", by ? "operator" : null, r.reference, JSON.stringify(change)]);
+    if (send && r.emailed_to) {
+      const pledge = (await c.query("SELECT customers FROM pledges WHERE id = $1", [r.pledge_id])).rows[0];
+      const parties = receiptParties(seller);
+      const { payAtGoAheadSellerChangedEmail } = await import("./email.js");
+      await send(payAtGoAheadSellerChangedEmail({
+        to: r.emailed_to, name: r.payer === "traveller" ? pledge?.customers : null, title: departure.product.title,
+        dateLabel: dateLabel(departure.date), bookingCode: r.reference, amount: Number(r.amount_eur),
+        previousSeller: r.seller_legal_name, seller: seller.legalName, receiptNo, supersededReceiptNo: previous.receipt_no,
+        issuedAt: new Date(now).toISOString(), issuer: parties.issuer, onBehalfOf: parties.onBehalfOf,
+        cancelBy: new Date(expiresAt).toISOString(), url: `${site()}/booking/${encodeURIComponent(r.reference)}`,
+      })).catch(() => ({ ok: false }));
+    }
+    out.push(change);
+  }
+  return out;
+}
+
+// The traveler takes the offer: the booking is canceled and everything paid
+// is refunded (no tier fee). Only while the offer is open.
+export async function acceptSellerChangeOffer(db, { code, by = "traveler", now = Date.now(), send = null, env = process.env }) {
+  return inTx(db, async (c) => {
+    const pledge = (await c.query("SELECT * FROM pledges WHERE UPPER(booking_code) = UPPER($1)", [String(code || "").trim()])).rows[0];
+    if (!pledge) throw new CatalogueError(404, "Booking not found.");
+    const offer = (await c.query(
+      "SELECT * FROM seller_change_offers WHERE pledge_id = $1 AND state = 'open' ORDER BY id DESC LIMIT 1 FOR UPDATE", [pledge.id])).rows[0];
+    if (!offer) throw new CatalogueError(409, "There's no open offer to cancel this booking with a full refund.");
+    if (new Date(offer.expires_at).getTime() <= now) {
+      await c.query("UPDATE seller_change_offers SET state = 'expired' WHERE id = $1", [offer.id]);
+      throw new CatalogueError(409, "The time to cancel with a full refund has passed.");
+    }
+    const result = await cancelBooking(c, { pledgeId: pledge.id, reason: "operator", fullRefund: true, by, now, send, env });
+    await c.query(
+      "UPDATE seller_change_offers SET state = 'accepted', accepted_at = $2, refund_id = $3 WHERE id = $1",
+      [offer.id, new Date(now), result.refundRecord?.id ?? null]);
+    return { ...result, offerId: Number(offer.id) };
+  });
+}
+
+async function expireSellerChangeOffers(db, { now }) {
+  if (!(await hasTable(db, "seller_change_offers"))) return 0;
+  return (await db.query("UPDATE seller_change_offers SET state = 'expired' WHERE state = 'open' AND expires_at <= $1", [new Date(now)])).rowCount;
 }
 
 // A later deadline for one traveler, with a reason. The first deadline is
@@ -458,30 +658,36 @@ async function refundPaid(c, { quote, by, env = process.env }) {
 // through the provider. The seat goes to the waitlist before the cut-off.
 export async function cancelPayAtGoAheadBooking(db, { pledgeId, reason = "traveler", by, now = Date.now(), send = null, env = process.env }) {
   if (!["traveler", "admin"].includes(reason)) throw new CatalogueError(422, "The reason is the traveler's request, or Sawa's (admin).");
-  return inTx(db, async (c) => {
-    const pledge = (await c.query("SELECT * FROM pledges WHERE id = $1 FOR UPDATE", [pledgeId])).rows[0];
-    if (!pledge) throw new CatalogueError(404, "Booking not found.");
-    if (pledge.payment_mode !== "pay_at_goahead") throw new CatalogueError(409, "This booking is on the deposit-and-balance flow.");
-    if (pledge.status === "cancelled") throw new CatalogueError(409, "This booking is already canceled.");
-    await c.query(
-      "UPDATE pledges SET status = 'cancelled', cancelled_reason = $2, cancelled_at = $3 WHERE id = $1",
-      [pledgeId, reason, new Date(now)]);
-    await refreshStatus(c, pledge.departure_id);
-    await c.query(
-      `UPDATE payment_requests SET state = 'cancelled', cancelled_at = $2, cancel_reason = $3
-        WHERE pledge_id = $1 AND state IN ('awaiting_link', 'sent', 'unsecured')`, [pledgeId, new Date(now), `Booking canceled (${reason}).`]);
-    await c.query(
-      `UPDATE payment_tasks t SET state = 'cancelled', done_at = now(), done_by = $2 FROM payment_requests r
-        WHERE t.request_id = r.id AND r.pledge_id = $1 AND t.kind = 'create_link' AND t.state = 'open'`, [pledgeId, by]);
-    const quote = await cancellationQuote(c, { pledgeId, now });
-    const refund = await refundPaid(c, { quote, by, env });
-    if (!quote.request) {
-      await c.query("UPDATE agency_invoices SET state = 'void', void_reason = 'Booking canceled before payment.' WHERE pledge_id = $1 AND state = 'due'", [pledgeId]);
-    }
-    await offerFreedSeats(c, { departure: quote.departure, sourcePledgeId: pledgeId, now, send });
-    const { departure, ...rest } = quote;
-    return { ...rest, refundRecord: refund };
-  });
+  return inTx(db, (c) => cancelBooking(c, { pledgeId, reason, by, now, send, env }));
+}
+
+// fullRefund: the seller changed after payment and the traveler took the
+// offer (acceptSellerChangeOffer). The reason is recorded as "operator" (its
+// failure), no tier fee is kept, and no agency commission is earned on it.
+async function cancelBooking(c, { pledgeId, reason, fullRefund = false, by, now, send, env }) {
+  const pledge = (await c.query("SELECT * FROM pledges WHERE id = $1 FOR UPDATE", [pledgeId])).rows[0];
+  if (!pledge) throw new CatalogueError(404, "Booking not found.");
+  if (pledge.payment_mode !== "pay_at_goahead") throw new CatalogueError(409, "This booking is on the deposit-and-balance flow.");
+  if (pledge.status === "cancelled") throw new CatalogueError(409, "This booking is already canceled.");
+  await c.query(
+    "UPDATE pledges SET status = 'cancelled', cancelled_reason = $2, cancelled_at = $3 WHERE id = $1",
+    [pledgeId, reason, new Date(now)]);
+  await refreshStatus(c, pledge.departure_id);
+  await c.query(
+    `UPDATE payment_requests SET state = 'cancelled', cancelled_at = $2, cancel_reason = $3
+      WHERE pledge_id = $1 AND state IN ('awaiting_link', 'sent', 'unsecured')`, [pledgeId, new Date(now), `Booking canceled (${reason}).`]);
+  await c.query(
+    `UPDATE payment_tasks t SET state = 'cancelled', done_at = now(), done_by = $2 FROM payment_requests r
+      WHERE t.request_id = r.id AND r.pledge_id = $1 AND t.kind = 'create_link' AND t.state = 'open'`, [pledgeId, by]);
+  const tiered = await cancellationQuote(c, { pledgeId, now });
+  const quote = fullRefund ? { ...tiered, retainedPct: 0, fee: 0, refund: tiered.paid } : tiered;
+  const refund = await refundPaid(c, { quote, by, env });
+  if (!quote.request) {
+    await c.query("UPDATE agency_invoices SET state = 'void', void_reason = 'Booking canceled before payment.' WHERE pledge_id = $1 AND state = 'due'", [pledgeId]);
+  }
+  await offerFreedSeats(c, { departure: quote.departure, sourcePledgeId: pledgeId, now, send });
+  const { departure, ...rest } = quote;
+  return { ...rest, refundRecord: refund };
 }
 
 // Ops confirm a refund was made in the provider.
@@ -741,7 +947,31 @@ export async function bookingPayView(db, { pledgeId }) {
   const terms = await bookingTerms(db, { versionId: p.cancellation_tier_version_id, productType: departure.product.type });
   const { termsVersionById } = await import("./terms-versions.js");
   const doc = p.terms_version_id ? await termsVersionById(db, p.terms_version_id) : null;
+  // Seller disclosure: the assigned operator, or the pending line; the payee is
+  // the collecting agent. A paid booking has its voucher.
+  const seller = await sellerOf(db, departure.id);
+  const parties = sellerAndPayee(seller);
+  const paid = r?.state === "paid";
+  const receipt = paid ? (await db.query("SELECT * FROM payment_requests WHERE id = $1", [r.id])).rows[0] : null;
+  // Going ahead, but the operator hasn't acknowledged yet: no seller named and
+  // no payment request yet (decided 27 Sep 2026).
+  const awaitingOperator = departure.status === "go_ahead" && !seller && p.status !== "cancelled";
+  // The seller changed after payment: the offer to cancel with a full refund.
+  const offer = paid && await hasTable(db, "seller_change_offers") ? (await db.query(
+    `SELECT s.*, o.legal_name AS from_name FROM seller_change_offers s LEFT JOIN operators o ON o.id = s.from_operator_id
+      WHERE s.pledge_id = $1 ORDER BY s.id DESC LIMIT 1`, [pledgeId])).rows[0] : null;
   return {
+    seller: seller ? { legalName: seller.legalName, licenceNo: seller.licenceNo } : null,
+    sellerLine: parties.seller, payee: parties.payee, awaitingOperator,
+    sellerChange: offer ? {
+      from: offer.from_name || null, receiptNo: receipt?.receipt_no || null, expiresAt: iso(offer.expires_at),
+      open: offer.state === "open" && new Date(offer.expires_at).getTime() > Date.now(), state: offer.state,
+    } : null,
+    voucher: paid ? {
+      bookingCode: p.booking_code, title: departure.product.title, date: departure.date, seats: Number(p.seats),
+      travellers: Array.isArray(p.traveller_names) ? p.traveller_names : [], pickupPoint: p.pickup_point || null,
+      seller: parties.seller, payee: parties.payee, receiptNo: receipt?.receipt_no || null,
+    } : null,
     mode: "pay_at_goahead",
     request: r && ["sent", "paid", "released"].includes(r.state)
       ? { state: r.state, amountEur: r.amountEur, dueAt: r.dueAt, linkUrl: r.state === "sent" ? r.linkUrl : null, payer: r.payer }
@@ -775,11 +1005,13 @@ export async function acceptBookingTerms(db, { code, versionId, now = Date.now()
 export async function runPayAtGoAheadTick({ db = pool, now = Date.now(), send = null, env = process.env, log = () => {} } = {}) {
   const out = { requested: 0, opsNotified: 0, reminded: 0, warned: 0, released: 0, reconciled: 0, offersExpired: 0 };
 
-  // 1. A request for every booking on a departure going ahead.
+  // 1. A request for every booking on a departure going ahead whose operator
+  // has acknowledged (acknowledge() also makes them at once).
   const due = (await db.query(
     `SELECT p.id AS pledge_id, cd.id AS dep_id FROM pledges p
        JOIN catalogue_departures cd ON cd.legacy_departure_id = p.departure_id
       WHERE cd.status = 'go_ahead' AND p.status <> 'cancelled' AND p.payment_mode = 'pay_at_goahead'
+        AND EXISTS (SELECT 1 FROM catalogue_assignments a WHERE a.departure_id = cd.id AND a.state = 'acknowledged')
         AND NOT EXISTS (SELECT 1 FROM payment_requests r WHERE r.pledge_id = p.id AND r.state IN ('awaiting_link', 'sent', 'paid', 'unsecured'))
       ORDER BY p.created_at, p.id`)).rows;
   for (const row of due) {
@@ -866,6 +1098,7 @@ export async function runPayAtGoAheadTick({ db = pool, now = Date.now(), send = 
           await send(payAtGoAheadReminderEmail({
             to: r.emailedTo, name: r.payer === "traveller" ? row.customers : null, title: row.title, dateLabel: dateLabel(row.date),
             amount: r.amountEur, dueAt: r.dueAt, url: r.linkUrl, bookingCode: r.reference,
+            ...sellerAndPayee(await sellerOf(db, r.departureId)),
           })).catch(() => ({ ok: false }));
         }
       }
@@ -885,6 +1118,7 @@ export async function runPayAtGoAheadTick({ db = pool, now = Date.now(), send = 
 
   // 6. Bookings canceled elsewhere; waitlist offers not taken.
   out.reconciled = await reconcileCancelled(db, { now, env });
+  out.sellerChangeOffersExpired = await expireSellerChangeOffers(db, { now });
   out.offersExpired = await expireOffers(db, { now, send });
   // Seats freed any other way (an admin edit): offered to whoever is waiting.
   const waitingOn = (await db.query("SELECT DISTINCT departure_id FROM departure_waitlist WHERE state = 'waiting'")).rows;

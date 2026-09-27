@@ -29,6 +29,8 @@ export function mapOperator(r) {
     email: r.email, whatsapp: r.whatsapp, phone: r.phone, contacts: r.contacts || [],
     status: r.status, statusReason: r.status_reason, statusChangedAt: r.status_changed_at, statusChangedBy: r.status_changed_by,
     notes: r.notes, createdAt: r.created_at,
+    // Migration 053 (absent before it is applied).
+    travellerLicenceNo: r.traveller_licence_no ?? null, activationBlocked: r.activation_blocked ?? null,
   };
 }
 
@@ -101,6 +103,9 @@ const OPERATOR_FIELDS = {
   legalName: "legal_name", tradingName: "trading_name", tourismLicenseNo: "tourism_license_no", etaaNo: "etaa_no",
   commercialRegistrationNo: "commercial_registration_no", taxRegistrationNo: "tax_registration_no",
   email: "email", whatsapp: "whatsapp", phone: "phone", notes: "notes", agencyId: "agency_id",
+  // Migration 053: the licence number printed for travelers where this
+  // operator is named as seller (payment request, receipt, voucher, booking page).
+  travellerLicenceNo: "traveller_licence_no",
 };
 
 export async function createOperator(db, fields, by) {
@@ -151,6 +156,9 @@ export async function setOperatorStatus(db, id, status, { by, reason = null, now
   if (!OPERATOR_STATUSES.includes(status)) throw new CatalogueError(422, "Unknown operator status.");
   const op = await getOperator(db, id);
   if (op.status === "removed" && status !== "removed") throw new CatalogueError(409, "A removed operator can't be reinstated here; create a new operator record.");
+  // Migration 053: a record that must never be activated (Capital Travel
+  // Service, decided 27 Sep 2026).
+  if (status === "active" && op.activationBlocked) throw new CatalogueError(409, op.activationBlocked);
   if (status === "active") {
     const gaps = documentGaps(await currentDocuments(db, id), todayIn(now));
     if (gaps.length) {
@@ -180,7 +188,7 @@ export async function addDocument(db, operatorId, { kind, number, expiresOn, fil
       [operatorId, kind, number ? String(number).trim() : null, expires, fileRef || null, by]);
     const op = await getOperator(c, operatorId);
     let reactivated = false;
-    if (op.status === "suspended" && String(op.statusReason || "").startsWith("document_expired")
+    if (op.status === "suspended" && !op.activationBlocked && String(op.statusReason || "").startsWith("document_expired")
         && documentGaps(await currentDocuments(c, operatorId), today).length === 0) {
       await c.query(
         `UPDATE operators SET status = 'active', status_reason = 'Reactivated: valid replacement uploaded',

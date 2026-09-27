@@ -441,9 +441,17 @@ test("commission is earned when the traveler travels, 50% on a late cancellation
   // (agency-billed) are paid through the agency's request; agency B's
   // traveler pays, then cancels 24 hours before the start, after GoAhead:
   // Sawa keeps 10% under the tiers, so the commission is half.
+  // Payment requests wait for the operator's acknowledgement (27 Sep 2026):
+  // the acknowledgement makes them, and a departure without one gets one here.
   const payUp = async (pledgeId, dep) => {
     const departure = await pag.departureFor(db, { id: dep.id });
-    const r = await pag.requestPayment(db, { pledgeId, departure });
+    await db.query(
+      `INSERT INTO catalogue_assignments (departure_id, operator_id, source, assigned_by, ack_due_at, state, acknowledged_at, acknowledged_by)
+       SELECT $1, (SELECT id FROM operators ORDER BY id LIMIT 1), 'admin', 'it', now(), 'acknowledged', now(), 'it'
+        WHERE NOT EXISTS (SELECT 1 FROM catalogue_assignments WHERE departure_id = $1 AND state IN ('offered', 'acknowledged'))`, [dep.id]);
+    await db.query("UPDATE catalogue_assignments SET state = 'acknowledged', acknowledged_at = COALESCE(acknowledged_at, now()) WHERE departure_id = $1 AND state = 'offered'", [dep.id]);
+    const r = await pag.requestPayment(db, { pledgeId, departure })
+      || await one("SELECT * FROM payment_requests WHERE pledge_id = $1 AND state = 'awaiting_link'", [pledgeId]);
     await pag.attachLink(db, { requestId: r.id, linkUrl: "https://pay.tab.travel/x", by: "ops" });
     return pag.markRequestPaid(db, { requestId: r.id, providerReference: `TAB-${r.id}`, by: "ops" });
   };

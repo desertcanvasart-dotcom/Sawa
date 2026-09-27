@@ -21,7 +21,7 @@ import { applySetoffs, releaseSetoffs, syncBalanceReceivable, createReceivable, 
 import { shiftDate } from "../shared/catalogue.js";
 import { rateFieldsFor } from "../shared/operators.js";
 import {
-  advanceFor, operatorBalance, deductionRoom, egyptBusinessDaysAfter, balanceDueOn, statementAutoAcceptAt,
+  advanceFor, operatorBalance, deductionRoom, egyptBusinessDaysAfter, balanceDueOn, statementAutoAcceptAt, collectionsDistribution, departureMargin,
 } from "../shared/settlement-rules.js";
 
 const inTx = (db, fn) => (db === pool ? withTransaction(fn) : fn(db));
@@ -234,6 +234,62 @@ export async function settlementFigures(c, departureId) {
   return { departure: d, party, expected, adjustments, deductions: round2(deductions), reimbursements: round2(reimbursements), advance, advanceRow, ...bal };
 }
 
+// How the departure's collections are distributed (decided 27 Sep 2026): Gross
+// Collections, less payment costs, agency commission and the operator
+// entitlement (the rate card, unchanged), leaving the collecting agent's
+// commission; a Minimum Departure Guarantee where collections fall short.
+//
+// In EUR, by the margin report's rule (departureMargin): the entitlement (EGP)
+// is shared across the travelers' charges in proportion to their amounts, and
+// each share is converted at the CBE rate on that charge's day. A day with no
+// rate is shown as missing, never guessed.
+export async function departureDistribution(c, departureId, { entitlementEgp }) {
+  const d = (await c.query("SELECT cd.date, cd.legacy_departure_id FROM catalogue_departures cd WHERE cd.id = $1", [departureId])).rows[0];
+  const hasRequests = (await c.query("SELECT to_regclass('public.payment_requests') AS t")).rows[0].t != null;
+  const day = (v) => todayIn(new Date(v).getTime());
+  const charges = [];
+  if (hasRequests) {
+    for (const r of (await c.query("SELECT amount_eur, paid_at FROM payment_requests WHERE departure_id = $1 AND state = 'paid'", [departureId])).rows) {
+      charges.push({ amountEur: Number(r.amount_eur), day: day(r.paid_at) });
+    }
+  }
+  for (const r of (await c.query(
+    `SELECT b.amount, b.paid_at FROM booking_payments b JOIN pledges p ON p.id = b.pledge_id WHERE p.departure_id = $1 AND b.state = 'paid'`, [d?.legacy_departure_id])).rows) {
+    charges.push({ amountEur: Number(r.amount), day: day(r.paid_at) });
+  }
+  const refunds = hasRequests ? (await c.query(
+    `SELECT f.amount_eur, COALESCE(f.done_at, f.created_at) AS at FROM payment_refunds f JOIN payment_requests r ON r.id = f.request_id
+      WHERE r.departure_id = $1 AND f.state <> 'cancelled' AND f.amount_eur > 0`, [departureId])).rows
+    .map((f) => ({ amountEur: -Number(f.amount_eur), day: day(f.at) })) : [];
+  const gross = round2([...charges, ...refunds].reduce((s2, x) => s2 + x.amountEur, 0));
+  const fees = (await c.query("SELECT value FROM finance_settings WHERE key = 'payment_fees'")).rows[0]?.value || null;
+  const paymentCosts = fees ? round2(charges.reduce((s2, x) => s2 + x.amountEur * (Number(fees.percent) / 100) + Number(fees.fixedEur || 0), 0)) : 0;
+  const agency = Number((await c.query(
+    "SELECT COALESCE(SUM(COALESCE(earned_eur, CASE WHEN state = 'pending' THEN amount_eur END)), 0) AS n FROM agency_commissions WHERE departure_id = $1",
+    [departureId])).rows[0].n);
+  // The entitlement is owed on the travelers who paid, so it is shared across
+  // the charges; a refund lowers Gross Collections but carries no share.
+  const days = [...new Set(charges.map((x) => x.day))];
+  const rates = new Map(days.length ? (await c.query(
+    "SELECT day, egp_per_eur FROM fx_rates WHERE day = ANY($1::date[])", [days])).rows.map((r) => [ymd(r.day), Number(r.egp_per_eur)]) : []);
+  const converted = entitlementEgp != null && charges.length
+    ? departureMargin({ charges, operatorEgp: Number(entitlementEgp), rates })
+    : null;
+  const entitlementEur = converted && !converted.missingRates.length ? converted.operatorEur : null;
+  const out = collectionsDistribution({
+    grossEur: gross, paymentCostsEur: paymentCosts, agencyCommissionEur: agency, entitlementEur, agentName: BRAND.legalName,
+  });
+  const missing = converted?.missingRates || [];
+  return {
+    ...out, currency: "EUR", entitlementEgp: entitlementEgp ?? null,
+    fx: { rule: "each charge at the CBE rate on its day", rates: days.sort().map((x) => ({ day: x, egpPerEur: rates.get(x) ?? null })) },
+    feesMissing: !fees,
+    problem: missing.length ? `exchange rate missing for ${missing.join(", ")}`
+      : entitlementEgp != null && !charges.length ? "no charges yet"
+      : out.problem || null,
+  };
+}
+
 async function statementSnapshot(c, departureId, figures = null) {
   const f = figures || await settlementFigures(c, departureId);
   const manifest = (await c.query("SELECT frozen_at, travelers, seat_count FROM catalogue_manifests WHERE departure_id = $1", [departureId])).rows[0];
@@ -269,6 +325,9 @@ async function statementSnapshot(c, departureId, figures = null) {
         netBalance: f.balance == null ? null : round2(Math.max(0, f.balance) - balanceSetoff),
       };
     })() : { setoffs: [], receivables: [], netBalance: f.balance }),
+    // The distribution of the departure's collections (27 Sep 2026).
+    distribution: await departureDistribution(c, departureId, { entitlementEgp: f.expected.total }),
+    collectingAgent: { name: BRAND.legalName, registrationNo: BRAND.registrationNumber, license: BRAND.agentLicense },
     generatedAt: new Date().toISOString(),
   };
 }

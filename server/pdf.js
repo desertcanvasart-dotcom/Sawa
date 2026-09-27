@@ -87,6 +87,7 @@ export function textPdf(items, { title = "Statement" } = {}) {
 export function statementPdf(statement) {
   const s = statement.snapshot || {};
   const egp = (n) => (n == null ? "-" : `EGP ${Number(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
+  const eur = (n) => (n == null ? "-" : `EUR ${Number(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
   const items = [
     { text: `Sawa (${BRAND.legalName})`, size: 9 },
     { text: "Settlement statement", size: 18, bold: true, gap: 6 },
@@ -127,6 +128,18 @@ export function statementPdf(statement) {
         { text: `${egp(r.amountEgp)}: ${r.reason} Outstanding ${egp(r.outstandingEgp)}; set off against your next advance or balance.`, size: 9, gap: 0 },
         ...(r.setOffAgainst || []).map((x) => ({ text: `   recovered ${egp(x.amountEgp)} from the ${x.payable} of ${x.departure}`, size: 9, gap: 0 })),
       ]),
+      { text: "", gap: 6 },
+    ] : []),
+    // The distribution of the departure's collections (27 Sep 2026), in EUR.
+    ...(s.distribution ? [
+      { rule: true },
+      { text: "Distribution of collections (EUR)", size: 11, bold: true, gap: 4 },
+      ...(s.distribution.lines || []).map((l) => ({ text: `${l.label}: ${eur(l.amountEur)}`, size: 10, bold: l.key === "agent_commission" || l.key === "minimum_departure_guarantee", gap: 0 })),
+      ...(s.distribution.problem ? [{ text: `Not complete: ${s.distribution.problem}.`, size: 9 }] : []),
+      ...(s.distribution.fx?.rates?.length ? [{
+        text: `Operator entitlement ${egp(s.distribution.entitlementEgp)}, converted per traveler at the CBE rate on each charge date: ${s.distribution.fx.rates.map((r) => `${r.day} ${r.egpPerEur ?? "missing"}`).join("; ")} (EGP per EUR).`,
+        size: 8,
+      }] : []),
       { text: "", gap: 6 },
     ] : []),
     { text: "", gap: 4 },

@@ -47,7 +47,7 @@ import { recordAgencyBooking } from "./commissions.js";
 import { fixBookingTerms } from "./cancellation-tiers.js";
 import { recordTermsVersion } from "./terms-versions.js";
 import {
-  requestPayment, departureFor, seatsHeldForWaitlist, bookingPayView, acceptBookingTerms, joinWaitlist,
+  requestPayment, departureFor, seatsHeldForWaitlist, bookingPayView, acceptBookingTerms, joinWaitlist, acceptSellerChangeOffer,
   waitlistOffer, claimWaitlistOffer, completeWaitlistOffer,
 } from "./pay-at-goahead.js";
 import { registerPayAtGoAheadRoutes } from "./pay-at-goahead-routes.js";
@@ -1713,6 +1713,19 @@ app.post("/api/public/bookings/:code/accept-terms", writeLimiter, h(async (req, 
   const result = await acceptBookingTerms(pool, { code, versionId: req.body?.versionId });
   await logAudit(req, { action: "booking.accept_terms", entity: "booking", entityId: code.toUpperCase(), detail: { tierVersionId: result.versionId } });
   res.json(result);
+}));
+
+// The seller changed after the traveler paid (the first operator failed and
+// Sawa reassigned): for 48 hours the traveler may cancel with a full refund.
+// The booking code is the credential, as for the terms above.
+app.post("/api/public/bookings/:code/seller-change/cancel", writeLimiter, h(async (req, res) => {
+  if (!catalogueV2Enabled()) throw new AppError(404, "Not found.");
+  const code = String(req.params.code || "").trim();
+  if (!code) throw new AppError(422, "Booking code required.");
+  const result = await acceptSellerChangeOffer(pool, { code, by: "traveler", send: sendEmail });
+  await logAudit(req, { action: "booking.seller_change_cancel", entity: "booking", entityId: code.toUpperCase(),
+    detail: { offerId: result.offerId, refundEur: result.refund, paidEur: result.paid } });
+  res.json({ canceled: true, refundEur: result.refund, refund: result.refundRecord });
 }));
 
 // Model phase 4: the waitlist for a full departure, and the offer a waiting

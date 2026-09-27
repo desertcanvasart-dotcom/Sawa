@@ -2,6 +2,8 @@
 
 For the conversations with the Egyptian lawyer and the payment provider, before traveler charging (mode A or B) is built. **No code was written for this.**
 
+> **Legal structure decided 27 Sep 2026.** The operator assigned at GoAhead is the **seller** of each departure. **Online Era** (Commercial Registration 148500), which holds a licence to collect payments as an agent, is its commercial and payment-collection agent and the **merchant** on the payment account. **Capital Travel Service is not involved in Sawa.** The questions below are updated accordingly; `docs/legal/terms-catalogue-draft.md` (v2) has the lawyer questions for this structure.
+
 It answers five questions for the current provider:
 1. Which provider and APIs does the current flow use?
 2. Can it save a card and charge it later (mode A)?
@@ -56,7 +58,7 @@ Where nothing was found, the answer is **unknown**.
 | Strong Customer Authentication handling (merchant-initiated transaction flagging, and 3DS at save time for EU cards) | **Unknown.** This needs care: most of Sawa's travelers pay with EU and UK cards. | none found |
 | Updating a declined card (the 24-hour fix rule, D5) | **Unknown** | none found |
 
-**Verdict.** On current evidence, **mode A isn't confirmed possible through Tab**. There's no pre-authorization, and no documented API to save and later charge a card from Sawa's own checkout. Ask Tab directly, in writing, before assuming either way. Mode A also depends on the lawyer's answer to Q3: whether Capital Travel may save a card and charge it later under CBE rules and the Consumer Protection Law (No. 181 of 2018).
+**Verdict.** On current evidence, **mode A isn't confirmed possible through Tab**. There's no pre-authorization, and no documented API to save and later charge a card from Sawa's own checkout. Ask Tab directly, in writing, before assuming either way. Mode A also depends on the lawyer's answer to Q3: whether Online Era, as collecting agent, may save a card and charge it later under CBE rules and the Consumer Protection Law (No. 181 of 2018).
 
 ## 3. Mode B: charge at booking, refund in full automatically if no GoAhead
 
@@ -90,10 +92,10 @@ The cancellation schedule's tiers (half or all of the deposit kept) need partial
 | Payout timing | Weekly, on Wednesdays; automatic when the balance is $500 or more; arrives in 1–4 business days | [Payments by Tab](https://business.tab.travel/payments) *(search summary)* |
 | Keep EUR (not convert to EGP) on payout | "Receive funds in your choice of 140+ local currencies", which suggests a EUR payout to an Egyptian EUR account is possible. **Unknown whether allowed for an Egyptian company's account.** | [Payments by Tab](https://business.tab.travel/payments) *(search summary)* |
 | Fees | Travelers pay a 4% fee when they use Tab. Businesses pay "between 2.6% and 5.9% for international card payments". | [Tab Support: What are the fees?](https://support.tab.travel/en/articles/836715-what-are-the-fees), [International payment fees](https://support.tab.travel/en/articles/7169701-international-payment-fees) *(search summaries)* |
-| Who is merchant of record (Tab or Capital Travel)? | **Unknown.** This decides whose name is on the traveler's statement and receipt, and matters for the seller-of-record switch-over. | none found |
+| Who is merchant of record (Tab, or Online Era as collecting agent)? | **Unknown.** This decides whose name is on the traveler's statement. Decided on Sawa's side: Online Era holds the account as the operators' collecting agent, and receipts are issued by Online Era on behalf of the operator (the seller). | none found |
 
 **For the lawyer:**
-- Whether Capital Travel may receive EUR, or must receive EGP, for services sold to foreign travelers.
+- Whether Online Era, as collecting agent, may receive EUR for services the operator sells to foreign travelers, and in what currency it must pay the operator.
 - Whether a UK platform paying out to an Egyptian company is acceptable under CBE rules.
 - Whether a 4% traveler-paid fee may be added on top of the published price under the Consumer Protection Law. If Tab adds it, the price a traveler pays isn't the price Sawa shows.
 
@@ -111,20 +113,20 @@ The cancellation schedule's tiers (half or all of the deposit kept) need partial
 3. Can we issue **full and partial refunds by API**, including in bulk (every booking on a canceled date)?
 4. On a full refund, are **all fees** (the traveler's 4% and ours) returned?
 5. Can the **4% traveler fee** be absorbed by us, so the traveler pays exactly the published price?
-6. For an **Egyptian company** (Capital Travel Service):
+6. For an **Egyptian company collecting as agent** (Online Era, Commercial Registration 148500):
    - Can we accept EUR, and hold or pay out in EUR to an Egyptian EUR account?
    - What documents does onboarding need?
-   - Who is merchant of record?
-7. What is on the **traveler's card statement and receipt**: Tab, or Capital Travel?
+   - Can the account be held by Online Era as collecting agent for several operators, and who is merchant of record?
+7. What is on the **traveler's card statement and receipt**: Tab, or Online Era? Can the receipt name the operator as seller?
 8. Can the booking **"check-in"** in Tab be left unused, so refunds after the tour stay possible?
 
 ## 7. Questions for the lawyer (payments only)
 
-1. **Q3:** May Capital Travel save a traveler's card at booking and charge it later, at GoAhead, with consent, under CBE rules and Law 181/2018? This decides mode A.
+1. **Q3:** May Online Era, as collecting agent, save a traveler's card at booking and charge it later, at GoAhead, with consent, under CBE rules and Law 181/2018? This decides mode A.
 2. If mode B, does charging the full price at booking with an automatic refund on no GoAhead need anything beyond clear pre-contract disclosure?
 3. May the traveler pay a provider's 4% fee on top of the published price?
 4. Receiving EUR from foreign travelers, and paying Egyptian agencies commission in EGP at the CBE rate (the phase 3 decision): is either restricted?
-5. Seller of record: Capital Travel (as the migration plan assumes). What must the receipt and the Terms say?
+5. Seller: the operator assigned at GoAhead, with Online Era as its collecting agent (decided 27 Sep 2026). What must the receipt and the Terms say? (`docs/legal/terms-catalogue-draft.md`, v2)
 
 ---
 
@@ -384,7 +386,7 @@ Every cell cites the provider's own page and is **unconfirmed**: no provider sit
 
 **No, per Stripe's availability list** as summarized by search ([stripe.com/global](https://stripe.com/global), unconfirmed). Egypt is not among the supported countries, and third-party guides agree.
 
-Stripe's own rule is that an account needs a legal entity, tax ID, address and bank account in a supported country ([Stripe Support: requirements to open an account in another country](https://support.stripe.com/questions/requirements-to-open-a-stripe-account-in-another-country), unconfirmed). So Stripe is possible only through a company incorporated abroad. That company, not Capital Travel, would be the seller collecting the money, which is a question for the lawyer, not a configuration.
+Stripe's own rule is that an account needs a legal entity, tax ID, address and bank account in a supported country ([Stripe Support: requirements to open an account in another country](https://support.stripe.com/questions/requirements-to-open-a-stripe-account-in-another-country), unconfirmed). So Stripe is possible only through a company incorporated abroad. That company, not Online Era, would be the one collecting the money, which is a question for the lawyer, not a configuration.
 
 The Stripe column below describes Stripe's product in general and applies only on that route.
 

@@ -8,7 +8,15 @@
 > - **L3**: `DIRECT_BOOKINGS_OPERATOR` has no default. Remove it from Railway if it is set there.
 > - **`server/pdf.js:89`**: the header reads "Sawa (Online Era)".
 >
-> The seller and merchant references in the planning docs, and the Terms draft, are updated in [#225](https://github.com/desertcanvasart-dotcom/Sawa/pull/225). The agreements .docx still names CTS and is awaiting a redraft. The inventory below is kept as it was found.
+> [#225](https://github.com/desertcanvasart-dotcom/Sawa/pull/225) covers the rest:
+> - the Terms draft (v2), the payment notes and the planning documents no longer name CTS as seller or merchant;
+> - migration 053 blocks activating the CTS operator record that 049 would create.
+>
+> **Still naming CTS:**
+> - the agreements .docx, which is awaiting a redraft (lawyer question 23);
+> - test fixtures and history.
+>
+> The inventory below is kept as it was found.
 
 Searched on `main` at `af18a94` (27 Sep 2026), plus open PR #224. The search covered text files (`git grep -i`) and the text inside the Word and Excel files. Matches for "Capital Travel" (without "Service") are included. `package-lock.json` has none.
 

@@ -96,7 +96,7 @@ export function registerPayAtGoAheadRoutes(app, { requireAuth, requireRole, h, l
   }));
 
   app.post("/api/admin/pay-requests/:id/paid", ...staff, writeLimiter, route(async (req, res) => {
-    const r = await markRequestPaid(pool, { requestId: id(req.params.id), providerReference: req.body?.providerReference, by: by(req) });
+    const r = await markRequestPaid(pool, { requestId: id(req.params.id), providerReference: req.body?.providerReference, by: by(req), send: send() });
     await logAudit(req, { action: "pay_request.paid", entity: "payment_request", entityId: r.id, detail: { pledgeId: r.pledgeId, amountEur: r.amountEur, reference: r.providerReference } });
     res.json({ request: r });
   }));
