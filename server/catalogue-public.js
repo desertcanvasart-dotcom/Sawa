@@ -102,6 +102,7 @@ async function build(now) {
 
   // Bookable dates by the ordinary departure id each is sold through.
   const dates = new Map();
+  const datesByProduct = new Map();
   for (const row of departures.rows) {
     const e = byCatalogueId.get(Number(row.product_id));
     if (!e?.visible) continue;
@@ -112,13 +113,24 @@ async function build(now) {
     const status = row.status;
     const seatsSold = Number(row.seats_sold) || 0;
     if (!publiclyListed({ status, cutoffAt: at.cutoffAt }, now)) continue;
-    dates.set(Number(row.legacy_departure_id), {
-      catalogueStatus: status,
-      catalogueLabel: publicDateLabel({ status, seatsSold, goaheadMin: e.product.goaheadMin }),
+    const label = publicDateLabel({ status, seatsSold, goaheadMin: e.product.goaheadMin });
+    dates.set(Number(row.legacy_departure_id), { catalogueStatus: status, catalogueLabel: label });
+    if (!datesByProduct.has(e.product.id)) datesByProduct.set(e.product.id, []);
+    datesByProduct.get(e.product.id).push({ date: dep.date, label });
+  }
+
+  // Each visible product with its bookable dates, soonest first: for "other
+  // dates" and "try instead" suggestions (the below-minimum notice).
+  const byProduct = new Map();
+  for (const e of all) {
+    if (!e.visible) continue;
+    byProduct.set(e.product.id, {
+      product: e.product, path: e.path,
+      dates: (datesByProduct.get(e.product.id) || []).sort((a, b) => (a.date < b.date ? -1 : 1)),
     });
   }
 
-  return { byListingId, redirects, dates };
+  return { byListingId, redirects, dates, byProduct };
 }
 
 // ---------------------------------------------------------------- overlays
@@ -131,6 +143,7 @@ function publicSpec(entry) {
     type: entry.product.type,
     endCity: entry.product.endCity,
     specVersion: entry.spec?.version ?? null,
+    needsNationality: entry.product.needsNationality === true,
     guideLanguages: specList(c.guideLanguages),
     meals: c.meals || null,
     pickupArea: c.pickupArea || null,

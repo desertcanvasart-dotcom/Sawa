@@ -13,7 +13,7 @@ import { TOUR_TIMEZONE, zonedDateTimeToUtc } from "./tz.js";
 import { cancelDepartureAndPledges } from "./departure-cancel.js";
 import {
   PRODUCT_TYPES, PRODUCT_STATUSES, shiftDate, plannedDates, nextStatus, canRunBelowMinimum,
-  activeSpec, publishBlockers, specGaps, usesDeadline, legacyTypeFor,
+  activeSpec, publishBlockers, specGaps, usesDeadline, legacyTypeFor, DEFAULT_GOAHEAD_DEADLINE_DAYS,
 } from "../shared/catalogue.js";
 
 export class CatalogueError extends Error {
@@ -56,6 +56,8 @@ export function mapCatalogueProduct(r) {
     cutoffHours: r.cutoff_hours,
     goaheadDeadlineDays: r.goahead_deadline_days,
     legacyProductId: r.legacy_product_id,
+    // Model phase 2 (migration 049); absent before it is applied.
+    ...(r.needs_nationality === undefined ? {} : { needsNationality: r.needs_nationality === true }),
     updatedAt: r.updated_at,
   };
 }
@@ -135,7 +137,7 @@ export async function listProducts(db = pool) {
 
 export async function getProduct(db, id) {
   const r = await db.query("SELECT * FROM catalogue_products WHERE id = $1", [id]);
-  if (!r.rows.length) throw new CatalogueError(404, "Catalogue product not found.");
+  if (!r.rows.length) throw new CatalogueError(404, "Catalog product not found.");
   return mapCatalogueProduct(r.rows[0]);
 }
 
@@ -288,7 +290,7 @@ export async function generateDepartures({ db = pool, now = Date.now(), material
 
   if (materialise) out.materialised = await materialiseBookable({ db, today, world, log });
   if (out.created || out.adopted || out.materialised) {
-    log(`catalogue: ${out.created} departure(s) created, ${out.adopted} adopted, ${out.materialised} made bookable`);
+    log(`catalog: ${out.created} departure(s) created, ${out.adopted} adopted, ${out.materialised} made bookable`);
   }
   return out;
 }
@@ -343,7 +345,7 @@ async function materialiseBookable({ db, today, world, log }) {
       });
     } catch (e) {
       // One bad row must not stop the rest; it is retried on the next run.
-      log(`catalogue: could not make departure ${row.id} bookable — ${e.message}`);
+      log(`catalog: could not make departure ${row.id} bookable — ${e.message}`);
     }
   }
   return made;
@@ -396,7 +398,7 @@ export async function runStatusJob({ db = pool, now = Date.now(), log = () => {}
     const changed = await transition(db, dep, next, product);
     if (changed) {
       out[next.status] += 1;
-      log(`catalogue: departure ${dep.id} (${product.code} ${dep.date}) ${dep.status} → ${next.status} (${next.reason})`);
+      log(`catalog: departure ${dep.id} (${product.code} ${dep.date}) ${dep.status} → ${next.status} (${next.reason})`);
     }
   }
   return out;
@@ -416,7 +418,14 @@ function transition(db, dep, next, product) {
 
     if (next.status === "cancelled_below_minimum") {
       let released = 0;
+      let releasedPledgeIds = [];
       if (dep.legacyDepartureId && dep.origin === "generated") {
+        // Exactly the bookings this cancellation releases, read before it
+        // happens: the notice goes to them, not to anyone who had already
+        // cancelled on their own.
+        releasedPledgeIds = (await client.query(
+          "SELECT id FROM pledges WHERE departure_id = $1 AND status <> 'cancelled' ORDER BY created_at, id",
+          [dep.legacyDepartureId])).rows.map((r) => r.id);
         released = (await cancelDepartureAndPledges(client, dep.legacyDepartureId)).pledgesCancelled;
       }
       const nextDate = await client.query(
@@ -427,7 +436,7 @@ function transition(db, dep, next, product) {
       );
       // Only a departure somebody booked has anybody to tell.
       if (dep.seatsSold > 0 || released > 0) {
-        await addEvent(client, dep.id, "traveller_notice.cancelled_below_minimum", { ...payload, bookingsReleased: released });
+        await addEvent(client, dep.id, "traveller_notice.cancelled_below_minimum", { ...payload, bookingsReleased: released, releasedPledgeIds });
         await addEvent(client, dep.id, "next_date_offer", { ...payload, nextDate: ymd(nextDate.rows[0]?.date) || null });
       }
     } else if (next.status === "go_ahead") {
@@ -483,7 +492,7 @@ export async function runBelowMinimum({ db = pool, departureId, by, reason, now 
     if (dep.status === "cancelled_below_minimum" && dep.legacyDepartureId) {
       const booked = await client.query("SELECT 1 FROM pledges WHERE departure_id = $1 LIMIT 1", [dep.legacyDepartureId]);
       if (booked.rows.length) {
-        throw new CatalogueError(409, "Bookings on this date were already released when it was cancelled. Use the override before the cut-off.");
+        throw new CatalogueError(409, "Bookings on this date were already released when it was canceled. Use the override before the cut-off.");
       }
     }
 
@@ -515,9 +524,21 @@ const PRODUCT_FIELDS = {
   title: "title", type: "type", baseCity: "base_city", endCity: "end_city", status: "status",
   mergedIntoId: "merged_into_id", goaheadMin: "goahead_min", maxGroup: "max_group",
   cutoffHours: "cutoff_hours", goaheadDeadlineDays: "goahead_deadline_days", legacyProductId: "legacy_product_id",
+  needsNationality: "needs_nationality",
 };
 
-export async function updateProduct(db, id, patch) {
+export async function updateProduct(db, id, patchIn) {
+  // Changing the type keeps the deadline rule true: a cruise or multi-day
+  // product with no deadline of its own gets the default; any other type has
+  // none.
+  const patch = { ...patchIn };
+  if ("type" in patch) {
+    if (!usesDeadline(patch.type)) patch.goaheadDeadlineDays = null;
+    else if (patch.goaheadDeadlineDays == null) {
+      const current = await getProduct(db, id);
+      patch.goaheadDeadlineDays = current.goaheadDeadlineDays ?? DEFAULT_GOAHEAD_DEADLINE_DAYS;
+    }
+  }
   const sets = [];
   const args = [id];
   for (const [key, col] of Object.entries(PRODUCT_FIELDS)) {
@@ -534,7 +555,7 @@ export async function updateProduct(db, id, patch) {
   try {
     const r = await db.query(
       `UPDATE catalogue_products SET ${sets.join(", ")}, updated_at = now() WHERE id = $1 RETURNING *`, args);
-    if (!r.rows.length) throw new CatalogueError(404, "Catalogue product not found.");
+    if (!r.rows.length) throw new CatalogueError(404, "Catalog product not found.");
     return mapCatalogueProduct(r.rows[0]);
   } catch (e) {
     throw constraintError(e);
@@ -549,7 +570,7 @@ function constraintError(e) {
     catalogue_products_end_city_chk: "A one-way road tour needs an end city.",
     catalogue_products_group_chk: "The maximum group must be between the GoAhead minimum and 12.",
     catalogue_products_merge_chk: "Only a retired product can be merged into another one.",
-    catalogue_products_legacy_product_id_key: "That listing is already linked to another catalogue product.",
+    catalogue_products_legacy_product_id_key: "That listing is already linked to another catalog product.",
     catalogue_products_legacy_product_id_fkey: "No listing has that id.",
     catalogue_rules_shape_chk: "A weekday rule needs at least one weekday (and a start date when it repeats every few weeks); a dates rule needs dates.",
     catalogue_rules_window_chk: "The rule ends before it starts.",

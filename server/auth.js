@@ -40,6 +40,9 @@ export async function attachUser(req, _res, next) {
       fullName: profile.full_name,
       role: profile.role,
       agencyId: profile.agency_id,
+      // Model phase 2 — operator logins (migration 049). Undefined column
+      // before 049 is applied, hence the fallback.
+      operatorId: profile.operator_id == null ? null : Number(profile.operator_id),
     };
     next();
   } catch (err) {
@@ -64,5 +67,6 @@ export function requireRole(...roles) {
 
 export const isPlatform = (user) => user && (user.role === "super_admin" || user.role === "ops_staff");
 export const isAgency = (user) => user && (user.role === "agency_owner" || user.role === "agency_agent");
+export const isOperator = (user) => !!user && (user.role === "operator_owner" || user.role === "operator_staff");
 
 export { AuthError };

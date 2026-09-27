@@ -7,13 +7,15 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Plus, Trash2, RefreshCw, Check } from "lucide-react";
 import { apiFetch } from "./supabaseClient";
-import { TYPE_LABELS, SPEC_FIELDS, usesDeadline, specGaps } from "../shared/catalogue.js";
+import { DepartureOperatorPanel } from "./AdminOperators.jsx";
+import { TYPE_LABELS, SPEC_FIELDS, usesDeadline, specGaps, DEFAULT_GOAHEAD_DEADLINE_DAYS } from "../shared/catalogue.js";
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const STATUS_TONE = { active: "tag-on", held: "tag-warn", retired: "tag-off" };
-const DEP_LABEL = { open: "Open", go_ahead: "Going ahead", cancelled_below_minimum: "Cancelled — below minimum", completed: "Completed" };
+const DEP_LABEL = { open: "Open", go_ahead: "Going ahead", cancelled_below_minimum: "Canceled — below minimum", completed: "Completed" };
 const DEP_TONE = { open: "", go_ahead: "tag-on", cancelled_below_minimum: "tag-off", completed: "tag-off" };
 const FIELD_LABEL = Object.fromEntries(SPEC_FIELDS);
+const ASSIGN_STATE = { offered: "awaiting acknowledgement", acknowledged: "acknowledged", expired: "not acknowledged" };
 const cairo = (iso, opts) => (iso ? new Intl.DateTimeFormat("en-GB", { timeZone: "Africa/Cairo", ...opts }).format(new Date(iso)) : "—");
 const dayLabel = (ymd) => cairo(`${ymd}T12:00:00Z`, { weekday: "short", day: "numeric", month: "short", year: "numeric" });
 
@@ -58,13 +60,13 @@ export function CatalogueSection({ flash }) {
 
   return (
     <>
-      <Head title="Catalogue"
+      <Head title="Catalog"
         sub="The fixed products Sawa sells. Each product's specification, calendar and departures are managed here." />
       {err && <div className="auth-error">{err}</div>}
       {data && (
         <p className="field-hint" style={{ marginBottom: 12 }}>
-          Public catalogue (<code>catalogue_v2</code>): <b>{data.flag ? "on" : "off"}</b>.
-          {data.flag ? " Travellers see active products with a published specification." : " Travellers still see the current Tours & Packages; nothing here is public yet."}
+          Public catalog (<code>catalogue_v2</code>): <b>{data.flag ? "on" : "off"}</b>.
+          {data.flag ? " Travelers see active products with a published specification." : " Travelers still see the current Tours & Packages; nothing here is public yet."}
         </p>
       )}
       {data && (
@@ -131,6 +133,7 @@ function CatalogueEditor({ id, listings, products, flash, onClose }) {
         goaheadMin: num(p.goaheadMin), maxGroup: num(p.maxGroup), cutoffHours: num(p.cutoffHours),
         goaheadDeadlineDays: usesDeadline(p.type) ? num(p.goaheadDeadlineDays) : null,
         legacyProductId: p.legacyProductId || null,
+        ...(typeof p.needsNationality === "boolean" ? { needsNationality: p.needsNationality } : {}),
       });
       flash("Product saved.");
       await load();
@@ -138,13 +141,21 @@ function CatalogueEditor({ id, listings, products, flash, onClose }) {
   }
 
   if (!detail || !form) return <>{err ? <div className="auth-error">{err}</div> : <p>Loading…</p>}</>;
-  const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
+  const set = (k) => (e) => {
+    const v = e.target.value;
+    // A cruise or multi-day product needs a GoAhead deadline: start from the default.
+    if (k === "type" && usesDeadline(v) && (form.goaheadDeadlineDays == null || form.goaheadDeadlineDays === "")) {
+      setForm({ ...form, type: v, goaheadDeadlineDays: DEFAULT_GOAHEAD_DEADLINE_DAYS });
+      return;
+    }
+    setForm({ ...form, [k]: v });
+  };
 
   return (
     <>
       <Head title={`#${detail.product.catalogueNo} ${detail.product.title}`}
         sub={`${detail.product.code} · sold through /${detail.legacyType === "package" ? "package" : "tour"}/${detail.product.slug}`}
-        action={<button className="btn-ghost" onClick={onClose}><ArrowLeft size={16} />Back to catalogue</button>} />
+        action={<button className="btn-ghost" onClick={onClose}><ArrowLeft size={16} />Back to catalog</button>} />
       {err && <div className="auth-error">{err}</div>}
 
       <form className="dash-card" onSubmit={saveFields}>
@@ -184,7 +195,13 @@ function CatalogueEditor({ id, listings, products, flash, onClose }) {
           {usesDeadline(form.type) && (
             <label className="field"><span>GoAhead deadline (days before departure)</span>
               <input type="number" min="1" max="365" value={form.goaheadDeadlineDays ?? ""} onChange={set("goaheadDeadlineDays")} required />
-              <em className="field-hint">Below the minimum at this point, the departure is cancelled and nobody is charged.</em>
+              <em className="field-hint">Below the minimum at this point, the departure is canceled and nobody is charged.</em>
+            </label>
+          )}
+          {typeof form.needsNationality === "boolean" && (
+            <label className="field-check">
+              <input type="checkbox" checked={form.needsNationality} onChange={(e) => setForm({ ...form, needsNationality: e.target.checked })} />
+              {" "}Ask travelers for their nationality (site tickets need it)
             </label>
           )}
           <label className="field field-full"><span>Sold through listing</span>
@@ -323,9 +340,9 @@ function DraftEditor({ product, draft, reload, flash }) {
         <label className="field"><span>Pickup window</span><input value={f.pickupWindow} onChange={set("pickupWindow")} placeholder="to complete, e.g. 07:15–07:45" /></label>
         <label className="field"><span>Inclusions (one per line)</span><textarea rows={5} value={f.inclusions} onChange={set("inclusions")} placeholder="to complete" /></label>
         <label className="field"><span>Exclusions (one per line)</span><textarea rows={5} value={f.exclusions} onChange={set("exclusions")} placeholder="to complete" /></label>
-        <label className="field"><span>Vehicle, 4–6 travellers</span><input value={f.band46} onChange={set("band46")} placeholder="to complete" /></label>
-        <label className="field"><span>Vehicle, 7–9 travellers</span><input value={f.band79} onChange={set("band79")} placeholder="to complete" /></label>
-        <label className="field"><span>Vehicle, 10–12 travellers</span><input value={f.band1012} onChange={set("band1012")} placeholder="to complete" /></label>
+        <label className="field"><span>Vehicle, 4–6 travelers</span><input value={f.band46} onChange={set("band46")} placeholder="to complete" /></label>
+        <label className="field"><span>Vehicle, 7–9 travelers</span><input value={f.band79} onChange={set("band79")} placeholder="to complete" /></label>
+        <label className="field"><span>Vehicle, 10–12 travelers</span><input value={f.band1012} onChange={set("band1012")} placeholder="to complete" /></label>
         <label className="field"><span>Guide languages (comma-separated)</span><input value={f.guideLanguages} onChange={set("guideLanguages")} placeholder="to complete, e.g. English, French" /></label>
         <label className="field field-full"><span>Meals</span><input value={f.meals} onChange={set("meals")} placeholder="to complete, e.g. Lunch included" /></label>
         <label className="field field-full"><span>Listed paid add-ons (one per line: name | price in EUR)</span>
@@ -462,6 +479,7 @@ export function CalendarSection({ flash }) {
   const [overriding, setOverriding] = useState(null);
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
+  const [panelId, setPanelId] = useState(null);
 
   async function load() {
     try {
@@ -480,7 +498,7 @@ export function CalendarSection({ flash }) {
     setBusy(true);
     try {
       const r = await call("/admin/catalogue/generate", "POST", {});
-      flash(`Generator: ${r.generated.created} created, ${r.generated.adopted} adopted, ${r.generated.materialised} made bookable. Statuses: ${r.statuses.go_ahead} going ahead, ${r.statuses.cancelled_below_minimum} cancelled, ${r.statuses.completed} completed.`);
+      flash(`Generator: ${r.generated.created} created, ${r.generated.adopted} adopted, ${r.generated.materialised} made bookable. Statuses: ${r.statuses.go_ahead} going ahead, ${r.statuses.cancelled_below_minimum} canceled, ${r.statuses.completed} completed.`);
       await load();
     } catch (e) { setErr(e.message); } finally { setBusy(false); }
   }
@@ -507,7 +525,7 @@ export function CalendarSection({ flash }) {
 
   return (
     <>
-      <Head title="Calendar" sub="Departures created from the catalogue calendar, with seats sold and where each stands."
+      <Head title="Calendar" sub="Departures created from the catalog calendar, with seats sold and where each stands."
         action={<button className="btn-ghost" onClick={generate} disabled={busy}><RefreshCw size={16} />Run generator now</button>} />
       {err && <div className="auth-error">{err}</div>}
       <div className="form-grid" style={{ marginBottom: 12 }}>
@@ -533,10 +551,15 @@ export function CalendarSection({ flash }) {
         </form>
       )}
 
+      {panelId && data?.departures.find((d) => d.id === panelId) && (
+        <DepartureOperatorPanel departure={data.departures.find((d) => d.id === panelId)} operators={data.operators}
+          flash={flash} onChange={load} onClose={() => setPanelId(null)} />
+      )}
+
       {data && (byDate.length ? (
         <div className="table-wrap">
           <table className="dash-table">
-            <thead><tr><th>Date</th><th>Product</th><th>Seats</th><th>Status</th><th>Decided at</th><th></th></tr></thead>
+            <thead><tr><th>Date</th><th>Product</th><th>Seats</th><th>Status</th><th>Decided at</th>{data.operators && <th>Operator</th>}<th></th></tr></thead>
             <tbody>
               {byDate.map(([date, deps]) => deps.map((d, i) => (
                 <tr key={d.id}>
@@ -551,7 +574,16 @@ export function CalendarSection({ flash }) {
                   </td>
                   <td>{usesDeadline(d.type) ? `Deadline ${cairo(d.deadlineAt, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}`
                     : `Cut-off ${cairo(d.cutoffAt, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}`}</td>
+                  {data.operators && (
+                    <td>
+                      {d.assignment ? <>{d.assignment.name}<div className="field-hint">{ASSIGN_STATE[d.assignment.state]}</div></>
+                        : d.rostered ? <>{d.rostered.name}<div className="field-hint">rostered{d.rostered.published ? "" : ", not published"}</div></> : null}
+                      {d.unrostered && <span className="tag tag-warn">No rostered operator</span>}
+                      {(d.alerts || []).map((k) => <span key={k} className="tag tag-off">{k === "missed_acknowledgement" ? "Not acknowledged" : "Needs an operator"}</span>)}
+                    </td>
+                  )}
                   <td className="row-actions">
+                    {data.operators && <button className="btn-ghost sm" onClick={() => setPanelId(d.id)}>Operator</button>}
                     {(d.status === "open" || (d.status === "cancelled_below_minimum" && !d.seatsSold)) && d.seatsSold < d.goaheadMin && (
                       <button className="btn-ghost sm" onClick={() => { setOverriding(d); setReason(""); }}>Run below minimum</button>
                     )}
@@ -561,7 +593,7 @@ export function CalendarSection({ flash }) {
             </tbody>
           </table>
         </div>
-      ) : <div className="dash-empty">No departures in this range. Add calendar rules in the Catalogue, then run the generator.</div>)}
+      ) : <div className="dash-empty">No departures in this range. Add calendar rules in the Catalog, then run the generator.</div>)}
     </>
   );
 }

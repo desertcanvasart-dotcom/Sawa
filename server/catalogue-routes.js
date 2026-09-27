@@ -16,7 +16,7 @@ import {
 } from "../shared/catalogue.js";
 
 const notSwitchedOn = () => Object.assign(
-  new CatalogueError(503, "The catalogue isn't switched on yet: migration 047 has not been applied to this database."),
+  new CatalogueError(503, "The catalog isn't switched on yet: migration 047 has not been applied to this database."),
   { expose: true });
 
 const productPatch = z.object({
@@ -31,6 +31,7 @@ const productPatch = z.object({
   cutoffHours: z.number().int().min(0).max(2160).optional(),
   goaheadDeadlineDays: z.number().int().min(1).max(365).nullable().optional(),
   legacyProductId: z.string().trim().max(120).nullable().optional(),
+  needsNationality: z.boolean().optional(),
 }).strict();
 
 const ymdSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use a date like 2026-11-13.");
@@ -169,8 +170,9 @@ export function registerCatalogueRoutes(app, { requireAuth, requireRole, h, logA
     ]);
     const byId = new Map(products.map((p) => [p.id, p]));
     const listingBy = new Map(listings.rows.map((t) => [t.id, t]));
+    const ops = await operatorOverlay(from, to);
     res.json({
-      from, to,
+      from, to, operators: ops?.operators || null,
       departures: departures.map((d) => {
         const p = byId.get(d.productId);
         const t = p?.legacyProductId ? listingBy.get(p.legacyProductId) : null;
@@ -182,10 +184,58 @@ export function registerCatalogueRoutes(app, { requireAuth, requireRole, h, logA
           cutoffAt: Number.isFinite(at.cutoffAt) ? new Date(at.cutoffAt).toISOString() : null,
           deadlineAt: Number.isFinite(at.deadlineAt) ? new Date(at.deadlineAt).toISOString() : null,
           startsAt: Number.isFinite(at.startsAt) ? new Date(at.startsAt).toISOString() : null,
+          ...(ops ? {
+            rostered: ops.rostered.get(`${d.productId}:${d.date}`) || null,
+            unrostered: ops.unrostered.has(d.id),
+            assignment: ops.assignments.get(d.id) || null,
+            alerts: ops.alerts.get(d.id) || [],
+          } : {}),
         };
       }),
     });
   }));
+
+  // Model phase 2 on the calendar: who is rostered (published months), who
+  // holds the departure, open alerts. Null until migration 049 is applied.
+  async function operatorOverlay(from, to) {
+    try {
+      const { unrosteredDepartures } = await import("./roster.js");
+      const [entries, assignments, alerts, operators, unrostered] = await Promise.all([
+        pool.query(`SELECT e.product_id, e.date, e.operator_id, o.legal_name, o.status, m.state
+                      FROM roster_entries e JOIN roster_months m ON m.month = e.month JOIN operators o ON o.id = e.operator_id
+                     WHERE e.date BETWEEN $1 AND $2`, [from, to]),
+        pool.query(`SELECT a.departure_id, a.id, a.state, a.source, a.ack_due_at, a.acknowledged_at, a.operator_id, o.legal_name
+                      FROM catalogue_assignments a JOIN operators o ON o.id = a.operator_id
+                      JOIN catalogue_departures cd ON cd.id = a.departure_id
+                     WHERE cd.date BETWEEN $1 AND $2 ORDER BY a.id`, [from, to]),
+        pool.query(`SELECT a.departure_id, a.kind FROM catalogue_admin_alerts a JOIN catalogue_departures cd ON cd.id = a.departure_id
+                     WHERE a.resolved_at IS NULL AND cd.date BETWEEN $1 AND $2`, [from, to]),
+        pool.query("SELECT id, legal_name, status FROM operators WHERE status = 'active' ORDER BY legal_name"),
+        unrosteredDepartures(pool, { from, to }),
+      ]);
+      const ymdOf = (v) => (v instanceof Date ? v.toISOString().slice(0, 10) : String(v).slice(0, 10));
+      const rostered = new Map(entries.rows.map((e) => [`${e.product_id}:${ymdOf(e.date)}`, {
+        operatorId: Number(e.operator_id), name: e.legal_name, operatorStatus: e.status, published: e.state === "published",
+      }]));
+      const live = new Map();
+      for (const a of assignments.rows) {
+        if (a.state === "replaced") continue;
+        live.set(Number(a.departure_id), {
+          id: Number(a.id), state: a.state, source: a.source, operatorId: Number(a.operator_id), name: a.legal_name,
+          ackDueAt: a.ack_due_at, acknowledgedAt: a.acknowledged_at,
+        });
+      }
+      const alertBy = new Map();
+      for (const a of alerts.rows) (alertBy.get(Number(a.departure_id)) || alertBy.set(Number(a.departure_id), []).get(Number(a.departure_id))).push(a.kind);
+      return {
+        rostered, unrostered, assignments: live, alerts: alertBy,
+        operators: operators.rows.map((o) => ({ id: Number(o.id), legalName: o.legal_name })),
+      };
+    } catch (e) {
+      if (isMissingCatalogueTables(e)) return null;
+      throw e;
+    }
+  }
 
   app.post("/api/admin/catalogue/departures/:id/run-below-minimum", ...staff, route(async (req, res) => {
     const departure = await runBelowMinimum({ departureId: id(req.params.id), by: by(req), reason: req.body?.reason });

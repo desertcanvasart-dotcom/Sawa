@@ -3,7 +3,7 @@ import {
   LayoutDashboard, Package, CalendarDays, Users, ClipboardList, ScrollText,
   Plus, Check, X, Search, Archive, ArchiveRestore, Euro, ShieldCheck,
   TrendingUp, AlertTriangle, MapPin, Hotel, ArrowUpRight, ArrowLeft, Trash2, Pencil,
-  Newspaper, Share2, Copy, Inbox, Eye, Clock3, Download, BookOpen, CalendarRange,
+  Newspaper, Share2, Copy, Inbox, Eye, Clock3, Download, BookOpen, CalendarRange, Truck, CalendarCheck, Coins,
 } from "lucide-react";
 import { apiFetch, uploadImage } from "./supabaseClient";
 import { DashSidebar } from "./DashSidebar";
@@ -13,6 +13,7 @@ import { RichText } from "./RichText";
 import { PaymentsSection } from "./AdminPayments.jsx";
 import { SettlementsSection } from "./AdminSettlements.jsx";
 import { CatalogueSection, CalendarSection } from "./AdminCatalogue.jsx";
+import { OperatorsSection, RosterSection, RatesSection } from "./AdminOperators.jsx";
 // Date-only departure values need a local-noon anchor or they render a day
 // early west of UTC — see src/dates.js.
 import { fmtDate, fmtReceived } from "./dates.js";
@@ -48,8 +49,11 @@ const NAV_GROUPS = [
     items: [
       { id: "overview", label: "Overview", icon: LayoutDashboard },
       { id: "tours", label: "Tours & Packages", icon: Package },
-      { id: "catalogue", label: "Catalogue", icon: BookOpen },
+      { id: "catalogue", label: "Catalog", icon: BookOpen },
       { id: "calendar", label: "Calendar", icon: CalendarRange },
+      { id: "operators", label: "Operators", icon: Truck },
+      { id: "roster", label: "Roster", icon: CalendarCheck },
+      { id: "rates", label: "Rate card", icon: Coins },
       { id: "archive", label: "Archive", icon: Archive },
       { id: "listings", label: "Listing requests", icon: Inbox, alert: (s) => s?.pendingListings || 0 },
       { id: "daterequests", label: "Date requests", icon: Clock3 },
@@ -124,6 +128,9 @@ export function AdminDashboard({ user, agency, signOut, navigate }) {
             {section === "tours" && <ToursSection data={data} destinations={destinations} reload={loadAll} flash={flash} />}
             {section === "catalogue" && <CatalogueSection flash={flash} />}
             {section === "calendar" && <CalendarSection flash={flash} />}
+            {section === "operators" && <OperatorsSection flash={flash} isSuperAdmin={user.role === "super_admin"} />}
+            {section === "roster" && <RosterSection flash={flash} />}
+            {section === "rates" && <RatesSection flash={flash} />}
             {section === "archive" && <ArchiveSection data={data} reload={loadAll} flash={flash} />}
             {section === "listings" && <ListingRequestsSection data={data} reload={loadAll} flash={flash} />}
             {section === "daterequests" && <DateRequestsSection data={data} reload={loadAll} flash={flash} />}

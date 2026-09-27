@@ -69,12 +69,12 @@ test("reaching the minimum means GoAhead, and GoAhead is sticky", () => {
 });
 
 test("cruises and multi-day decide at the GoAhead deadline, not the cut-off", () => {
-  const cruise = dayTour({ type: "cruise", deadlineAt: t0 - 21 * 24 * HOUR });
-  assert.equal(nextStatus(cruise, t0 - 22 * 24 * HOUR).status, "open");
-  assert.deepEqual(nextStatus(cruise, t0 - 21 * 24 * HOUR), { status: "cancelled_below_minimum", reason: "deadline" });
+  const cruise = dayTour({ type: "cruise", deadlineAt: t0 - 30 * 24 * HOUR });
+  assert.equal(nextStatus(cruise, t0 - 31 * 24 * HOUR).status, "open");
+  assert.deepEqual(nextStatus(cruise, t0 - 30 * 24 * HOUR), { status: "cancelled_below_minimum", reason: "deadline" });
   // Past the deadline but with the minimum reached: it goes ahead.
-  assert.equal(nextStatus({ ...cruise, seatsSold: 4 }, t0 - 20 * 24 * HOUR).status, "go_ahead");
-  assert.equal(nextStatus(dayTour({ type: "multi_day", deadlineAt: t0 - 21 * 24 * HOUR }), t0 - 21 * 24 * HOUR).status, "cancelled_below_minimum");
+  assert.equal(nextStatus({ ...cruise, seatsSold: 4 }, t0 - 29 * 24 * HOUR).status, "go_ahead");
+  assert.equal(nextStatus(dayTour({ type: "multi_day", deadlineAt: t0 - 30 * 24 * HOUR }), t0 - 30 * 24 * HOUR).status, "cancelled_below_minimum");
 });
 
 test("the admin override runs a departure below its minimum instead of cancelling it", () => {

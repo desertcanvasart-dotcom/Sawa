@@ -63,6 +63,7 @@ import {
 const LoginGate = lazy(() => import("./LoginGate").then((m) => ({ default: m.LoginGate })));
 const AdminDashboard = lazy(() => import("./AdminDashboard").then((m) => ({ default: m.AdminDashboard })));
 const AgencyDashboard = lazy(() => import("./AgencyDashboard").then((m) => ({ default: m.AgencyDashboard })));
+const OperatorDashboard = lazy(() => import("./OperatorDashboard.jsx").then((m) => ({ default: m.OperatorDashboard })));
 
 
 // Three named traveler quotes lived here — Valencia, Munich, Abu Dhabi, each
@@ -875,7 +876,7 @@ function App() {
   // Resolves to { ok: true } or { ok: false, error }. The tour page renders
   // before the shared `notice` banner, so a failure reported only there was
   // never seen — the caller shows the error itself and keeps the form (F01).
-  async function bookPublicDeparture({ departureId, customerName, customerEmail, customerPhone, phoneToken, seats, roomingType, accommodationTier }) {
+  async function bookPublicDeparture({ departureId, customerName, customerEmail, customerPhone, phoneToken, seats, roomingType, accommodationTier, manifest }) {
     if (isSaving) return { ok: false, error: "" };
     setIsSaving(true);
     setNotice("");
@@ -883,7 +884,7 @@ function App() {
       const response = await fetch(`${API_BASE}/public/departures/${departureId}/bookings`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ customerName, customerEmail, customerPhone, phoneToken, seats: Number(seats), roomingType, accommodationTier, refCode: getStoredRef() }),
+        body: JSON.stringify({ customerName, customerEmail, customerPhone, phoneToken, seats: Number(seats), roomingType, accommodationTier, refCode: getStoredRef(), ...(manifest || {}) }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Could not request seats.");
@@ -1052,6 +1053,12 @@ function Portal({ user, agency, signOut, refreshProfile, navigate, notice, cityS
     return <AdminDashboard user={user} agency={agency} signOut={signOut} navigate={navigate} />;
   }
 
+  // Model phase 2 — operator logins get their own portal (the server answers
+  // 404 to it while catalogue_v2 is off).
+  if (user.role === "operator_owner" || user.role === "operator_staff") {
+    return <OperatorDashboard user={user} signOut={signOut} navigate={navigate} />;
+  }
+
   // Agency users get the clean agency dashboard, reusing the existing
   // AgencyDesk (booking) and StaffPanel (team) components.
   return (
@@ -1076,6 +1083,8 @@ function roleLabel(role) {
     super_admin: "Super admin",
     ops_staff: "Operations",
     agency_owner: "Agency owner",
+    operator_owner: "Operator owner",
+    operator_staff: "Operator staff",
     agency_agent: "Agent",
   }[role] || role;
 }
@@ -1453,7 +1462,7 @@ function CatalogueFacts({ facts }) {
     facts.meals ? ["Meals", facts.meals] : null,
     facts.pickupArea ? ["Pickup", facts.pickupWindow ? `${facts.pickupArea} (${facts.pickupWindow})` : facts.pickupArea] : null,
     facts.endCity ? ["Ends in", facts.endCity] : null,
-    bands.length ? ["Vehicle", bands.map(([b, v]) => `${b} travellers: ${v}`).join("; ")] : null,
+    bands.length ? ["Vehicle", bands.map(([b, v]) => `${b} travelers: ${v}`).join("; ")] : null,
     facts.roomCategories?.length ? ["Rooms", facts.roomCategories.map((r) => r.name).join(", ")] : null,
     facts.addons?.length ? ["Optional extras", facts.addons.map((a) => (a.price != null ? `${a.name} (${CURRENCY_SYMBOL}${a.price})` : a.name)).join(", ")] : null,
   ].filter(Boolean);
@@ -1523,6 +1532,11 @@ function TourDetailV2({ isSaving, navigate, phoneVerification = false, onBookPub
   const pkgTiers = isPackage(tour) ? (tour.accommodationTiers || []) : [];
   const [tierId, setTierId] = useState(pkgTiers[0]?.id || "");
   const [roomingType, setRoomingType] = useState("double");
+  // Model phase 2 — what the operator's manifest needs; optional, catalog only.
+  const [pickupPoint, setPickupPoint] = useState("");
+  const [nationality, setNationality] = useState("");
+  const [safetyNeeds, setSafetyNeeds] = useState("");
+  const manifestForm = catalogueV2() && tour.catalogue;
   // Keep the selection valid if the tour (and therefore its tiers) changes.
   useEffect(() => {
     if (pkgTiers.length && !pkgTiers.some((t) => t.id === tierId)) setTierId(pkgTiers[0].id);
@@ -1617,6 +1631,7 @@ function TourDetailV2({ isSaving, navigate, phoneVerification = false, onBookPub
       customerPhone: phone.trim(), phoneToken: phoneToken || undefined, seats: nSeats,
       // Only meaningful for packages; the server ignores them for day tours.
       ...(isPackage(tour) ? { roomingType, accommodationTier: tierId } : {}),
+      ...(manifestForm ? { manifest: { pickupPoint: pickupPoint.trim(), nationality: nationality.trim(), safetyNeeds: safetyNeeds.trim() } } : {}),
     });
     // F01 — the form used to clear straight away, before the server answered:
     // a full date, a closed cutoff or a dropped connection left the traveller
@@ -2067,6 +2082,26 @@ function TourDetailV2({ isSaving, navigate, phoneVerification = false, onBookPub
                           <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+20 1XX XXX XXXX" autoComplete="tel" required={phoneVerification} aria-required={phoneVerification} />
                         </label>
                       </div>
+                      {manifestForm && (
+                        <>
+                          <div className="frow">
+                            <label className="bk-field">
+                              <span>Pickup point <i className="opt">(optional)</i></span>
+                              <input value={pickupPoint} onChange={(e) => setPickupPoint(e.target.value)} placeholder={tour.catalogue.pickupArea || "Hotel name and area"} maxLength={200} />
+                            </label>
+                            {tour.catalogue.needsNationality && (
+                              <label className="bk-field">
+                                <span>Nationality <i className="opt">(optional; site tickets need it)</i></span>
+                                <input value={nationality} onChange={(e) => setNationality(e.target.value)} placeholder="e.g. Canadian" maxLength={80} autoComplete="country-name" />
+                              </label>
+                            )}
+                          </div>
+                          <label className="bk-field">
+                            <span>Health or safety needs <i className="opt">(optional)</i></span>
+                            <input value={safetyNeeds} onChange={(e) => setSafetyNeeds(e.target.value)} placeholder="e.g. uses a wheelchair, severe nut allergy" maxLength={1000} />
+                          </label>
+                        </>
+                      )}
                       {phoneVerification && (
                         <PhoneCodeStep
                           phone={phone}

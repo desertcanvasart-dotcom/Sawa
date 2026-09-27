@@ -56,6 +56,8 @@ const MIGRATIONS = [
   { name: "045_cost_basis", file: "schema_045_cost_basis.sql" },
   { name: "046_extra_income", file: "schema_046_extra_income.sql" },
   { name: "047_catalogue_calendar", file: "schema_047_catalogue_calendar.sql" },
+  { name: "048_catalogue_notices", file: "schema_048_catalogue_notices.sql" },
+  { name: "049_operators_roster_rates", file: "schema_049_operators_roster_rates.sql" },
 ];
 
 async function main() {

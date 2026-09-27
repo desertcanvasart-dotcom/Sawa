@@ -139,6 +139,34 @@
    "verdict": "CONTRADICTS",
    "contradicts": "site/privacy.html:118-122, 158 (says health, allergy and dietary data is collected)",
    "note": "No booking form or schema captures safety needs (model audit 01 §4.2). Capture planned for phase 3."
+  },
+  "c02dc6efabe5": {
+   "where": "server/catalogue-notices.js:9",
+   "text": "recipient), and only rows not yet sent are sent. Every send is recorded on",
+   "verdict": "AGREES",
+   "contradicts": null,
+   "note": "catalogue_notices has UNIQUE (departure_id, pledge_id, kind, recipient) and sendPendingNotices only claims pending/failed rows; catalogue-notices.integration.test.js re-runs and asserts no second send. Internal, behind catalogue_v2; no public claim depends on it."
+  },
+  "fabaa447f382": {
+   "where": "server/catalogue-notices.js:153",
+   "text": "link at any time (043). A booking with a payment marked paid and not yet",
+   "verdict": "AGREES",
+   "contradicts": null,
+   "note": "The /pay/:ref manual Tab link (043) can be sent before GoAhead, so hasUnrefundedPayment checks booking_payments for a paid row; the test marks one paid and asserts the refund wording. Consistent with the public 'nothing is charged before GoAhead' claim for the normal flow."
+  },
+  "602019ecf34b": {
+   "where": "docs/model-audit/03-migration-plan.md:519",
+   "text": "These replace the phase 1 placeholders: the 21-day deadline (now 30) and British English for new copy (now US). \"Rate card in EGP\" settles the operator side of D1; travellers still pay in EUR.",
+   "verdict": "AGREES",
+   "contradicts": null,
+   "note": "Records the phase 2 decisions of 27 Sep 2026: GoAhead deadline 30 days for cruise and multi-day (shared/catalogue.js DEFAULT_GOAHEAD_DEADLINE_DAYS = 30), US English, operator rates in EGP (catalogue_rate_versions currency CHECK). Traveler prices stay in EUR as before."
+  },
+  "3d751ac9220c": {
+   "where": "docs/phase2/REPORT.md:206",
+   "text": "Operator bank details and invoices** are not collected yet.",
+   "verdict": "AGREES",
+   "contradicts": null,
+   "note": "No table or form collects operator bank details or invoices: 049 adds none, and operators/operator_documents hold only identity, license and insurance data. Internal report; no public claim depends on it."
   }
  }
 }

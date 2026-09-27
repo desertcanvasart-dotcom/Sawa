@@ -676,7 +676,7 @@ export async function buildBody(pathname) {
   <h2>Upcoming departures</h2>
   ${departureListHtml(deps)}
   ${catalogueV2Enabled()
-    ? `<p>Every date needs ${Math.max(1, Number(p.min_seats) || 4)} travellers to go ahead (the GoAhead). Nothing is charged before then, and once a date goes ahead it runs.</p>`
+    ? `<p>Every date needs ${Math.max(1, Number(p.min_seats) || 4)} travelers to go ahead (the GoAhead). Nothing is charged before then, and once a date goes ahead it runs.</p>`
     : `<p>Every date needs ${Math.max(1, Number(p.min_seats) || 4)} travelers to be confirmed (the GoAhead). Hold a seat free — a deposit is only charged once the date confirms. Don't see your day? Start your own date on this page; our team reviews it before it opens.</p>`}
   ${itin.length ? `<h2>Itinerary</h2><ol>${itin.map((d) => `<li><strong>${esc(d.title || "")}</strong>${d.description ? ` — ${esc(plain(d.description, 400))}` : ""}</li>`).join("")}</ol>` : ""}
   ${included.length ? `<h2>Included</h2><ul>${included.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}
