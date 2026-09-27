@@ -7,7 +7,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Plus, Trash2, RefreshCw, Check } from "lucide-react";
 import { apiFetch } from "./supabaseClient";
-import { TYPE_LABELS, SPEC_FIELDS, usesDeadline, specGaps } from "../shared/catalogue.js";
+import { TYPE_LABELS, SPEC_FIELDS, usesDeadline, specGaps, DEFAULT_GOAHEAD_DEADLINE_DAYS } from "../shared/catalogue.js";
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const STATUS_TONE = { active: "tag-on", held: "tag-warn", retired: "tag-off" };
@@ -138,7 +138,15 @@ function CatalogueEditor({ id, listings, products, flash, onClose }) {
   }
 
   if (!detail || !form) return <>{err ? <div className="auth-error">{err}</div> : <p>Loading…</p>}</>;
-  const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
+  const set = (k) => (e) => {
+    const v = e.target.value;
+    // A cruise or multi-day product needs a GoAhead deadline: start from the default.
+    if (k === "type" && usesDeadline(v) && (form.goaheadDeadlineDays == null || form.goaheadDeadlineDays === "")) {
+      setForm({ ...form, type: v, goaheadDeadlineDays: DEFAULT_GOAHEAD_DEADLINE_DAYS });
+      return;
+    }
+    setForm({ ...form, [k]: v });
+  };
 
   return (
     <>

@@ -22,6 +22,10 @@ export const TYPE_LABELS = {
 // decide at the cut-off.
 export const usesDeadline = (type) => type === "cruise" || type === "multi_day";
 
+// The GoAhead deadline a cruise or multi-day product gets unless it sets its
+// own (decided 27 Sep 2026: 30 days, matching the site's existing copy).
+export const DEFAULT_GOAHEAD_DEADLINE_DAYS = 30;
+
 // How far ahead the generator creates departures.
 export const windowDaysFor = (type) => (usesDeadline(type) ? 365 : 90);
 

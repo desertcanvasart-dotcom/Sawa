@@ -13,7 +13,7 @@ import { TOUR_TIMEZONE, zonedDateTimeToUtc } from "./tz.js";
 import { cancelDepartureAndPledges } from "./departure-cancel.js";
 import {
   PRODUCT_TYPES, PRODUCT_STATUSES, shiftDate, plannedDates, nextStatus, canRunBelowMinimum,
-  activeSpec, publishBlockers, specGaps, usesDeadline, legacyTypeFor,
+  activeSpec, publishBlockers, specGaps, usesDeadline, legacyTypeFor, DEFAULT_GOAHEAD_DEADLINE_DAYS,
 } from "../shared/catalogue.js";
 
 export class CatalogueError extends Error {
@@ -524,7 +524,18 @@ const PRODUCT_FIELDS = {
   cutoffHours: "cutoff_hours", goaheadDeadlineDays: "goahead_deadline_days", legacyProductId: "legacy_product_id",
 };
 
-export async function updateProduct(db, id, patch) {
+export async function updateProduct(db, id, patchIn) {
+  // Changing the type keeps the deadline rule true: a cruise or multi-day
+  // product with no deadline of its own gets the default; any other type has
+  // none.
+  const patch = { ...patchIn };
+  if ("type" in patch) {
+    if (!usesDeadline(patch.type)) patch.goaheadDeadlineDays = null;
+    else if (patch.goaheadDeadlineDays == null) {
+      const current = await getProduct(db, id);
+      patch.goaheadDeadlineDays = current.goaheadDeadlineDays ?? DEFAULT_GOAHEAD_DEADLINE_DAYS;
+    }
+  }
   const sets = [];
   const args = [id];
   for (const [key, col] of Object.entries(PRODUCT_FIELDS)) {

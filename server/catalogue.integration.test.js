@@ -297,7 +297,7 @@ test("a cruise below the minimum is cancelled at its GoAhead deadline", { skip }
   await cat.generateDepartures({ materialise: true });
   const dep = (await db.query("SELECT * FROM catalogue_departures WHERE product_id = $1 AND date = $2", [pid, sailing])).rows[0];
   assert.ok(dep && dep.legacy_departure_id, "the sailing is generated and bookable");
-  const deadline = startMs(sailing) - 21 * 24 * HOUR;
+  const deadline = startMs(sailing) - 30 * 24 * HOUR;   // the 30-day default (048)
   await cat.runStatusJob({ now: deadline - HOUR });
   assert.equal((await db.query("SELECT status FROM catalogue_departures WHERE id = $1", [dep.id])).rows[0].status, "open");
   await cat.runStatusJob({ now: deadline + HOUR });
