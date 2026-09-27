@@ -174,6 +174,13 @@
    "verdict": "AGREES",
    "contradicts": null,
    "note": "Describes a proposed mode C job (design only, not built): no code releases unpaid seats today, and no public page claims it does. The site's current promise ('nothing is charged before GoAhead') is unchanged by it."
+  },
+  "b18b969374be": {
+   "where": "server/assignments.js:311",
+   "text": "Departures with a pay-at-GoAhead seat past its deadline and not yet",
+   "verdict": "AGREES",
+   "contradicts": null,
+   "note": "Internal to the manifest freeze (model phase 4, behind catalogue_v2): no public claim. A seat past its payment deadline is released by the pay-at-GoAhead tick, which runs before the freeze (server/jobs/operator-jobs.js); tested in pay-at-goahead.integration.test.js."
   }
  }
 }

@@ -53,7 +53,11 @@ export async function recordAgencyBooking(c, { pledgeId, agency, catalogueDepart
   if (agency.billing_approved === true) {
     const gross = round2(Number(p.booking_total) || 0);
     const commission = amount || 0;
-    const dueOn = shiftDate(todayIn(now), Number(agency.billing_due_days ?? 14));
+    // Pay at GoAhead (phase 4): every catalog booking under the flag is on it,
+    // so the invoice is due at the payment deadline after GoAhead, and has no
+    // due date until then (server/pay-at-goahead.js dates it).
+    const payAtGoAhead = (await c.query("SELECT payment_mode FROM pledges WHERE id = $1", [pledgeId])).rows[0]?.payment_mode === "pay_at_goahead";
+    const dueOn = payAtGoAhead ? null : shiftDate(todayIn(now), Number(agency.billing_due_days ?? 14));
     const r = await c.query(
       `INSERT INTO agency_invoices (pledge_id, agency_id, departure_id, gross_eur, commission_eur, amount_eur, due_on)
        VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT (pledge_id) DO NOTHING RETURNING *`,
@@ -67,8 +71,11 @@ export async function recordAgencyBooking(c, { pledgeId, agency, catalogueDepart
 export async function decideCommissions({ db = pool, now = Date.now(), log = () => {} } = {}) {
   const rows = (await db.query(
     `SELECT ac.*, cd.status AS dep_status, cd.date, c.type, t.default_time,
-            p.status AS pledge_status, p.cancelled_reason, p.cancelled_at,
-            (SELECT MIN(created_at) FROM catalogue_events e WHERE e.departure_id = cd.id AND e.type = 'go_ahead') AS go_ahead_at
+            p.status AS pledge_status, p.cancelled_reason, p.cancelled_at, p.payment_mode,
+            (SELECT MIN(created_at) FROM catalogue_events e WHERE e.departure_id = cd.id AND e.type = 'go_ahead') AS go_ahead_at,
+            EXISTS (SELECT 1 FROM payment_requests r WHERE r.pledge_id = p.id AND r.state = 'paid') AS paid,
+            (SELECT COALESCE(SUM(CASE WHEN f.kind = 'cancellation' THEN f.fee_retained_eur ELSE -f.amount_eur END), 0)
+               FROM payment_refunds f WHERE f.pledge_id = p.id AND f.state <> 'cancelled') AS fee_kept
        FROM agency_commissions ac
        JOIN catalogue_departures cd ON cd.id = ac.departure_id
        JOIN catalogue_products c ON c.id = cd.product_id
@@ -83,6 +90,7 @@ export async function decideCommissions({ db = pool, now = Date.now(), log = () 
       cancelledAtMs: r.cancelled_at ? new Date(r.cancelled_at).getTime() : null,
       goAheadAtMs: r.go_ahead_at ? new Date(r.go_ahead_at).getTime() : null,
       startMs: zonedDateTimeToUtc(ymd(r.date), String(r.default_time || "08:00").slice(0, 5)), productType: r.type,
+      payAtGoAhead: r.payment_mode === "pay_at_goahead", paid: r.paid === true, feeKept: Number(r.fee_kept) > 0,
     });
     if (!outcome) continue;
     const earned = r.amount_eur == null ? null : round2(Number(r.amount_eur) * outcome.share);

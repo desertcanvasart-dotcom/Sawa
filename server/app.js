@@ -44,12 +44,18 @@ import { registerOperatorRoutes } from "./operator-routes.js";
 import { registerFinanceRoutes } from "./finance-routes.js";
 import { catalogueContextFor, assertBookingComplete } from "./booking-details.js";
 import { recordAgencyBooking } from "./commissions.js";
+import { fixBookingTerms } from "./cancellation-tiers.js";
+import {
+  requestPayment, departureFor, seatsHeldForWaitlist, bookingPayView, acceptBookingTerms, joinWaitlist,
+  waitlistOffer, claimWaitlistOffer, completeWaitlistOffer,
+} from "./pay-at-goahead.js";
+import { registerPayAtGoAheadRoutes } from "./pay-at-goahead-routes.js";
 import { SAFETY_NONE } from "../shared/settlement-rules.js";
 import { catalogueV2Enabled } from "./features.js";
 import { publicCatalogue, overlayBootstrap, clearPublicCatalogue } from "./catalogue-public.js";
 import {
   sendEmail, sendEmailInBackground, emailMode,
-  inviteEmail, bookingConfirmationEmail, goAheadEmail, cancellationEmail,
+  inviteEmail, bookingConfirmationEmail, payAtGoAheadBookingEmail, goAheadEmail, cancellationEmail,
   listingApprovedEmail, listingRejectedEmail,
   departureRequestReceivedEmail, departureRequestApprovedEmail, departureRequestDeclinedEmail,
   operatorApplicationEmail, operatorApplicationReceiptEmail, operatorApplicationText,
@@ -393,6 +399,24 @@ async function requireCompleteBooking(c, departureId, manifest, seats, phone) {
   if (!ctx) return null;
   assertBookingComplete({ ...manifest, phone }, seats, { needsNationality: ctx.needsNationality });
   return ctx;
+}
+
+// Model phase 4: seats held for waitlist offers are not for general sale.
+// Nothing is held with the flag off, or before migration 051.
+async function heldForWaitlist(c, legacyDepartureId, exceptSeats = 0) {
+  if (!catalogueV2Enabled()) return 0;
+  try {
+    return Math.max(0, (await seatsHeldForWaitlist(c, legacyDepartureId)) - exceptSeats);
+  } catch (e) {
+    if (e?.code !== "42P01") throw e;
+    return 0;
+  }
+}
+
+// A booking made after GoAhead is asked to pay at once (section 9.1, step 7).
+async function payNowIfGoingAhead(c, pledgeId, catalogueDepartureId) {
+  const departure = await departureFor(c, { id: catalogueDepartureId });
+  if (departure?.status === "go_ahead") await requestPayment(c, { pledgeId, departure });
 }
 
 // Operator verification application (site/verify.html). Every field is bounded:
@@ -1247,7 +1271,7 @@ app.post("/api/departures/:id/pledges", requireAuth, requireRole("agency_owner",
     if (!dep) throw new AppError(404, "Departure not found.");
     if (dep.status === "cancelled") throw new AppError(409, "This departure has been canceled.");
     if (dep.status === "pending_review") throw new AppError(409, "This departure is awaiting review and not open for bookings yet.");
-    if (seatsTotal(dep.pledges) + input.seats > dep.maxSeats) {
+    if (seatsTotal(dep.pledges) + await heldForWaitlist(c, dep.id) + input.seats > dep.maxSeats) {
       throw new AppError(409, "This pledge exceeds capacity.");
     }
     const product = dep.tourProductId ? await loadProduct(c, dep.tourProductId) : null;
@@ -1267,13 +1291,21 @@ app.post("/api/departures/:id/pledges", requireAuth, requireRole("agency_owner",
       customerEmail: input.customerEmail || null,
       customerPhone: input.customerPhone || null,
       createdByUserId: req.user.id,
+      // Phase 4: a catalog booking has a code, the payment's reference.
+      bookingCode: catalogueCtx ? await uniqueBookingCode(c) : null,
       manifest,
       ...pricing,
     });
-    // Model phase 3: the commission (EUR, from the rate version in force) is
-    // locked now; an agency on billing is invoiced now. Behind the flag, catalog
-    // departures only.
-    if (catalogueCtx) await recordAgencyBooking(c, { pledgeId, agency, catalogueDepartureId: catalogueCtx.departureId });
+    if (catalogueCtx) {
+      // Model phase 4: pay at GoAhead. The agency showed its client the
+      // cancellation terms before booking (Agency Reseller Agreement 4.2), so
+      // the tier version in force now is the one this booking keeps.
+      await fixBookingTerms(c, { pledgeId, by: "agency" });
+      // Model phase 3: the commission (EUR, from the rate version in force) is
+      // locked now; an agency on billing is invoiced now.
+      await recordAgencyBooking(c, { pledgeId, agency, catalogueDepartureId: catalogueCtx.departureId });
+      await payNowIfGoingAhead(c, pledgeId, catalogueCtx.departureId);
+    }
     return loadDeparture(c, dep.id);
   });
   await logAudit(req, { action: "pledge.create", entity: "departure", entityId: Number(req.params.id), detail: { seats: input.seats, agencyId: req.user.agencyId } });
@@ -1369,12 +1401,12 @@ app.post("/api/public/departures/:id/bookings", writeLimiter, h(async (req, res)
     }
     if (dep.status === "cancelled") throw new AppError(409, "This departure has been canceled.");
     if (dep.status === "pending_review") throw new AppError(409, "This departure is awaiting review and not open for bookings yet.");
-    if (seatsTotal(dep.pledges) + input.seats > dep.maxSeats) {
+    if (seatsTotal(dep.pledges) + await heldForWaitlist(c, dep.id) + input.seats > dep.maxSeats) {
       throw new AppError(409, "This booking exceeds the remaining seats.");
     }
     const product = dep.tourProductId ? await loadProduct(c, dep.tourProductId) : null;
     if (bookingClosed(dep, product)) throw new AppError(409, "Bookings for this date have closed.");
-    await requireCompleteBooking(c, dep.id, manifest, input.seats, input.customerPhone);
+    const catalogueCtx = await requireCompleteBooking(c, dep.id, manifest, input.seats, input.customerPhone);
     const pricing = computePledgePricing(dep, product, input);
     const refCode = cleanRefCode(input.refCode);
     if (refCode) {
@@ -1398,12 +1430,27 @@ app.post("/api/public/departures/:id/bookings", writeLimiter, h(async (req, res)
       ...pricing,
     };
     await insertPledge(c, dep.id, booking);
+    if (catalogueCtx) {
+      // Model phase 4: pay at GoAhead. The traveler accepts the Terms here, so
+      // the tier version in force now is the one this booking keeps.
+      await fixBookingTerms(c, { pledgeId, by: "traveller" });
+      await payNowIfGoingAhead(c, pledgeId, catalogueCtx.departureId);
+    }
     const departure = await loadDeparture(c, dep.id);
     const saved = await c.query(`SELECT * FROM pledges WHERE id=$1`, [pledgeId]);
-    return { departure, booking: mapPledge(saved.rows[0]) };
+    return { departure, booking: mapPledge(saved.rows[0]), payAtGoAhead: !!catalogueCtx };
   });
   await logAudit(req, { action: "booking.create", entity: "pledge", entityId: result.booking.id, detail: { departureId: Number(req.params.id), seats: input.seats, source: "public" } });
-  if (input.customerEmail) {
+  if (input.customerEmail && result.payAtGoAhead) {
+    // Model phase 4: nothing is paid until GoAhead, then the full price; the
+    // email repeats the cancellation tiers this booking was made under.
+    const d = result.departure;
+    sendEmailInBackground(bookingPayView(pool, { pledgeId: result.booking.id }).then((view) => payAtGoAheadBookingEmail({
+      to: input.customerEmail, customerName: input.customerName, route: d.route,
+      dateLabel: d.startDate ? `${d.startDate} – ${d.endDate}` : d.date, seats: input.seats,
+      total: result.booking.bookingTotal, bookingCode: result.booking.bookingCode, terms: view?.terms || null,
+    })));
+  } else if (input.customerEmail) {
     const d = result.departure;
     sendEmailInBackground(operatorFor(d.id).then((operator) => bookingConfirmationEmail({
       to: input.customerEmail, customerName: input.customerName, route: d.route,
@@ -1614,10 +1661,23 @@ app.get("/api/public/bookings/:code", h(async (req, res) => {
     if (!isMissingPaymentsTable(e)) throw e;
   }
 
+  // Model phase 4: a pay-at-GoAhead booking shows its full-price request and
+  // the cancellation terms it was made under (an agency's traveler accepts
+  // that same version here).
+  let payAtGoAhead = null;
+  if (catalogueV2Enabled()) {
+    try {
+      payAtGoAhead = await bookingPayView(pool, { pledgeId: b.pledge_id });
+    } catch (e) {
+      if (e?.code !== "42P01" && e?.code !== "42703") throw e;
+    }
+  }
+
   res.json({ booking: {
     code: b.booking_code,
     tourTitle: b.product_title || b.route,
-    payment,
+    payment: payAtGoAhead ? null : payment,
+    payAtGoAhead,
     city: b.city || "",
     dateLabel,
     seats: Number(b.seats),
@@ -1626,6 +1686,73 @@ app.get("/api/public/bookings/:code", h(async (req, res) => {
     routePath,
     ...view,
   } });
+}));
+
+// Model phase 4: the traveler of an agency booking accepts the cancellation
+// terms the agency booked under (never the current ones). The version id is
+// the one the booking page showed; any other is refused.
+app.post("/api/public/bookings/:code/accept-terms", writeLimiter, h(async (req, res) => {
+  if (!catalogueV2Enabled()) throw new AppError(404, "Not found.");
+  const code = String(req.params.code || "").trim();
+  if (!code) throw new AppError(422, "Booking code required.");
+  const result = await acceptBookingTerms(pool, { code, versionId: req.body?.versionId });
+  await logAudit(req, { action: "booking.accept_terms", entity: "booking", entityId: code.toUpperCase(), detail: { tierVersionId: result.versionId } });
+  res.json(result);
+}));
+
+// Model phase 4: the waitlist for a full departure, and the offer a waiting
+// traveler gets when a seat is released.
+const waitlistSchema = z.object({
+  name: z.string().trim().min(1, "Your name is required.").max(160),
+  email: z.string().trim().email("A valid email is required.").max(200),
+  phone: z.string().trim().max(40).optional().or(z.literal("")),
+  seats: z.coerce.number().int().min(1).max(12),
+});
+app.post("/api/public/departures/:id/waitlist", writeLimiter, h(async (req, res) => {
+  if (!catalogueV2Enabled()) throw new AppError(404, "Not found.");
+  const input = parse(waitlistSchema, req.body);
+  const entry = await joinWaitlist(pool, {
+    legacyDepartureId: Number(req.params.id), name: input.name, email: input.email, phone: input.phone || null, seats: input.seats,
+  });
+  await logAudit(req, { action: "waitlist.join", entity: "departure", entityId: Number(req.params.id), detail: { seats: input.seats, position: entry.position } });
+  res.status(201).json({ waitlist: { position: entry.position, seats: entry.seats } });
+}));
+
+app.get("/api/public/waitlist/:token", h(async (req, res) => {
+  if (!catalogueV2Enabled()) throw new AppError(404, "Not found.");
+  res.json(await waitlistOffer(pool, { token: String(req.params.token || "") }));
+}));
+
+// The waiting traveler books the held seats. The departure is going ahead, so
+// the booking is asked to pay at once; a seat freed by a paid cancellation is
+// resold, and that traveler's retained fee is returned.
+app.post("/api/public/waitlist/:token/book", writeLimiter, h(async (req, res) => {
+  if (!catalogueV2Enabled()) throw new AppError(404, "Not found.");
+  const manifest = manifestFields(req.body);
+  const result = await withTransaction(async (c) => {
+    const { entry, departure: cat } = await claimWaitlistOffer(c, { token: String(req.params.token || "") });
+    const dep = await loadDeparture(c, cat.legacyDepartureId, { forUpdate: true });
+    if (!dep || dep.status === "cancelled") throw new AppError(409, "This departure has been canceled.");
+    if (seatsTotal(dep.pledges) + await heldForWaitlist(c, dep.id, entry.seats) + entry.seats > dep.maxSeats) {
+      throw new AppError(409, "The held seats are no longer available. Please contact us.");
+    }
+    const product = dep.tourProductId ? await loadProduct(c, dep.tourProductId) : null;
+    const phone = String(req.body?.customerPhone || entry.phone || "").trim() || null;
+    await requireCompleteBooking(c, dep.id, manifest, entry.seats, phone);
+    const pricing = computePledgePricing(dep, product, { seats: entry.seats, roomingType: req.body?.roomingType, accommodationTier: req.body?.accommodationTier });
+    const pledgeId = newPledgeId(dep.id);
+    await insertPledge(c, dep.id, {
+      id: pledgeId, agencyId: "direct_customer", agency: "Direct traveler", seats: entry.seats, customers: entry.name,
+      customerEmail: entry.email, customerPhone: phone, source: "public", bookingCode: await uniqueBookingCode(c), manifest, ...pricing,
+    });
+    await fixBookingTerms(c, { pledgeId, by: "traveller" });
+    const done = await completeWaitlistOffer(c, { entryId: entry.id, pledgeId, departure: cat });
+    const saved = (await c.query(`SELECT * FROM pledges WHERE id=$1`, [pledgeId])).rows[0];
+    return { booking: mapPledge(saved), departureId: dep.id, request: done.request };
+  });
+  await logAudit(req, { action: "waitlist.book", entity: "pledge", entityId: result.booking.id, detail: { departureId: result.departureId } });
+  emitDepartureSync(result.departureId);
+  res.status(201).json({ booking: { code: result.booking.bookingCode, seats: result.booking.seats } });
 }));
 
 // Public: a traveller releases their own seat, using the code from their email.
@@ -3834,6 +3961,7 @@ app.post("/api/admin/uploads", requireAuth, requireRole("super_admin", "ops_staf
 registerCatalogueRoutes(app, { requireAuth, requireRole, h, logAudit, invalidatePublic: () => invalidatePublicBootstrap() });
 registerOperatorRoutes(app, { requireAuth, requireRole, h, logAudit, provisionUser, supabaseAdmin, sendEmail });
 registerFinanceRoutes(app, { requireAuth, requireRole, h, logAudit, sendEmail, opsRecipient, writeLimiter });
+registerPayAtGoAheadRoutes(app, { requireAuth, requireRole, h, logAudit, sendEmail, writeLimiter });
 
 app.use("/api", (_req, res) => res.status(404).json({ error: "Not found." }));
 

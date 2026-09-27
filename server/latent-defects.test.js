@@ -58,11 +58,20 @@ test("L-4: cancelled_reason is written only under catalogue_v2, and its reader a
     assert.ok(lines.slice(Math.max(0, i - 6), i + 1).some((l) => /catalogueV2Enabled\(\)/.test(l)),
       `L-4: server/app.js:${i + 1} writes cancelled_reason outside catalogue_v2`);
   }
+  // Model phase 4: two writes, on pay-at-GoAhead bookings only — a release
+  // (only a request can be released, and only pay-at-GoAhead bookings have
+  // requests) and a cancellation that refuses any other booking.
+  const pag = readFileSync(join(ROOT, "server", "pay-at-goahead.js"), "utf8");
+  assert.equal((pag.match(/cancelled_reason\s*=/g) || []).length, 2, "L-4: a new write of cancelled_reason in pay-at-goahead.js — revisit the register");
+  assert.match(pag, /if \(pledge\.payment_mode !== "pay_at_goahead"\) throw new CatalogueError\(409/,
+    "L-4: the pay-at-GoAhead cancellation no longer refuses other bookings");
   const { commissionOutcome } = await import("../shared/settlement-rules.js");
   const late = { pledgeStatus: "cancelled", cancelledReason: "traveler", cancelledAtMs: 10, goAheadAtMs: 5, startMs: 10 + 3600000, productType: "day_tour" };
   assert.equal(commissionOutcome({ ...late, departureStatus: "cancelled_below_minimum", reachedGoAhead: false }).state, "void",
     "L-4 is armed: the commission rule read the booking's reason before the departure's status");
   assert.equal(commissionOutcome({ ...late, departureStatus: "completed", reachedGoAhead: true }).state, "half");
+  assert.equal(commissionOutcome({ ...late, cancelledReason: "unpaid", payAtGoAhead: true, departureStatus: "cancelled_below_minimum", reachedGoAhead: false }).reason,
+    "The departure didn't reach GoAhead.", "L-4 is armed: the release reason was read before the departure's status");
 });
 
 test("L-5's bound is what the register says it is", () => {

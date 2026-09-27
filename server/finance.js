@@ -140,8 +140,10 @@ export async function financeItems(db = pool, { from = null, to = null, party = 
       kind: "agency_invoice", id: Number(i.id), type: "Agency invoice (receivable)", direction: "in",
       party: { kind: "agency", id: i.agency_id, name: i.agency_name },
       departure: { id: Number(i.departure_id), date: ymd(i.date), label: `${i.code} ${i.title}` },
-      currency: "EUR", amount: num(i.amount_eur), dueOn: ymd(i.due_on), standing: standingOf(i.state, ymd(i.due_on)),
-      holdReason: null, payment: payment("agency_invoice", i.id),
+      currency: "EUR", amount: num(i.amount_eur), dueOn: ymd(i.due_on),
+      // Pay at GoAhead: no due date until the payment deadline after GoAhead.
+      standing: i.state === "due" && !i.due_on ? "on_hold" : standingOf(i.state, ymd(i.due_on)),
+      holdReason: i.state === "due" && !i.due_on ? "Due at the payment deadline after GoAhead." : null, payment: payment("agency_invoice", i.id),
     })),
   ];
   return items
@@ -217,7 +219,17 @@ export async function recordPayment(db, { kind, id, amount, paidOn, bankReferenc
       if (!i) throw new CatalogueError(404, "Not found.");
       if (i.state !== "due") throw new CatalogueError(409, i.state === "paid" ? "Already paid." : "This invoice is void.");
       direction = "in"; currency = "EUR"; due = Number(i.amount_eur);
-      markPaid = () => c.query("UPDATE agency_invoices SET state = 'paid', paid_at = now() WHERE id = $1", [id]);
+      markPaid = async () => {
+        await c.query("UPDATE agency_invoices SET state = 'paid', paid_at = now() WHERE id = $1", [id]);
+        // Pay at GoAhead (phase 4): the invoice is the seat's payment, so
+        // the seat's request is paid too and isn't released at the deadline.
+        if (await hasPayRequests(c)) {
+          await c.query(
+            `UPDATE payment_requests SET state = 'paid', paid_at = now(), provider_reference = $2, recorded_by = $3
+              WHERE pledge_id = $1 AND payer = 'agency' AND state IN ('awaiting_link', 'sent')`,
+            [i.pledge_id, `bank transfer ${String(bankReference).trim().slice(0, 100)}`, user?.email || null]);
+        }
+      };
     } else {
       throw new CatalogueError(422, "Unknown item.");
     }
@@ -241,6 +253,12 @@ export async function recordPayment(db, { kind, id, amount, paidOn, bankReferenc
   });
 }
 
+// Migration 051 applied? (The finance screens work before it.)
+async function hasPayRequests(c) {
+  const r = await c.query("SELECT to_regclass('public.payment_requests') AS t");
+  return r.rows[0].t != null;
+}
+
 // ---------------------------------------------------------------- margin
 // Per catalog departure: EUR charged (by charge date, net of refunds),
 // operator cost (EGP) converted at the rate on each charge date, commissions
@@ -254,12 +272,26 @@ export async function marginReport(db = pool, { from, to }) {
   const rates = new Map((await db.query("SELECT day, egp_per_eur FROM fx_rates")).rows.map((r) => [ymd(r.day), Number(r.egp_per_eur)]));
   const fees = await feeSetting(db);
   const { expectedAmountFor } = await import("./assignments.js");
+  const payAtGoAhead = await hasPayRequests(db);
+  const tiers = payAtGoAhead ? await import("./cancellation-tiers.js") : null;
+  const fx = tiers ? await tiers.latestFxRate(db) : null;
   const out = [];
   for (const d of deps) {
     const charges = (await db.query(
       `SELECT b.amount, b.paid_at, b.state FROM booking_payments b JOIN pledges p ON p.id = b.pledge_id
         WHERE p.departure_id = $1 AND b.state = 'paid' AND b.paid_at IS NOT NULL`, [d.legacy_departure_id])).rows
       .map((b) => ({ amountEur: Number(b.amount), day: todayIn(new Date(b.paid_at).getTime()) }));
+    // Pay at GoAhead (phase 4): the full-price payments, by the day each was
+    // recorded paid, less what was refunded (by the day of the refund).
+    if (payAtGoAhead) {
+      const paid = (await db.query(
+        "SELECT amount_eur, paid_at FROM payment_requests WHERE departure_id = $1 AND paid_at IS NOT NULL AND state IN ('paid')", [d.id])).rows;
+      for (const r of paid) charges.push({ amountEur: Number(r.amount_eur), day: todayIn(new Date(r.paid_at).getTime()) });
+      const back = (await db.query(
+        `SELECT f.amount_eur, COALESCE(f.done_at, f.created_at) AS at FROM payment_refunds f JOIN payment_requests r ON r.id = f.request_id
+          WHERE r.departure_id = $1 AND f.state <> 'cancelled' AND f.amount_eur > 0`, [d.id])).rows;
+      for (const f of back) charges.push({ amountEur: -Number(f.amount_eur), day: todayIn(new Date(f.at).getTime()) });
+    }
     const balance = (await db.query("SELECT detail FROM operator_payables WHERE departure_id = $1 AND kind = 'balance' AND state <> 'cancelled'", [d.id])).rows[0];
     let operatorEgp = balance?.detail?.operatorAmount ?? null;
     if (operatorEgp == null) operatorEgp = (await expectedAmountFor(db, Number(d.id))).total;
@@ -269,6 +301,9 @@ export async function marginReport(db = pool, { from, to }) {
     out.push({
       departure: { id: Number(d.id), date: ymd(d.date), status: d.status, label: `${d.code} ${d.title}` },
       ...departureMargin({ charges, operatorEgp, commissionsEur: Number(commissions), feesEur, rates }),
+      // Phase 4: tier windows where a cancellation would lose money
+      // (clause 10.2), under the departure's locked rate.
+      lossWarnings: tiers ? await tiers.departureLossWarnings(db, { departureId: Number(d.id), fx }) : [],
     });
   }
   return out;

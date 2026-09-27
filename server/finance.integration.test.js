@@ -40,7 +40,7 @@ const ADMIN = { id: USERS["ops-token"].id, email: USERS["ops-token"].email, role
 const STAFF = { id: USERS["staff-token"].id, email: USERS["staff-token"].email, role: "ops_staff" };
 
 let db, dbUrl, fakeAuth, servers = [];
-let cat, ops, roster, rates, asg, settle, fin, bank, comm, details, jobs;
+let cat, ops, roster, rates, asg, settle, fin, bank, comm, details, jobs, pag;
 let productId, X;
 const deps = {};
 const sent = [];
@@ -120,6 +120,7 @@ before(async () => {
   comm = await import("./commissions.js");
   details = await import("./booking-details.js");
   jobs = await import("./jobs/operator-jobs.js");
+  pag = await import("./pay-at-goahead.js");
 
   productId = Number((await db.query("SELECT id FROM catalogue_products WHERE catalogue_no = 1")).rows[0].id);
   const draft = (await db.query("SELECT id FROM catalogue_spec_versions WHERE product_id = $1 AND state = 'draft'", [productId])).rows[0].id;
@@ -224,7 +225,11 @@ test("under the flag a catalog booking needs every traveler's details; commissio
   // seats count toward GoAhead from booking.
   const inv = await one("SELECT * FROM agency_invoices WHERE pledge_id = $1", [p.id]);
   assert.equal(Number(inv.amount_eur), Number(p.booking_total) - 24);
-  assert.equal(ymd(inv.due_on), shiftDate(today(), 14));
+  // Model phase 4: every catalog booking under the flag pays at GoAhead, so
+  // the invoice has no due date until the payment deadline after GoAhead.
+  assert.equal(inv.due_on, null);
+  assert.equal(p.payment_mode, "pay_at_goahead");
+  assert.equal(p.terms_fixed_by, "agency");
   assert.equal(Number((await one("SELECT seats_sold FROM catalogue_departure_seats WHERE catalogue_departure_id = $1", [deps.a.id])).seats_sold), 2);
 
   // A later rate version doesn't change a locked commission.
@@ -426,9 +431,23 @@ test("no payment without verified bank details; a change blocks payment until it
 
 // ---------------------------------------------------------------- E. commission
 test("commission is earned when the traveler travels, 50% on a late cancellation, nothing without GoAhead", { skip }, async () => {
-  // Departure B: agency B's traveler canceled 24 hours before the start, after GoAhead.
+  // Model phase 4: the two agency bookings pay at GoAhead. Agency A's seats
+  // (agency-billed) are paid through the agency's request; agency B's
+  // traveler pays, then cancels 24 hours before the start, after GoAhead:
+  // Sawa keeps 10% under the tiers, so the commission is half.
+  const payUp = async (pledgeId, dep) => {
+    const departure = await pag.departureFor(db, { id: dep.id });
+    const r = await pag.requestPayment(db, { pledgeId, departure });
+    await pag.attachLink(db, { requestId: r.id, linkUrl: "https://pay.tab.travel/x", by: "ops" });
+    return pag.markRequestPaid(db, { requestId: r.id, providerReference: `TAB-${r.id}`, by: "ops" });
+  };
+  const paidA = await payUp(deps.a.agencyPledge, deps.a);
+  assert.equal(paidA.payer, "agency");
+  assert.equal((await one("SELECT state FROM agency_invoices WHERE pledge_id = $1", [deps.a.agencyPledge])).state, "paid");
+  await payUp(deps.b.agencyPledge, deps.b);
   const start = zonedDateTimeToUtc(deps.b.date, "08:00");
-  await db.query("UPDATE pledges SET status = 'cancelled', cancelled_reason = 'traveler', cancelled_at = $2 WHERE id = $1", [deps.b.agencyPledge, new Date(start - DAY)]);
+  const cancel = await pag.cancelPayAtGoAheadBooking(db, { pledgeId: deps.b.agencyPledge, reason: "traveler", by: "ops", now: start - DAY });
+  assert.deepEqual([cancel.retainedPct, cancel.fee, cancel.refund], [10, 10, 90]);
   // Departure C: an agency seat on a date that never reached GoAhead.
   const cPledge = await pledge(deps.c, 1, { agencyId: "ag_a", agency: "Agency A" });
   await comm.recordAgencyBooking(db, { pledgeId: cPledge, agency: { id: "ag_a", billing_approved: true, billing_due_days: 14 }, catalogueDepartureId: deps.c.id });
@@ -472,6 +491,9 @@ test("the monthly statement lists each seat and totals it; an Egyptian agency wa
 
 // ---------------------------------------------------------------- F. finance view and margin
 test("the finance view lists due, overdue and paid; the margin shows 'rate missing' until the rate is entered", { skip }, async () => {
+  // A legacy-flow invoice (not pay at GoAhead) is due N days after booking.
+  const legacyInvoice = await pledge(deps.c, 1, { agencyId: "ag_a", agency: "Agency A" });
+  await comm.recordAgencyBooking(db, { pledgeId: legacyInvoice, agency: { id: "ag_a", billing_approved: true, billing_due_days: 14 }, catalogueDepartureId: deps.c.id });
   const items = await fin.financeItems(db, {});
   assert.ok(items.some((i) => i.kind === "operator_payable" && i.standing === "paid"));
   assert.ok(items.some((i) => i.kind === "agency_invoice" && i.party.id === "ag_a"));
@@ -490,16 +512,25 @@ test("the finance view lists due, overdue and paid; the margin shows 'rate missi
   await charge(live[0].id, 300, d1);
   await charge(live[1].id, 100, d2);
   await fin.setFxRate(db, { day: d1, egpPerEur: 50, by: "it" });
+  // Model phase 4: agency A's pay-at-GoAhead payment (its invoice amount,
+  // 200 − 24 commission = 176 EUR) counts on the day it was recorded paid.
+  const modeC = await one("SELECT amount_eur, paid_at FROM payment_requests WHERE pledge_id = $1 AND state = 'paid'", [deps.a.agencyPledge]);
+  const d0 = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(modeC.paid_at);
+  await fin.setFxRate(db, { day: d0, egpPerEur: 55, by: "it" });
   let row = (await fin.marginReport(db, { from: deps.a.date, to: deps.a.date })).find((r) => r.departure.id === deps.a.id);
   assert.equal(row.margin, null);
   assert.equal(row.problem, "rate missing");
   assert.deepEqual(row.missingRates, [d2]);
   await fin.setFxRate(db, { day: d2, egpPerEur: 40, by: "it" });
   row = (await fin.marginReport(db, { from: deps.a.date, to: deps.a.date })).find((r) => r.departure.id === deps.a.id);
-  // Operator 390 EGP: 3/4 at 50, 1/4 at 40 → 5.85 + 2.4375 EUR. Commission 24. Fees not set.
+  // Operator 390 EGP, spread over the charges by share and converted at each
+  // charge day's rate. Commission 24. Fees not set.
+  const c0 = Number(modeC.amount_eur);
+  const revenue = 400 + c0;
+  const opEur = [[300, 50], [100, 40], [c0, 55]].reduce((sum, [amt, rate]) => sum + (390 * (amt / revenue)) / rate, 0);
   assert.equal(row.operatorEgp, 390);
   assert.equal(row.feesMissing, true);
-  assert.equal(row.margin, Math.round((400 - (5.85 + 2.4375) - 24) * 100) / 100);
+  assert.ok(Math.abs(row.margin - (revenue - opEur - 24)) < 0.02, `${row.margin} vs ${revenue - opEur - 24}`);
   const legacy = await fin.legacyOpenDepartures(db);
   assert.equal(typeof legacy.open, "number");
 });

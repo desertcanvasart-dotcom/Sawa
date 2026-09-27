@@ -231,9 +231,15 @@ export async function assignByAdmin(db, { departureId, operatorId, by, now = Dat
 // operator needs to run it: name, pickup point, a contact number (the lead
 // traveler's), nationality where the product's tickets need it, and
 // safety-related needs. No email, no price.
-export function manifestRows(pledges, { needsNationality = false } = {}) {
+export function manifestRows(pledges, { needsNationality = false, payments = null } = {}) {
   const rows = [];
   for (const p of pledges) {
+    // Model phase 4, before the cut-off: whether the booking has paid. A
+    // released seat is a canceled booking and isn't here (clause 10.1).
+    const pay = payments && p.payment_mode === "pay_at_goahead" ? payments.get(p.id) || null : undefined;
+    const payment = pay === undefined ? undefined
+      : pay?.state === "paid" ? { standing: "paid" }
+      : { standing: "due", dueAt: pay?.state === "sent" ? pay.dueAt : null };
     const names = Array.isArray(p.traveller_names) ? p.traveller_names.map((n) => String(n || "").trim()).filter(Boolean) : [];
     const lead = String(p.customers || "").trim();
     const seats = Math.max(1, Number(p.seats) || 1);
@@ -256,6 +262,7 @@ export function manifestRows(pledges, { needsNationality = false } = {}) {
         nationality: needsNationality ? (p.nationality || null) : undefined,
         safetyNeeds: i === 0 ? (p.safety_needs || null) : null,
         canceledAfterCutoff: p.status === "cancelled" || undefined,
+        ...(payment ? { payment } : {}),
       });
     }
   }
@@ -276,12 +283,17 @@ export async function freezeManifests({ db = pool, now = Date.now(), log = () =>
     `SELECT cd.id FROM catalogue_departures cd
       WHERE cd.status = 'go_ahead' AND NOT EXISTS (SELECT 1 FROM catalogue_manifests m WHERE m.departure_id = cd.id)
         AND cd.date <= $1::date + 120`, [todayIn(now)]);
+  const unreleased = await payAtGoAheadPending(db, now);
   let frozen = 0;
   for (const { id } of r.rows) {
     await inTx(db, async (c) => {
       const d = await departureContext(c, Number(id));
       const { cutoffAt } = departureInstants(d, d.product, { startTime: d.startTime, nights: d.nights });
       if (!(now >= cutoffAt)) return;
+      // Model phase 4: a seat whose payment deadline has passed is released
+      // (by the pay-at-GoAhead tick, which runs first) before the manifest
+      // freezes, so the frozen manifest holds manifest seats only.
+      if (unreleased.has(d.id)) return;
       const pledges = await livePledges(c, d.legacyDepartureId);
       const travelers = manifestRows(pledges, { needsNationality: d.product.needsNationality });
       const rooms = roomsFor(pledges.map((p) => ({ seats: p.seats, roomingType: p.rooming_type })));
@@ -294,6 +306,25 @@ export async function freezeManifests({ db = pool, now = Date.now(), log = () =>
   }
   if (frozen) log(`manifests: ${frozen} frozen at cut-off`);
   return { frozen };
+}
+
+// Departures with a pay-at-GoAhead seat past its deadline and not yet
+// released. Empty until migration 051 is applied.
+async function payAtGoAheadPending(db, now) {
+  try {
+    const r = await db.query(
+      "SELECT DISTINCT departure_id FROM payment_requests WHERE state = 'sent' AND due_at <= $1", [new Date(now)]);
+    return new Set(r.rows.map((x) => Number(x.departure_id)));
+  } catch (e) {
+    if (e?.code === "42P01") return new Set();
+    throw e;
+  }
+}
+
+async function paymentsFor(c, pledges) {
+  if (!pledges.some((p) => p.payment_mode === "pay_at_goahead")) return null;
+  const { requestsByPledge } = await import("./pay-at-goahead.js");
+  return requestsByPledge(c, pledges.map((p) => p.id));
 }
 
 // The manifest an operator (or admin) sees. `operatorId` set = an operator:
@@ -311,8 +342,12 @@ export async function manifestFor(db, { departureId, operatorId = null, user = n
       if (assignment.manifest_access_revoked_at) throw new CatalogueError(410, "Access to this manifest ended 90 days after the departure.");
     }
     const frozen = (await c.query("SELECT * FROM catalogue_manifests WHERE departure_id = $1", [departureId])).rows[0];
-    const travelers = frozen ? frozen.travelers
-      : manifestRows(await livePledges(c, d.legacyDepartureId), { needsNationality: d.product.needsNationality });
+    let travelers = frozen?.travelers;
+    if (!frozen) {
+      // Before the cut-off: every booked seat, paid or with its payment due.
+      const pledges = await livePledges(c, d.legacyDepartureId);
+      travelers = manifestRows(pledges, { needsNationality: d.product.needsNationality, payments: await paymentsFor(c, pledges) });
+    }
     if (operatorId != null) {
       await c.query(
         `INSERT INTO manifest_access_log (departure_id, operator_id, user_id, user_email, frozen) VALUES ($1, $2, $3, $4, $5)`,

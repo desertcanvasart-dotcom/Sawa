@@ -88,16 +88,31 @@ export function sawaKeepsFee(productType, daysBefore) {
 //   traveler canceled after GoAhead, in a band where Sawa keeps a fee → half, 50%
 //   any other cancellation                   → void
 // Returns null while the departure is still undecided.
+//
+// Pay at GoAhead (model phase 4, `payAtGoAhead`): a seat earns only if it was
+// paid (an agency-billed seat: its invoice) and traveled; a seat released for
+// non-payment is void at once. Whether a late cancellation kept a fee is what
+// was actually kept (`feeKept`), known once the departure is over: a seat
+// resold to the waitlist before the cut-off returns the fee, and with it the
+// half commission.
 export function commissionOutcome({
   departureStatus, reachedGoAhead, pledgeStatus, cancelledReason = null,
   cancelledAtMs = null, goAheadAtMs = null, startMs, productType,
+  payAtGoAhead = false, paid = false, feeKept = null,
 }) {
   if (departureStatus === "cancelled_below_minimum" || (!reachedGoAhead && departureStatus !== "open")) {
     return { state: "void", share: 0, reason: "The departure didn't reach GoAhead." };
   }
   if (pledgeStatus === "cancelled") {
+    if (cancelledReason === "unpaid") return { state: "void", share: 0, reason: "Released: not paid by the deadline." };
     const afterGoAhead = goAheadAtMs != null && cancelledAtMs != null && cancelledAtMs >= goAheadAtMs;
-    if (cancelledReason === "traveler" && afterGoAhead && cancelledAtMs != null) {
+    if (payAtGoAhead && cancelledReason === "traveler" && afterGoAhead) {
+      if (departureStatus !== "completed") return null;
+      return feeKept
+        ? { state: "half", share: LATE_CANCEL_COMMISSION_SHARE, reason: "Late cancellation: Sawa kept a fee." }
+        : { state: "void", share: 0, reason: "Canceled without a fee to Sawa (or the seat was resold)." };
+    }
+    if (!payAtGoAhead && cancelledReason === "traveler" && afterGoAhead && cancelledAtMs != null) {
       const daysBefore = Math.floor((startMs - cancelledAtMs) / 86400000);
       if (sawaKeepsFee(productType, daysBefore)) {
         return { state: "half", share: LATE_CANCEL_COMMISSION_SHARE, reason: "Late cancellation: Sawa keeps a fee." };
@@ -105,7 +120,10 @@ export function commissionOutcome({
     }
     return { state: "void", share: 0, reason: "Canceled without a fee to Sawa." };
   }
-  if (departureStatus === "completed") return { state: "earned", share: 1, reason: "Traveled." };
+  if (departureStatus === "completed") {
+    if (payAtGoAhead && !paid) return { state: "void", share: 0, reason: "Traveled, but the seat wasn't paid." };
+    return { state: "earned", share: 1, reason: "Traveled." };
+  }
   return null;
 }
 

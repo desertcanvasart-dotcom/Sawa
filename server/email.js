@@ -1069,3 +1069,113 @@ export function commissionStatementEmail({ to, agencyName, period, totalLabel, s
     { eyebrow: "Commission", preheader: totalLabel });
   return { to, subject, html, text, kind: "commission_statement" };
 }
+
+// ---------------------------------------------------------------- pay at GoAhead
+// Model phase 4 (catalog departures, catalogue_v2). One full-price link per
+// booking after GoAhead, with a deadline; unpaid seats are released.
+const eur = (n) => `€${Number(n).toFixed(2).replace(/\.00$/, "")}`;
+const cairoTime = (iso) => new Intl.DateTimeFormat("en-US", {
+  timeZone: "Africa/Cairo", weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
+}).format(new Date(iso)) + " Cairo time";
+
+// The link. To the traveler, or to the agency for an agency-billed seat.
+export function payAtGoAheadLinkEmail({ to, name, title, dateLabel, amount, dueAt, url, bookingCode, agencyBilled = false, termsLink = null }) {
+  const due = cairoTime(dueAt);
+  const subject = `Pay for ${title} on ${dateLabel} by ${due}`;
+  const opener = agencyBilled
+    ? `Hello, ${title} on ${dateLabel} is going ahead. This is the payment for your agency's booking ${bookingCode}.`
+    : `Hello${name ? ` ${name}` : ""}, good news: ${title} on ${dateLabel} is going ahead.`;
+  const lines = [
+    opener,
+    `Please pay ${eur(amount)} by ${due}. If it isn't paid by then, the seat${agencyBilled ? "s are" : " is"} released and offered to other travelers.`,
+    `Pay here: ${url}`,
+    `Booking code: ${bookingCode}. It is the payment's reference.`,
+    ...(termsLink ? [`Before you pay, please review and accept the cancellation terms your booking was made under: ${termsLink}`] : []),
+  ];
+  const html = shell(
+    subject,
+    `<p style="margin:0 0 16px">${esc(opener)}</p>
+     <p style="margin:0 0 20px">Please pay <strong>${esc(eur(amount))}</strong> by <strong>${esc(due)}</strong>. If it isn't paid by then, the seat${agencyBilled ? "s are" : " is"} released and offered to other travelers.</p>
+     ${button(url, `Pay ${eur(amount)}`)}
+     ${note(`Booking code: <strong>${esc(bookingCode)}</strong>. It is the payment's reference.`)}
+     ${termsLink ? note(`Before you pay, please <a href="${esc(termsLink)}">review and accept the cancellation terms</a> your booking was made under.`) : ""}`,
+    { eyebrow: "Going ahead", preheader: `Pay ${eur(amount)} by ${due}.` }
+  );
+  return { to, subject, html, text: lines.join("\n\n"), kind: "pay_at_goahead_link" };
+}
+
+export function payAtGoAheadReminderEmail({ to, name, title, dateLabel, amount, dueAt, url, bookingCode }) {
+  const due = cairoTime(dueAt);
+  const subject = `Reminder: pay for ${title} by ${due}`;
+  const text = `Hello${name ? ` ${name}` : ""}, a reminder that ${eur(amount)} for ${title} on ${dateLabel} is due by ${due}. `
+    + `After that the seat is released. Pay here: ${url} (booking code ${bookingCode}).`;
+  const html = shell(subject,
+    `<p style="margin:0 0 20px">${esc(text.split(" Pay here")[0])}</p>${button(url, `Pay ${eur(amount)}`)}${note(`Booking code: ${esc(bookingCode)}`)}`,
+    { eyebrow: "Reminder", preheader: `Due by ${due}.` });
+  return { to, subject, html, text, kind: "pay_at_goahead_reminder" };
+}
+
+export function payAtGoAheadReleasedEmail({ to, name, title, dateLabel, bookingCode }) {
+  const subject = `Your seat on ${title} was released`;
+  const text = `Hello${name ? ` ${name}` : ""}, we didn't receive payment for ${title} on ${dateLabel} (booking ${bookingCode}) by the deadline, `
+    + "so the seat has been released. Nothing was charged. If you paid and this is a mistake, reply to this email at once and we'll put it right.";
+  const html = shell(subject, `<p style="margin:0 0 16px">${esc(text)}</p>`, { eyebrow: "Seat released", preheader: "Payment wasn't received by the deadline." });
+  return { to, subject, html, text, kind: "pay_at_goahead_released" };
+}
+
+export function waitlistOfferEmail({ to, name, title, dateLabel, seats, expiresAt, url }) {
+  const until = cairoTime(expiresAt);
+  const subject = `A seat opened up: ${title} on ${dateLabel}`;
+  const text = `Hello${name ? ` ${name}` : ""}, ${seats === 1 ? "a seat has" : `${seats} seats have`} opened up on ${title} on ${dateLabel}, `
+    + `and ${seats === 1 ? "it is" : "they are"} held for you until ${until}. The departure is going ahead, so payment is due soon after you book. Book here: ${url}`;
+  const html = shell(subject, `<p style="margin:0 0 20px">${esc(text.split(" Book here")[0])}</p>${button(url, "Book the seat")}`,
+    { eyebrow: "Waitlist", preheader: `Held for you until ${until}.` });
+  return { to, subject, html, text, kind: "waitlist_offer" };
+}
+
+// To ops: the links to make in Tab, and the seats about to be released.
+export function payAtGoAheadOpsEmail({ to, kind, items = [], portalUrl }) {
+  const subject = kind === "links"
+    ? `${items.length} payment link${items.length === 1 ? "" : "s"} to make in Tab`
+    : `${items.length} seat${items.length === 1 ? "" : "s"} will be released in 2 hours unless paid`;
+  const intro = kind === "links"
+    ? "These bookings are going ahead and need a Tab payment link. Make each link with the booking code as its reference, then paste it into Admin → Finance → Pay at GoAhead."
+    : "These seats are released at their deadline unless payment is recorded first. If one was paid in Tab and not yet marked, mark it paid now.";
+  const lines = items.map((i) => `${i.reference} · ${i.title} ${i.date} · ${eur(i.amount)}${i.dueAt ? ` · due ${cairoTime(i.dueAt)}` : ""}`);
+  const html = shell(subject,
+    `<p style="margin:0 0 16px">${esc(intro)}</p><ul>${lines.map((l) => `<li>${esc(l)}</li>`).join("")}</ul>${portalUrl ? button(portalUrl, "Open Pay at GoAhead") : ""}`,
+    { eyebrow: "Pay at GoAhead", preheader: subject });
+  return { to, subject, html, text: [intro, ...lines, portalUrl || ""].join("\n"), kind: kind === "links" ? "pay_at_goahead_ops_links" : "pay_at_goahead_ops_release_warning" };
+}
+
+// The booking confirmation under pay at GoAhead: nothing charged, the full
+// price asked once the date goes ahead, and the cancellation tiers this
+// booking was made under (Terms §13.2: repeated in the confirmation).
+export function payAtGoAheadBookingEmail({ to, customerName, route, dateLabel, seats, total, bookingCode, terms = null }) {
+  const subject = `Booking received — ${route}`;
+  const manageUrl = bookingCode ? `${APP_URL}/booking/${encodeURIComponent(bookingCode)}` : null;
+  const tiers = terms?.tiers || [];
+  const tierLines = tiers.map((t) => `  ${t.window}: ${t.retainedPct ? `${t.retainedPct}% of the price kept` : "no charge"}`);
+  const text =
+    `Hi ${customerName || ""},\n\nWe've recorded your booking for ${route} on ${dateLabel}.\n`
+    + `Seats: ${seats}\n${bookingCode ? `Booking code: ${bookingCode}\n` : ""}Price: ${eur(total)}\n\n`
+    + "Nothing has been charged. When this date reaches its minimum travelers (GoAhead) we'll email you a payment link "
+    + "for the full price, with a deadline. If it isn't paid by then, the seat is released.\n"
+    + (manageUrl ? `\nCheck your date or cancel your seat, free, any time before GoAhead:\n${manageUrl}\n` : "")
+    + `\nCancellation\n${CANCELLATION_BEFORE_GOAHEAD}\n`
+    + (tiers.length ? `After GoAhead (cancellation terms v${terms.version}):\n${tierLines.join("\n")}\n` : "")
+    + `Full terms: ${APP_URL}/terms`;
+  const html = shell(
+    "Booking received",
+    `<p style="margin:0 0 20px">We've recorded your booking for <strong>${esc(route)}</strong> on ${esc(dateLabel)}.</p>
+     ${panel(`${row("Seats:", esc(seats))}<br/>${bookingCode ? `${row("Booking code:", esc(bookingCode))}<br/>` : ""}${row("Price:", esc(eur(total)))}`)}
+     ${note(`<strong style="color:${C.ink}">Nothing has been charged.</strong> When this date reaches its minimum travelers we'll email you a payment link for the full price, with a deadline. If it isn't paid by then, the seat is released.`)}
+     ${manageUrl ? button(manageUrl, "Check or cancel your booking") : ""}
+     <p style="margin:0 0 8px;font-family:${SANS};font-size:13px;font-weight:700;color:${C.ink}">Cancellation</p>
+     ${note(esc(CANCELLATION_BEFORE_GOAHEAD))}
+     ${tiers.length ? note(`After GoAhead (cancellation terms v${esc(terms.version)}):<br/>${tiers.map((t) => `${esc(t.window)}: <strong>${t.retainedPct ? `${esc(t.retainedPct)}% of the price kept` : "no charge"}</strong>`).join("<br/>")}`) : ""}
+     ${note(`<a href="${APP_URL}/terms" style="color:${C.muted}">Full terms</a>.`)}`,
+    { eyebrow: "Seat held", preheader: `Your seat on ${route} is held — nothing charged yet` }
+  );
+  return { to, subject, html, text, kind: "booking_confirmation" };
+}
