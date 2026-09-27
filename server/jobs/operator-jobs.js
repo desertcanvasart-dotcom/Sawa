@@ -5,7 +5,9 @@
 //                         GoAhead departures to the rostered operator, expire
 //                         missed acknowledgements (strike + admin alert)
 //   operator-daily        daily: document expiry (suspend, 30- and 7-day
-//                         reminders) and manifest access 90 days after the trip
+//                         reminders), manifest access 90 days after the trip,
+//                         booking-detail requests and commission statements
+//                         (phase 3)
 //
 // With the flag off they do nothing. Until migration 049 is applied they do
 // nothing either. None of them moves money.
@@ -32,8 +34,15 @@ async function guarded(fn, log, env) {
 export function runOperatorAssignments({ log = console.log, now, env = process.env } = {}) {
   return guarded(async () => {
     const { runAssignmentTick } = await import("../assignments.js");
+    const { runSettlementTick } = await import("../operator-settlement.js");
+    const { decideCommissions } = await import("../commissions.js");
     const { sendEmail } = await import("../email.js");
-    return runAssignmentTick({ log, now, send: sendEmail });
+    const assignments = await runAssignmentTick({ log, now, send: sendEmail });
+    // Model phase 3: advances priced, balances and statements after the
+    // departure, statements accepted at 30 days, commissions decided.
+    const settlement = await runSettlementTick({ log, now });
+    const commissions = await decideCommissions({ log, now });
+    return { ...assignments, ...settlement, ...commissions };
   }, log, env);
 }
 
@@ -42,9 +51,15 @@ export function runOperatorDaily({ log = console.log, now, env = process.env } =
     const { runDocumentJob } = await import("../operators.js");
     const { revokeExpiredManifestAccess } = await import("../assignments.js");
     const { sendEmail, opsRecipient } = await import("../email.js");
+    const { runCompletionRequests } = await import("../booking-details.js");
+    const { runCommissionStatements } = await import("../commissions.js");
     const documents = await runDocumentJob({ log, now, send: sendEmail, adminEmail: opsRecipient() });
     const manifests = await revokeExpiredManifestAccess({ now });
-    return { ...documents, ...manifests };
+    // Model phase 3: booking-detail requests (7 and 3 days before) and the
+    // monthly commission statements (by the 10th).
+    const details = await runCompletionRequests({ log, now, send: sendEmail, env });
+    const statements = await runCommissionStatements({ log, now, send: sendEmail, env });
+    return { ...documents, ...manifests, details, statements };
   }, log, env);
 }
 

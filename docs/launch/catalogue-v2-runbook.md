@@ -1,0 +1,344 @@
+# Runbook: switching on `catalogue_v2` in production
+
+The exact order to switch on the catalog, the operator roster and settlements (model phases 1–3) on sawa.tours, with a check before and after each step, and the rollback order.
+
+**The flag is the last step.** Everything before it runs with `catalogue_v2` off, and with the flag off:
+- the public site, booking and jobs behave as they do today;
+- the new admin screens are staff-only.
+
+Nothing reaches a traveler, an operator or an agency until step 9.
+
+Conventions:
+- `$PROD` is the production `DATABASE_URL` (Supabase). Run SQL with `psql "$PROD"`.
+- **Read-only checks** are marked `-- check`. Anything that writes is spelled out.
+- **Migrations don't run on deploy** (`docs/RUNBOOK.md`). Every step here is by hand.
+- The admin paths (Admin → …) are in the staff portal at `/admin`.
+
+---
+
+## 0. Before anything
+
+1. **Main contains phases 1–3** (PRs #219, #220 and #222) **and the security fix** (#221), and that build is deployed. Check that the deployed commit is main's head.
+2. **Take a backup.** Use Supabase → Database → Backups, or:
+   ```bash
+   pg_dump "$PROD" --format=custom --file=sawa-before-catalogue-v2-$(date +%F).dump
+   ```
+   Keep it until step 9 has run cleanly for a week.
+3. **Confirm the flag is off.** Railway → the web service → Variables: `FEATURES` is unset or doesn't contain `catalogue_v2`.
+4. **Confirm production is up to date to 046:**
+   ```bash
+   PRODUCTION_DB_HOST=<supabase host> DATABASE_URL="$PROD" npm run check:applied-schema
+   ```
+   ```sql
+   -- check: the last applied migrations; 046 must be there, 047–050 must not
+   SELECT name, applied_at FROM schema_migrations ORDER BY id DESC LIMIT 5;
+   ```
+5. **Count the legacy departures still open.** They keep the existing settlement tools until the last one completes. Note the numbers.
+   ```sql
+   -- check: legacy departures still open, and the date of the last one
+   SELECT COUNT(*) AS still_open, MAX(COALESCE(d.end_date, d.start_date, d.date)) AS last_date
+     FROM departures d
+    WHERE d.status NOT IN ('cancelled', 'closed')
+      AND NOT EXISTS (SELECT 1 FROM catalogue_departures cd WHERE cd.legacy_departure_id = d.id);
+   ```
+   Until 047 is applied, `catalogue_departures` doesn't exist, so drop the `AND NOT EXISTS …` line for this first count.
+6. **Snapshot what must not change.** Re-run this after each migration: the numbers must be identical.
+   ```sql
+   -- check: live bookings and departures
+   SELECT (SELECT COUNT(*) FROM pledges WHERE status <> 'cancelled') AS live_pledges,
+          (SELECT COUNT(*) FROM departures WHERE status NOT IN ('cancelled','closed')) AS open_departures,
+          (SELECT COUNT(*) FROM tour_products WHERE status = 'approved' AND active) AS live_listings;
+   ```
+
+---
+
+## 1. Migrations 047–050
+
+`npm run db:migrate` applies every pending migration in one go, and is safe to re-run. To check between them, apply them one at a time as below instead. Each file is idempotent. Stop at the first error: `-v ON_ERROR_STOP=1` does that.
+
+For each migration, the pattern is:
+1. run the pre-check;
+2. apply the file;
+3. record it;
+4. run the post-check;
+5. re-run check 0.6.
+
+### 1a. 047: catalog and departure calendar
+
+**Pre-check:**
+```sql
+-- check: nothing from 047 exists yet
+SELECT to_regclass('catalogue_products') AS products, to_regclass('catalogue_departures') AS departures;
+```
+
+**Apply and record:**
+```bash
+psql "$PROD" -v ON_ERROR_STOP=1 --single-transaction -f server/db/schema_047_catalogue_calendar.sql
+psql "$PROD" -c "INSERT INTO schema_migrations (name) VALUES ('047_catalogue_calendar') ON CONFLICT (name) DO NOTHING"
+```
+
+**Post-check:**
+```sql
+-- check: the seeded catalog (about 21 products, codes P01–P21), each draft spec, and its listing link
+SELECT catalogue_no, code, title, type, status, legacy_product_id IS NOT NULL AS linked
+  FROM catalogue_products ORDER BY catalogue_no;
+SELECT COUNT(*) FILTER (WHERE state = 'draft') AS drafts, COUNT(*) FILTER (WHERE state = 'published') AS published
+  FROM catalogue_spec_versions;                                  -- expect drafts only, 0 published
+SELECT relname, relrowsecurity FROM pg_class
+ WHERE relname IN ('catalogue_products','catalogue_spec_versions','catalogue_calendar_rules','catalogue_departures','catalogue_events');
+```
+
+In Admin → Catalog, **check the listing links of #2, #6, #8 and #17** (`docs/phase1/REPORT.md`, "Specs still to complete"). Then re-run check 0.6.
+
+### 1b. 048: cancellation notices; 30-day deadline
+
+**Pre-check:**
+```sql
+-- check
+SELECT to_regclass('catalogue_notices');                          -- expect null
+SELECT catalogue_no, type, goahead_deadline_days FROM catalogue_products WHERE type IN ('cruise','multi_day');
+```
+
+**Apply and record:**
+```bash
+psql "$PROD" -v ON_ERROR_STOP=1 --single-transaction -f server/db/schema_048_catalogue_notices.sql
+psql "$PROD" -c "INSERT INTO schema_migrations (name) VALUES ('048_catalogue_notices') ON CONFLICT (name) DO NOTHING"
+```
+
+**Post-check:**
+```sql
+-- check: the table exists, empty; cruises and multi-day at 30 days
+SELECT COUNT(*) FROM catalogue_notices;                           -- expect 0
+SELECT catalogue_no, goahead_deadline_days FROM catalogue_products WHERE type IN ('cruise','multi_day');   -- expect 30
+```
+
+### 1c. 049: operators, roster, rate card, assignment, manifest
+
+**Pre-check:**
+```sql
+-- check: the companies 049 will turn into pending operators
+SELECT id, name, relationship FROM agencies
+ WHERE relationship = 'operator' OR name = 'Capital Travel Service'
+    OR EXISTS (SELECT 1 FROM tour_products t WHERE t.agency_id = agencies.id);
+-- check: the roles in use (049 widens the role check; nothing existing may break it)
+SELECT role, COUNT(*) FROM app_users GROUP BY role;
+```
+
+**Apply and record:**
+```bash
+psql "$PROD" -v ON_ERROR_STOP=1 --single-transaction -f server/db/schema_049_operators_roster_rates.sql
+psql "$PROD" -c "INSERT INTO schema_migrations (name) VALUES ('049_operators_roster_rates') ON CONFLICT (name) DO NOTHING"
+```
+
+**Post-check:**
+```sql
+-- check: one pending operator per company listed in the pre-check, Capital Travel Service among them
+SELECT id, legal_name, agency_id, status FROM operators ORDER BY legal_name;
+-- check: the lock-at-first-seat trigger is in place
+SELECT tgname FROM pg_trigger WHERE tgname = 'trg_catalogue_lock_on_first_seat';
+-- check: the new booking columns exist and are empty
+SELECT COUNT(*) FILTER (WHERE pickup_point IS NOT NULL) AS with_pickup FROM pledges;   -- expect 0
+```
+
+Re-run check 0.6. A booking made now still works, because the trigger only records the rate and spec a catalog departure sells under.
+
+### 1d. 050: settlements and commissions
+
+**Pre-check:**
+```sql
+-- check
+SELECT to_regclass('operator_payables') AS payables;             -- expect null
+SELECT column_name FROM information_schema.columns
+ WHERE table_name = 'agencies' AND column_name IN ('country_code','billing_approved','billing_due_days');   -- expect none
+```
+
+**Apply and record:** 050 carries its own transaction, so it has no `--single-transaction`.
+```bash
+psql "$PROD" -v ON_ERROR_STOP=1 -f server/db/schema_050_settlements_commissions.sql
+psql "$PROD" -c "INSERT INTO schema_migrations (name) VALUES ('050_settlements_commissions') ON CONFLICT (name) DO NOTHING"
+```
+
+**Post-check:**
+```sql
+-- check: the four Schedule 6 penalties, all 0 until set
+SELECT code, amount_egp FROM operator_penalty_rates ORDER BY code;
+-- check: every new table has RLS on
+SELECT relname, relrowsecurity FROM pg_class WHERE relname IN
+  ('booking_completion_requests','operator_bank_accounts','operator_bank_access_log','egypt_holidays','fx_rates',
+   'operator_penalty_rates','operator_payables','operator_adjustments','operator_receivables','operator_setoffs',
+   'settlement_statements','commission_statements','agency_commissions','agency_invoices','finance_payments','finance_settings');
+-- check: no agency is on billing yet
+SELECT COUNT(*) FROM agencies WHERE billing_approved;            -- expect 0
+```
+
+**Then:**
+```bash
+PRODUCTION_DB_HOST=<supabase host> DATABASE_URL="$PROD" npm run check:applied-schema   # expect all applied
+```
+
+Re-run checks 0.5 (the full query now) and 0.6. Open sawa.tours and book nothing: the site must look exactly as before.
+
+---
+
+## 2. Publish the specifications
+
+In **Admin → Catalog**, for each product that will sell at launch:
+1. Complete the draft. The product's "to complete" tag lists what's missing: vehicle class per band, guide languages, meals, pickup window, add-ons, and the itinerary with timings for day tours.
+2. Tick **"Ask travelers for their nationality"** where the product's site tickets need it.
+3. Check the calendar rules. Cruises #17 and #18 need the ship's sailing days as dates. Held #2 and #3 and retired #14 have no rules.
+4. Publish the spec with an effective date.
+5. Admin → Calendar → **Run generator now**. With the flag off it creates catalog departures (and adopts existing dates) but makes nothing bookable.
+
+```sql
+-- check: a published spec for every product that will sell
+SELECT c.catalogue_no, c.status, MAX(s.version) FILTER (WHERE s.state = 'published') AS published_version
+  FROM catalogue_products c LEFT JOIN catalogue_spec_versions s ON s.product_id = c.id
+ GROUP BY c.catalogue_no, c.status ORDER BY 1;
+```
+
+## 3. Enter and publish the rates
+
+**Before the first seat sells:** a departure locks the rate version in force when its first seat is sold.
+
+1. Fill in `docs/model/sawa-rate-card.xlsx` in these currencies:
+   - operator amounts in EGP;
+   - agency commission per seat in EUR.
+2. Admin → **Rate card** → **Import spreadsheet**. Read the import report: rows skipped, notes, problems.
+3. Open each product, check its draft, and **Publish** with an effective date of today or later. Publishing refuses a draft with a blank field the product type needs.
+
+```sql
+-- check: a published version in force for every active product; commission set
+SELECT c.catalogue_no, rv.version, rv.effective_from, rv.per_traveler, rv.land_per_traveler, rv.fee_4_6, rv.fee_7_9, rv.fee_10_12, rv.commission_per_seat
+  FROM catalogue_products c
+  LEFT JOIN LATERAL (SELECT * FROM catalogue_rate_versions v WHERE v.product_id = c.id AND v.state = 'published' AND v.effective_from <= CURRENT_DATE
+                      ORDER BY effective_from DESC, version DESC LIMIT 1) rv ON true
+ WHERE c.status = 'active' ORDER BY 1;
+```
+
+## 4. Operators: documents, approvals, bank details
+
+In **Admin → Operators**, for each operator that will run tours, Capital Travel Service included:
+1. Complete the record: legal name, license, ETAA, commercial registration, tax number, email and phone.
+2. Upload the four documents, each with its number and expiry: tourism license, ETAA membership, liability insurance and vehicle insurance.
+3. Tick the **approved products**.
+4. **Activate.** Activation refuses a missing or expired document.
+5. **Bank details:** enter them, or have the operator's owner enter them in the portal. Then **Verify**. The holder must be the legal name. No payment can be recorded until the details are verified.
+6. **Portal logins** (super admin): create an owner login and share the temporary password.
+
+```sql
+-- check: active operators with current documents, approvals and verified bank details
+SELECT o.legal_name, o.status,
+       (SELECT COUNT(*) FROM operator_documents d WHERE d.operator_id = o.id AND d.superseded_at IS NULL AND d.expires_on >= CURRENT_DATE) AS current_docs,
+       (SELECT COUNT(*) FROM operator_product_approvals a WHERE a.operator_id = o.id) AS approved_products,
+       EXISTS (SELECT 1 FROM operator_bank_accounts b WHERE b.operator_id = o.id AND b.state = 'verified') AS bank_verified,
+       EXISTS (SELECT 1 FROM app_users u WHERE u.operator_id = o.id AND u.status = 'active') AS has_login
+  FROM operators o ORDER BY o.legal_name;                        -- launch operators: active, 4, >0, true, true
+```
+
+## 5. Finance reference data
+
+In **Admin → Finance → Rates and settings:**
+1. **Exchange rates:** enter today's CBE rate (EGP per 1 EUR). Enter it again every business day from now on.
+   - The margin report shows "rate missing" for any charge date without one.
+   - A commission statement to an Egyptian agency waits for the rate on its statement date.
+2. **Public holidays:** enter the year's Egyptian public holidays. The operator advance is due 2 business days (Sun–Thu) after acknowledgement, skipping these.
+3. **Penalty amounts (Schedule 6):** enter the four amounts in EGP once agreed. They are 0 until set.
+4. **Payment provider fees:** the percentage and fixed amount per charge, for the margin report.
+
+In **Admin → Finance → Agency commission** (super admin), for each agency:
+- set its country code (`EG` for Egyptian agencies);
+- set its billing approval and invoice due days.
+
+```sql
+-- check
+SELECT MAX(day) AS latest_rate FROM fx_rates;                    -- expect today
+SELECT COUNT(*) AS holidays FROM egypt_holidays WHERE day >= CURRENT_DATE;
+SELECT code, amount_egp FROM operator_penalty_rates;
+SELECT value FROM finance_settings WHERE key = 'payment_fees';
+SELECT id, name, country_code, billing_approved, billing_due_days FROM agencies ORDER BY name;
+```
+
+## 6. Publish the roster
+
+Admin → **Roster**, for this month and next:
+1. Plan each product's weekdays.
+2. **Build month from plan.**
+3. Adjust single dates.
+4. **Publish.**
+
+Publishing refuses an entry whose operator isn't active and approved. From now on, a month is due by the 15th of the month before.
+
+```sql
+-- check: published months, and any open departure with nobody rostered (should be none you intend to sell)
+SELECT month, state, published_at FROM roster_months ORDER BY month;
+SELECT cd.id, c.code, cd.date FROM catalogue_departures cd JOIN catalogue_products c ON c.id = cd.product_id
+ WHERE cd.status IN ('open','go_ahead') AND cd.date <= CURRENT_DATE + 60
+   AND NOT EXISTS (SELECT 1 FROM roster_entries e JOIN roster_months m ON m.month = e.month AND m.state = 'published'
+                    WHERE e.product_id = cd.product_id AND e.date = cd.date)
+ ORDER BY cd.date;
+```
+
+## 7. Scheduler and email
+
+1. **Check the scheduler is on** (it is in production: `NODE_ENV=production`, and `DISABLE_JOB_SCHEDULER` unset). The boot log lists the catalog jobs.
+2. **Check email delivery is live.** `RESEND_API_KEY` is set, and `/api/modes` shows email mode `live`.
+   - Travelers get cancellation notices and booking-detail requests.
+   - Operators get assignments, reminders and statements.
+   - Agencies get commission statements.
+3. **Check `APP_URL`** is `https://sawa.tours`: it is the base of every link in those emails.
+
+## 8. Last look before the flag
+
+- [ ] Checks 0.5 and 0.6 still match your notes.
+- [ ] Every product that will sell has a published spec (step 2) and a rate version in force (step 3).
+- [ ] Launch operators are active, approved, with verified bank details and logins (step 4).
+- [ ] Today's CBE rate, the holidays, penalties and fees are set (step 5).
+- [ ] This month's and next month's rosters are published (step 6).
+- [ ] Traveler charging hasn't changed: travelers still pay by the manual Tab link. Traveler charging is a separate phase (`docs/phase4/payments-readiness.md`).
+
+## 9. Set the flag
+
+Railway → web service → Variables: set `FEATURES=catalogue_v2` (comma-separate if other flags are set). Railway redeploys.
+
+**Right after deploy:**
+1. The boot log says `catalogue_v2 is ON: generated departures are bookable`.
+2. Admin → Calendar → **Run generator now**. Catalog departures with a published spec become bookable dates.
+3. Open a catalog tour page:
+   - the dates show the catalog labels;
+   - the booking form asks for every traveler's name, the phone, pickup, nationality where set, and safety needs.
+4. Make one test booking on a date far out, as a direct traveler, then cancel it from the booking email's link.
+5. An operator logs in to `/portal` and sees Assignments, Roster, Statements & payments and Notices.
+
+```sql
+-- check, the hour after
+SELECT COUNT(*) FROM catalogue_departures WHERE legacy_departure_id IS NOT NULL AND date >= CURRENT_DATE;   -- bookable catalog dates
+SELECT type, COUNT(*) FROM catalogue_events GROUP BY type;
+```
+
+---
+
+## Rollback order
+
+Roll back **only as far as needed**, in this order. Each step stops at the smallest change that removes the problem.
+
+**1. Turn the flag off.** Remove `catalogue_v2` from `FEATURES` and let Railway redeploy. This alone stops everything outside the staff screens:
+- public catalog labels and required booking fields;
+- operator, agency and booking-details routes (404);
+- all phase 2–3 jobs: assignment, advances, balances, statements, commission, completion requests.
+
+Nothing is deleted. Bookings made meanwhile stay ordinary bookings on ordinary departures. Try this first, and investigate with the data intact.
+
+**2. Stop the scheduler, only if a job itself misbehaves with the flag off.** Set `DISABLE_JOB_SCHEDULER=1`. The phase 1 generator and status job still run with the flag off: they create catalog records and cancel below-minimum catalog dates, and nothing else.
+
+**3. Roll back migrations, only if the schema itself is the problem.** Newest first, one at a time, with the flag off. Export anything you need first: each rollback drops its tables and their data.
+
+| Order | Rollback | Loses |
+|---|---|---|
+| 1st | `psql "$PROD" -v ON_ERROR_STOP=1 -f server/db/down/schema_050_settlements_commissions.down.sql` | payables, receivables, set-offs, statements, commissions, invoices, recorded payments, bank details and their log, FX rates, holidays, penalties, completion requests; agencies' billing columns |
+| 2nd | `…/down/schema_049_operators_roster_rates.down.sql` | operators, documents, approvals, strikes, notices, roster, rate versions, assignments, manifests and their access log, the lock trigger; **operator logins (deleted)**; the three booking-detail columns on pledges |
+| 3rd | `…/down/schema_048_catalogue_notices.down.sql` | the cancellation-notice log. Cruise and multi-day deadlines stay at 30, the decided value. |
+| 4th | `…/down/schema_047_catalogue_calendar.down.sql` | the catalog, specs, rules, catalog departures and events. Ordinary departures and bookings created for catalog dates stay, as ordinary rows. |
+
+Each rollback deletes its own `schema_migrations` row. **`npm run db:migrate` re-applies every migration it finds**, so after a rollback don't run it until the problem is fixed and you mean to re-apply.
+
+**After any rollback:** re-run checks 0.5 and 0.6. If data was lost that you need, restore from the step 0.2 backup into a separate database and copy the rows back. Don't restore over production.

@@ -12,6 +12,7 @@
 //
 // No money moves: the expected operator amount is shown, never paid.
 import { pool, withTransaction } from "./db/index.js";
+import { catalogueV2Enabled } from "./features.js";
 import { BRAND } from "./brand.js";
 import { CatalogueError, todayIn, departureInstants, mapCatalogueProduct } from "./catalogue.js";
 import { rosteredOperator } from "./roster.js";
@@ -182,13 +183,19 @@ export async function acknowledge(db, { assignmentId, operatorId, by, now = Date
     const upd = await c.query(
       `UPDATE catalogue_assignments SET state = 'acknowledged', acknowledged_at = now(), acknowledged_by = $2 WHERE id = $1 RETURNING *`,
       [assignmentId, by]);
-    return mapAssignment(upd.rows[0]);
+    const acknowledged = mapAssignment(upd.rows[0]);
+    // Model phase 3: the 50% advance, due 2 Egyptian business days from now.
+    if (catalogueV2Enabled()) {
+      const { createAdvance } = await import("./operator-settlement.js");
+      await createAdvance(c, { assignment: acknowledged, now });
+    }
+    return acknowledged;
   });
 }
 
 // An admin assigns (or reassigns) a departure to another operator. The live
 // assignment, if any, is replaced; open alerts for the departure are resolved.
-export async function assignByAdmin(db, { departureId, operatorId, by, now = Date.now(), send = null }) {
+export async function assignByAdmin(db, { departureId, operatorId, by, now = Date.now(), send = null, reassign = {} }) {
   return inTx(db, async (c) => {
     const departure = await departureContext(c, departureId);
     if (departure.status !== "go_ahead") throw new CatalogueError(409, "Only a departure that is going ahead can be assigned.");
@@ -197,8 +204,15 @@ export async function assignByAdmin(db, { departureId, operatorId, by, now = Dat
     const live = (await c.query(
       "SELECT * FROM catalogue_assignments WHERE departure_id = $1 AND state IN ('offered', 'acknowledged') FOR UPDATE", [departureId])).rows[0];
     if (live && Number(live.operator_id) === Number(operatorId)) throw new CatalogueError(409, "That operator already has this departure.");
+    // Model phase 3 (catalogue_v2): a paid advance needs a reason before
+    // anything changes.
+    const settlement = live && catalogueV2Enabled() ? await import("./operator-settlement.js") : null;
+    if (settlement && await settlement.paidAdvanceOf(c, live.id) && !settlement.REASSIGN_REASONS.includes(reassign.reason)) {
+      throw Object.assign(new CatalogueError(409, "This operator's advance has been paid. Say why the departure is being reassigned: the operator's fault, or not."), { code: "reason_required" });
+    }
     if (live) {
       await c.query("UPDATE catalogue_assignments SET state = 'replaced', replaced_at = now() WHERE id = $1", [live.id]);
+      if (settlement) await settlement.settleReplacedAdvance(c, { replaced: live, by, ...reassign });
       await notifyOperator(c, {
         operatorId: Number(live.operator_id), kind: "unassigned",
         title: `No longer assigned: ${departure.product.title} on ${dateLabel(departure.date)}`,
@@ -223,9 +237,18 @@ export function manifestRows(pledges, { needsNationality = false } = {}) {
     const names = Array.isArray(p.traveller_names) ? p.traveller_names.map((n) => String(n || "").trim()).filter(Boolean) : [];
     const lead = String(p.customers || "").trim();
     const seats = Math.max(1, Number(p.seats) || 1);
+    // Model phase 3: what the booking still lacks is marked on the manifest.
+    const bookingMissing = [
+      !String(p.customer_phone || "").trim() && "phone",
+      !String(p.pickup_point || "").trim() && "pickupPoint",
+      needsNationality && !String(p.nationality || "").trim() && "nationality",
+      !String(p.safety_needs || "").trim() && "safetyNeeds",
+    ].filter(Boolean);
     for (let i = 0; i < seats; i++) {
+      const missing = [...(names[i] ? [] : ["name"]), ...(i === 0 ? bookingMissing : [])];
       rows.push({
         booking: p.booking_code || String(p.id).slice(-8),
+        ...(missing.length ? { missing } : {}),
         name: names[i] || (i === 0 ? lead : `${lead || "Guest"}, guest ${i + 1}`),
         lead: i === 0,
         pickupPoint: p.pickup_point || null,

@@ -6,7 +6,7 @@ import { CURRENCY_SYMBOL } from "../shared/currency.js";
 import {
   LayoutDashboard, Ticket, ClipboardList, Users as UsersIcon, ShieldCheck, ArrowUpRight,
   Check, ChevronDown, AlertTriangle, CalendarDays, MapPin, Package, Hotel, ArrowLeft, Search, Clock3,
-  Share2, Copy, Settings as SettingsIcon, Wallet,
+  Share2, Copy, Settings as SettingsIcon, Wallet, Receipt,
 } from "lucide-react";
 import { DashSidebar } from "./DashSidebar";
 import { AgencySettings } from "./AgencySettings.jsx";
@@ -14,6 +14,7 @@ import { AgencyMoney } from "./AgencyMoney.jsx";
 import { usePortalSection } from "./portal-section.js";
 import { useBackToClose, useUnsavedGuard } from "./back-to-close.js";
 import { apiFetch } from "./supabaseClient";
+import { TravelerDetailsFields, emptyTravelerDetails, travelerDetailsBody, travelerDetailsError } from "./TravelerDetails.jsx";
 import { ProductEditor } from "./AdminDashboard";
 // Date-only departure values need a local-noon anchor or they render a day
 // early west of UTC — see src/dates.js.
@@ -48,8 +49,10 @@ function livePrice(item, seats) {
 export function AgencyDashboard({ user, agency, signOut, refreshProfile, navigate, departures, tourProducts = [], onReload, agencyDeskProps, AgencyDesk, StaffPanel }) {
   const agencyId = agency?.id;
   const isOwner = user.role === "agency_owner";
+  // Model phase 3: commission statements, with the catalog (catalogue_v2) on.
+  const catalogueOn = tourProducts.some((p) => p.catalogue);
   const [section, setSection] = usePortalSection(
-    ["overview", "book", "listings", "bookings", "money", "widget", ...(isOwner ? ["team"] : []), "settings"], "overview");
+    ["overview", "book", "listings", "bookings", "money", ...(catalogueOn ? ["commission"] : []), "widget", ...(isOwner ? ["team"] : []), "settings"], "overview");
   // Clicking "Book seats" while a tour is open inside it used to do nothing:
   // the section was already active, so the open tour stayed on screen. A
   // repeat click remounts the catalog, which closes the tour (and takes its
@@ -106,6 +109,7 @@ export function AgencyDashboard({ user, agency, signOut, refreshProfile, navigat
         { id: "book", label: "Book seats", icon: Ticket },
         { id: "bookings", label: "My bookings", icon: ClipboardList },
         { id: "money", label: "Money", icon: Wallet },
+        ...(catalogueOn ? [{ id: "commission", label: "Commission", icon: Receipt }] : []),
       ],
     },
     {
@@ -213,6 +217,7 @@ export function AgencyDashboard({ user, agency, signOut, refreshProfile, navigat
         {section === "widget" && <WidgetSection tourProducts={tourProducts} />}
 
         {section === "money" && <AgencyMoney />}
+        {section === "commission" && <AgencyCommission />}
 
         {section === "settings" && (
           <AgencySettings user={user} agency={agency} isOwner={isOwner} onSaved={refreshProfile} />
@@ -451,6 +456,9 @@ function TourBooking({ product, agencyId, agencyName, agencyPax = 0, onBack, onR
   const [rooming, setRooming] = useState("double");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
+  // Phase 3 (catalogue_v2): a catalog booking carries every traveler's details.
+  const [details, setDetails] = useState(emptyTravelerDetails);
+  const detailsForm = !!product.catalogue;
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
   const [err, setErr] = useState("");
@@ -495,15 +503,19 @@ function TourBooking({ product, agencyId, agencyName, agencyPax = 0, onBack, onR
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return setErr("Enter a valid customer email.");
     if (phone.trim().length < 6) return setErr("Enter a customer phone number.");
     if (Number(seats) > remaining) return setErr(`Only ${remaining} seat${remaining === 1 ? "" : "s"} left on this date.`);
+    if (detailsForm) {
+      const missing = travelerDetailsError(details, nSeats, { needsNationality: product.catalogue.needsNationality, phone });
+      if (missing) return setErr(missing);
+    }
     setBusy(true);
     try {
-      const body = { seats: nSeats, customers: reference, customerEmail: email.trim(), customerPhone: phone.trim() };
+      const body = { seats: nSeats, customers: reference, customerEmail: email.trim(), customerPhone: phone.trim(), ...(detailsForm ? travelerDetailsBody(details) : {}) };
       if (pkg) { body.roomingType = rooming; body.accommodationTier = tierId; }
       const r = await apiFetch(`/departures/${dep.id}/pledges`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error || "Could not book.");
       setMsg(`Booked ${nSeats} seat${nSeats > 1 ? "s" : ""} — ref ${reference}.`);
-      setEmail(""); setPhone(""); setSeats(1);
+      setEmail(""); setPhone(""); setSeats(1); setDetails(emptyTravelerDetails());
       onReload && onReload();
     } catch (e2) { setErr(e2.message); } finally { setBusy(false); }
   }
@@ -698,6 +710,12 @@ function TourBooking({ product, agencyId, agencyName, agencyPax = 0, onBack, onR
                   <input id="bk-phone" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+20 1XX XXX XXXX" />
                 </div>
               </div>
+              {detailsForm && (
+                <div className="tb-details">
+                  <TravelerDetailsFields value={details} onChange={setDetails} seats={nSeats} className="tb-field"
+                    needsNationality={product.catalogue.needsNationality} pickupHint={product.catalogue.pickupArea || ""} />
+                </div>
+              )}
 
               <div className="tb-summary">
                 <div className="tb-sum-row"><span>{CURRENCY_SYMBOL}{pp} × {nSeats} traveler{nSeats > 1 ? "s" : ""}</span><b>{CURRENCY_SYMBOL}{total}</b></div>
@@ -1164,5 +1182,65 @@ function Kpi({ icon: Icon, label, value, foot, accent }) {
       <strong>{value}</strong>
       {foot && <p>{foot}</p>}
     </div>
+  );
+}
+
+// ---- Commission (model phase 3, catalogue_v2) -------------------------------
+// Commission per seat in EUR, locked at booking; earned when the traveler
+// travels, 50% on a late cancellation where Sawa keeps a fee, nothing if the
+// date doesn't reach GoAhead. Monthly statements, sent by the 10th.
+function AgencyCommission() {
+  const [data, setData] = useState(null);
+  const [err, setErr] = useState("");
+  useEffect(() => {
+    apiFetch("/agency/commissions").then(async (r) => {
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.error || "Couldn't load your commission.");
+      setData(j);
+    }).catch((e) => setErr(e.message));
+  }, []);
+  const eur = (n) => (n == null ? "—" : `EUR ${Number(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
+  const STATE = { pending: "Pending: earned when the traveler travels", earned: "Earned", half: "50%: late cancellation", void: "None" };
+  return (
+    <>
+      <div className="dash-head"><div><h1>Commission</h1><p>Per seat, in EUR, locked when you book. Paid monthly; the statement arrives by the 10th.</p></div></div>
+      {err && <div className="auth-error">{err}</div>}
+      {data && (
+        <>
+          <div className="dash-card" style={{ marginBottom: 12 }}>
+            <h2>Statements</h2>
+            {data.statements.length ? (
+              <table className="dash-table"><tbody>{data.statements.map((s) => (
+                <tr key={s.id}><td>{s.period}</td><td className="tnum">{eur(s.totalEur)}{s.currency === "EGP" && s.totalEgp != null && <div className="field-hint">EGP {Number(s.totalEgp).toLocaleString("en-US")} at {s.egpPerEur} ({s.fxDay})</div>}</td>
+                  <td>{s.state === "paid" ? "Paid" : "Sent"}</td></tr>
+              ))}</tbody></table>
+            ) : <p className="field-hint">No statements yet.</p>}
+          </div>
+          <div className="dash-card" style={{ marginBottom: 12 }}>
+            <h2>Seats</h2>
+            {data.commissions.length ? (
+              <table className="dash-table">
+                <thead><tr><th>Date</th><th>Tour</th><th>Client</th><th>Seats</th><th>Commission</th><th>Status</th></tr></thead>
+                <tbody>{data.commissions.map((c) => (
+                  <tr key={c.pledgeId}><td>{fmtDate(c.date)}</td><td>{c.product}</td><td>{c.client}</td><td className="tnum">{c.seats}</td>
+                    <td className="tnum">{c.perSeatEur == null ? "—" : `${eur(c.perSeatEur)} × ${c.seats}`}{c.earnedEur != null && c.state !== "pending" && <div className="field-hint">{eur(c.earnedEur)}</div>}</td>
+                    <td>{STATE[c.state]}</td></tr>
+                ))}</tbody>
+              </table>
+            ) : <p className="field-hint">No catalog bookings yet.</p>}
+          </div>
+          {data.invoices.length > 0 && (
+            <div className="dash-card">
+              <h2>Invoices</h2>
+              <p className="field-hint">Your agency is billed the published price less your commission.</p>
+              <table className="dash-table"><tbody>{data.invoices.map((i) => (
+                <tr key={i.id}><td>{i.title}<div className="field-hint">{fmtDate(i.date)}</div></td><td className="tnum">{eur(i.grossEur)} − {eur(i.commissionEur)} = <b>{eur(i.amountEur)}</b></td>
+                  <td>due {fmtDate(i.dueOn)}</td><td>{i.state}</td></tr>
+              ))}</tbody></table>
+            </div>
+          )}
+        </>
+      )}
+    </>
   );
 }

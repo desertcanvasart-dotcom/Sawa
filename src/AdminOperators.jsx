@@ -20,7 +20,7 @@ const RATE_LABELS = {
   perTraveler: "Per traveler", landPerTraveler: "Land services per traveler",
   roomTwin: "Twin room or cabin, per trip", roomSingle: "Single room or cabin, per trip",
   fee4_6: "Departure fee, 4–6 travelers", fee7_9: "Departure fee, 7–9 travelers", fee10_12: "Departure fee, 10–12 travelers",
-  commissionPerSeat: "Agency commission per seat (reference)",
+  commissionPerSeat: "Agency commission per seat",
 };
 const egp = (n) => (n == null ? "—" : `EGP ${Number(n).toLocaleString("en-US", { maximumFractionDigits: 2 })}`);
 const dayLabel = (ymd) => (ymd ? new Intl.DateTimeFormat("en-US", { timeZone: "Africa/Cairo", weekday: "short", month: "short", day: "numeric", year: "numeric" }).format(new Date(`${ymd}T12:00:00Z`)) : "—");
@@ -257,6 +257,8 @@ function OperatorEditor({ id, products, agencies, flash, isSuperAdmin, onClose }
           </form>
         )}
       </div>
+
+      <BankCard operatorId={id} legalName={op.legalName} flash={flash} />
 
       <ApprovalsCard id={id} products={products} approved={d.approvedProductIds} run={run} busy={busy} />
 
@@ -525,7 +527,7 @@ export function RatesSection({ flash }) {
   return (
     <>
       <Head title="Rate card"
-        sub="What each operator is paid per product, in EGP. A departure keeps the version in force when its first seat sold. Shown for reference; nothing is paid from here yet."
+        sub="What each operator is paid per product, in EGP, and the agency commission per seat, in EUR. A departure keeps the version in force when its first seat sold."
         action={<label className="btn-ghost" style={{ cursor: "pointer" }}><Upload size={16} />Import spreadsheet
           <input type="file" accept=".xlsx" hidden disabled={busy} onChange={(e) => importFile(e.target.files?.[0])} /></label>} />
       {err && <div className="auth-error">{err}</div>}
@@ -601,14 +603,14 @@ function RateEditor({ product, flash, onClose }) {
 
   return (
     <>
-      <Head title={`#${product.catalogue_no} ${product.title}`} sub={`${TYPE_LABELS[product.type] || product.type} · rates in EGP`}
+      <Head title={`#${product.catalogue_no} ${product.title}`} sub={`${TYPE_LABELS[product.type] || product.type} · operator amounts in EGP, agency commission in EUR`}
         action={<button className="btn-ghost" onClick={onClose}><ArrowLeft size={16} />Rate card</button>} />
       {err && <div className="auth-error">{err}</div>}
       <form className="dash-card" style={{ marginBottom: 12 }} onSubmit={save}>
         <h2>{draft ? `Draft v${draft.version}` : "New draft"}</h2>
         <div className="form-grid">
           {fields.map((k) => (
-            <label className="field" key={k}><span>{RATE_LABELS[k]} (EGP)</span>
+            <label className="field" key={k}><span>{RATE_LABELS[k]} ({k === "commissionPerSeat" ? "EUR" : "EGP"})</span>
               <input type="number" min="0" step="0.01" value={values[k] ?? ""} onChange={(e) => setValues({ ...values, [k]: e.target.value })} />
             </label>
           ))}
@@ -660,11 +662,32 @@ export function DepartureOperatorPanel({ departure, operators, flash, onChange, 
     call(`/admin/catalogue/departures/${departure.id}/manifest`).then(setManifest).catch(() => setManifest(null));
   }, [departure.id]);
 
+  // Phase 3: when the current operator's advance has been paid, say why the
+  // departure moves (the server asks; the choice decides what it repays).
+  const [why, setWhy] = useState(null);
+  const [costLines, setCostLines] = useState([]);
+  const [penalties, setPenalties] = useState([]);
   async function assign(e) {
     e.preventDefault();
     setBusy(true); setErr("");
     try {
-      await call(`/admin/catalogue/departures/${departure.id}/assign`, "POST", { operatorId: Number(operatorId) });
+      const body = { operatorId: Number(operatorId) };
+      if (why?.reason) {
+        Object.assign(body, { reason: why.reason, note: why.note || undefined });
+        if (why.reason === "operator_fault" && why.penaltyCode) Object.assign(body, { penaltyCode: why.penaltyCode, travelers: Number(why.travelers) || null });
+        if (why.reason === "not_operator_fault") Object.assign(body, { keptEgp: Number(why.keptEgp) || 0, costLineIds: why.costLineIds || [] });
+      }
+      const r = await apiFetch(`/admin/catalogue/departures/${departure.id}/assign`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const j = await r.json().catch(() => ({}));
+      if (r.status === 409 && j.code === "reason_required") {
+        const s = await call(`/admin/catalogue/departures/${departure.id}/settlement`).catch(() => null);
+        setCostLines(s?.costLines || []);
+        setPenalties(s?.penalties || []);
+        setWhy({ reason: "" });
+        throw new Error(j.error);
+      }
+      if (!r.ok) throw new Error(j.error || "That didn't work. Please try again.");
+      setWhy(null);
       flash("Assigned. The operator has 12 hours to acknowledge.");
       onChange();
     } catch (e2) { setErr(e2.message); } finally { setBusy(false); }
@@ -687,8 +710,42 @@ export function DepartureOperatorPanel({ departure, operators, flash, onChange, 
             <option value="">Choose an operator</option>
             {(operators || []).map((o) => <option key={o.id} value={o.id}>{o.legalName}</option>)}
           </select>
-          <button className="btn-primary" disabled={busy || !operatorId}>{a ? "Reassign" : "Assign"}</button>
+          <button className="btn-primary" disabled={busy || !operatorId || (why && !why.reason)}>{a ? "Reassign" : "Assign"}</button>
         </form>
+      )}
+      {why && (
+        <div className="dash-card" style={{ margin: "8px 0" }}>
+          <h3>Why is {a?.name} losing this departure? Its advance was paid.</h3>
+          <label className="field-check"><input type="radio" name="why" checked={why.reason === "operator_fault"} onChange={() => setWhy({ ...why, reason: "operator_fault" })} />
+            {" "}The operator's fault (it canceled, or didn't acknowledge): it repays the whole advance, set off against its next payments.</label>
+          <label className="field-check"><input type="radio" name="why" checked={why.reason === "not_operator_fault"} onChange={() => setWhy({ ...why, reason: "not_operator_fault" })} />
+            {" "}Not the operator's fault (Sawa, or force majeure): it keeps its evidenced non-refundable costs and repays the rest.</label>
+          {why.reason === "operator_fault" && (
+            <div className="form-grid">
+              <label className="field"><span>Schedule 6 penalty (optional)</span>
+                <select value={why.penaltyCode || ""} onChange={(e) => setWhy({ ...why, penaltyCode: e.target.value })}>
+                  <option value="">None</option>{penalties.map((p) => <option key={p.code} value={p.code}>{p.label}: EGP {p.amountEgp}{p.perTraveler ? " per traveler" : ""}</option>)}
+                </select>
+              </label>
+              {penalties.find((p) => p.code === why.penaltyCode)?.perTraveler && (
+                <label className="field"><span>Travelers</span><input type="number" min="1" max="12" value={why.travelers || ""} onChange={(e) => setWhy({ ...why, travelers: e.target.value })} /></label>
+              )}
+            </div>
+          )}
+          {why.reason === "not_operator_fault" && (
+            <div className="form-grid">
+              <label className="field"><span>Costs the operator keeps (EGP)</span><input type="number" min="0" step="0.01" value={why.keptEgp || ""} onChange={(e) => setWhy({ ...why, keptEgp: e.target.value })} /></label>
+              <div className="field field-full"><span>Evidence: approved cost-sheet lines</span>
+                {costLines.length ? costLines.map((c) => (
+                  <label key={c.id} className="field-check"><input type="checkbox" checked={(why.costLineIds || []).includes(c.id)}
+                    onChange={(e) => setWhy({ ...why, costLineIds: e.target.checked ? [...(why.costLineIds || []), c.id] : (why.costLineIds || []).filter((x) => x !== c.id) })} />
+                    {" "}#{c.id} {c.description} (EUR {c.amount})</label>
+                )) : <p className="field-hint">No approved lines on this departure's cost sheet. Add them in Settlements first, or keep nothing.</p>}
+              </div>
+            </div>
+          )}
+          <label className="field field-full"><span>Note</span><input value={why.note || ""} onChange={(e) => setWhy({ ...why, note: e.target.value })} /></label>
+        </div>
       )}
       {expected && (
         <>
@@ -711,6 +768,193 @@ export function DepartureOperatorPanel({ departure, operators, flash, onChange, 
           <ManifestTable travelers={manifest.travelers} />
         </>
       )}
+      {(departure.status === "go_ahead" || departure.status === "completed") && <SettlementBlock departureId={departure.id} flash={flash} />}
+    </div>
+  );
+}
+
+// ============================================================ Settlement (phase 3)
+const PAYABLE_LABEL = { advance: "Advance (50%)", balance: "Balance" };
+const ADJ_LABEL = { penalty: "Penalty", service_failure: "Service-failure deduction", reimbursement: "Force-majeure reimbursement" };
+
+function SettlementBlock({ departureId, flash }) {
+  const [d, setD] = useState(null);
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [adj, setAdj] = useState(null);
+  const [note, setNote] = useState("");
+  async function load() {
+    try { setErr(""); setD(await call(`/admin/catalogue/departures/${departureId}/settlement`)); } catch (e) { setErr(e.message); }
+  }
+  useEffect(() => { load(); }, [departureId]);
+  const run = async (fn, msg) => {
+    setBusy(true); setErr("");
+    try { await fn(); flash(msg); await load(); } catch (e) { setErr(e.message); } finally { setBusy(false); }
+  };
+  async function upload(file) {
+    const dataUrl = await readFile(file);
+    const r = await apiFetch("/cost-receipts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ filename: file.name, dataUrl }) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.error || "Upload failed.");
+    return j.ref;
+  }
+  if (!d) return err ? <div className="auth-error">{err}</div> : null;
+  const st = d.statement;
+  const editable = !st || st.state === "draft" || st.state === "disputed";
+  return (
+    <>
+      <h3>Settlement (EGP)</h3>
+      {err && <div className="auth-error">{err}</div>}
+      <p className="field-hint">Operator amount {egp(d.expected.total)} · advance {egp(d.advance)} · deductions {egp(d.deductionsApplied)}{d.capped ? " (capped)" : ""} · reimbursements {egp(d.reimbursements)} · balance <b>{egp(d.balance)}</b></p>
+      {d.payables.length > 0 && (
+        <table className="dash-table"><tbody>{d.payables.map((p) => (
+          <tr key={p.id}><td>{PAYABLE_LABEL[p.kind]}</td><td className="tnum">{egp(p.amount)}{p.setoffEgp > 0 && <div className="field-hint">less {egp(p.setoffEgp)} set off: {egp(p.netDue)} to transfer</div>}</td><td>due {dayLabel(p.dueOn)}</td>
+            <td>{p.state}{p.holdReason && <div className="field-hint">{p.holdReason}</div>}</td></tr>
+        ))}</tbody></table>
+      )}
+      {d.receivables?.length > 0 && (
+        <>
+          <h4>Owed to Sawa (set off against the operator's next payments)</h4>
+          <table className="dash-table"><tbody>{d.receivables.map((r) => (
+            <tr key={r.id}><td>{r.reason}<div className="field-hint">{r.clauseRef}</div></td><td className="tnum">{egp(r.amountEgp)}</td>
+              <td>{r.state === "settled" ? "recovered" : `outstanding ${egp(r.outstandingEgp)}`}</td></tr>
+          ))}</tbody></table>
+        </>
+      )}
+      <h4>Adjustments</h4>
+      {d.adjustments.length ? (
+        <table className="dash-table"><tbody>{d.adjustments.map((a) => (
+          <tr key={a.id}><td>{ADJ_LABEL[a.kind]}</td><td className="tnum">{a.kind === "reimbursement" ? "+" : "−"}{egp(a.amountEgp)}</td>
+            <td>{a.reason}<div className="field-hint">{a.clauseRef}{a.evidence.length ? ` · ${a.evidence.length} evidence file${a.evidence.length === 1 ? "" : "s"}` : ""}{a.costLineIds.length ? ` · cost lines ${a.costLineIds.join(", ")}` : ""}</div></td>
+            <td className="row-actions">{editable && <button className="btn-ghost sm" disabled={busy} onClick={() => { const reason = window.prompt("Why void this adjustment?"); if (reason) run(() => call(`/admin/operator-adjustments/${a.id}/void`, "POST", { reason }), "Adjustment voided."); }}>Void</button>}</td></tr>
+        ))}</tbody></table>
+      ) : <p className="field-hint">None.</p>}
+      {editable && d.operator && (adj ? (
+        <form onSubmit={(e) => {
+          e.preventDefault();
+          run(async () => {
+            const evidence = [];
+            for (const f of adj.files || []) evidence.push(await upload(f));
+            await call(`/admin/catalogue/departures/${departureId}/adjustments`, "POST", {
+              kind: adj.kind, reason: adj.reason, clauseRef: adj.clauseRef || undefined, evidence,
+              ...(adj.kind === "penalty" ? { penaltyCode: adj.penaltyCode, travelers: Number(adj.travelers) || null } : { amountEgp: Number(adj.amountEgp) }),
+              ...(adj.kind === "reimbursement" ? { costLineIds: adj.costLineIds } : {}),
+            });
+            setAdj(null);
+          }, "Adjustment recorded.");
+        }}>
+          <div className="form-grid">
+            <label className="field"><span>Type</span>
+              <select value={adj.kind} onChange={(e) => setAdj({ ...adj, kind: e.target.value })}>
+                {Object.entries(ADJ_LABEL).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+              </select>
+            </label>
+            {adj.kind === "penalty" ? (
+              <>
+                <label className="field"><span>Penalty (Schedule 6)</span>
+                  <select value={adj.penaltyCode || ""} onChange={(e) => setAdj({ ...adj, penaltyCode: e.target.value })} required>
+                    <option value="">Choose</option>
+                    {d.penalties.map((p) => <option key={p.code} value={p.code}>{p.label}: EGP {p.amountEgp}{p.perTraveler ? " per traveler" : ""}</option>)}
+                  </select>
+                </label>
+                {d.penalties.find((p) => p.code === adj.penaltyCode)?.perTraveler && (
+                  <label className="field"><span>Travelers</span><input type="number" min="1" max="12" value={adj.travelers || ""} onChange={(e) => setAdj({ ...adj, travelers: e.target.value })} required /></label>
+                )}
+              </>
+            ) : (
+              <label className="field"><span>Amount (EGP)</span><input type="number" min="0" step="0.01" value={adj.amountEgp || ""} onChange={(e) => setAdj({ ...adj, amountEgp: e.target.value })} required /></label>
+            )}
+            <label className="field"><span>Clause</span><input value={adj.clauseRef || ""} onChange={(e) => setAdj({ ...adj, clauseRef: e.target.value })} placeholder={adj.kind === "service_failure" ? "Operator clause 12.2" : adj.kind === "reimbursement" ? "Operator clause 14" : "from Schedule 6"} required={adj.kind !== "penalty"} /></label>
+            <label className="field field-full"><span>Reason</span><textarea rows={2} value={adj.reason || ""} onChange={(e) => setAdj({ ...adj, reason: e.target.value })} required minLength={3} /></label>
+            {adj.kind === "reimbursement" ? (
+              <div className="field field-full"><span>Approved cost-sheet lines (receipts attached there)</span>
+                {d.costLines.length ? d.costLines.map((c) => (
+                  <label key={c.id} className="field-check"><input type="checkbox" checked={(adj.costLineIds || []).includes(c.id)}
+                    onChange={(e) => setAdj({ ...adj, costLineIds: e.target.checked ? [...(adj.costLineIds || []), c.id] : (adj.costLineIds || []).filter((x) => x !== c.id) })} />
+                    {" "}#{c.id} {c.description} (EUR {c.amount}){c.hasReceipt ? "" : ", no receipt"}</label>
+                )) : <p className="field-hint">No approved lines on this departure's cost sheet. Add them in Settlements first.</p>}
+              </div>
+            ) : (
+              <label className="field field-full"><span>Evidence files</span><input type="file" multiple accept="application/pdf,image/*" onChange={(e) => setAdj({ ...adj, files: [...(e.target.files || [])] })} /></label>
+            )}
+          </div>
+          <div className="cat-actions">
+            <button type="button" className="btn-ghost" onClick={() => setAdj(null)}>Cancel</button>
+            <button className="btn-primary" disabled={busy}>Record</button>
+          </div>
+        </form>
+      ) : <button className="btn-ghost sm" onClick={() => setAdj({ kind: "service_failure" })}>Add adjustment</button>)}
+      <h4>Statement</h4>
+      {st ? (
+        <>
+          <p>
+            <span className="tag">{st.state}</span>
+            {st.sentAt && <> sent {stamp(st.sentAt)}{st.autoAcceptOn && <> · accepted automatically on {stamp(st.autoAcceptOn)} unless disputed</>}</>}
+            {st.autoAccepted && <> · accepted automatically</>}
+          </p>
+          {st.disputeReason && <p className="field-hint">Disputed by {st.disputedBy}: {st.disputeReason}</p>}
+          {st.resolutionNote && <p className="field-hint">Resolved by {st.resolvedBy}: {st.resolutionNote}</p>}
+          <div className="cat-actions" style={{ justifyContent: "flex-start" }}>
+            <button className="btn-ghost sm" onClick={() => apiFetch(`/admin/catalogue/departures/${departureId}/statement.pdf`).then((r) => r.blob()).then((b) => window.open(URL.createObjectURL(b), "_blank", "noopener"))}>PDF</button>
+            {st.state === "draft" && <button className="btn-primary sm" disabled={busy} onClick={() => run(() => call(`/admin/catalogue/departures/${departureId}/statement/send`, "POST", {}), "Statement sent to the operator.")}>Send to operator</button>}
+          </div>
+          {st.state === "disputed" && (
+            <form onSubmit={(e) => { e.preventDefault(); run(() => call(`/admin/catalogue/departures/${departureId}/statement/resolve`, "POST", { note }).then(() => setNote("")), "Dispute resolved."); }}>
+              <label className="field field-full"><span>Resolution note</span><textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} required minLength={5} /></label>
+              <div className="cat-actions"><button className="btn-primary sm" disabled={busy}>Resolve dispute</button></div>
+            </form>
+          )}
+        </>
+      ) : <p className="field-hint">Created with the balance once the departure has completed.</p>}
+    </>
+  );
+}
+
+// ============================================================ Bank details (phase 3)
+function BankCard({ operatorId, legalName, flash }) {
+  const [accounts, setAccounts] = useState(null);
+  const [form, setForm] = useState(null);
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+  async function load() {
+    try { setErr(""); setAccounts((await call(`/admin/operators/${operatorId}/bank`)).accounts); } catch (e) { setErr(e.message); }
+  }
+  const run = async (fn, msg) => { setBusy(true); setErr(""); try { await fn(); flash(msg); await load(); } catch (e) { setErr(e.message); } finally { setBusy(false); } };
+  return (
+    <div className="dash-card" style={{ marginBottom: 12 }}>
+      <h2>Bank details</h2>
+      <p className="field-hint">A change is used only after an admin verifies it; payments to this operator are held until then. The holder must be {legalName}. Every view and change is logged.</p>
+      {err && <div className="auth-error">{err}</div>}
+      {accounts == null ? <button className="btn-ghost sm" onClick={load}>Show bank details (logged)</button> : (
+        <>
+          {accounts.length ? (
+            <table className="dash-table"><tbody>{accounts.map((a) => (
+              <tr key={a.id}>
+                <td>{a.holderName}<div className="field-hint">{a.bankName}</div></td>
+                <td>{a.iban || a.accountNumber}{a.swift && <div className="field-hint">SWIFT {a.swift}</div>}</td>
+                <td><span className={`tag ${a.state === "verified" ? "tag-on" : a.state === "pending" ? "tag-warn" : "tag-off"}`}>{a.state}</span>
+                  <div className="field-hint">by {a.submittedBy} {stamp(a.submittedAt)}{a.decidedBy ? ` · ${a.state} by ${a.decidedBy}` : ""}{a.decisionNote ? `: ${a.decisionNote}` : ""}</div></td>
+                <td className="row-actions">{a.state === "pending" && <>
+                  <button className="btn-primary sm" disabled={busy} onClick={() => run(() => call(`/admin/operator-bank/${a.id}/decide`, "POST", { approve: true }), "Bank details verified.")}>Verify</button>
+                  <button className="btn-ghost sm" disabled={busy} onClick={() => { const n = window.prompt("Why are these details rejected?"); if (n) run(() => call(`/admin/operator-bank/${a.id}/decide`, "POST", { approve: false, note: n }), "Rejected."); }}>Reject</button>
+                </>}</td>
+              </tr>
+            ))}</tbody></table>
+          ) : <p className="field-hint">No bank details yet.</p>}
+          {form ? (
+            <form onSubmit={(e) => { e.preventDefault(); run(() => call(`/admin/operators/${operatorId}/bank`, "POST", form).then(() => setForm(null)), "Saved as pending verification. The operator and admin were emailed."); }}>
+              <div className="form-grid">
+                <label className="field"><span>Account holder</span><input value={form.holderName} onChange={(e) => setForm({ ...form, holderName: e.target.value })} required /></label>
+                <label className="field"><span>Bank</span><input value={form.bankName} onChange={(e) => setForm({ ...form, bankName: e.target.value })} required /></label>
+                <label className="field"><span>Account number</span><input value={form.accountNumber} onChange={(e) => setForm({ ...form, accountNumber: e.target.value })} /></label>
+                <label className="field"><span>IBAN</span><input value={form.iban} onChange={(e) => setForm({ ...form, iban: e.target.value })} /></label>
+                <label className="field"><span>SWIFT (if relevant)</span><input value={form.swift} onChange={(e) => setForm({ ...form, swift: e.target.value })} /></label>
+              </div>
+              <div className="cat-actions"><button type="button" className="btn-ghost" onClick={() => setForm(null)}>Cancel</button><button className="btn-primary" disabled={busy}>Save for verification</button></div>
+            </form>
+          ) : <button className="btn-ghost sm" onClick={() => setForm({ holderName: legalName, bankName: "", accountNumber: "", iban: "", swift: "" })}>Change bank details</button>}
+        </>
+      )}
     </div>
   );
 }
@@ -718,21 +962,27 @@ export function DepartureOperatorPanel({ departure, operators, flash, onChange, 
 export function ManifestTable({ travelers }) {
   if (!travelers?.length) return <p className="field-hint">No travelers yet.</p>;
   const nationality = travelers.some((t) => t.nationality !== undefined);
+  const incomplete = travelers.filter((t) => t.missing?.length).length;
   return (
     <div className="table-wrap">
+      {incomplete > 0 && <p className="field-hint"><span className="tag tag-warn">Missing</span> {incomplete} row{incomplete === 1 ? "" : "s"} still lack details. Sawa asks travelers to complete them 7 days before the tour, with a reminder at 3.</p>}
       <table className="dash-table">
         <thead><tr><th>Booking</th><th>Name</th><th>Pickup</th><th>Contact</th>{nationality && <th>Nationality</th>}<th>Safety needs</th></tr></thead>
         <tbody>
-          {travelers.map((t, i) => (
-            <tr key={i} style={t.canceledAfterCutoff ? { opacity: 0.6 } : undefined}>
-              <td>{t.booking}</td>
-              <td>{t.name}{t.canceledAfterCutoff && <div className="field-hint">canceled after the cut-off</div>}</td>
-              <td>{t.pickupPoint || "—"}</td>
-              <td>{t.contactNumber || (t.lead ? "—" : "")}</td>
-              {nationality && <td>{t.nationality || "—"}</td>}
-              <td>{t.safetyNeeds || (t.lead ? "—" : "")}</td>
-            </tr>
-          ))}
+          {travelers.map((t, i) => {
+            const miss = new Set(t.missing || []);
+            const Missing = () => <span className="tag tag-warn">Missing</span>;
+            return (
+              <tr key={i} style={t.canceledAfterCutoff ? { opacity: 0.6 } : undefined}>
+                <td>{t.booking}</td>
+                <td>{t.name}{miss.has("name") && <> <Missing /></>}{t.canceledAfterCutoff && <div className="field-hint">canceled after the cut-off</div>}</td>
+                <td>{miss.has("pickupPoint") ? <Missing /> : t.pickupPoint || "—"}</td>
+                <td>{miss.has("phone") ? <Missing /> : t.contactNumber || (t.lead ? "—" : "")}</td>
+                {nationality && <td>{miss.has("nationality") ? <Missing /> : t.nationality || "—"}</td>}
+                <td>{miss.has("safetyNeeds") ? <Missing /> : t.safetyNeeds || (t.lead ? "—" : "")}</td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>

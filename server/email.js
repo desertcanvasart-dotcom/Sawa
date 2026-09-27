@@ -1005,3 +1005,67 @@ export function cancellationEmail({ to, route, dateLabel }) {
   );
   return { to, subject, html, text, kind: "cancellation" };
 }
+
+// ---------------------------------------------------------------- phase 3
+// Model phase 3 — a booking is missing details the operator's manifest needs.
+// Sent 7 days before the departure, and a reminder at 3 days; once each.
+export function bookingDetailsRequestEmail({ to, travelerName, title, dateLabel, missing = [], link, reminder = false, agencyClient = null }) {
+  const subject = reminder
+    ? `Reminder: details needed for ${title} on ${dateLabel}`
+    : `Details needed for ${title} on ${dateLabel}`;
+  const opener = agencyClient
+    ? `Hello, your client ${agencyClient} is booked on ${title} on ${dateLabel}.`
+    : `Hello${travelerName ? ` ${travelerName}` : ""},`;
+  const need = missing.length ? missing.join(", ") : "a few details";
+  const lines = [
+    opener,
+    `Your guide needs ${need} for ${title} on ${dateLabel}. It takes a minute, and nothing else about the booking changes.`,
+    `Add them here: ${link}`,
+    "The link is private to this booking. Reply to this email if anything is unclear.",
+  ];
+  const html = shell(
+    `Details needed for ${title}`,
+    `<p style="margin:0 0 16px">${esc(opener)}</p>
+     <p style="margin:0 0 20px">Your guide needs <strong>${esc(need)}</strong> for <strong>${esc(title)}</strong> on ${esc(dateLabel)}. It takes a minute, and nothing else about the booking changes.</p>
+     ${button(link, "Add the details")}
+     ${note("The link is private to this booking. Reply to this email if anything is unclear.")}`,
+    { eyebrow: reminder ? "Reminder" : "Before your tour", preheader: `Your guide needs ${need}.` }
+  );
+  return { to, subject, html, text: lines.join("\n\n"), kind: reminder ? "booking_details_reminder" : "booking_details_request" };
+}
+
+// Operator bank details changed: to the operator and to Sawa's admin. The
+// numbers themselves are never in the email.
+export function bankDetailsChangedEmail({ to, operatorName, bankName, lastDigits, submittedBy, forAdmin = false }) {
+  const subject = forAdmin
+    ? `Verify new bank details for ${operatorName}`
+    : `Your bank details for Sawa were changed`;
+  const text = forAdmin
+    ? `${operatorName}'s bank details were changed by ${submittedBy || "a portal user"}: ${bankName}, account ending ${lastDigits}. `
+      + "They aren't used until an admin verifies them in Admin → Operators. Payments to this operator are held until then."
+    : `Your bank details on Sawa were changed by ${submittedBy || "a user"}: ${bankName}, account ending ${lastDigits}. `
+      + "Sawa verifies a change before paying to it. If you didn't make this change, reply to this email at once.";
+  const html = shell(subject, `<p style="margin:0 0 16px">${esc(text)}</p>`, { eyebrow: "Bank details", preheader: text.slice(0, 90) });
+  return { to, subject, html, text, kind: forAdmin ? "bank_details_changed_admin" : "bank_details_changed" };
+}
+
+// A settlement statement sent to an operator (portal + PDF).
+export function settlementStatementEmail({ to, operatorName, title, dateLabel, balance, portalUrl }) {
+  const subject = `Settlement statement: ${title} on ${dateLabel}`;
+  const text = `${operatorName}, your settlement statement for ${title} on ${dateLabel} is ready. Balance: ${balance}. `
+    + `Open it, download the PDF, or dispute it in the operator portal: ${portalUrl}. `
+    + "It is accepted automatically 30 days after it is sent unless you dispute it.";
+  const html = shell(subject, `<p style="margin:0 0 16px">${esc(text)}</p>${button(portalUrl, "Open the statement")}`,
+    { eyebrow: "Settlement", preheader: `Balance ${balance}` });
+  return { to, subject, html, text, kind: "settlement_statement" };
+}
+
+// The monthly commission statement to an agency.
+export function commissionStatementEmail({ to, agencyName, period, totalLabel, seats, portalUrl }) {
+  const subject = `Commission statement for ${period}: ${totalLabel}`;
+  const text = `${agencyName}, your commission statement for ${period} is ready: ${seats} seat${seats === 1 ? "" : "s"}, ${totalLabel}. `
+    + `See each seat in your portal: ${portalUrl}.`;
+  const html = shell(subject, `<p style="margin:0 0 16px">${esc(text)}</p>${button(portalUrl, "Open the statement")}`,
+    { eyebrow: "Commission", preheader: totalLabel });
+  return { to, subject, html, text, kind: "commission_statement" };
+}

@@ -167,6 +167,13 @@
    "verdict": "AGREES",
    "contradicts": null,
    "note": "No table or form collects operator bank details or invoices: 049 adds none, and operators/operator_documents hold only identity, license and insurance data. Internal report; no public claim depends on it."
+  },
+  "771a092eae95": {
+   "where": "docs/phase4/payments-readiness.md:219",
+   "text": "Release at the deadline | none | A job releases unpaid seats | **Yes**: a job. A payment made but not yet marked would be released, so the job warns ops 2 hours before each release. |",
+   "verdict": "AGREES",
+   "contradicts": null,
+   "note": "Describes a proposed mode C job (design only, not built): no code releases unpaid seats today, and no public page claims it does. The site's current promise ('nothing is charged before GoAhead') is unchanged by it."
   }
  }
 }

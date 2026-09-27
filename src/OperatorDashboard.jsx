@@ -3,7 +3,7 @@
 // strikes. Operator logins only, and only with catalogue_v2 on (the server
 // answers 404 otherwise). An operator sees its own entries and nothing else.
 import React, { useEffect, useState } from "react";
-import { ClipboardCheck, CalendarCheck, Bell, FileText, Check } from "lucide-react";
+import { ClipboardCheck, CalendarCheck, Bell, FileText, Check, Landmark } from "lucide-react";
 import { apiFetch } from "./supabaseClient";
 import { DashSidebar } from "./DashSidebar";
 import { usePortalSection } from "./portal-section.js";
@@ -15,6 +15,7 @@ const NAV_GROUPS = [{
   items: [
     { id: "assignments", label: "Assignments", icon: ClipboardCheck, alert: (s) => s?.toAcknowledge || 0 },
     { id: "roster", label: "Roster", icon: CalendarCheck },
+    { id: "money", label: "Statements & payments", icon: Landmark },
     { id: "notices", label: "Notices", icon: Bell, alert: (s) => s?.unread || 0 },
     { id: "account", label: "Documents & strikes", icon: FileText },
   ],
@@ -70,6 +71,7 @@ export function OperatorDashboard({ user, signOut, navigate }) {
         )}
         {me && section === "assignments" && <Assignments assignments={assignments} reload={load} flash={flash} />}
         {me && section === "roster" && <Roster flash={flash} />}
+        {me && section === "money" && <Money user={user} flash={flash} />}
         {me && section === "notices" && <Notices notices={notices} />}
         {me && section === "account" && <Account me={me} />}
       </main>
@@ -249,6 +251,101 @@ function Account({ me }) {
         <h2>Strikes in the last 90 days: {me.strikes90}</h2>
         {me.strikes.length ? <ul>{me.strikes.map((s, i) => <li key={i}>{stamp(s.createdAt)} · {STRIKE_LABELS[s.kind]}{s.note ? `: ${s.note}` : ""}</li>)}</ul> : <p className="field-hint">None.</p>}
       </div>
+    </>
+  );
+}
+
+// ---------------------------------------------------------------- phase 3
+const PAYABLE_LABEL = { advance: "Advance (50%)", balance: "Balance" };
+function Money({ user, flash }) {
+  const [data, setData] = useState(null);
+  const [bank, setBank] = useState(null);
+  const [form, setForm] = useState(null);
+  const [disputing, setDisputing] = useState(null);
+  const [reason, setReason] = useState("");
+  const [err, setErr] = useState("");
+  async function load() {
+    try {
+      setErr("");
+      const [s, b] = await Promise.all([call("/operator/statements"), call("/operator/bank")]);
+      setData(s); setBank(b.accounts);
+    } catch (e) { setErr(e.message); }
+  }
+  useEffect(() => { load(); }, []);
+  const run = async (fn, msg) => { setErr(""); try { await fn(); flash(msg); await load(); } catch (e) { setErr(e.message); } };
+  const pdf = (id) => apiFetch(`/operator/statements/${id}.pdf`).then((r) => r.blob()).then((b) => window.open(URL.createObjectURL(b), "_blank", "noopener"));
+  return (
+    <>
+      <div className="dash-head"><div><h1>Statements &amp; payments</h1><p>In EGP, from the rate card version locked for each departure. Sawa pays the advance 2 business days after you acknowledge, and the balance 7 days after the departure ends.</p></div></div>
+      {err && <div className="auth-error">{err}</div>}
+      {data && (
+        <>
+          <div className="dash-card" style={{ marginBottom: 12 }}>
+            <h2>Payments</h2>
+            {data.payables.length ? (
+              <table className="dash-table"><tbody>{data.payables.map((p) => (
+                <tr key={p.id}><td>{PAYABLE_LABEL[p.kind]}<div className="field-hint">departure #{p.departureId}</div></td>
+                  <td className="tnum">{egp(p.amount)}{p.setoffEgp > 0 && <div className="field-hint">less {egp(p.setoffEgp)} set off (clause 9.4): {egp(p.netDue)}</div>}</td>
+                  <td>due {dayLabel(p.dueOn)}</td><td>{p.state === "paid" ? <span className="tag tag-on">Paid</span> : p.state === "offset" ? <span className="tag tag-on">Set off</span> : p.state === "on_hold" ? <span className="tag tag-warn">On hold</span> : "Due"}</td></tr>
+              ))}</tbody></table>
+            ) : <p className="field-hint">Nothing yet.</p>}
+          </div>
+          {data.receivables?.some((r) => r.state === "open") && (
+            <div className="dash-card" style={{ marginBottom: 12 }}>
+              <h2>Owed to Sawa</h2>
+              <p className="field-hint">Taken from your next advance or balance (clause 9.4), unless you repay it by transfer first.</p>
+              <table className="dash-table"><tbody>{data.receivables.filter((r) => r.state === "open").map((r) => (
+                <tr key={r.id}><td>{r.reason}</td><td className="tnum">{egp(r.outstandingEgp)}</td></tr>
+              ))}</tbody></table>
+            </div>
+          )}
+          <div className="dash-card" style={{ marginBottom: 12 }}>
+            <h2>Settlement statements</h2>
+            {data.statements.length ? (
+              <table className="dash-table"><tbody>{data.statements.map((st) => (
+                <tr key={st.id}>
+                  <td>{st.snapshot?.departure?.code} {st.snapshot?.departure?.title}<div className="field-hint">{dayLabel(st.snapshot?.departure?.date)}</div></td>
+                  <td className="tnum">{egp(st.snapshot?.balance)}</td>
+                  <td>{st.state}{st.autoAcceptOn && <div className="field-hint">accepted automatically on {stamp(st.autoAcceptOn)} unless disputed</div>}
+                    {st.disputeReason && <div className="field-hint">Your dispute: {st.disputeReason}</div>}
+                    {st.resolutionNote && <div className="field-hint">Sawa: {st.resolutionNote}</div>}</td>
+                  <td className="row-actions">
+                    <button className="btn-ghost sm" onClick={() => pdf(st.departureId)}>PDF</button>
+                    {st.state === "sent" && <button className="btn-ghost sm" onClick={() => { setDisputing(st); setReason(""); }}>Dispute</button>}
+                  </td>
+                </tr>
+              ))}</tbody></table>
+            ) : <p className="field-hint">No statements yet.</p>}
+            {disputing && (
+              <form onSubmit={(e) => { e.preventDefault(); run(() => call(`/operator/statements/${disputing.departureId}/dispute`, "POST", { reason }).then(() => setDisputing(null)), "Dispute sent to Sawa."); }}>
+                <label className="field field-full"><span>What is wrong with this statement?</span><textarea rows={3} value={reason} onChange={(e) => setReason(e.target.value)} required minLength={5} /></label>
+                <div className="cat-actions"><button type="button" className="btn-ghost" onClick={() => setDisputing(null)}>Cancel</button><button className="btn-primary">Send dispute</button></div>
+              </form>
+            )}
+          </div>
+        </>
+      )}
+      {bank && (
+        <div className="dash-card">
+          <h2>Bank details</h2>
+          <p className="field-hint">The account holder must be your company's legal name. A change is used only after Sawa verifies it, and both you and Sawa are emailed.</p>
+          {bank.length ? <table className="dash-table"><tbody>{bank.map((a) => (
+            <tr key={a.id}><td>{a.holderName}<div className="field-hint">{a.bankName}</div></td><td>{a.iban || a.accountNumber}</td><td>{a.state}</td></tr>
+          ))}</tbody></table> : <p className="field-hint">No bank details yet.</p>}
+          {user.role === "operator_owner" && (form ? (
+            <form onSubmit={(e) => { e.preventDefault(); run(() => call("/operator/bank", "POST", form).then(() => setForm(null)), "Saved. Sawa verifies the change before using it."); }}>
+              <div className="form-grid">
+                <label className="field"><span>Account holder</span><input value={form.holderName} onChange={(e) => setForm({ ...form, holderName: e.target.value })} required /></label>
+                <label className="field"><span>Bank</span><input value={form.bankName} onChange={(e) => setForm({ ...form, bankName: e.target.value })} required /></label>
+                <label className="field"><span>Account number</span><input value={form.accountNumber} onChange={(e) => setForm({ ...form, accountNumber: e.target.value })} /></label>
+                <label className="field"><span>IBAN</span><input value={form.iban} onChange={(e) => setForm({ ...form, iban: e.target.value })} /></label>
+                <label className="field"><span>SWIFT (if relevant)</span><input value={form.swift} onChange={(e) => setForm({ ...form, swift: e.target.value })} /></label>
+              </div>
+              <div className="cat-actions"><button type="button" className="btn-ghost" onClick={() => setForm(null)}>Cancel</button><button className="btn-primary">Save</button></div>
+            </form>
+          ) : <button className="btn-ghost sm" onClick={() => setForm({ holderName: "", bankName: "", accountNumber: "", iban: "", swift: "" })}>Change bank details</button>)}
+        </div>
+      )}
     </>
   );
 }

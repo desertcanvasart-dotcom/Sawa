@@ -41,6 +41,10 @@ import rateLimit from "express-rate-limit";
 import { logAudit } from "./audit.js";
 import { registerCatalogueRoutes } from "./catalogue-routes.js";
 import { registerOperatorRoutes } from "./operator-routes.js";
+import { registerFinanceRoutes } from "./finance-routes.js";
+import { catalogueContextFor, assertBookingComplete } from "./booking-details.js";
+import { recordAgencyBooking } from "./commissions.js";
+import { SAFETY_NONE } from "../shared/settlement-rules.js";
 import { catalogueV2Enabled } from "./features.js";
 import { publicCatalogue, overlayBootstrap, clearPublicCatalogue } from "./catalogue-public.js";
 import {
@@ -363,19 +367,32 @@ const manifestFieldsSchema = z.object({
   nationality: z.string().trim().max(80).optional().or(z.literal("")),
   safetyNeeds: z.string().trim().max(1000).optional().or(z.literal("")),
   travelerNames: z.array(z.string().trim().max(120)).max(12).optional(),
+  safetyNone: z.boolean().optional(),
 });
 function manifestFields(body) {
   if (!catalogueV2Enabled()) return null;
   const f = parse(manifestFieldsSchema, {
     pickupPoint: body?.pickupPoint, nationality: body?.nationality,
-    safetyNeeds: body?.safetyNeeds, travelerNames: body?.travelerNames,
+    safetyNeeds: body?.safetyNeeds, travelerNames: body?.travelerNames, safetyNone: body?.safetyNone,
   });
   return {
     pickupPoint: f.pickupPoint || null,
     nationality: f.nationality || null,
-    safetyNeeds: f.safetyNeeds || null,
+    // Phase 3: "None" is the explicit answer when there are no safety needs.
+    safetyNeeds: f.safetyNone === true ? SAFETY_NONE : (f.safetyNeeds || null),
     travelerNames: (f.travelerNames || []).filter(Boolean),
   };
+}
+
+// Model phase 3 — under catalogue_v2, a booking on a catalog departure must
+// carry every field the operator's manifest needs (decided 27 Sep 2026).
+// Returns the catalog context (or null for a legacy departure).
+async function requireCompleteBooking(c, departureId, manifest, seats, phone) {
+  if (!manifest) return null;
+  const ctx = await catalogueContextFor(c, departureId);
+  if (!ctx) return null;
+  assertBookingComplete({ ...manifest, phone }, seats, { needsNationality: ctx.needsNationality });
+  return ctx;
 }
 
 // Operator verification application (site/verify.html). Every field is bounded:
@@ -1235,12 +1252,14 @@ app.post("/api/departures/:id/pledges", requireAuth, requireRole("agency_owner",
     }
     const product = dep.tourProductId ? await loadProduct(c, dep.tourProductId) : null;
     if (bookingClosed(dep, product)) throw new AppError(409, "Bookings for this date have closed.");
+    const catalogueCtx = await requireCompleteBooking(c, dep.id, manifest, input.seats, input.customerPhone);
     const agency = (await c.query(`SELECT * FROM agencies WHERE id=$1`, [req.user.agencyId])).rows[0];
     const pricing = computePledgePricing(dep, product, input);
 
     agencyName = agency.name;
+    const pledgeId = newPledgeId(dep.id);
     await insertPledge(c, dep.id, {
-      id: newPledgeId(dep.id),
+      id: pledgeId,
       agencyId: agency.id,
       agency: agency.name,
       seats: input.seats,
@@ -1251,6 +1270,10 @@ app.post("/api/departures/:id/pledges", requireAuth, requireRole("agency_owner",
       manifest,
       ...pricing,
     });
+    // Model phase 3: the commission (EUR, from the rate version in force) is
+    // locked now; an agency on billing is invoiced now. Behind the flag, catalog
+    // departures only.
+    if (catalogueCtx) await recordAgencyBooking(c, { pledgeId, agency, catalogueDepartureId: catalogueCtx.departureId });
     return loadDeparture(c, dep.id);
   });
   await logAudit(req, { action: "pledge.create", entity: "departure", entityId: Number(req.params.id), detail: { seats: input.seats, agencyId: req.user.agencyId } });
@@ -1351,6 +1374,7 @@ app.post("/api/public/departures/:id/bookings", writeLimiter, h(async (req, res)
     }
     const product = dep.tourProductId ? await loadProduct(c, dep.tourProductId) : null;
     if (bookingClosed(dep, product)) throw new AppError(409, "Bookings for this date have closed.");
+    await requireCompleteBooking(c, dep.id, manifest, input.seats, input.customerPhone);
     const pricing = computePledgePricing(dep, product, input);
     const refCode = cleanRefCode(input.refCode);
     if (refCode) {
@@ -1469,6 +1493,8 @@ app.post("/api/agency/bookings/:pledgeId/cancel", requireAuth, requireRole("agen
     }
 
     await c.query(`UPDATE pledges SET status='cancelled' WHERE id=$1`, [pledge.id]);
+    // Model phase 3: a traveler's own cancellation (before GoAhead: no fee).
+    if (catalogueV2Enabled()) await c.query(`UPDATE pledges SET cancelled_at = now(), cancelled_reason = 'traveler' WHERE id = $1`, [pledge.id]);
     await refreshStatus(c, dep.id);
     return { alreadyDone: false, departureId: dep.id };
   });
@@ -1676,6 +1702,7 @@ app.post("/api/public/bookings/:code/cancel", writeLimiter, h(async (req, res) =
     }
 
     await c.query(`UPDATE pledges SET status='cancelled' WHERE id=$1`, [pledge.id]);
+    if (catalogueV2Enabled()) await c.query(`UPDATE pledges SET cancelled_at = now(), cancelled_reason = 'traveler' WHERE id = $1`, [pledge.id]);
     // The seat is released, so the departure may fall back below its minimum —
     // the same recomputation the pledge-id route does.
     await refreshStatus(c, dep.id);
@@ -2940,6 +2967,16 @@ app.patch("/api/admin/bookings/:id", requireAuth, requireRole("super_admin", "op
       }
     }
     await c.query(`UPDATE pledges SET status=$1 WHERE id=$2`, [status, req.params.id]);
+    // Model phase 3: when and why a booking ended decides the agency's
+    // commission (50% when the traveler canceled late and Sawa keeps a fee).
+    if (catalogueV2Enabled()) {
+      if (status === "cancelled" && cur.rows[0].status !== "cancelled") {
+        const reason = req.body?.cancelledReason === "traveler" ? "traveler" : "admin";
+        await c.query(`UPDATE pledges SET cancelled_at = now(), cancelled_reason = $2 WHERE id = $1`, [req.params.id, reason]);
+      } else if (reinstating) {
+        await c.query(`UPDATE pledges SET cancelled_at = NULL, cancelled_reason = NULL WHERE id = $1`, [req.params.id]);
+      }
+    }
     await refreshStatus(c, dep.id);
     // TT1 — both seatsTaken and the departure's own status can move here.
     touch(dep.id);
@@ -3796,6 +3833,7 @@ app.post("/api/admin/uploads", requireAuth, requireRole("super_admin", "ops_staf
 // here reaches a traveller. Registered before the /api 404 below.
 registerCatalogueRoutes(app, { requireAuth, requireRole, h, logAudit, invalidatePublic: () => invalidatePublicBootstrap() });
 registerOperatorRoutes(app, { requireAuth, requireRole, h, logAudit, provisionUser, supabaseAdmin, sendEmail });
+registerFinanceRoutes(app, { requireAuth, requireRole, h, logAudit, sendEmail, opsRecipient, writeLimiter });
 
 app.use("/api", (_req, res) => res.status(404).json({ error: "Not found." }));
 
