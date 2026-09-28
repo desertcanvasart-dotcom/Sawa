@@ -3,7 +3,7 @@ import {
   LayoutDashboard, Package, CalendarDays, Users, ClipboardList, ScrollText,
   Plus, Check, X, Search, Archive, ArchiveRestore, Euro, ShieldCheck,
   TrendingUp, AlertTriangle, MapPin, Hotel, ArrowUpRight, ArrowLeft, Trash2, Pencil,
-  Newspaper, Share2, Copy, Inbox, Eye, Clock3, Download, BookOpen, CalendarRange, Truck, CalendarCheck, Coins, Landmark,
+  Newspaper, Share2, Copy, Inbox, Eye, Clock3, Download, BookOpen, CalendarRange, Truck, CalendarCheck, Coins, Landmark, ChevronRight,
 } from "lucide-react";
 import { apiFetch, uploadImage } from "./supabaseClient";
 import { DashSidebar } from "./DashSidebar";
@@ -62,8 +62,9 @@ const NAV_GROUPS = [
       { id: "daterequests", label: "Date requests", icon: Clock3 },
       { id: "destinations", label: "Destinations", icon: MapPin },
       { id: "blog", label: "Blog", icon: Newspaper },
-      { id: "departures", label: "Departures", icon: CalendarDays, alert: (s) => s?.departureStatus?.readyToConfirm || 0 },
-      { id: "bookings", label: "Bookings", icon: ClipboardList },
+      // Departures and bookings are one page (28 Sep 2026): the dates, each
+      // opening to its travelers, and a Travelers tab to find one person.
+      { id: "departures", label: "Departures & bookings", icon: CalendarDays, alert: (s) => s?.departureStatus?.readyToConfirm || 0 },
       { id: "payments", label: "Payments", icon: Euro },
       { id: "settlements", label: "Settlements", icon: TrendingUp },
       { id: "referrals", label: "Referrals", icon: Share2 },
@@ -73,7 +74,9 @@ const NAV_GROUPS = [
     ],
   },
 ];
-const SECTION_IDS = NAV_GROUPS.flatMap((g) => g.items.map((it) => it.id));
+// "bookings" has no sidebar entry of its own: it is the Travelers tab of
+// Departures & bookings, kept as a URL so old links still land.
+const SECTION_IDS = [...NAV_GROUPS.flatMap((g) => g.items.map((it) => it.id)), "bookings"];
 
 export function AdminDashboard({ user, agency, signOut, navigate }) {
   const [section, setSection] = usePortalSection(SECTION_IDS, "overview");
@@ -115,7 +118,7 @@ export function AdminDashboard({ user, agency, signOut, navigate }) {
       <DashSidebar
         subtitle="Operations"
         groups={NAV_GROUPS}
-        active={section}
+        active={section === "bookings" ? "departures" : section}
         onSelect={setSection}
         stats={stats}
         roleLabel={user.role === "super_admin" ? "Super admin" : "Operations"}
@@ -148,8 +151,8 @@ export function AdminDashboard({ user, agency, signOut, navigate }) {
             {section === "daterequests" && <DateRequestsSection data={data} reload={loadAll} flash={flash} />}
             {section === "destinations" && <DestinationsSection destinations={destinations} reload={loadAll} flash={flash} />}
             {section === "blog" && <BlogSection posts={posts} reload={loadAll} flash={flash} />}
-            {section === "departures" && <DeparturesSection data={data} reload={loadAll} flash={flash} />}
-            {section === "bookings" && <BookingsSection data={data} stats={stats} reload={loadAll} flash={flash} isSuperAdmin={user.role === "super_admin"} />}
+            {section === "departures" && <DeparturesSection data={data} reload={loadAll} flash={flash} tabs={<DepBookTabs tab="dates" onTab={setSection} />} />}
+            {section === "bookings" && <BookingsSection data={data} stats={stats} reload={loadAll} flash={flash} isSuperAdmin={user.role === "super_admin"} tabs={<DepBookTabs tab="travelers" onTab={setSection} />} />}
             {section === "payments" && <PaymentsSection flash={flash} />}
             {section === "settlements" && <SettlementsSection flash={flash} />}
             {section === "referrals" && <ReferralsSection flash={flash} />}
@@ -1713,8 +1716,63 @@ function ListingPreviewModal({ p, agencyName, busy, onApprove, onReject, onClose
 const LIVE_DEP = ["pending_review", "open", "minimum_reached", "supplier_confirmed"];
 const depDay = (d) => String(d.startDate || d.date || "").slice(0, 10);
 
-function DeparturesSection({ data, reload, flash }) {
+// The two views of Departures & bookings.
+function DepBookTabs({ tab, onTab }) {
+  return (
+    <div className="seg-tabs depbook-tabs">
+      <button className={`seg-tab ${tab === "dates" ? "on" : ""}`} onClick={() => onTab("departures")}>Dates</button>
+      <button className={`seg-tab ${tab === "travelers" ? "on" : ""}`} onClick={() => onTab("bookings")}>Travelers</button>
+    </div>
+  );
+}
+
+// A booking's status change from either view. Under catalogue_v2 a
+// cancellation asks who canceled (it decides the agency's commission).
+async function patchBookingStatus(id, status, catalogueOn, flash) {
+  const body = { status };
+  if (status === "cancelled" && catalogueOn) {
+    body.cancelledReason = window.confirm("Did the traveler ask to cancel?\n\nOK: the traveler canceled (the cancellation schedule and the agency's commission follow from it).\nCancel: Sawa canceled it.") ? "traveler" : "admin";
+  }
+  const r = await apiFetch(`/admin/bookings/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  if (!r.ok) { const j = await r.json().catch(() => ({})); flash(j.error || "That didn't work. Please try again."); return false; }
+  return true;
+}
+function useCatalogueOn() {
+  const [on, setOn] = useState(false);
+  useEffect(() => { apiFetch("/admin/features").then((r) => (r.ok ? r.json() : {})).then((j) => setOn(j.catalogueV2 === true)).catch(() => setOn(false)); }, []);
+  return on;
+}
+function BalanceCell({ b }) {
+  return (
+    <>
+      {money(b.balanceDue)}{b.balanceDueDate && <div className="sub">by {fmtDate(b.balanceDueDate)}</div>}
+      {b.status !== "paid" && b.status !== "cancelled" && Number(b.depositDue) > 0 && <div className="sub">+ {money(b.depositDue)} deposit unpaid</div>}
+    </>
+  );
+}
+
+function DeparturesSection({ data, reload, flash, tabs = null }) {
   const [filter, setFilter] = useState("all");
+  // The date's travelers, shown when its row is opened.
+  const [bookings, setBookings] = useState(null);
+  const [expanded, setExpanded] = useState(() => new Set());
+  const [openBooking, setOpenBooking] = useState(null);
+  const catalogueOn = useCatalogueOn();
+  useBackToClose(!!openBooking, () => setOpenBooking(null));
+  async function loadBookings() {
+    const j = await apiFetch("/admin/bookings?limit=1000").then((r) => r.json()).catch(() => ({ bookings: [] }));
+    setBookings(j.bookings || []);
+    return j.bookings || [];
+  }
+  useEffect(() => { loadBookings(); }, []);
+  const byDep = (bookings || []).reduce((m, b) => { (m[b.departureId] || (m[b.departureId] = [])).push(b); return m; }, {});
+  const toggleRow = (id) => setExpanded((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  async function setBookingStatus(id, status) {
+    if (!(await patchBookingStatus(id, status, catalogueOn, flash))) return;
+    const list = await loadBookings();
+    reload?.();
+    setOpenBooking((o) => (o ? list.find((b) => b.id === o.id) || null : null));
+  }
   const [pub, setPub] = useState(null); // {type}
   const [merging, setMerging] = useState(null); // the departure the merge starts from
   const [merges, setMerges] = useState([]);
@@ -1735,7 +1793,7 @@ function DeparturesSection({ data, reload, flash }) {
     if (!window.confirm(`Undo merge ${m.id}? The bookings go back to departures ${m.duplicateIds.join(", ")}, which reopen as they were. Travelers are not emailed again.`)) return;
     const r = await apiFetch(`/admin/departure-merges/${m.id}/revert`, { method: "POST" });
     const j = await r.json().catch(() => ({}));
-    if (r.ok) { flash("Merge undone."); reload(); loadMerges(); } else flash(j.error || "Could not undo the merge.");
+    if (r.ok) { flash("Merge undone."); reload(); loadMerges(); loadBookings(); } else flash(j.error || "Could not undo the merge.");
   }
   const today = cairoToday();
   const shown = deps.filter((d) => {
@@ -1758,12 +1816,12 @@ function DeparturesSection({ data, reload, flash }) {
   async function cancel(d) {
     if (!window.confirm(`Cancel "${d.route}" on ${fmtDate(d.startDate || d.date)}? Travelers with an email will be notified.`)) return;
     const r = await apiFetch(`/admin/departures/${d.id}/cancel`, { method: "POST" });
-    if (r.ok) { flash("Departure canceled."); reload(); }
+    if (r.ok) { flash("Departure canceled."); reload(); loadBookings(); }
   }
 
   return (
     <>
-      <PageHead title="Departures" sub="Publish dates, confirm GoAhead, and manage what's running."
+      <PageHead title="Departures & bookings" sub="Each date with its travelers. Open a date to see who is booked and what they have paid."
         action={
           <div className="head-actions">
             <button className="btn-ghost" onClick={() => setPub({ type: "day_tour" })}><Plus size={16} />Create tour date</button>
@@ -1771,6 +1829,7 @@ function DeparturesSection({ data, reload, flash }) {
           </div>
         } />
 
+      {tabs}
       <div className="seg">
         {[["all", "All"], ["open", "Open"], ["ready", "Ready"], ["confirmed", "Confirmed"], ["past", "Past / closed"], ["cancelled", "Cancelled"]].map(([k, label]) => (
           <button key={k} className={filter === k ? "active" : ""} onClick={() => setFilter(k)}>
@@ -1781,19 +1840,26 @@ function DeparturesSection({ data, reload, flash }) {
 
       <div className="table-wrap">
         <table className="dash-table">
-          <thead><tr><th>Route</th><th>When</th><th>Seats</th><th>Live {CURRENCY_SYMBOL}</th><th>Status</th><th></th></tr></thead>
+          <thead><tr><th></th><th>Route</th><th>When</th><th>Seats</th><th>Travelers</th><th>Live {CURRENCY_SYMBOL}</th><th>Status</th><th></th></tr></thead>
           <tbody>
             {shown.map((d) => {
               const seats = seatsOf(d), min = d.minSeats || 4, ready = seats >= min;
               const inactive = depInactive(d, today);
+              const list = byDep[d.id] || [];
+              const live = list.filter((b) => b.status !== "cancelled");
+              const paid = live.filter((b) => b.status === "paid").length;
+              const isOpen = expanded.has(d.id);
               return (
-                <tr key={d.id} className={inactive ? "row-archived" : ""}>
+                <Fragment key={d.id}>
+                <tr className={`${inactive ? "row-archived" : ""}${list.length ? " clickable" : ""}`} onClick={() => list.length && toggleRow(d.id)}>
+                  <td className="dep-toggle">{list.length ? <ChevronRight size={15} className={isOpen ? "rot90" : ""} aria-label={isOpen ? "Hide travelers" : "Show travelers"} /> : null}</td>
                   <td><strong>{isPkg(d) && <span className="tag tag-pkg">Pkg</span>} {d.route}</strong><div className="sub">{(d.cities || [d.city]).join(" → ")}</div></td>
                   <td>{fmtDate(d.startDate || d.date)}{d.endDate ? ` – ${fmtDate(d.endDate)}` : ""}</td>
                   <td><span className={ready ? "seats ok" : "seats"}>{seats}/{min}</span><span className="sub">max {d.maxSeats}</span></td>
+                  <td>{bookings === null ? "…" : live.length ? <>{live.length} booking{live.length === 1 ? "" : "s"}<div className="sub">{paid} paid{list.length > live.length ? ` · ${list.length - live.length} canceled` : ""}</div></> : <span className="sub">{list.length ? `${list.length} canceled` : "none"}</span>}</td>
                   <td>{money(d.livePrice)}</td>
                   <td><StatusTag d={d} />{d.mergedIntoId ? <div className="sub">merged into {d.mergedIntoId}</div> : isDup(d) ? <div><span className="tag tag-warn">Same day listed twice</span></div> : null}</td>
-                  <td className="row-actions">
+                  <td className="row-actions" onClick={(e) => e.stopPropagation()}>
                     {isDup(d) && !inactive && <button className="btn-mini" onClick={() => setMerging(d)}>Merge into…</button>}
                     {d.status !== "supplier_confirmed" && !inactive && (
                       <button className="btn-mini" disabled={!ready} onClick={() => confirm(d)}><Check size={14} />Confirm</button>
@@ -1801,9 +1867,29 @@ function DeparturesSection({ data, reload, flash }) {
                     {!inactive && <button className="icon-btn danger" title="Cancel departure" onClick={() => cancel(d)}><X size={15} /></button>}
                   </td>
                 </tr>
+                {isOpen && (
+                  <tr className="dep-travelers"><td></td><td colSpan={7}>
+                    <table className="dash-table sub-table">
+                      <thead><tr><th>Traveler</th><th>Booked by</th><th>Seats</th><th>Total</th><th>Balance</th><th>Status</th></tr></thead>
+                      <tbody>
+                        {list.map((b) => (
+                          <tr key={b.id} className={`clickable${b.status === "cancelled" ? " row-archived" : ""}`} onClick={() => setOpenBooking(b)}>
+                            <td><strong>{b.customers || "—"}</strong>{b.customerEmail && <div className="sub">{b.customerEmail}</div>}{b.bookingCode && <div className="sub">{b.bookingCode}</div>}</td>
+                            <td>{b.source === "public" || b.source === "public_request" ? <span className="tag">Direct</span> : b.agency}<div className="sub">{fmtReceived(b.createdAt)}</div></td>
+                            <td>{b.seats}</td>
+                            <td>{money(b.bookingTotal)}</td>
+                            <td><BalanceCell b={b} /></td>
+                            <td><span className={`tag ${bookingStatusTag(b.status)}`}>{bookingStatusLabel(b)}</span></td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </td></tr>
+                )}
+                </Fragment>
               );
             })}
-            {shown.length === 0 && <tr><td colSpan={6}><Empty label="No departures match this filter." /></td></tr>}
+            {shown.length === 0 && <tr><td colSpan={8}><Empty label="No departures match this filter." /></td></tr>}
           </tbody>
         </table>
       </div>
@@ -1819,7 +1905,8 @@ function DeparturesSection({ data, reload, flash }) {
       )}
 
       {pub && <PublishModal type={pub.type} data={data} onClose={() => setPub(null)} onDone={(code) => { setPub(null); flash(code ? `Date created with its first booking — code ${code}.` : "Date created."); reload(); }} />}
-      {merging && <MergeModal from={merging} deps={deps} onClose={() => setMerging(null)} onDone={(msg) => { setMerging(null); flash(msg); reload(); loadMerges(); }} />}
+      {merging && <MergeModal from={merging} deps={deps} onClose={() => setMerging(null)} onDone={(msg) => { setMerging(null); flash(msg); reload(); loadMerges(); loadBookings(); }} />}
+      {openBooking && <BookingDrawer booking={openBooking} onClose={() => setOpenBooking(null)} onStatus={setBookingStatus} />}
     </>
   );
 }
@@ -2053,17 +2140,9 @@ function daysUntil(value) {
   if (n > 0) return `in ${n} days`;
   return n === -1 ? "yesterday" : `${-n} days ago`;
 }
-function depFillStatus(d) {
-  const seats = seatsOf(d), min = Math.max(1, d.minSeats || 4);
-  if (d.status === "cancelled") return { key: "cancelled", label: "Canceled", tone: "off", seats, min };
-  if (d.status === "supplier_confirmed") return { key: "confirmed", label: "Confirmed · running", tone: "on", seats, min };
-  if (seats >= min) return { key: "ready", label: "Ready to confirm", tone: "ready", seats, min };
-  return { key: "forming", label: `${min - seats} more to GoAhead`, tone: "warn", seats, min };
-}
-function BookingsSection({ data, stats, reload, flash = () => {}, isSuperAdmin = false }) {
+function BookingsSection({ stats, reload, flash = () => {}, isSuperAdmin = false, tabs = null }) {
   const [rows, setRows] = useState(null);
   const [q, setQ] = useState("");
-  const [view, setView] = useState("list");   // list | tours
   const [filter, setFilter] = useState("active");
   const [sort, setSort] = useState("booked");
   const [selected, setSelected] = useState(() => new Set());
@@ -2117,7 +2196,7 @@ function BookingsSection({ data, stats, reload, flash = () => {}, isSuperAdmin =
   const shownIds = shown.map((b) => b.id);
   const selectedShown = shownIds.filter((id) => selected.has(id));
   const allShownSelected = shownIds.length > 0 && selectedShown.length === shownIds.length;
-  useEffect(() => { setSelected(new Set()); }, [filter, q, view]);
+  useEffect(() => { setSelected(new Set()); }, [filter, q]);
   const toggle = (id) => setSelected((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   const toggleAll = () => setSelected(allShownSelected ? new Set() : new Set(shownIds));
 
@@ -2164,29 +2243,10 @@ function BookingsSection({ data, stats, reload, flash = () => {}, isSuperAdmin =
     } finally { setBulkBusy(false); }
   }
 
-  // Per-departure roll-up: how each date is filling + its booking value.
-  const revByDep = all.reduce((m, b) => {
-    if (b.status === "cancelled") return m;
-    const e = m[b.departureId] || (m[b.departureId] = { seats: 0, revenue: 0, count: 0 });
-    e.seats += Number(b.seats || 0); e.revenue += Number(b.bookingTotal || 0); e.count += 1;
-    return m;
-  }, {});
-  const tourRows = (data?.departures || [])
-    .filter((d) => d.status !== "cancelled" && (revByDep[d.id] || seatsOf(d) > 0))
-    .map((d) => ({ d, fill: depFillStatus(d), agg: revByDep[d.id] || { seats: seatsOf(d), revenue: 0, count: 0 } }))
-    .filter(({ d }) => { if (!q) return true; return `${d.route} ${d.city}`.toLowerCase().includes(q.toLowerCase()); })
-    .sort((a, b) => new Date(a.d.startDate || a.d.date) - new Date(b.d.startDate || b.d.date));
-
   // Model phase 3 (catalogue_v2): who canceled decides the agency's commission.
-  const [catalogueOn, setCatalogueOn] = useState(false);
-  useEffect(() => { apiFetch("/admin/features").then((r) => (r.ok ? r.json() : {})).then((j) => setCatalogueOn(j.catalogueV2 === true)).catch(() => setCatalogueOn(false)); }, []);
+  const catalogueOn = useCatalogueOn();
   async function setStatus(id, status) {
-    const body = { status };
-    if (status === "cancelled" && catalogueOn) {
-      body.cancelledReason = window.confirm("Did the traveler ask to cancel?\n\nOK: the traveler canceled (the cancellation schedule and the agency's commission follow from it).\nCancel: Sawa canceled it.") ? "traveler" : "admin";
-    }
-    const r = await apiFetch(`/admin/bookings/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-    if (!r.ok) { const j = await r.json().catch(() => ({})); flash(j.error || "That didn't work. Please try again."); return; }
+    if (!(await patchBookingStatus(id, status, catalogueOn, flash))) return;
     const list = await load();
     reload?.();
     // A canceled booking leaves the Active list, so its drawer closes with it.
@@ -2208,13 +2268,14 @@ function BookingsSection({ data, stats, reload, flash = () => {}, isSuperAdmin =
 
   return (
     <>
-      <PageHead title="Bookings" sub="Every seat booked across agencies and direct travelers."
+      <PageHead title="Departures & bookings" sub="Every booking, to find one traveler, act on several at once, or export."
         action={
           <div className="head-actions">
             <div className="search-box"><Search size={16} /><input placeholder="Search name, email, route…" value={q} onChange={(e) => setQ(e.target.value)} /></div>
             <button className="btn-ghost" onClick={exportCsv} disabled={!shown.length}>{selectedShown.length ? `Export ${selectedShown.length} selected` : "Export CSV"}</button>
           </div>
         } />
+      {tabs}
 
       {rows === null && <DashSkeleton />}
       {rows && (
@@ -2228,16 +2289,11 @@ function BookingsSection({ data, stats, reload, flash = () => {}, isSuperAdmin =
           {truncated && (
             <p className="bk-trunc" role="status">
               Showing the {all.length.toLocaleString()} most recent of {total.toLocaleString()} bookings.
-              The figures above cover all bookings; the list, search and “By tour” view below cover only the ones loaded.
+              The figures above cover all bookings; the list and search below cover only the ones loaded.
             </p>
           )}
 
           <div className="bk-controls">
-            <div className="seg-tabs">
-              <button className={`seg-tab ${view === "list" ? "on" : ""}`} onClick={() => setView("list")}>Bookings</button>
-              <button className={`seg-tab ${view === "tours" ? "on" : ""}`} onClick={() => setView("tours")}>By tour</button>
-            </div>
-            {view === "list" && (
               <div className="chip-row">
                 {BOOKING_FILTERS.map((f) => {
                   const n = f.id === "active" ? activeCount : f.id === "all" ? all.length : counts[f.id];
@@ -2251,10 +2307,9 @@ function BookingsSection({ data, stats, reload, flash = () => {}, isSuperAdmin =
                   {BOOKING_SORTS.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
                 </select>
               </div>
-            )}
           </div>
 
-          {view === "list" && selectedShown.length > 0 && (
+          {selectedShown.length > 0 && (
             <div className="bk-bulk" role="toolbar" aria-label="Bulk actions">
               <strong>{selectedShown.length} selected</strong>
               {BULK_ACTIONS.map((a) => (
@@ -2267,7 +2322,6 @@ function BookingsSection({ data, stats, reload, flash = () => {}, isSuperAdmin =
             </div>
           )}
 
-          {view === "list" ? (
             <div className="table-wrap">
               <table className="dash-table">
                 <thead><tr>
@@ -2287,7 +2341,7 @@ function BookingsSection({ data, stats, reload, flash = () => {}, isSuperAdmin =
                       <td>{b.source === "public" || b.source === "public_request" ? <span className="tag">Direct</span> : b.agency}</td>
                       <td>{b.seats}</td>
                       <td>{money(b.bookingTotal)}</td>
-                      <td>{money(b.balanceDue)}{b.balanceDueDate && <div className="sub">by {fmtDate(b.balanceDueDate)}</div>}{b.status !== "paid" && b.status !== "cancelled" && Number(b.depositDue) > 0 && <div className="sub">+ {money(b.depositDue)} deposit unpaid</div>}</td>
+                      <td><BalanceCell b={b} /></td>
                       <td><span className={`tag ${bookingStatusTag(b.status)}`}>{bookingStatusLabel(b)}</span></td>
                     </tr>
                   ))}
@@ -2295,27 +2349,6 @@ function BookingsSection({ data, stats, reload, flash = () => {}, isSuperAdmin =
                 </tbody>
               </table>
             </div>
-          ) : (
-            <div className="bk-tours">
-              {tourRows.map(({ d, fill, agg }) => (
-                <div className="bk-tour" key={d.id}>
-                  <div className="bk-tour-main">
-                    <div className="bk-tour-title">
-                      <strong>{d.route}</strong>
-                      <span className="sub">{d.city} · {fmtDate(d.startDate || d.date)}{d.type === "package" ? " · package" : ""}</span>
-                    </div>
-                    <div className="bk-meter"><i className={`fill-${fill.tone}`} style={{ width: `${Math.min(100, (fill.seats / fill.min) * 100)}%` }} /></div>
-                    <div className="bk-tour-stat"><b>{fill.seats}/{fill.min}</b><span className={`tag tag-${fill.tone === "on" ? "on" : fill.tone === "ready" ? "ready" : fill.tone === "off" ? "off" : "warn"}`}>{fill.label}</span></div>
-                  </div>
-                  <div className="bk-tour-side">
-                    <div><span>{agg.count}</span>bookings</div>
-                    <div><span>{money(agg.revenue)}</span>value</div>
-                  </div>
-                </div>
-              ))}
-              {tourRows.length === 0 && <Empty label="No booked departures yet." />}
-            </div>
-          )}
         </>
       )}
 
