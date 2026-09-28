@@ -2286,6 +2286,11 @@ async function createDateRequest(input, req, requester = {}, { hold = false, con
     //   - an open or going-ahead date: 409 exact_day, and the client books it
     //     through the normal booking route (its checks, pricing and emails).
     // Only when every such date is full is a second date for that day made.
+    // Two requests for the same new day at the same moment: FOR UPDATE below
+    // locks rows that exist, and a day with no date yet has none, so both
+    // would insert one. Serialize on the tour and day instead; the second
+    // request waits, then sees the first one's date and joins it.
+    await c.query("SELECT pg_advisory_xact_lock(hashtext('departure-day'), hashtext($1::text || ':' || $2::text))", [product.id, input.date]);
     const merged = (await c.query("SELECT to_regclass('public.departure_merges') AS t")).rows[0].t != null;
     const sameDay = await c.query(
       `SELECT id, status FROM departures

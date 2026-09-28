@@ -1789,7 +1789,7 @@ function DeparturesSection({ data, reload, flash }) {
                   <td>{money(d.livePrice)}</td>
                   <td><StatusTag d={d} />{d.mergedIntoId ? <div className="sub">merged into {d.mergedIntoId}</div> : isDup(d) ? <div><span className="tag tag-warn">Same day listed twice</span></div> : null}</td>
                   <td className="row-actions">
-                    {isDup(d) && <button className="btn-mini" onClick={() => setMerging(d)}>Merge…</button>}
+                    {isDup(d) && <button className="btn-mini" onClick={() => setMerging(d)}>Merge into…</button>}
                     {d.status !== "supplier_confirmed" && d.status !== "cancelled" && !d.mergedIntoId && (
                       <button className="btn-mini" disabled={!ready} onClick={() => confirm(d)}><Check size={14} />Confirm</button>
                     )}
