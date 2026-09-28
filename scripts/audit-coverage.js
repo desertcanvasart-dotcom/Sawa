@@ -38,6 +38,10 @@ export const EXEMPT = {
     + "block. There is no actor and nothing changes: no access, money, booking "
     + "or status. It fires on page views, so auditing it would bury the rows "
     + "that matter; each distinct violation is logged once for tuning instead.",
+  "POST /api/admin/departures/merge/preview":
+    "a read-only dry run of a merge: it writes nothing, so there is nothing to "
+    + "record. POST only because it takes a list of departure ids in the body. "
+    + "The merge itself (POST /api/admin/departures/merge) and its undo are audited.",
 };
 
 // Deliberately line-based over app.js rather than a parser: the file is one

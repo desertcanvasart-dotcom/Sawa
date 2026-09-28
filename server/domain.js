@@ -563,6 +563,9 @@ export function passengerOwner(p, { directAgencyId = null, referralAgencies = nu
 export function operatorForDeparture(departure, {
   listingAgencyId = null, directAgencyId = null, referralAgencies = null, lockAtMs = NaN, nowMs = Date.now(),
 } = {}) {
+  // 055: when duplicates with different operators were merged, admin chose who
+  // runs the kept date. That choice stands over the rule below.
+  if (departure?.operatorAgencyOverride) return departure.operatorAgencyOverride;
   const fallback = listingAgencyId || directAgencyId || null;
   const all = departure?.pledges || [];
   const asOf = Number.isFinite(lockAtMs) && nowMs >= lockAtMs ? lockAtMs : Infinity;

@@ -1743,7 +1743,9 @@ function TourDetailV2({ isSaving, navigate, phoneVerification = false, onBookPub
       });
       const data = await response.json();
       if (response.status === 409 && data.code === "near_matches") {
-        setReqMatches(data.nearMatches || []);
+        // exactDay: the tour already has a group that very day — join it; no
+        // second group for the same day (27 Sep 2026).
+        setReqMatches(Object.assign(data.nearMatches || [], { exactDay: !!data.exactDay }));
         return;
       }
       if (!response.ok) throw new Error(data.error || "Could not request this date.");
@@ -2051,7 +2053,7 @@ function TourDetailV2({ isSaving, navigate, phoneVerification = false, onBookPub
                           </div>
                           {reqMatches && reqMatches.length > 0 && (
                             <div style={{ marginTop: 10 }}>
-                              <div className="lbl">Groups already forming near that date — joining confirms a trip faster:</div>
+                              <div className="lbl">{reqMatches.exactDay ? "This tour already has a group on that day — join it:" : "Groups already forming near that date — joining confirms a trip faster:"}</div>
                               {reqMatches.map((m) => {
                                 const ms = seatsTotal(m.pledges); const mga = goAheadSeatsFor(m);
                                 return (
@@ -2061,9 +2063,11 @@ function TourDetailV2({ isSaving, navigate, phoneVerification = false, onBookPub
                                   </button>
                                 );
                               })}
-                              <button type="button" className="btn light full" style={{ marginTop: 6 }} disabled={reqBusy} onClick={() => submitDateRequest(true)}>
-                                {reqBusy ? "Requesting…" : "None of these work — request my date"}
-                              </button>
+                              {!reqMatches.exactDay && (
+                                <button type="button" className="btn light full" style={{ marginTop: 6 }} disabled={reqBusy} onClick={() => submitDateRequest(true)}>
+                                  {reqBusy ? "Requesting…" : "None of these work — request my date"}
+                                </button>
+                              )}
                             </div>
                           )}
                           <button type="button" className="req-back" onClick={() => { setReqMode(false); setReqMatches(null); setReqErr(""); }}>← Back to open dates</button>
@@ -3141,7 +3145,7 @@ function EmbedBookTour({ product, refCode, phoneVerification }) {
     if (preview) return setErr("Preview only — nothing was sent. On your website this sends the date request to Sawa.");
     const { r, j } = await post("/public/departure-requests", { tourProductId: product.id, date: reqDate, ignoreMatches, ...traveller() });
     // Join-first: open dates close by are offered before a new one is made.
-    if (r.status === 409 && j.code === "near_matches") { setMatches(j.nearMatches || []); return; }
+    if (r.status === 409 && j.code === "near_matches") { setMatches(Object.assign(j.nearMatches || [], { exactDay: !!j.exactDay })); return; }
     if (!r.ok) throw new Error(j.error || "Could not request this date.");
     setDone({ kind: "requested", booking: j.booking || {}, date: reqDate });
   }
@@ -3222,7 +3226,7 @@ function EmbedBookTour({ product, refCode, phoneVerification }) {
           <div className="eb-matches" role="status">
             {matches.length ? (
               <>
-                <p>There's already an open date close to that one — join it and your group confirms sooner:</p>
+                <p>{matches.exactDay ? "This tour already has a group on that day — join it:" : "There's already an open date close to that one — join it and your group confirms sooner:"}</p>
                 {matches.map((m) => {
                   const known = dates.some((d) => Number(d.id) === Number(m.id));
                   return (
@@ -3234,7 +3238,7 @@ function EmbedBookTour({ product, refCode, phoneVerification }) {
                 })}
               </>
             ) : <p>There's already an open date close to that one.</p>}
-            <button type="button" className="eb-switch" disabled={busy} onClick={(e) => submit(e, { ignoreMatches: true })}>No thanks — request {reqDate ? formatDate(reqDate, { alwaysYear: true }) : "my date"} anyway</button>
+            {!matches.exactDay && <button type="button" className="eb-switch" disabled={busy} onClick={(e) => submit(e, { ignoreMatches: true })}>No thanks — request {reqDate ? formatDate(reqDate, { alwaysYear: true }) : "my date"} anyway</button>}
           </div>
         )}
 
