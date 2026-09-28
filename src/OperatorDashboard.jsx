@@ -91,6 +91,16 @@ function Assignments({ assignments, reload, flash }) {
       reload();
     } catch (e) { setErr(e.message); }
   }
+  // Phase 5: an offer may be declined; it passes to the next operator in line.
+  async function decline(a) {
+    const reason = window.prompt(`Decline ${a.title} on ${dayLabel(a.date)}? It will be offered to another operator. It doesn't count as a strike.\n\nReason (optional):`);
+    if (reason === null) return;
+    try {
+      await call(`/operator/assignments/${a.id}/decline`, "POST", { reason });
+      flash(`Declined: ${a.title}, ${dayLabel(a.date)}.`);
+      reload();
+    } catch (e) { setErr(e.message); }
+  }
   async function open(a) {
     setErr(""); setOpenId(a.id); setManifest(null);
     try { setManifest(await call(`/operator/departures/${a.departureId}/manifest`)); } catch (e) { setErr(e.message); }
@@ -114,11 +124,14 @@ function Assignments({ assignments, reload, flash }) {
                   <td className="tnum">{a.expected ? egp(a.expected.total) : "—"}{a.expected && !a.expected.frozen && <div className="field-hint">until the cut-off</div>}</td>
                   <td>
                     {a.state === "offered" && <>Due by {stamp(a.ackDueAt)}</>}
+                    {a.state === "offered" && a.source === "agency" && a.candidate && <div className="field-hint">Offered to you because your agency has {a.candidate.travelers} traveler{a.candidate.travelers === 1 ? "" : "s"} on it.</div>}
+                    {a.state === "declined" && <span className="tag tag-off">Declined</span>}
                     {a.state === "acknowledged" && <span className="tag tag-on">Acknowledged</span>}
                     {a.state === "expired" && <span className="tag tag-off">Not acknowledged in time</span>}
                   </td>
                   <td className="row-actions">
                     {a.state === "offered" && <button className="btn-primary sm" onClick={() => ack(a)}><Check size={14} />Acknowledge</button>}
+                    {a.state === "offered" && <button className="btn-ghost sm" onClick={() => decline(a)}>Decline</button>}
                     {a.manifestAvailable && <button className="btn-ghost sm" onClick={() => open(a)}>Manifest</button>}
                   </td>
                 </tr>

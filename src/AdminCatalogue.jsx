@@ -15,7 +15,7 @@ const STATUS_TONE = { active: "tag-on", held: "tag-warn", retired: "tag-off" };
 const DEP_LABEL = { open: "Open", go_ahead: "Going ahead", cancelled_below_minimum: "Canceled — below minimum", completed: "Completed" };
 const DEP_TONE = { open: "", go_ahead: "tag-on", cancelled_below_minimum: "tag-off", completed: "tag-off" };
 const FIELD_LABEL = Object.fromEntries(SPEC_FIELDS);
-const ASSIGN_STATE = { offered: "awaiting acknowledgement", acknowledged: "acknowledged", expired: "not acknowledged" };
+const ASSIGN_STATE = { offered: "awaiting acknowledgement", acknowledged: "acknowledged", expired: "not acknowledged", declined: "declined" };
 const cairo = (iso, opts) => (iso ? new Intl.DateTimeFormat("en-GB", { timeZone: "Africa/Cairo", ...opts }).format(new Date(iso)) : "—");
 const dayLabel = (ymd) => cairo(`${ymd}T12:00:00Z`, { weekday: "short", day: "numeric", month: "short", year: "numeric" });
 
@@ -619,7 +619,7 @@ export function CalendarSection({ flash }) {
                     : `Cut-off ${cairo(d.cutoffAt, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}`}</td>
                   {data.operators && (
                     <td>
-                      {d.assignment ? <>{d.assignment.name}<div className="field-hint">{ASSIGN_STATE[d.assignment.state]}</div></>
+                      {d.assignment ? <>{d.assignment.name}<div className="field-hint">{ASSIGN_STATE[d.assignment.state]}{d.assignment.source === "agency" ? " · agency on the departure" : d.assignment.source === "roster" ? " · rostered" : ""}</div></>
                         : d.rostered ? <>{d.rostered.name}<div className="field-hint">rostered{d.rostered.published ? "" : ", not published"}</div></> : null}
                       {d.unrostered && <span className="tag tag-warn">No rostered operator</span>}
                       {(d.alerts || []).map((k) => <span key={k} className="tag tag-off">{k === "missed_acknowledgement" ? "Not acknowledged" : "Needs an operator"}</span>)}
