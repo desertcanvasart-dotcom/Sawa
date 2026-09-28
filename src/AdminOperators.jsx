@@ -721,20 +721,22 @@ function RateEditor({ product, flash, onClose }) {
           <button type="button" className="btn-primary" disabled={busy || !!problem} onClick={publish}>Publish</button>
         </div>
       </form>
-      <div className="dash-card">
+      <div className="dash-card rate-editor">
         <h2>Versions</h2>
         {versions.length ? (
           <div className="table-wrap">
             <table className="dash-table">
-              <thead><tr><th>Version</th><th>State</th><th>From</th><th>Prices (EGP)</th><th>Operator fee</th><th>Cost lines</th><th>Commission</th><th>EUR rate</th></tr></thead>
+              <thead><tr><th>Version</th><th>From</th><th>Tiers (EGP per traveler · operator fee)</th><th>Cost lines</th><th>Commission</th><th>EUR rate</th></tr></thead>
               <tbody>
                 {versions.map((v) => (
                   <tr key={v.id}>
-                    <td>v{v.version}</td><td>{v.state}{v.publishedBy && <div className="field-hint">{v.publishedBy}</div>}</td>
+                    <td className="re-ver"><b>v{v.version}</b> <span className={`tag ${v.state === "published" ? "tag-on" : v.state === "draft" ? "tag-ready" : "tag-off"}`}>{v.state}</span>
+                      {v.publishedBy && <div className="field-hint">{v.publishedBy}</div>}</td>
                     <td>{v.effectiveFrom ? dayLabel(v.effectiveFrom) : "—"}</td>
-                    <td className="tnum">{(v.tiers || []).map((t) => egpFmt(t.priceEgp)).join(" / ")}</td>
-                    <td className="tnum">{(v.tiers || []).map((t) => (t.operatorFeePct == null ? "—" : `${t.operatorFeePct}%`)).join(" / ")}</td>
-                    <td>{(v.costLines || []).map((l) => `${l.name} (${COST_BASIS_LABELS[l.basis] || l.basis})`).join(", ") || "—"}
+                    <td><ul className="re-list">{(v.tiers || []).map((t, i) => (
+                      <li key={i}><span className="re-range">{t.from}–{t.to}</span> <span className="tnum">{egpFmt(t.priceEgp)}</span> <span className="re-muted">· {t.operatorFeePct == null ? "—" : `${t.operatorFeePct}%`}</span></li>
+                    ))}</ul></td>
+                    <td>{(v.costLines || []).length ? <ul className="re-list">{v.costLines.map((l, i) => <li key={i}>{l.name} <span className="re-muted">{COST_BASIS_LABELS[l.basis] || l.basis}</span></li>)}</ul> : "—"}
                       {v.source?.migration061 && <div className="field-hint">Converted by migration 061: {(v.source.migration061.notes || []).join("; ")}</div>}</td>
                     <td className="tnum">{v.commissionPct}%</td>
                     <td className="tnum">{v.eurRate ?? "—"}</td>
