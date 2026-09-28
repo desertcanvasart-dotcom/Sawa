@@ -59,13 +59,25 @@ export async function heldCodeTaken(c, code) {
 }
 
 // Inside the booking's transaction, after every check passed.
-export async function holdBooking(c, { departureId, bookingCode, email, seats, payload, now = Date.now() }) {
+// A date request (migration 060) is held the same way, with its tour and day
+// (and the date it would join, when one is awaiting review).
+export async function holdBooking(c, { departureId = null, bookingCode, email, seats, payload, kind = "booking", tourProductId = null, requestDate = null, now = Date.now() }) {
   const token = newToken();
   const row = (await c.query(
-    `INSERT INTO booking_confirmations (booking_code, departure_id, email, seats, payload, token_hash, expires_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
-    [bookingCode, departureId, email, seats, JSON.stringify(payload), hash(token), new Date(now + CONFIRM_HOURS * HOUR)])).rows[0];
+    kind === "booking"
+      ? `INSERT INTO booking_confirmations (booking_code, departure_id, email, seats, payload, token_hash, expires_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`
+      : `INSERT INTO booking_confirmations (booking_code, departure_id, email, seats, payload, token_hash, expires_at, kind, tour_product_id, request_date)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
+    [bookingCode, departureId, email, seats, JSON.stringify(payload), hash(token), new Date(now + CONFIRM_HOURS * HOUR),
+      ...(kind === "booking" ? [] : [kind, tourProductId, requestDate])])).rows[0];
   return { row, token };
+}
+
+// Whether date requests can be held: migration 060 applied.
+export async function dateRequestHoldAvailable(db = pool) {
+  return (await db.query(
+    "SELECT 1 FROM information_schema.columns WHERE table_name = 'booking_confirmations' AND column_name = 'kind'")).rowCount > 0;
 }
 
 // The held booking behind a link, locked. Null for an unknown link.

@@ -203,17 +203,24 @@ export async function mergeDepartures({ keptId, duplicateIds, operatorAgencyId =
     const approve = kept.status !== "pending_review";
     const costs = (await has(c, "departure_costs")) ? (await c.query("SELECT id, departure_id FROM departure_costs WHERE departure_id = ANY($1::int[])", [duplicateIds])).rows : [];
     const adjustments = (await has(c, "settlement_adjustments")) ? (await c.query("SELECT id, departure_id FROM settlement_adjustments WHERE departure_id = ANY($1::int[])", [duplicateIds])).rows : [];
+    // Bookings still waiting for their email confirmation (migration 058) move
+    // too: their link then makes the booking on the kept date, instead of
+    // failing with "book on that one".
+    const held = (await has(c, "booking_confirmations")) ? (await c.query(
+      "SELECT id, departure_id FROM booking_confirmations WHERE departure_id = ANY($1::int[]) AND status = 'unconfirmed'", [duplicateIds])).rows : [];
     const snapshot = {
       kept: { status: kept.status, notes: kept.notes, operatorAgencyOverride: kept.operator_agency_override || null },
       duplicates: duplicateIds.map((id) => ({ id, status: data.byId.get(id).status })),
       pledges: moved.map((p) => ({ id: p.id, from: Number(p.departure_id), status: p.status })),
       costs: costs.map((r) => ({ id: Number(r.id), from: Number(r.departure_id) })),
       adjustments: adjustments.map((r) => ({ id: Number(r.id), from: Number(r.departure_id) })),
+      held: held.map((r) => ({ id: Number(r.id), from: Number(r.departure_id) })),
     };
     await c.query("UPDATE pledges SET departure_id = $1 WHERE departure_id = ANY($2::int[])", [keptId, duplicateIds]);
     if (approve) await c.query("UPDATE pledges SET status = 'confirmed' WHERE id = ANY($1::text[]) AND status = 'pending'", [moved.map((p) => p.id)]);
     if (costs.length) await c.query("UPDATE departure_costs SET departure_id = $1 WHERE departure_id = ANY($2::int[])", [keptId, duplicateIds]);
     if (adjustments.length) await c.query("UPDATE settlement_adjustments SET departure_id = $1 WHERE departure_id = ANY($2::int[])", [keptId, duplicateIds]);
+    if (held.length) await c.query("UPDATE booking_confirmations SET departure_id = $1 WHERE id = ANY($2::int[])", [keptId, held.map((r) => Number(r.id))]);
     const extraNotes = duplicateIds.map((id) => data.byId.get(id)).filter((d) => String(d.notes || "").trim())
       .map((d) => `Merged from departure ${d.id}: ${String(d.notes).trim()}`);
     await c.query(
@@ -269,6 +276,7 @@ export async function revertMerge({ mergeId, by, now = Date.now() }) {
     }
     for (const r of snap.costs || []) await c.query("UPDATE departure_costs SET departure_id = $2 WHERE id = $1", [r.id, r.from]);
     for (const r of snap.adjustments || []) await c.query("UPDATE settlement_adjustments SET departure_id = $2 WHERE id = $1", [r.id, r.from]);
+    for (const r of snap.held || []) await c.query("UPDATE booking_confirmations SET departure_id = $2 WHERE id = $1", [r.id, r.from]);
     for (const d of snap.duplicates) {
       await c.query("UPDATE departures SET status = $2, merged_into_id = NULL WHERE id = $1", [d.id, d.status]);
     }

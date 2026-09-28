@@ -169,6 +169,16 @@ test("the root cause: a request for a tour and day that already has a date joins
   assert.notEqual(full.body.departure.id, depId);
 });
 
+test("the root cause, at the same moment: ten requests for a new day at once make one date", { skip }, async () => {
+  const day = cairoDay(27);
+  const results = await Promise.all(Array.from({ length: 10 }, (_, i) =>
+    request({ date: day, customerEmail: `burst${i}@example.test`, ignoreMatches: true })));
+  for (const r of results) assert.equal(r.status, 201, JSON.stringify(r.body));
+  assert.equal(new Set(results.map((r) => r.body.departure.id)).size, 1, "every request landed on one date");
+  assert.equal(Number((await one("SELECT count(*) AS n FROM departures WHERE tour_product_id = $1 AND date = $2", [TOUR, day])).n), 1);
+  assert.equal(Number((await one("SELECT count(*) AS n FROM pledges p JOIN departures d ON d.id = p.departure_id WHERE d.tour_product_id = $1 AND d.date = $2", [TOUR, day])).n), 10);
+});
+
 // ---------------------------------------------------------------- the merge
 test("merge: bookings, payments, cost lines and notes move to the kept date; seats and GoAhead are worked out again; the duplicates close, leave the site and redirect; each traveler gets one email; audited", { skip }, async () => {
   const kept = await departure({ notes: "Kept date" });
@@ -247,6 +257,21 @@ test("a merge can be undone only within 24 hours", { skip }, async () => {
   const r = await ops("POST", "/admin/departures/merge", { keptId: kept, duplicateIds: [dup] });
   assert.equal(r.status, 201, JSON.stringify(r.body));
   await assert.rejects(merge.revertMerge({ mergeId: r.body.merge.id, by: "ops", now: Date.now() + 25 * 3600000 }), /only within 24 hours/);
+});
+
+test("a booking still waiting for its email confirmation moves with the merge, and back with the undo", { skip }, async () => {
+  const kept = await departure();
+  const dup = await departure();
+  await booking(kept); await booking(dup);
+  const held = (await db.query(
+    `INSERT INTO booking_confirmations (booking_code, departure_id, email, seats, payload, token_hash, expires_at)
+     VALUES ('SAWA-HELD01', $1, 'held@example.test', 1, '{}', 'hash-held-01', now() + interval '1 day') RETURNING id`, [dup])).rows[0].id;
+  const r = await ops("POST", "/admin/departures/merge", { keptId: kept, duplicateIds: [dup] });
+  assert.equal(r.status, 201, JSON.stringify(r.body));
+  assert.equal(Number((await one("SELECT departure_id FROM booking_confirmations WHERE id = $1", [held])).departure_id), kept,
+    "its link now makes the booking on the kept date");
+  await merge.revertMerge({ mergeId: r.body.merge.id, by: "ops" });
+  assert.equal(Number((await one("SELECT departure_id FROM booking_confirmations WHERE id = $1", [held])).departure_id), dup);
 });
 
 // ---------------------------------------------------------------- the refusals

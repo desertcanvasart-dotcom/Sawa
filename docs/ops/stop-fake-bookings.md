@@ -18,6 +18,14 @@ this change are unaffected.
   are made at once, as before, and the log says so once.
 - `BOOKING_EMAIL_CONFIRMATION=off` turns the hold off without a deploy of code.
 
+**Date requests (migration 060).** A traveler's request for a new date, or
+one joining a date still in review, is held the same way: no date is made
+and no seats are held until the link is clicked. The email says "Confirm your
+date request". The link makes the request through the same checks; if a group
+formed on that day meanwhile, the request is refused and the traveler is told
+to book on it. Operators' requests from their dashboard are not held. Until
+060 is applied, date requests are made at once, as before.
+
 ## 2. Cloudflare Turnstile
 
 Create the keys:
