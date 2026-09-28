@@ -19,7 +19,7 @@ import {
   rosterMonth, setPlanLine, buildMonth, overrideEntry, publishMonth, decideSwap, requestSwap, operatorRoster,
 } from "./roster.js";
 import { ratesFor, saveRateDraft, publishRate, importRateCard, mapRate } from "./rates.js";
-import { acknowledge, assignByAdmin, manifestFor, expectedAmountFor, mapAssignment } from "./assignments.js";
+import { acknowledge, declineAssignment, assignByAdmin, manifestFor, expectedAmountFor, mapAssignment } from "./assignments.js";
 import { DOCUMENT_KINDS, STRIKE_KINDS, strikesInWindow, OPERATOR_STATUSES } from "../shared/operators.js";
 import { parseReceiptDataUrl } from "./receipts.js";
 
@@ -353,7 +353,7 @@ export function registerOperatorRoutes(app, { requireAuth, requireRole, h, logAu
          JOIN catalogue_departure_seats s ON s.catalogue_departure_id = cd.id
          JOIN catalogue_products c ON c.id = cd.product_id
          LEFT JOIN catalogue_spec_versions sv ON sv.id = cd.spec_version_id
-        WHERE a.operator_id = $1 AND a.state IN ('offered', 'acknowledged', 'expired')
+        WHERE a.operator_id = $1 AND a.state IN ('offered', 'acknowledged', 'expired', 'declined')
         ORDER BY cd.date DESC LIMIT 200`, [req.user.operatorId]);
     const out = [];
     for (const a of r.rows) {
@@ -373,6 +373,18 @@ export function registerOperatorRoutes(app, { requireAuth, requireRole, h, logAu
     await logAudit(req, { action: "operator.assignment.acknowledge", entity: "catalogue_assignment", entityId: a.id,
       detail: { departureId: a.departureId, paymentRequests: a.paymentRequests ?? 0, sellerChanges: (a.sellerChanges || []).map((x) => x.bookingCode) } });
     res.json({ assignment: a });
+  }));
+
+  // Phase 5: an operator may decline an offer. No strike; the departure is
+  // offered to the next in line (another agency on it, then the roster).
+  app.post("/api/operator/assignments/:id/decline", ...operatorOnly, portal(async (req, res) => {
+    const out = await declineAssignment(pool, {
+      assignmentId: id(req.params.id), operatorId: req.user.operatorId, by: req.user.email,
+      reason: req.body?.reason ? String(req.body.reason).slice(0, 500) : null, send: send(),
+    });
+    await logAudit(req, { action: "operator.assignment.decline", entity: "catalogue_assignment", entityId: out.declined.id,
+      detail: { departureId: out.declined.departureId, reason: out.declined.declineReason || null, nextOperatorId: out.next?.operatorId ?? null, nextSource: out.next?.source ?? null } });
+    res.json({ assignment: out.declined });
   }));
 
   app.get("/api/operator/departures/:id/manifest", ...operatorOnly, portal(async (req, res) => {

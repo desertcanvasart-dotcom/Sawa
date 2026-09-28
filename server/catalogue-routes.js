@@ -225,6 +225,7 @@ export function registerCatalogueRoutes(app, { requireAuth, requireRole, h, logA
       }]));
       const live = new Map();
       for (const a of assignments.rows) {
+        // The latest offer shows; a declined one only until the next is made.
         if (a.state === "replaced") continue;
         live.set(Number(a.departure_id), {
           id: Number(a.id), state: a.state, source: a.source, operatorId: Number(a.operator_id), name: a.legal_name,

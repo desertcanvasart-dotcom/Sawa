@@ -16,7 +16,7 @@ import { catalogueV2Enabled } from "./features.js";
 import { BRAND } from "./brand.js";
 import { CatalogueError, todayIn, departureInstants, mapCatalogueProduct } from "./catalogue.js";
 import { rosteredOperator } from "./roster.js";
-import { rosterEligibility, addStrike, notifyOperator, operatorRecipients } from "./operators.js";
+import { rosterEligibility, addStrike, notifyOperator, operatorRecipients, documentGaps } from "./operators.js";
 import { rateById, lockRatesForSoldDepartures } from "./rates.js";
 import { ACK_HOURS, MANIFEST_ACCESS_DAYS, expectedOperatorAmount, roomsFor } from "../shared/operators.js";
 import { shiftDate } from "../shared/catalogue.js";
@@ -39,6 +39,8 @@ export function mapAssignment(r) {
     assignedBy: r.assigned_by, assignedAt: r.assigned_at, ackDueAt: r.ack_due_at, acknowledgedAt: r.acknowledged_at,
     acknowledgedBy: r.acknowledged_by, expiredAt: r.expired_at, replacedAt: r.replaced_at,
     manifestAccessRevokedAt: r.manifest_access_revoked_at,
+    ...(r.declined_at ? { declinedAt: r.declined_at, declineReason: r.decline_reason || null } : {}),
+    ...(r.candidate ? { candidate: r.candidate } : {}),
   };
 }
 
@@ -76,11 +78,16 @@ async function alertAdmin(c, { departure, kind, detail = {}, send }) {
   if (res?.ok) await c.query("UPDATE catalogue_admin_alerts SET emailed_at = now() WHERE id = $1", [ins.rows[0].id]);
 }
 
-async function offer(c, { departure, operatorId, source, by, now, send }) {
-  const r = await c.query(
-    `INSERT INTO catalogue_assignments (departure_id, operator_id, source, assigned_by, ack_due_at)
-     VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-    [departure.id, operatorId, source, by, new Date(now + ACK_HOURS * HOUR_MS)]);
+async function offer(c, { departure, operatorId, source, by, now, send, candidate = null }) {
+  const r = candidate
+    ? await c.query(
+      `INSERT INTO catalogue_assignments (departure_id, operator_id, source, assigned_by, ack_due_at, candidate)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+      [departure.id, operatorId, source, by, new Date(now + ACK_HOURS * HOUR_MS), JSON.stringify(candidate)])
+    : await c.query(
+      `INSERT INTO catalogue_assignments (departure_id, operator_id, source, assigned_by, ack_due_at)
+       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+      [departure.id, operatorId, source, by, new Date(now + ACK_HOURS * HOUR_MS)]);
   const a = mapAssignment(r.rows[0]);
   const op = (await c.query("SELECT legal_name FROM operators WHERE id = $1", [operatorId])).rows[0];
   const ackBy = when(now + ACK_HOURS * HOUR_MS);
@@ -107,7 +114,86 @@ async function offer(c, { departure, operatorId, source, by, now, send }) {
   return a;
 }
 
-// GoAhead events → assignments (or an admin alert). Once per event.
+// ---------------------------------------------------------------- selection
+// Who operates a departure (phase 5, decided 28 Sep 2026). At GoAhead the
+// departure is offered to an agency that has travelers on it and is an
+// approved, active operator for the product, with valid documents and
+// verified bank details: the one with the most travelers on it, and on a tie
+// the one whose first reservation came earliest. Declined, or not
+// acknowledged within 4 hours, it passes to the next such agency, then to the
+// operator rostered for that product and day (the phase 2 roster is the
+// fallback). Once an operator acknowledges, the choice is final: travelers
+// added later never change it (nothing here runs again for the departure).
+
+// Agencies with travelers on the departure that have an operator record,
+// most travelers first, then earliest first reservation.
+export async function agencyCandidates(c, departure) {
+  if (!departure.legacyDepartureId) return [];
+  const r = await c.query(
+    `SELECT o.id AS operator_id, o.agency_id, o.legal_name, SUM(p.seats)::int AS travelers, MIN(p.created_at) AS first_at
+       FROM pledges p JOIN operators o ON o.agency_id = p.agency_id
+      WHERE p.departure_id = $1 AND p.status <> 'cancelled' AND p.agency_id IS NOT NULL AND p.agency_id <> 'direct_customer'
+      GROUP BY o.id, o.agency_id, o.legal_name
+      ORDER BY SUM(p.seats) DESC, MIN(p.created_at) ASC, o.id ASC`, [departure.legacyDepartureId]);
+  return r.rows.map((x) => ({
+    operatorId: Number(x.operator_id), agencyId: x.agency_id, legalName: x.legal_name,
+    travelers: Number(x.travelers), firstReservationAt: x.first_at instanceof Date ? x.first_at.toISOString() : x.first_at,
+  }));
+}
+
+// An agency may operate a departure only as an approved, active operator for
+// the product with every document current and its bank details verified.
+export async function operatorEligibility(c, operatorId, productId, now = Date.now()) {
+  const base = await rosterEligibility(c, operatorId, productId);
+  if (!base.ok) return base;
+  const docs = (await c.query(
+    "SELECT kind, expires_on FROM operator_documents WHERE operator_id = $1 AND superseded_at IS NULL", [operatorId])).rows
+    .map((d) => ({ kind: d.kind, expiresOn: ymd(d.expires_on) }));
+  const gaps = documentGaps(docs, todayIn(now));
+  if (gaps.length) return { ok: false, reason: `Documents not in order: ${gaps.map((g) => `${g.kind.replace(/_/g, " ")} ${g.problem}`).join(", ")}.` };
+  const bank = (await c.query("SELECT to_regclass('public.operator_bank_accounts') IS NOT NULL AS ok")).rows[0].ok
+    && (await c.query("SELECT 1 FROM operator_bank_accounts WHERE operator_id = $1 AND state = 'verified'", [operatorId])).rowCount > 0;
+  if (!bank) return { ok: false, reason: "No verified bank details." };
+  return { ok: true };
+}
+
+// Offer the departure to the next operator in line. Returns the new offer, or
+// null when nobody can take it (an admin alert then says why).
+export async function offerNext(c, { departure, now = Date.now(), send = null }) {
+  const tried = new Set((await c.query(
+    "SELECT operator_id FROM catalogue_assignments WHERE departure_id = $1", [departure.id])).rows.map((r) => Number(r.operator_id)));
+  const skipped = [];
+  const candidates = await agencyCandidates(c, departure);
+  for (const [i, cand] of candidates.entries()) {
+    if (tried.has(cand.operatorId)) continue;
+    const ok = await operatorEligibility(c, cand.operatorId, departure.product.id, now);
+    if (!ok.ok) { skipped.push({ operatorId: cand.operatorId, name: cand.legalName, reason: ok.reason }); continue; }
+    const candidate = { travelers: cand.travelers, firstReservationAt: cand.firstReservationAt, rank: i + 1, agencyId: cand.agencyId };
+    const a = await offer(c, { departure, operatorId: cand.operatorId, source: "agency", by: "selection", now, send, candidate });
+    return { assignment: a, source: "agency" };
+  }
+  const rostered = await rosteredOperator(c, departure.product.id, departure.date);
+  if (rostered && !tried.has(rostered.operatorId)) {
+    const ok = await rosterEligibility(c, rostered.operatorId, departure.product.id);
+    if (ok.ok) {
+      const a = await offer(c, { departure, operatorId: rostered.operatorId, source: "roster", by: "roster", now, send });
+      return { assignment: a, source: "roster" };
+    }
+    skipped.push({ operatorId: rostered.operatorId, reason: ok.reason });
+  }
+  await alertAdmin(c, {
+    departure, kind: "no_rostered_operator", send,
+    detail: {
+      reason: candidates.length || rostered
+        ? "No agency on the departure or rostered operator could take it."
+        : "No agency on the departure is an operator for it, and no operator is on a published roster for this date.",
+      ...(skipped.length ? { skipped } : {}),
+    },
+  });
+  return null;
+}
+
+// GoAhead events → an offer (or an admin alert). Once per event.
 export async function processGoAheadEvents({ db = pool, now = Date.now(), send = null, log = () => {} } = {}) {
   const events = await db.query(
     "SELECT * FROM catalogue_events WHERE type = 'go_ahead' AND processed_at IS NULL ORDER BY id");
@@ -119,28 +205,30 @@ export async function processGoAheadEvents({ db = pool, now = Date.now(), send =
       const departure = await departureContext(c, Number(ev.departure_id));
       const live = await c.query("SELECT 1 FROM catalogue_assignments WHERE departure_id = $1 AND state IN ('offered', 'acknowledged')", [departure.id]);
       let r = null;
-      if (!live.rows.length) {
-        const rostered = await rosteredOperator(c, departure.product.id, departure.date);
-        const ok = rostered ? await rosterEligibility(c, rostered.operatorId, departure.product.id) : { ok: false };
-        if (rostered && ok.ok) {
-          await offer(c, { departure, operatorId: rostered.operatorId, source: "roster", by: "roster", now, send });
-          r = "assigned";
-        } else {
-          await alertAdmin(c, {
-            departure, kind: "no_rostered_operator", send,
-            detail: rostered ? { operatorId: rostered.operatorId, reason: ok.reason } : { reason: "No operator on a published roster for this date." },
-          });
-          r = "alerted";
-        }
-      }
+      if (!live.rows.length) r = (await offerNext(c, { departure, now, send })) ? "assigned" : "alerted";
       await c.query("UPDATE catalogue_events SET processed_at = now() WHERE id = $1", [ev.id]);
       return r;
     });
     if (result === "assigned") out.assigned += 1;
     if (result === "alerted") out.alerted += 1;
   }
-  if (out.assigned || out.alerted) log(`assignments: ${out.assigned} assigned, ${out.alerted} need an admin`);
+  if (out.assigned || out.alerted) log(`assignments: ${out.assigned} offered, ${out.alerted} need an admin`);
   return out;
+}
+
+// The operator says no. No strike; the departure passes to the next in line.
+export async function declineAssignment(db, { assignmentId, operatorId, by, reason = null, now = Date.now(), send = null }) {
+  return inTx(db, async (c) => {
+    const a = (await c.query("SELECT * FROM catalogue_assignments WHERE id = $1 FOR UPDATE", [assignmentId])).rows[0];
+    if (!a || Number(a.operator_id) !== Number(operatorId)) throw new CatalogueError(404, "Assignment not found.");
+    if (a.state !== "offered") throw new CatalogueError(409, "Only an offer that hasn't been acknowledged can be declined.");
+    const upd = await c.query(
+      `UPDATE catalogue_assignments SET state = 'declined', declined_at = now(), decline_reason = $2 WHERE id = $1 RETURNING *`,
+      [assignmentId, reason ? String(reason).trim().slice(0, 500) : null]);
+    const departure = await departureContext(c, Number(a.departure_id));
+    const next = await offerNext(c, { departure, now, send });
+    return { declined: mapAssignment(upd.rows[0]), next: next ? { ...next.assignment, source: next.source } : null, by };
+  });
 }
 
 // Offers not acknowledged in time: expired, a strike, an admin alert.
@@ -156,17 +244,25 @@ export async function expireAcknowledgements({ db = pool, now = Date.now(), send
       expired += 1;
       const departure = await departureContext(c, Number(row.departure_id));
       const op = (await c.query("SELECT legal_name FROM operators WHERE id = $1", [row.operator_id])).rows[0];
-      await addStrike(c, {
-        operatorId: Number(row.operator_id), kind: "missed_acknowledgement", departureId: departure.id, assignmentId: Number(row.id),
-        note: `Not acknowledged within ${ACK_HOURS} hours (due ${new Date(row.ack_due_at).toISOString()}).`, by: "system",
-      });
+      // Phase 5: a missed acknowledgement is a strike only for a rostered
+      // operator. An agency's offer passes to the next in line.
+      const rostered = row.source === "roster";
+      if (rostered || row.source === "admin") {
+        await addStrike(c, {
+          operatorId: Number(row.operator_id), kind: "missed_acknowledgement", departureId: departure.id, assignmentId: Number(row.id),
+          note: `Not acknowledged within ${ACK_HOURS} hours (due ${new Date(row.ack_due_at).toISOString()}).`, by: "system",
+        });
+      }
       await notifyOperator(c, {
         operatorId: Number(row.operator_id), kind: "missed_acknowledgement",
         title: `Not acknowledged: ${departure.product.title} on ${dateLabel(departure.date)}`,
-        body: `This assignment wasn't acknowledged within ${ACK_HOURS} hours. It counts as a strike, and Sawa may assign the departure to another operator.`,
+        body: row.source === "agency"
+          ? `This offer wasn't acknowledged within ${ACK_HOURS} hours, so it has passed to another operator. It doesn't count as a strike.`
+          : `This assignment wasn't acknowledged within ${ACK_HOURS} hours. It counts as a strike, and Sawa may assign the departure to another operator.`,
         departureId: departure.id, dedupeKey: `missed_ack:${row.id}`,
       });
-      await alertAdmin(c, { departure, kind: "missed_acknowledgement", send, detail: { operatorId: Number(row.operator_id), operatorName: op?.legal_name } });
+      if (row.source === "agency") await offerNext(c, { departure, now, send });
+      else await alertAdmin(c, { departure, kind: "missed_acknowledgement", send, detail: { operatorId: Number(row.operator_id), operatorName: op?.legal_name } });
     });
   }
   if (expired) log(`assignments: ${expired} not acknowledged in time (strike recorded)`);
