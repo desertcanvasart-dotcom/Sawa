@@ -2120,6 +2120,25 @@ function BookingsSection({ data, stats, reload, flash = () => {}, isSuperAdmin =
     } finally { setBulkBusy(false); }
   }
 
+  // Group bookings (catalogue_v2): link the selected bookings into one party,
+  // or take them out of theirs. Seats don't change.
+  async function party(action) {
+    const ids = selectedShown;
+    if (!ids.length) return;
+    if (action === "unlink" && !window.confirm(`Take ${ids.length} booking${ids.length === 1 ? "" : "s"} out of their group? They'll be listed separately on the manifest.`)) return;
+    setBulkBusy(true);
+    try {
+      const r = await apiFetch(`/admin/parties/${action}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ids }) });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) { flash(j.error || "That didn't work. Please try again."); return; }
+      flash(action === "link"
+        ? `${ids.length} bookings travel as one group. The operator's manifest lists them together.`
+        : `${j.unlinked.length} booking${j.unlinked.length === 1 ? "" : "s"} taken out of the group.`);
+      setSelected(new Set());
+      await load();
+    } finally { setBulkBusy(false); }
+  }
+
   // Per-departure roll-up: how each date is filling + its booking value.
   const revByDep = all.reduce((m, b) => {
     if (b.status === "cancelled") return m;
@@ -2216,6 +2235,8 @@ function BookingsSection({ data, stats, reload, flash = () => {}, isSuperAdmin =
               {BULK_ACTIONS.map((a) => (
                 <button key={a.id} className="btn-ghost" disabled={bulkBusy} onClick={() => bulk(a.id)}>{a.label}</button>
               ))}
+              {catalogueOn && selectedShown.length > 1 && <button className="btn-ghost" disabled={bulkBusy} onClick={() => party("link")}>Link as a group</button>}
+              {catalogueOn && shown.some((b) => selected.has(b.id) && b.partyId) && <button className="btn-ghost" disabled={bulkBusy} onClick={() => party("unlink")}>Unlink from group</button>}
               {isSuperAdmin && <button className="btn-ghost bk-danger" disabled={bulkBusy} onClick={() => bulk("delete")}>Delete</button>}
               <button className="btn-ghost" disabled={bulkBusy} onClick={() => setSelected(new Set())}>Clear</button>
             </div>
@@ -2234,7 +2255,7 @@ function BookingsSection({ data, stats, reload, flash = () => {}, isSuperAdmin =
                       <td className="bk-check" onClick={(e) => e.stopPropagation()}>
                         <input type="checkbox" aria-label={`Select ${b.bookingCode || b.customers || "booking"}`} checked={selected.has(b.id)} onChange={() => toggle(b.id)} />
                       </td>
-                      <td><strong>{b.customers || "—"}</strong>{b.customerEmail && <div className="sub">{b.customerEmail}</div>}{b.bookingCode && <div className="sub">{b.bookingCode}</div>}</td>
+                      <td><strong>{b.customers || "—"}</strong>{b.customerEmail && <div className="sub">{b.customerEmail}</div>}{b.bookingCode && <div className="sub">{b.bookingCode}</div>}{b.partyId && <div><span className="tag" title="Travels with the other bookings in this group">Group {b.partyId}</span></div>}</td>
                       <td>{b.route}</td>
                       <td><strong>{tourDateLabel(b)}</strong><div className="sub">{b.time ? `${b.time} · ` : ""}{daysUntil(b.date)}</div></td>
                       <td className="sub">{fmtReceived(b.createdAt)}</td>

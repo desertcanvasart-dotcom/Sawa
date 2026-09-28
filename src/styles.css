@@ -6031,6 +6031,11 @@ button:disabled {
 .booking-pay-row span { color: var(--ink-soft); font-weight: 600; }
 .booking-pay p { margin: 0; font-size: 14px; line-height: 1.55; color: var(--ink); }
 .booking-pay small { font-size: 12px; color: var(--ink-soft); }
+.booking-group { margin: 14px 0 4px; padding: 16px 18px; border-radius: 16px; border: 1px dashed var(--line); display: grid; gap: 10px; }
+.booking-group p { margin: 0; font-size: 14px; line-height: 1.55; color: var(--ink); }
+.booking-group small { font-size: 12px; color: var(--ink-soft); }
+.booking-group-link { display: flex; gap: 8px; flex-wrap: wrap; }
+.booking-group-link input { flex: 1 1 200px; min-width: 0; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line); font-size: 13px; }
 .booking-pay-btn { justify-self: start; text-decoration: none; }
 .booking-meta div { display: flex; align-items: center; gap: 7px; font-size: 14px; color: var(--ink-soft); }
 .booking-meta svg { color: var(--accent); }

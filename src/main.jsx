@@ -67,6 +67,7 @@ const AgencyDashboard = lazy(() => import("./AgencyDashboard").then((m) => ({ de
 const OperatorDashboard = lazy(() => import("./OperatorDashboard.jsx").then((m) => ({ default: m.OperatorDashboard })));
 import { TravelerDetailsFields, emptyTravelerDetails, travelerDetailsBody, travelerDetailsError } from "./TravelerDetails.jsx";
 import { BookingPayAtGoAhead, WaitlistJoin, WaitlistOfferPage } from "./PayAtGoAheadPublic.jsx";
+import { JoinGroupLink, JoinGroupPage, partyTokenFromUrl } from "./GroupBooking.jsx";
 
 
 // Three named traveler quotes lived here — Valencia, Munich, Abu Dhabi, each
@@ -887,7 +888,7 @@ function App() {
       const response = await fetch(`${API_BASE}/public/departures/${departureId}/bookings`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ customerName, customerEmail, customerPhone, phoneToken, seats: Number(seats), roomingType, accommodationTier, refCode: getStoredRef(), ...(manifest || {}) }),
+        body: JSON.stringify({ customerName, customerEmail, customerPhone, phoneToken, seats: Number(seats), roomingType, accommodationTier, refCode: getStoredRef(), ...(catalogueV2() && partyTokenFromUrl() ? { partyToken: partyTokenFromUrl() } : {}), ...(manifest || {}) }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Could not request seats.");
@@ -970,6 +971,9 @@ function App() {
   // Model phase 4: the page behind a waitlist offer.
   const waitlistMatch = path.match(/^\/waitlist\/([^/?#]+)$/);
   if (waitlistMatch && catalogueV2()) return <WaitlistOfferPage token={decodeURIComponent(waitlistMatch[1])} />;
+  // Group bookings: the page behind a "Join my group" link.
+  const joinMatch = path.match(/^\/join\/([^/?#]+)$/);
+  if (joinMatch && catalogueV2()) return <JoinGroupPage token={decodeURIComponent(joinMatch[1])} />;
 
   const isPortalRoute = path.startsWith("/admin") || path.startsWith("/agency") || path.startsWith("/portal");
   // Editorial pages do not need the tour catalogue to load successfully.
@@ -2183,6 +2187,13 @@ function TourDetailV2({ isSaving, navigate, phoneVerification = false, onBookPub
                             // <a> with no href: unreachable by keyboard and announced to screen
                             // readers as plain text. A real <button> restores focus and Enter/Space.
                             <div className="bk-ok" role="status">Seat held — {publicBooking.code}. {publicBooking.depositDue ? `${CURRENCY_SYMBOL}${publicBooking.depositDue} ${CURRENCY} deposit due at GoAhead.` : ""} <button type="button" className="bk-cancel" onClick={async () => { setErr(""); const r = await onCancelPublicBooking(); if (r && !r.ok) setErr(r.error); }}>Cancel</button></div>
+                          )}
+                          {/* Group bookings: share the date with the rest of the group. */}
+                          {publicBooking && Number(publicBooking.departureId) === Number(dep?.id) && manifestForm && publicBooking.code && (
+                            <JoinGroupLink code={publicBooking.code} />
+                          )}
+                          {manifestForm && partyTokenFromUrl() && !publicBooking && (
+                            <div className="note"><SxCheck />You're booking through a group link: your seats join the same group</div>
                           )}
                           <div className="note"><SxCheck />Free hold — you only pay once the date confirms</div>
                         </>
@@ -3849,6 +3860,7 @@ function BookingLookupPage({ navigate, path }) {
             <p className="booking-note">{b.note}</p>
             <BookingPayment payment={b.payment} />
             {b.payAtGoAhead && <BookingPayAtGoAhead code={b.code} view={b.payAtGoAhead} onChanged={() => lookup()} />}
+            {b.group && <JoinGroupLink code={b.code} group={b.group} />}
             {/* Whether this is offered at all comes from the server (canCancel),
                 for the same reason the note does: only it knows the state, and
                 a page that decided for itself is how a cancelled date came to

@@ -52,6 +52,7 @@ import {
   waitlistOffer, claimWaitlistOffer, completeWaitlistOffer,
 } from "./pay-at-goahead.js";
 import { registerPayAtGoAheadRoutes } from "./pay-at-goahead-routes.js";
+import { partyLinkFor, partyForBooking, partyView, partyToJoin, joinParty, linkParty, unlinkParty, partiesAvailable, JOINABLE_STATUSES } from "./booking-parties.js";
 import { SAFETY_NONE } from "../shared/settlement-rules.js";
 import { catalogueV2Enabled } from "./features.js";
 import { publicCatalogue, overlayBootstrap, clearPublicCatalogue } from "./catalogue-public.js";
@@ -366,6 +367,9 @@ const publicBookingSchema = z.object({
   roomingType: z.enum(["single", "double", "triple"]).optional(),
   accommodationTier: z.string().optional(),
   refCode: z.string().trim().max(60).optional(),
+  // Group bookings (catalogue_v2): the "Join my group" link the booking came
+  // through. Ignored with the flag off.
+  partyToken: z.string().trim().max(80).optional(),
 });
 
 // Model phase 2 — what the operator's manifest needs, all optional. Read only
@@ -1423,12 +1427,20 @@ app.post("/api/public/departures/:id/bookings", writeLimiter, h(async (req, res)
     if (dep.status === "cancelled") throw new AppError(409, "This departure has been canceled.");
     if (dep.mergedIntoId) throw Object.assign(new AppError(409, "This date was joined with another listing of the same tour and day. Book on that one."), { mergedIntoId: dep.mergedIntoId });
     if (dep.status === "pending_review") throw new AppError(409, "This departure is awaiting review and not open for bookings yet.");
-    if (seatsTotal(dep.pledges) + await heldForWaitlist(c, dep.id) + input.seats > dep.maxSeats) {
-      throw new AppError(409, "This booking exceeds the remaining seats.");
+    // Group bookings: a booking made through a "Join my group" link joins that
+    // party. The party is locked first, so two members joining at once can't
+    // both take the last free seats.
+    const party = catalogueV2Enabled() && input.partyToken ? await partyToJoin(c, { token: input.partyToken, departureId: dep.id }) : null;
+    const free = dep.maxSeats - seatsTotal(dep.pledges) - await heldForWaitlist(c, dep.id);
+    if (input.seats > free) {
+      throw new AppError(409, party
+        ? `Only ${Math.max(0, free)} seat${free === 1 ? " is" : "s are"} left on this date, so the group can't take ${input.seats} more.`
+        : "This booking exceeds the remaining seats.");
     }
     const product = dep.tourProductId ? await loadProduct(c, dep.tourProductId) : null;
     if (bookingClosed(dep, product)) throw new AppError(409, "Bookings for this date have closed.");
     const catalogueCtx = await requireCompleteBooking(c, dep.id, manifest, input.seats, input.customerPhone);
+    if (party && !catalogueCtx) throw new AppError(409, "Group links aren't available for this date.");
     const pricing = computePledgePricing(dep, product, input);
     const refCode = cleanRefCode(input.refCode);
     if (refCode) {
@@ -1458,11 +1470,13 @@ app.post("/api/public/departures/:id/bookings", writeLimiter, h(async (req, res)
       await fixBookingTerms(c, { pledgeId, by: "traveller" });
       await payNowIfGoingAhead(c, pledgeId, catalogueCtx.departureId);
     }
+    if (party) await joinParty(c, { partyId: party.id, pledgeId });
     const departure = await loadDeparture(c, dep.id);
     const saved = await c.query(`SELECT * FROM pledges WHERE id=$1`, [pledgeId]);
-    return { departure, booking: mapPledge(saved.rows[0]), payAtGoAhead: !!catalogueCtx };
+    return { departure, booking: mapPledge(saved.rows[0]), payAtGoAhead: !!catalogueCtx, partyId: party?.id ?? null };
   });
-  await logAudit(req, { action: "booking.create", entity: "pledge", entityId: result.booking.id, detail: { departureId: Number(req.params.id), seats: input.seats, source: "public" } });
+  await logAudit(req, { action: "booking.create", entity: "pledge", entityId: result.booking.id,
+    detail: { departureId: Number(req.params.id), seats: input.seats, source: "public", ...(result.partyId ? { partyId: result.partyId } : {}) } });
   if (input.customerEmail && result.payAtGoAhead) {
     // Model phase 4: nothing is paid until GoAhead, then the full price; the
     // email repeats the cancellation tiers this booking was made under.
@@ -1695,6 +1709,14 @@ app.get("/api/public/bookings/:code", h(async (req, res) => {
     }
   }
 
+  // Group bookings: the booking's "Join my group" link, once it has one, and
+  // whether it can start one.
+  let group = null;
+  if (catalogueV2Enabled() && payAtGoAhead && b.pledge_status !== "cancelled") {
+    const party = await partyForBooking(pool, b.pledge_id);
+    group = party || (JOINABLE_STATUSES.includes(b.dep_status) && await partiesAvailable(pool) ? { url: null } : null);
+  }
+
   // "Nothing was charged" isn't true of a pay-at-GoAhead booking canceled
   // after it paid, and a released seat has its own reason.
   const payReq = payAtGoAhead?.request;
@@ -1709,6 +1731,7 @@ app.get("/api/public/bookings/:code", h(async (req, res) => {
     tourTitle: b.product_title || b.route,
     payment: payAtGoAhead ? null : payment,
     payAtGoAhead,
+    group,
     city: b.city || "",
     dateLabel,
     seats: Number(b.seats),
@@ -1729,6 +1752,36 @@ app.post("/api/public/bookings/:code/accept-terms", writeLimiter, h(async (req, 
   const result = await acceptBookingTerms(pool, { code, versionId: req.body?.versionId });
   await logAudit(req, { action: "booking.accept_terms", entity: "booking", entityId: code.toUpperCase(), detail: { tierVersionId: result.versionId } });
   res.json(result);
+}));
+
+// Group bookings: the booking's "Join my group" link. The first request starts
+// the party with this booking as its lead; later ones return the same link.
+app.post("/api/public/bookings/:code/party", writeLimiter, h(async (req, res) => {
+  if (!catalogueV2Enabled()) throw new AppError(404, "Not found.");
+  const code = String(req.params.code || "").trim();
+  if (!code) throw new AppError(422, "Booking code required.");
+  const link = await partyLinkFor(pool, { code });
+  await logAudit(req, { action: link.created ? "party.create" : "party.link_view", entity: "party", entityId: link.partyId, detail: { bookingCode: code.toUpperCase() } });
+  res.json({ group: { url: link.url, seatsLeft: link.seatsLeft } });
+}));
+
+// What a "Join my group" link shows: the date, the lead's first name and the
+// seats left. Booking goes through the ordinary booking route with the token.
+app.get("/api/public/parties/:token", h(async (req, res) => {
+  if (!catalogueV2Enabled()) throw new AppError(404, "Not found.");
+  const v = await partyView(pool, { token: String(req.params.token || "") });
+  const dep = await loadDeparture(pool, v.departureId);
+  const product = dep?.tourProductId ? await loadProduct(pool, dep.tourProductId) : null;
+  const closed = !dep || !JOINABLE_STATUSES.includes(dep.status) || bookingClosed(dep, product);
+  res.json({
+    group: { leadFirstName: v.leadFirstName, seats: v.groupSeats },
+    departure: dep ? {
+      id: dep.id, title: product?.title || dep.route, city: dep.city || "", date: dep.startDate || dep.date, endDate: dep.endDate || null,
+      path: product ? tourPath(product) : null,
+    } : null,
+    seatsLeft: closed ? 0 : v.seatsLeft,
+    bookable: !closed && v.seatsLeft > 0,
+  });
 }));
 
 // The seller changed after the traveler paid (the first operator failed and
@@ -3149,11 +3202,13 @@ app.get("/api/admin/bookings", requireAuth, requireRole("super_admin", "ops_staf
   // silently became "the most recent N" — and appeared to fall as older
   // bookings dropped out of the window.
   const totalRows = await pool.query(`SELECT COUNT(*)::int AS n FROM pledges`);
+  // Group bookings (catalogue_v2, migration 056): which party a booking is in.
+  const parties = catalogueV2Enabled() && await partiesAvailable(pool);
   const r = await pool.query(
     `SELECT p.id, p.departure_id, p.agency, p.agency_id, p.seats, p.customers, p.customer_email,
             p.customer_phone, p.status, p.price_per_person, p.deposit_percent,
             p.booking_total, p.deposit_due, p.balance_due, p.balance_due_date, p.source,
-            p.booking_code, p.rooming_type, p.accommodation_tier_name, p.created_at,
+            p.booking_code, p.rooming_type, p.accommodation_tier_name, p.created_at,${parties ? " p.party_id," : ""}
             d.route, d.date, d.start_date, d.end_date, d.type, d.city, d.time, d.status AS departure_status
        FROM pledges p JOIN departures d ON d.id = p.departure_id
       ORDER BY p.created_at DESC LIMIT $1`,
@@ -3171,6 +3226,7 @@ app.get("/api/admin/bookings", requireAuth, requireRole("super_admin", "ops_staf
     depositDue: b.deposit_due != null ? Number(b.deposit_due) : null,
     balanceDue: b.balance_due != null ? Number(b.balance_due) : null,
     balanceDueDate: b.balance_due_date, source: b.source, bookingCode: b.booking_code,
+    ...(b.party_id != null ? { partyId: Number(b.party_id) } : {}),
     createdAt: b.created_at instanceof Date ? b.created_at.toISOString() : b.created_at,
   })) });
 }));
@@ -3282,6 +3338,27 @@ app.post("/api/admin/bookings/bulk", requireAuth, requireRole("super_admin", "op
     }
   }
   res.json({ action: input.action, done, failed });
+}));
+
+// Group bookings (catalogue_v2): staff link bookings on one date into a party,
+// or take them out. Seats don't move; the party groups the bookings on the
+// operator's manifest under one lead contact.
+const partyIdsSchema = z.object({
+  ids: z.array(z.string().trim().min(1).max(100)).min(1, "Select at least one booking.").max(60, "Select at most 60 bookings at once."),
+});
+app.post("/api/admin/parties/link", requireAuth, requireRole("super_admin", "ops_staff"), h(async (req, res) => {
+  if (!catalogueV2Enabled()) throw new AppError(404, "Not found.");
+  const input = parse(partyIdsSchema, req.body);
+  const result = await linkParty(pool, { pledgeIds: input.ids, by: req.user?.email || req.user?.id || "staff" });
+  await logAudit(req, { action: "party.link", entity: "party", entityId: result.partyId, detail: { departureId: result.departureId, linked: result.linked, created: result.created } });
+  res.json(result);
+}));
+app.post("/api/admin/parties/unlink", requireAuth, requireRole("super_admin", "ops_staff"), h(async (req, res) => {
+  if (!catalogueV2Enabled()) throw new AppError(404, "Not found.");
+  const input = parse(partyIdsSchema, req.body);
+  const result = await unlinkParty(pool, { pledgeIds: input.ids, by: req.user?.email || req.user?.id || "staff" });
+  await logAudit(req, { action: "party.unlink", entity: "party", entityId: result.parties.join(","), detail: { unlinked: result.unlinked, removedParties: result.removedParties } });
+  res.json(result);
 }));
 
 // ---- Payment links (043) ----------------------------------------------------
