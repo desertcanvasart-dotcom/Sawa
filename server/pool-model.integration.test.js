@@ -154,8 +154,8 @@ before(async () => {
   const r = await db.query(
     `SELECT id, date, legacy_departure_id FROM catalogue_departures
       WHERE product_id = $1 AND legacy_departure_id IS NOT NULL AND status = 'open' AND date >= $2::date + 20
-      ORDER BY date LIMIT 4`, [productId, today()]);
-  [deps.a, deps.b, deps.c, deps.d] = r.rows.map((x) => ({ id: Number(x.id), date: ymd(x.date), legacy: Number(x.legacy_departure_id) }));
+      ORDER BY date LIMIT 5`, [productId, today()]);
+  [deps.a, deps.b, deps.c, deps.d, deps.e] = r.rows.map((x) => ({ id: Number(x.id), date: ymd(x.date), legacy: Number(x.legacy_departure_id) }));
   on = await startServer({ FEATURES: "catalogue_v2" });
 });
 
@@ -408,4 +408,29 @@ test("migration 061 converts a phase 2 version and records what it did", { skip 
   // Running the migration again changes nothing already converted.
   await db.query(readFileSync(join(ROOT, "server", "db", "schema_061_pool_model.sql"), "utf8"));
   assert.deepEqual(rates.mapRate(await one("SELECT * FROM catalogue_rate_versions WHERE id = $1", [old])).costLines, v.costLines);
+});
+
+// ---------------------------------------------------------------- merge into a catalog date
+test("a legacy date beside a catalog date merges into it; each booking becomes a catalog booking, and the undo restores it", { skip }, async () => {
+  const d = deps.e;
+  const merge = await import("./departure-merge.js");
+  const legacyTour = (await one("SELECT tour_product_id, date FROM departures WHERE id = $1", [d.legacy]));
+  const dupId = Number((await one(
+    `INSERT INTO departures (id, type, tour_product_id, route, date, time, city, min_seats, max_seats, published_rate, break_price, status)
+     VALUES (nextval('departures_id_seq'), 'day_tour', $1, 'Giza', $2, '08:00', 'Cairo', 4, 12, 95, 95, 'open') RETURNING id`,
+    [legacyTour.tour_product_id, legacyTour.date])).id);
+  const pid = "pl_pool_merge";
+  await db.query(
+    `INSERT INTO pledges (id, departure_id, agency_id, agency, seats, customers, customer_email, customer_phone, status, source, booking_total, booking_code)
+     VALUES ($1, $2, 'ag_b', 'ag_b', 2, 'Old Date Traveler', 'old@example.test', '+201000000000', 'confirmed', 'agency_request', 190, 'POOLMERGE1')`, [pid, dupId]);
+  const out = await merge.mergeDepartures({ keptId: d.legacy, duplicateIds: [dupId], by: "ops" });
+  const p = await one("SELECT * FROM pledges WHERE id = $1", [pid]);
+  assert.deepEqual([Number(p.departure_id), p.payment_mode, Number(p.published_eur_rate), Number(p.price_per_person)], [d.legacy, "pay_at_goahead", 50, 51],
+    "a catalog booking: pay at GoAhead, the published rate, 2 travelers at the 4–6 tier");
+  assert.ok(p.cancellation_tier_version_id, "the tiers in force");
+  assert.equal((await one("SELECT basis FROM agency_commissions WHERE pledge_id = $1", [pid])).basis, "pool");
+  await merge.revertMerge({ mergeId: out.merge.id, by: "ops" });
+  const back = await one("SELECT * FROM pledges WHERE id = $1", [pid]);
+  assert.deepEqual([Number(back.departure_id), back.payment_mode === "pay_at_goahead", back.published_eur_rate, Number(back.booking_total)], [dupId, false, null, 190]);
+  assert.equal(await one("SELECT 1 FROM agency_commissions WHERE pledge_id = $1", [pid]), undefined);
 });

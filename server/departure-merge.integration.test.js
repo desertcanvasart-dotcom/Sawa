@@ -312,10 +312,38 @@ test("refused: over the maximum group, a duplicate settled or paid out, another 
     `INSERT INTO catalogue_products (catalogue_no, code, slug, title, type, base_city)
      VALUES (901, 'IT-MERGE', 'it-merge', 'Merge test product', 'day_tour', 'Cairo') RETURNING id`);
   await db.query("INSERT INTO catalogue_departures (product_id, date, legacy_departure_id) VALUES ($1, $2, $3)", [prod.id, DAY, cat]);
-  await refused(k4, [cat], /catalog departure/);
+  await refused(k4, [cat], /catalog departure: keep it, and merge the other date into it/);
+  // Kept, a catalog date takes the legacy duplicate; a booking already paid
+  // under the old deposit flow is refused.
+  const legacyDup = await departure();
+  const paidOld = await booking(legacyDup);
+  await db.query(
+    `INSERT INTO booking_payments (pledge_id, kind, amount, link_url, due_at, due_bound_by, state, paid_at, provider_reference)
+     VALUES ($1, 'deposit', 25, 'https://pay.example/x', now(), 'window', 'paid', now(), 'tab_x')`, [paidOld]);
+  await refused(cat, [legacyDup], /already paid under the old deposit flow/);
   // A kept date awaiting review can't absorb an open one.
   const inReview = await departure({ status: "pending_review" }); const open = await departure();
   await refused(inReview, [open], /Keep a date that is open/);
+});
+
+test("a legacy date made beside a catalog date merges into it: the bookings move, no operator choice, no old profit split", { skip }, async () => {
+  const cat = await departure({ day: cairoDay(23) });
+  const dup = await departure({ day: cairoDay(23) });
+  await booking(cat, { seats: 3 });
+  const moved = await booking(dup, { seats: 1, agency: "ag_mb", source: "agency_request" });
+  const prod = await one("SELECT id FROM catalogue_products WHERE catalogue_no = 901");
+  await db.query("INSERT INTO catalogue_departures (product_id, date, legacy_departure_id) VALUES ($1, $2, $3)", [prod.id, cairoDay(23), cat]);
+  const pre = await ops("POST", "/admin/departures/merge/preview", { keptId: cat, duplicateIds: [dup] });
+  assert.equal(pre.status, 200, JSON.stringify(pre.body));
+  assert.deepEqual([pre.body.ok, pre.body.intoCatalogue, pre.body.needsOperatorChoice, pre.body.split], [true, true, false, null]);
+  const r = await ops("POST", "/admin/departures/merge", { keptId: cat, duplicateIds: [dup] });
+  assert.equal(r.status, 201, JSON.stringify(r.body));
+  assert.equal(Number((await one("SELECT departure_id FROM pledges WHERE id = $1", [moved])).departure_id), cat);
+  assert.equal((await one("SELECT status FROM departures WHERE id = $1", [dup])).status, "closed");
+  // With catalogue_v2 off (this server), the booking isn't converted; the undo works.
+  assert.notEqual((await one("SELECT payment_mode FROM pledges WHERE id = $1", [moved])).payment_mode, "pay_at_goahead");
+  await merge.revertMerge({ mergeId: r.body.merge.id, by: "ops" });
+  assert.equal(Number((await one("SELECT departure_id FROM pledges WHERE id = $1", [moved])).departure_id), dup);
 });
 
 test("different operators: admin chooses who runs the kept date, after seeing the old profit split", { skip }, async () => {
