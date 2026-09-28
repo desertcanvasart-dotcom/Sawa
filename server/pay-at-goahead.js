@@ -137,15 +137,29 @@ async function ensureBookingCode(c, pledgeId) {
 }
 
 // Who is asked to pay, and how much: an agency-billed seat is paid by the
-// agency (its invoice amount, the published price less commission); every
-// other booking by the traveler, for the full published price.
+// agency (its invoice amount); every other booking by the traveler, for the
+// full published price.
+//
+// Phase 5 (migration 061): a booking that kept a published EUR rate is
+// charged the EUR price of the tier the departure is in NOW, at that rate, and
+// an agency on billing pays that same full price (its pool share comes on the
+// monthly statement). The booking and its invoice are updated to the amount
+// asked for.
 async function payerFor(c, pledge) {
+  const { poolChargeFor } = await import("./pool-settlement.js");
+  const charge = pledge.published_eur_rate != null ? await poolChargeFor(c, pledge) : null;
+  if (charge) {
+    await c.query("UPDATE pledges SET price_per_person = $2, booking_total = $3 WHERE id = $1", [pledge.id, charge.eachEur, charge.totalEur]);
+    await c.query(
+      "UPDATE agency_invoices SET gross_eur = $2, commission_eur = 0, amount_eur = $2 WHERE pledge_id = $1 AND state = 'due'", [pledge.id, charge.totalEur]);
+    pledge = { ...pledge, booking_total: charge.totalEur };
+  }
   const invoice = (await c.query("SELECT * FROM agency_invoices WHERE pledge_id = $1 AND state <> 'void'", [pledge.id])).rows[0];
   if (invoice) {
     const owner = (await c.query(
       "SELECT email FROM app_users WHERE agency_id = $1 AND role = 'agency_owner' AND status = 'active' ORDER BY created_at LIMIT 1",
       [pledge.agency_id])).rows[0];
-    return { payer: "agency", amount: Number(invoice.amount_eur), to: owner?.email || null, name: null, invoiceId: Number(invoice.id) };
+    return { payer: "agency", amount: Number(invoice.amount_eur), to: owner?.email || null, name: null, invoiceId: Number(invoice.id), tier: charge?.tier ?? null };
   }
   let to = pledge.customer_email || null;
   if (!to && pledge.agency_id && pledge.agency_id !== "direct_customer") {
@@ -153,7 +167,20 @@ async function payerFor(c, pledge) {
       "SELECT email FROM app_users WHERE agency_id = $1 AND role = 'agency_owner' AND status = 'active' ORDER BY created_at LIMIT 1",
       [pledge.agency_id])).rows[0]?.email || null;
   }
-  return { payer: "traveller", amount: Number(pledge.booking_total) || 0, to, name: pledge.customers || null, invoiceId: null };
+  return { payer: "traveller", amount: Number(pledge.booking_total) || 0, to, name: pledge.customers || null, invoiceId: null, tier: charge?.tier ?? null };
+}
+
+// Phase 5 (061): a booking that leaves before paying earns its agency no
+// pool share; decided now, as its invoice is voided now. A paid booking that
+// cancels waits for the departure's calculation (a late cancellation where a
+// fee is kept earns half).
+async function voidPoolRow(c, pledgeId, reason) {
+  const has = (await c.query(
+    "SELECT 1 FROM information_schema.columns WHERE table_name = 'agency_commissions' AND column_name = 'basis'")).rowCount > 0;
+  if (!has) return;
+  await c.query(
+    `UPDATE agency_commissions SET state = 'void', earned_egp = 0, share_factor = 0, state_reason = $2, decided_at = now()
+      WHERE pledge_id = $1 AND basis = 'pool' AND state = 'pending'`, [pledgeId, reason]);
 }
 
 // ---------------------------------------------------------------- the seller
@@ -599,6 +626,7 @@ async function releaseSeat(c, { requestId, now, send }) {
   await c.query(
     "UPDATE agency_invoices SET state = 'void', void_reason = 'Released: not paid by the deadline.' WHERE pledge_id = $1 AND state = 'due'",
     [pledge.id]);
+  await voidPoolRow(c, pledge.id, "Released: not paid by the deadline.");
   const departure = await departureFor(c, { id: Number(r.departure_id) });
   if (send && r.emailed_to) {
     const { payAtGoAheadReleasedEmail } = await import("./email.js");
@@ -684,6 +712,7 @@ async function cancelBooking(c, { pledgeId, reason, fullRefund = false, by, now,
   const refund = await refundPaid(c, { quote, by, env });
   if (!quote.request) {
     await c.query("UPDATE agency_invoices SET state = 'void', void_reason = 'Booking canceled before payment.' WHERE pledge_id = $1 AND state = 'due'", [pledgeId]);
+    await voidPoolRow(c, pledgeId, "Canceled before payment.");
   }
   await offerFreedSeats(c, { departure: quote.departure, sourcePledgeId: pledgeId, now, send });
   const { departure, ...rest } = quote;

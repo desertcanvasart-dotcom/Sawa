@@ -266,15 +266,19 @@ SELECT c.catalogue_no, c.status, MAX(s.version) FILTER (WHERE s.state = 'publish
 
 **Before the first seat sells:** a departure locks the rate version in force when its first seat is sold.
 
-1. Fill in `docs/model/sawa-rate-card.xlsx` in these currencies:
-   - operator amounts in EGP;
-   - agency commission per seat in EUR.
-2. Admin → **Rate card** → **Import spreadsheet**. Read the import report: rows skipped, notes, problems.
-3. Open each product, check its draft, and **Publish** with an effective date of today or later. Publishing refuses a draft with a blank field the product type needs.
+Phase 5 (migration 061, 28 Sep 2026) replaced the phase 2 card with the pricing and money model: `docs/phase5/REPORT.md`. There is no agency commission per seat any more; agencies are paid a share of each departure's pool.
+
+1. Apply migration 061 (`npm run db:migrate`). It converts every existing version: the band fees become a per-group cost line, the per-traveler amount a per-traveler line, a twin room half its rate per traveler, operator fee 0%. Check what it did: Admin → **Rate card** → **What the conversion changed**, or `node scripts/pool-migration-report.js` (read-only).
+2. The spreadsheet import (Admin → **Rate card** → **Import spreadsheet**) still reads the phase 2 columns and converts them the same way; it never sets selling prices.
+3. Open each product and, in a new draft, enter per tier (4–6, 7–9, 10–12): the **selling price per traveler in EGP** and the **operator fee** (default 5% / 6% / 10% of operating cost); the **cost lines** (per group or per traveler, an EGP amount per tier); the **collecting agent's commission** (default 10%); and the **published EUR rate** (EGP per EUR, used only to show and charge travelers).
+4. Read the live table (2 to 12 travelers) and its warnings: a **negative pool** means the Minimum Departure Guarantee pays; **"pool shrinks"** means adding that traveler lowers the pool.
+5. **Publish** with an effective date of today or later. Publishing refuses missing cost amounts or fees, prices entered for only some tiers, and prices without the EUR rate. A version with no prices at all can be published: the operator is paid, but the tour page keeps the listing's price and the departure's pool waits (agency statements hold and say why), so enter prices before selling.
 
 ```sql
--- check: a published version in force for every active product; commission set
-SELECT c.catalogue_no, rv.version, rv.effective_from, rv.per_traveler, rv.land_per_traveler, rv.fee_4_6, rv.fee_7_9, rv.fee_10_12, rv.commission_per_seat
+-- check: a published version in force for every active product, with prices and the EUR rate
+SELECT c.catalogue_no, rv.version, rv.effective_from, rv.eur_rate, rv.commission_pct,
+       (SELECT string_agg(t->>'priceEgp', ' / ') FROM jsonb_array_elements(rv.tiers) t) AS prices_egp,
+       jsonb_array_length(rv.cost_lines) AS cost_lines
   FROM catalogue_products c
   LEFT JOIN LATERAL (SELECT * FROM catalogue_rate_versions v WHERE v.product_id = c.id AND v.state = 'published' AND v.effective_from <= CURRENT_DATE
                       ORDER BY effective_from DESC, version DESC LIMIT 1) rv ON true
@@ -336,6 +340,8 @@ Admin → **Roster**, for this month and next:
 4. **Publish.**
 
 Publishing refuses an entry whose operator isn't active and approved. From now on, a month is due by the 15th of the month before.
+
+Since phase 5 part 1 the roster is the **fallback**: at GoAhead the departure is first offered to the approved agency with the most travelers on it (link an agency to its operator record with `operators.agency_id`); the rostered operator is offered it only if no agency qualifies or accepts. Publish the roster all the same: a departure with no agency on it goes to the roster.
 
 ```sql
 -- check: published months, and any open departure with nobody rostered (should be none you intend to sell)

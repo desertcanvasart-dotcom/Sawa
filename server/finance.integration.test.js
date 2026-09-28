@@ -1,6 +1,7 @@
 // Model phase 3 on a real Postgres: the rate card's currencies, required
-// booking details and the completion requests, commission locked at booking
-// and decided at the trip, agency billing, the operator advance and balance,
+// booking details and the completion requests, agency pay (the pool since
+// phase 5, migration 061: proven in full in pool-model.integration.test.js),
+// agency billing, the operator advance and balance,
 // adjustments and the cap, statements (auto-acceptance, dispute and
 // resolution), bank details gating payment, payment recording, monthly
 // commission statements, the margin report and parity with catalogue_v2 off.
@@ -222,15 +223,14 @@ test("under the flag a catalog booking needs every traveler's details; commissio
   assert.equal(p.safety_needs, "None");
   assert.deepEqual(p.traveller_names, ["Ana Lima", "Bo Lima"]);
 
-  // Commission locked from the rate version in force: 12 EUR × 2 seats.
+  // Phase 5 (061): no fixed commission per seat. The agency's row waits for
+  // the departure's pool, whatever the rate card's old per-seat figure says.
   const c = await one("SELECT * FROM agency_commissions WHERE pledge_id = $1", [p.id]);
-  assert.equal(Number(c.per_seat_eur), 12);
-  assert.equal(Number(c.amount_eur), 24);
-  assert.equal(c.state, "pending");
-  // Agency billing: invoiced the published price less commission, and the
-  // seats count toward GoAhead from booking.
+  assert.deepEqual([c.basis, c.per_seat_eur, c.amount_eur, c.state], ["pool", null, null, "pending"]);
+  // Agency billing: the full price (the pool share comes on the monthly
+  // statement), and the seats count toward GoAhead from booking.
   const inv = await one("SELECT * FROM agency_invoices WHERE pledge_id = $1", [p.id]);
-  assert.equal(Number(inv.amount_eur), Number(p.booking_total) - 24);
+  assert.deepEqual([Number(inv.amount_eur), Number(inv.commission_eur)], [Number(p.booking_total), 0]);
   // Model phase 4: every catalog booking under the flag pays at GoAhead, so
   // the invoice has no due date until the payment deadline after GoAhead.
   assert.equal(inv.due_on, null);
@@ -238,10 +238,12 @@ test("under the flag a catalog booking needs every traveler's details; commissio
   assert.equal(p.terms_fixed_by, "agency");
   assert.equal(Number((await one("SELECT seats_sold FROM catalogue_departure_seats WHERE catalogue_departure_id = $1", [deps.a.id])).seats_sold), 2);
 
-  // A later rate version doesn't change a locked commission.
+  // A later rate version doesn't touch a departure already locked.
   const v2 = await rates.saveRateDraft(db, productId, { commissionPerSeat: 20 }, { by: "it" });
   await rates.publishRate({ productId, versionId: v2.id, by: "it" });
-  assert.equal(Number((await one("SELECT amount_eur FROM agency_commissions WHERE pledge_id = $1", [p.id])).amount_eur), 24);
+  const lockedA = Number((await one("SELECT rate_version_id FROM catalogue_departures WHERE id = $1", [deps.a.id])).rate_version_id);
+  assert.notEqual(lockedA, v2.id);
+  assert.equal(Number((await one("SELECT rate_version_id FROM agency_commissions WHERE pledge_id = $1", [p.id])).rate_version_id), lockedA);
 
   // Agency B (no billing) books on departure B: commission, no invoice.
   const b = await fetch(`${on}/api/departures/${deps.b.legacy}/pledges`, { method: "POST", headers: auth("ag-b-token"), body: JSON.stringify({
@@ -250,7 +252,8 @@ test("under the flag a catalog booking needs every traveler's details; commissio
   assert.equal(b.status, 201, await b.text());
   const bp = await one("SELECT id FROM pledges WHERE departure_id = $1 AND agency_id = 'ag_b'", [deps.b.legacy]);
   deps.b.agencyPledge = bp.id;
-  assert.equal(Number((await one("SELECT per_seat_eur FROM agency_commissions WHERE pledge_id = $1", [bp.id])).per_seat_eur), 20, "the version in force at this booking");
+  const bRow = await one("SELECT * FROM agency_commissions WHERE pledge_id = $1", [bp.id]);
+  assert.deepEqual([bRow.basis, Number(bRow.rate_version_id)], ["pool", v2.id], "the version in force at this booking");
   assert.equal(await one("SELECT 1 FROM agency_invoices WHERE pledge_id = $1", [bp.id]), undefined);
 
   // With the flag off the same booking without details goes through as today.
@@ -368,7 +371,7 @@ test("adjustments: deductions are capped at the operator amount; penalties use t
   const snap = (await settle.statementFor(db, deps.b.id)).snapshot;
   assert.equal(snap.balance, 140);
   assert.equal(snap.adjustments.length, 4);
-  assert.equal(snap.band, "7-9");
+  assert.equal(snap.band, "7–9");
   assert.equal(snap.travelers.length, 8);
   // Departure B's first seat sold after version 2 (a commission change) was
   // published, so it is locked to version 2; the operator amounts are the same.
@@ -436,7 +439,7 @@ test("no payment without verified bank details; a change blocks payment until it
 });
 
 // ---------------------------------------------------------------- E. commission
-test("commission is earned when the traveler travels, 50% on a late cancellation, nothing without GoAhead", { skip }, async () => {
+test("agency pay is the pool: no row is decided per seat; without selling prices the rows wait and say why; no GoAhead is void", { skip }, async () => {
   // Model phase 4: the two agency bookings pay at GoAhead. Agency A's seats
   // (agency-billed) are paid through the agency's request; agency B's
   // traveler pays, then cancels 24 hours before the start, after GoAhead:
@@ -467,44 +470,43 @@ test("commission is earned when the traveler travels, 50% on a late cancellation
   await comm.recordAgencyBooking(db, { pledgeId: cPledge, agency: { id: "ag_a", billing_approved: true, billing_due_days: 14 }, catalogueDepartureId: deps.c.id });
   await db.query("UPDATE catalogue_departures SET status = 'cancelled_below_minimum' WHERE id = $1", [deps.c.id]);
 
-  const out = await comm.decideCommissions({});
-  assert.equal(out.decided, 3);
+  // Phase 5: the per-seat rules decide nothing here (every row is a pool
+  // row); the pool tick does, from each departure's calculation. Departures A
+  // and B are on rate versions without selling prices (converted from the
+  // phase 2 card): there is no pool to share, and the rows say so rather
+  // than being decided at nothing. C never went ahead: void.
+  assert.equal((await comm.decideCommissions({})).decided, 0);
+  const { runPoolTick } = await import("./pool-settlement.js");
+  const tick = await runPoolTick({});
+  assert.equal(tick.poolRowsVoided, 1, JSON.stringify(tick));
   const a = await one("SELECT * FROM agency_commissions WHERE pledge_id = $1", [deps.a.agencyPledge]);
-  assert.deepEqual([a.state, Number(a.earned_eur)], ["earned", 24]);
+  assert.equal(a.state, "pending");
+  assert.match(a.state_reason, /Waiting for the rate card: price 4–6/);
   const b = await one("SELECT * FROM agency_commissions WHERE pledge_id = $1", [deps.b.agencyPledge]);
-  assert.deepEqual([b.state, Number(b.earned_eur)], ["half", 10]);
+  assert.equal(b.state, "pending");
   const c = await one("SELECT * FROM agency_commissions WHERE pledge_id = $1", [cPledge]);
-  assert.deepEqual([c.state, Number(c.earned_eur)], ["void", 0]);
-  assert.equal((await one("SELECT state FROM agency_invoices WHERE pledge_id = $1", [cPledge])).state, "void");
+  assert.deepEqual([c.state, Number(c.earned_egp)], ["void", 0]);
+  // The operators are paid all the same: their entitlement needs no prices.
+  assert.equal(Number((await one("SELECT amount FROM operator_payables WHERE departure_id = $1 AND kind = 'balance'", [deps.b.id])).amount), 140);
 });
 
-test("the monthly statement lists each seat and totals it; an Egyptian agency waits for the day's EGP rate", { skip }, async () => {
+test("the monthly statement holds while a departure's rate card has no prices, and says which", { skip }, async () => {
   const [y, m] = deps.month.split("-").map(Number);
   const next = m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, "0")}`;
   const now = zonedDateTimeToUtc(`${next}-02`, "09:00");
+  await fin.setFxRate(db, { day: `${next}-02`, egpPerEur: 55, by: "it" });
   sent.length = 0;
   const first = await comm.runCommissionStatements({ now, send });
-  assert.deepEqual([first.sent, first.held], [1, 1], JSON.stringify(first));
+  assert.deepEqual([first.sent, first.held], [0, 2], JSON.stringify(first));
   const stA = comm.mapStatement(await one("SELECT * FROM commission_statements WHERE agency_id = 'ag_a'"));
-  assert.equal(stA.period, deps.month);
-  assert.equal(stA.state, "sent");
-  assert.equal(stA.totalEur, 24, "24 earned + 0 void");
-  assert.deepEqual(stA.lines.map((l) => [l.seats, l.status, l.earnedEur]).sort(), [[1, "void", 0], [2, "earned", 24]]);
-  assert.ok(sent.some((x) => x.to === "owner@agency-a.test" && /Commission statement for/.test(x.subject)));
-  const stB = await one("SELECT * FROM commission_statements WHERE agency_id = 'ag_b'");
-  assert.equal(stB.state, "draft");
-  assert.match(stB.hold_reason, /No EGP rate/);
-  await fin.setFxRate(db, { day: `${next}-02`, egpPerEur: 55, by: "it" });
-  assert.equal((await comm.runCommissionStatements({ now, send })).sent, 1);
-  const b = comm.mapStatement(await one("SELECT * FROM commission_statements WHERE agency_id = 'ag_b'"));
-  assert.deepEqual([b.state, b.currency, b.totalEur, b.totalEgp, b.egpPerEur], ["sent", "EGP", 10, 550, 55]);
-  // Recorded like any payment.
-  const paid = await fin.recordPayment(db, { kind: "commission_statement", id: b.id, amount: 550, paidOn: `${next}-05`, bankReference: "NBE-77", user: STAFF });
-  assert.equal(paid.currency, "EGP");
+  assert.deepEqual([stA.basis, stA.currency, stA.state], ["pool", "EUR", "draft"]);
+  assert.match(stA.holdReason, /no selling prices for .* so there is no pool to share yet/);
+  assert.equal(stA.egpPerEur, 55, "pool shares convert at the statement date's CBE rate");
+  assert.equal(sent.length, 0, "nothing is sent while held");
 });
 
 // ---------------------------------------------------------------- F. finance view and margin
-test("the finance view lists due, overdue and paid; the margin shows 'rate missing' until the rate is entered", { skip }, async () => {
+test("the finance view lists due, overdue and paid; the margin, in EGP, says when the rate card can't give one", { skip }, async () => {
   // A legacy-flow invoice (not pay at GoAhead) is due N days after booking.
   const legacyInvoice = await pledge(deps.c, 1, { agencyId: "ag_a", agency: "Agency A" });
   await comm.recordAgencyBooking(db, { pledgeId: legacyInvoice, agency: { id: "ag_a", billing_approved: true, billing_due_days: 14 }, catalogueDepartureId: deps.c.id });
@@ -531,20 +533,14 @@ test("the finance view lists due, overdue and paid; the margin shows 'rate missi
   const modeC = await one("SELECT amount_eur, paid_at FROM payment_requests WHERE pledge_id = $1 AND state = 'paid'", [deps.a.agencyPledge]);
   const d0 = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(modeC.paid_at);
   await fin.setFxRate(db, { day: d0, egpPerEur: 55, by: "it" });
-  let row = (await fin.marginReport(db, { from: deps.a.date, to: deps.a.date })).find((r) => r.departure.id === deps.a.id);
-  assert.equal(row.margin, null);
-  assert.equal(row.problem, "rate missing");
-  assert.deepEqual(row.missingRates, [d2]);
-  await fin.setFxRate(db, { day: d2, egpPerEur: 40, by: "it" });
-  row = (await fin.marginReport(db, { from: deps.a.date, to: deps.a.date })).find((r) => r.departure.id === deps.a.id);
-  // Operator 390 EGP, spread over the charges by share and converted at each
-  // charge day's rate. Commission 24. Fees not set.
-  const c0 = Number(modeC.amount_eur);
-  const revenue = 400 + c0;
-  const opEur = [[300, 50], [100, 40], [c0, 55]].reduce((sum, [amt, rate]) => sum + (390 * (amt / revenue)) / rate, 0);
-  assert.equal(row.operatorEgp, 390);
-  assert.equal(row.feesMissing, true);
-  assert.ok(Math.abs(row.margin - (revenue - opEur - 24)) < 0.02, `${row.margin} vs ${revenue - opEur - 24}`);
+  // Phase 5: the margin is the pool calculation's, in EGP. Departure A's rate
+  // version has no selling prices, so there is no revenue to set against the
+  // entitlement: said, never estimated. (The full report, FX line included,
+  // is proven in pool-model.integration.test.js.)
+  const row = (await fin.marginReport(db, { from: deps.a.date, to: deps.a.date })).find((r) => r.departure.id === deps.a.id);
+  assert.deepEqual([row.model, row.currency, row.marginEgp, row.lines], ["pool", "EGP", null, null]);
+  assert.match(row.problem, /rate card incomplete \(price 4–6/);
+  assert.equal(row.entitlement, 390, "the operator's entitlement is known all the same");
   const legacy = await fin.legacyOpenDepartures(db);
   assert.equal(typeof legacy.open, "number");
 });

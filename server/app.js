@@ -45,6 +45,7 @@ import { registerFinanceRoutes } from "./finance-routes.js";
 import { catalogueContextFor, assertBookingComplete } from "./booking-details.js";
 import { recordAgencyBooking } from "./commissions.js";
 import { fixBookingTerms } from "./cancellation-tiers.js";
+import { stampBookingPrice } from "./pool-settlement.js";
 import { recordTermsVersion } from "./terms-versions.js";
 import { mergePreview, mergeDepartures, revertMerge, mergedTarget, listMerges, emailMovedTravelers, MergeError } from "./departure-merge.js";
 import {
@@ -1358,6 +1359,8 @@ app.post("/api/departures/:id/pledges", requireAuth, requireRole("agency_owner",
       // cancellation terms before booking (Agency Reseller Agreement 4.2), so
       // the tier version in force now is the one this booking keeps.
       await fixBookingTerms(c, { pledgeId, by: "agency" });
+      // Model phase 5: the published EUR rate, and the current tier's price.
+      await stampBookingPrice(c, { pledgeId });
       // Model phase 3: the commission (EUR, from the rate version in force) is
       // locked now; an agency on billing is invoiced now.
       await recordAgencyBooking(c, { pledgeId, agency, catalogueDepartureId: catalogueCtx.departureId });
@@ -1538,6 +1541,8 @@ async function placePublicBooking(req, { departureId, body, confirmation = null 
       // Model phase 4: pay at GoAhead. The traveler accepts the Terms here, so
       // the tier version in force now is the one this booking keeps.
       await fixBookingTerms(c, { pledgeId, by: "traveller" });
+      // Model phase 5: the published EUR rate, and the current tier's price.
+      await stampBookingPrice(c, { pledgeId });
       await payNowIfGoingAhead(c, pledgeId, catalogueCtx.departureId);
     }
     if (party) await joinParty(c, { partyId: party.id, pledgeId });
@@ -2041,6 +2046,7 @@ app.post("/api/public/waitlist/:token/book", writeLimiter, h(async (req, res) =>
       customerEmail: entry.email, customerPhone: phone, source: "public", bookingCode: await uniqueBookingCode(c), manifest, ...pricing,
     });
     await fixBookingTerms(c, { pledgeId, by: "traveller" });
+    await stampBookingPrice(c, { pledgeId });
     const done = await completeWaitlistOffer(c, { entryId: entry.id, pledgeId, departure: cat });
     const saved = (await c.query(`SELECT * FROM pledges WHERE id=$1`, [pledgeId])).rows[0];
     return { booking: mapPledge(saved), departureId: dep.id, request: done.request };
@@ -4563,7 +4569,7 @@ app.post("/api/admin/uploads", requireAuth, requireRole("super_admin", "ops_staf
 // behind the catalogue_v2 flag (see catalogue-public.js); with it off nothing
 // here reaches a traveller. Registered before the /api 404 below.
 registerCatalogueRoutes(app, { requireAuth, requireRole, h, logAudit, invalidatePublic: () => invalidatePublicBootstrap() });
-registerOperatorRoutes(app, { requireAuth, requireRole, h, logAudit, provisionUser, supabaseAdmin, sendEmail });
+registerOperatorRoutes(app, { requireAuth, requireRole, h, logAudit, provisionUser, supabaseAdmin, sendEmail, invalidatePublic: () => invalidatePublicBootstrap() });
 registerFinanceRoutes(app, { requireAuth, requireRole, h, logAudit, sendEmail, opsRecipient, writeLimiter });
 registerPayAtGoAheadRoutes(app, { requireAuth, requireRole, h, logAudit, sendEmail, writeLimiter });
 

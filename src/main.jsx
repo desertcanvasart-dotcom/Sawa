@@ -1990,6 +1990,8 @@ function TourDetailV2({ isSaving, navigate, phoneVerification = false, onBookPub
                         at more than the default. */}
                     <div className="book-price">
                       <b className="tnum">{CURRENCY_SYMBOL}{pp}</b><span>{CURRENCY} / person</span>
+                      {/* Phase 5: the rate card's tier prices, and the refund promise. */}
+                      {tour.catalogue?.priceLine && <span className="book-threshold">{tour.catalogue.priceLine}. You pay the price of the group size your date has when payment is asked for; if it grows into a cheaper tier by the cut-off, the difference is refunded.</span>}
                       <span className="book-promise">Never more than {GROUP_MAX_WORD}. Ever.</span>
                       <span className="book-threshold">This date confirms at {numberWord(goAhead)} traveler{goAhead === 1 ? "" : "s"}.</span>
                     </div>

@@ -22,7 +22,7 @@ async function call(path, method = "GET", body) {
 
 export function FinanceSection({ flash, isSuperAdmin }) {
   const [tab, setTab] = useState("owed");
-  const tabs = [["owed", "Owed and paid"], ["pay", "Pay at GoAhead"], ["commissions", "Agency commission"], ["margin", "Margin"],
+  const tabs = [["owed", "Owed and paid"], ["pay", "Pay at GoAhead"], ["commissions", "Agency pool shares"], ["margin", "Margin"],
     ["tiers", "Tiers and Terms"], ["settings", "Rates and settings"]];
   return (
     <>
@@ -262,8 +262,33 @@ function Margin() {
         <label className="field"><span>From</span><input type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></label>
         <label className="field"><span>To</span><input type="date" value={to} onChange={(e) => setTo(e.target.value)} /></label>
       </div>
-      <p className="field-hint">EUR charged, less the operator amount (EGP converted at the CBE rate on each charge date), commissions and payment fees. A date with no rate shows "rate missing": nothing is estimated.</p>
-      {data && (data.rows.length ? (
+      {data?.rows?.some((r) => r.model === "pool") ? (
+        <p className="field-hint">The collecting agent's result per departure, in EGP, from the one calculation the statements use: its commission, plus the pool on direct places (and what agencies didn't earn), less any Minimum Departure Guarantee, less payment costs, plus the FX line: the EUR actually collected, each amount at the CBE rate on its day, against the nominal EGP revenue. The FX line never reaches an operator or an agency. A day with no rate shows "rate missing": nothing is estimated.</p>
+      ) : <p className="field-hint">EUR charged, less the operator amount (EGP converted at the CBE rate on each charge date), commissions and payment fees. A date with no rate shows "rate missing": nothing is estimated.</p>}
+      {data && data.rows.some((r) => r.model === "pool") && (
+        <div className="table-wrap">
+          <table className="dash-table">
+            <thead><tr><th>Departure</th><th>Revenue</th><th>Entitlement</th><th>Commission</th><th>Pool</th><th>Agencies</th><th>Guarantee</th><th>Payment costs</th><th>FX</th><th>Agent</th></tr></thead>
+            <tbody>{data.rows.filter((r) => r.model === "pool").map((r) => (
+              <tr key={r.departure.id}>
+                <td>{r.departure.label}<div className="field-hint">{dayLabel(r.departure.date)} · {r.departure.status} · {r.headcount} travelers{r.lines ? ` · tier ${r.lines.tier}` : ""} · {r.stage}</div><LossWarnings warnings={r.lossWarnings} /></td>
+                {r.lines ? (<>
+                  <td className="tnum">{money("EGP", r.lines.revenue)}</td>
+                  <td className="tnum">{money("EGP", r.lines.entitlement)}</td>
+                  <td className="tnum">{money("EGP", r.lines.commission)}</td>
+                  <td className="tnum">{money("EGP", r.lines.pool)}<div className="field-hint">{money("EGP", r.lines.poolPerTraveller)} each</div></td>
+                  <td className="tnum">{money("EGP", (r.shares?.agencies || []).reduce((n, a) => n + a.amount, 0))}</td>
+                  <td className="tnum">{r.lines.guarantee ? money("EGP", r.lines.guarantee) : "—"}</td>
+                  <td className="tnum">{r.onlineEra?.paymentCostsEgp == null ? <span className="field-hint">not set</span> : money("EGP", r.onlineEra.paymentCostsEgp)}</td>
+                  <td className="tnum">{r.fx?.fxEgp == null ? "—" : money("EGP", r.fx.fxEgp)}<div className="field-hint">{r.fx?.collectedEur == null ? "" : `${money("EUR", r.fx.collectedEur)} collected`}</div></td>
+                </>) : <td colSpan={8} />}
+                <td className="tnum">{r.marginEgp == null ? <span className="tag tag-warn">{r.problem || "not complete"}</span> : <b>{money("EGP", r.marginEgp)}</b>}</td>
+              </tr>
+            ))}</tbody>
+          </table>
+        </div>
+      )}
+      {data && !data.rows.some((r) => r.model === "pool") && (data.rows.length ? (
         <div className="table-wrap">
           <table className="dash-table">
             <thead><tr><th>Departure</th><th>Charged</th><th>Operator</th><th>Commissions</th><th>Fees</th><th>Margin</th></tr></thead>

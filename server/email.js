@@ -1062,9 +1062,12 @@ export function settlementStatementEmail({ to, operatorName, title, dateLabel, b
 }
 
 // The monthly commission statement to an agency.
-export function commissionStatementEmail({ to, agencyName, period, totalLabel, seats, portalUrl }) {
-  const subject = `Commission statement for ${period}: ${totalLabel}`;
-  const text = `${agencyName}, your commission statement for ${period} is ready: ${seats} seat${seats === 1 ? "" : "s"}, ${totalLabel}. `
+// Phase 5: agencies are paid pool shares, not a per-seat commission.
+export function commissionStatementEmail({ to, agencyName, period, totalLabel, seats, portalUrl, pool = false }) {
+  const what = pool ? "pool share statement" : "commission statement";
+  const subject = `${pool ? "Pool share" : "Commission"} statement for ${period}: ${totalLabel}`;
+  const text = `${agencyName}, your ${what} for ${period} is ready: ${seats} seat${seats === 1 ? "" : "s"}, ${totalLabel}. `
+    + (pool ? "Each departure's calculation (revenue, costs, the operator's entitlement, the collecting agent's commission and the pool) is on the statement. " : "")
     + `See each seat in your portal: ${portalUrl}.`;
   const html = shell(subject, `<p style="margin:0 0 16px">${esc(text)}</p>${button(portalUrl, "Open the statement")}`,
     { eyebrow: "Commission", preheader: totalLabel });

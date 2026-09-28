@@ -41,6 +41,8 @@ Three operations; the booking logic calls only these:
 The first adapter, **`tab-manual`**, opens ops tasks: "Make a Tab link for €X, reference CODE" and "Refund €X in Tab for CODE". `PAYMENT_PROVIDER` selects the adapter for new requests; each request remembers its own. A Paymob, Kashier or Geidea adapter is one new file registered in `index.js`, with no change to `server/pay-at-goahead.js`. None was built.
 
 ### Pay at GoAhead (`server/pay-at-goahead.js`, `shared/pay-at-goahead.js`)
+
+> **Superseded by phase 5 (28 Sep 2026, `docs/phase5/REPORT.md`).** The request now charges the EUR price of the group-size tier the departure is in when it is sent, at the published EUR rate the booking kept; an agency-billed seat pays the full price (no commission off it); a departure that reaches a cheaper tier by the cut-off refunds the difference. The operator is normally the agency with the most travelers on the departure, not the rostered one.
 - **Booking.** No payment. Under the flag, a catalog booking is `pay_at_goahead` and fixes its tier version (`server/cancellation-tiers.js` `fixBookingTerms`). An agency catalog booking now gets a booking code, the payment's reference.
 - **At GoAhead** (the 15-minute job, before the manifests freeze): one request per live booking for the **full published price**. An agency-billed seat is requested from the agency, for its invoice amount (price less commission). A booking made after GoAhead, or taken from the waitlist, is requested at once. Ops get one email listing the links to make.
 - **Deadline.** 48 hours (or 24, a setting) from when the link is sent, capped at the cut-off. The 24-hour floor holds unless the cut-off is sooner; admin sees those as "short window". The traveler's email states the stored deadline.

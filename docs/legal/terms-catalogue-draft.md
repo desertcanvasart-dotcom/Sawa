@@ -1,7 +1,7 @@
-# DRAFT: Terms for catalog bookings: reservation, sale and payment (v2)
+# DRAFT: Terms for catalog bookings: reservation, sale and payment (v3)
 
 **Status: draft for the lawyer. Not published, not linked from the site, and not in force.**
-Version 2, 27 Sep 2026. It follows the legal structure decided that day:
+Version 3, 28 Sep 2026. Version 2 (27 Sep 2026) set the legal structure; version 3 adds the final business model (docs/phase5/REPORT.md): the operator is normally **one of the agencies with travelers on the departure**, the price **falls as the group grows**, and the difference is **refunded** if the departure reaches a cheaper tier. Changes from v2 are in C1.2, C3.2, C4.1, C4.6 and the new C4a, and questions 24–26.
 
 - **The operator assigned at GoAhead is the seller** of each departure.
 - **Online Era** (Commercial Registration 148500), trading as Sawa Tours, holds a license to collect payments as an agent: **General Sales Agent license no. 32241** (supplied 27 Sep 2026). It is the operator's **commercial and payment-collection agent**. It operates the platform, and it is not the seller of the tour.
@@ -16,7 +16,7 @@ Markers: **[LAWYER n]** is a point that needs the lawyer's confirmation. The que
 ## C1. Who does what
 
 1. **Online Era** (Commercial Registration 148500, General Sales Agent license no. 32241), trading as Sawa Tours ("Sawa", "we"), runs the platform. It takes reservations, and collects payment **as agent for the operator** that sells your departure. It is not the seller of the tour. **[LAWYER 2]**
-2. **The operator** is a licensed Egyptian tour company that Sawa assigns to your departure when it goes ahead. **The operator is the seller**: your contract for the tour is with the operator. It delivers the tour, or arranges its delivery. **[LAWYER 3]**
+2. **The operator** is a licensed Egyptian tour company assigned to your departure when it goes ahead. It is normally one of the travel agencies that have travelers on the departure: the approved agency with the most of them (on a tie, the one that reserved first); if none can take it, the tour company on Sawa's roster for that day. That may be the agency you booked through, or another. **The operator is the seller**: your contract for the tour is with the operator. It delivers the tour, or arranges its delivery. **[LAWYER 3]** **[LAWYER 24]**
 3. **Until the operator has confirmed** your departure, your booking pages say "operated by a licensed Sawa partner", because no operator is committed yet. **From the operator's confirmation**, your payment request, receipt, voucher and booking page name the operator's legal name and license number as **seller**, and "Online Era, collecting agent (General Sales Agent license no. 32241)" as **payee**. **[LAWYER 4]**
 4. If you book through a travel agency, the agency acts for you. It must show you these Terms and the cancellation terms before it reserves (Agency Reseller Agreement, clause 4.2), and you confirm them yourself before you pay. **[LAWYER 5]**
 
@@ -31,19 +31,27 @@ Markers: **[LAWYER n]** is a point that needs the lawyer's confirmation. The que
 ## C3. GoAhead: the sale is made with the named operator
 
 1. A departure goes ahead when **4 travelers** have reserved it, unless the tour page shows a different minimum. **[LAWYER 8]**
-2. At GoAhead, Sawa assigns a licensed operator to the departure, and the operator confirms it (normally within 4 hours). **Once it has confirmed, the sale of your seats is made between you and that operator.** Online Era acts as the operator's agent in making it and in collecting the price. Until then your booking page says "Operated by a licensed Sawa partner. Your payment request will follow shortly."
+2. At GoAhead the departure is offered to a licensed operator (C1.2), which has **4 hours** to confirm it; if it declines or doesn't confirm, the next one is offered it. **Once an operator has confirmed, the choice is final** (travelers who book later don't change it), **and the sale of your seats is made between you and that operator.** Online Era acts as the operator's agent in making it and in collecting the price. Until then your booking page says "Operated by a licensed Sawa partner. Your payment request will follow shortly."
 3. We tell you the operator's name and license number in your payment request, and on your booking page from then on.
 4. If the operator can't run the departure and Sawa assigns another before the tour, the new operator becomes the seller on the same terms and at the same price. If you have already paid, once the new operator confirms we email you, reissue your receipt naming the new seller (the original receipt is kept, marked superseded), and you may **cancel with a full refund within 48 hours** of that email (never after the start). **[LAWYER 9]**
 5. If a departure doesn't reach its minimum by its booking cut-off, or its earlier GoAhead deadline for cruises and multi-day tours, the reservation lapses. No sale is made, nothing is charged, and we offer another date where we can. Sawa may choose to run a departure below its minimum; if it does, it is a GoAhead like any other.
 
 ## C4. Paying: the payment request, paid to Online Era as collecting agent
 
-1. Once the operator has confirmed the departure (C3.2), we email you a **payment request** for the full price, in euros. It names the seller (the operator) and the payee (Online Era, collecting agent). Your booking code is the payment's reference.
+1. **No payment is requested before the operator has confirmed the departure (C3.2).** Then we email you a **payment request** for the full price, in euros: the price of the group-size tier the departure is in **when the request is sent** (C4a). It names the seller (the operator) and the payee (Online Era, collecting agent). Your booking code is the payment's reference.
 2. The request has a **deadline**, stated in the email and on your booking page: normally **48 hours** after it is sent, never later than the booking cut-off. **You always have at least 12 hours**. If we can't give you that, we don't start a deadline; we contact you (C5.3). **[LAWYER 10]**
 3. We send one reminder halfway to the deadline.
 4. You pay by card through the payment provider used by Online Era. Paying Online Era as the operator's collecting agent **settles the price with the operator**. **[LAWYER 11]**
 5. You receive a **receipt issued by Online Era on behalf of the operator**, and a **voucher** on your booking page naming the operator as seller.
-6. Agency billing: an agency that pays us directly does so by the same deadline, on the same terms.
+6. Agency billing: an agency that pays us directly pays **the same full price** by the same deadline, on the same terms.
+
+## C4a. The price: it falls as the group grows
+
+1. A catalog tour has a price per person for each group size: **4 to 6, 7 to 9 and 10 to 12 travelers**. The tour page shows them, for example "€51 per person, €50 from 7 travelers, €47 from 10". **[LAWYER 25]**
+2. Prices are set in Egyptian pounds and shown and charged in **euros at the published exchange rate** of the price list in force when you reserved. Your booking keeps that rate; your charges use it. A later change of the rate doesn't change your price. **[LAWYER 26]**
+3. You pay the price of the tier your departure is in when your payment request is sent (C4.1). A departure run below 4 travelers (C3.5) is priced at the 4-to-6 tier.
+4. **If by the booking cut-off your departure has grown into a cheaper tier, we refund the difference** to each traveler who has paid, to the card you paid with, as collecting agent (C7.5).
+5. **You are never charged more** if the group shrinks after you have paid.
 
 ## C5. If you don't pay by the deadline
 
@@ -102,4 +110,7 @@ Markers: **[LAWYER n]** is a point that needs the lawyer's confirmation. The que
 | 20 | The waitlist refund: the partial-resale share, and the "waitlist only" limit. |
 | 21 | ***New.* Competition Law (3/2005):** Sawa sets **one retail price** for a catalog departure, and that price is paid to whichever of several **competing operators** is assigned. Operators are paid their own rate-card amounts. Does a common retail price across competing operators, set by their common agent, raise a price-fixing or information-exchange concern? What safeguards should the operator agreements carry? For example: Sawa sets the price alone, as principal of its catalog; operators don't see each other's rates; and the rate card is agreed bilaterally. |
 | 22 | ***New.* Invoices and tax:** who issues the tax invoice to the traveler (the operator as seller?) and to the operator (Online Era, for its commission)? Is VAT due on Online Era's commission, and on the guarantee? |
-| 23 | ***New.* The operator and agency agreements:** the draft Operator Supply and Agency Reseller Agreements name Capital Travel Service as the contracting party. They must be redrafted with the operator as seller and Online Era as its commercial and collecting agent. Which clauses change? |
+| 23 | ***New.* The operator and agency agreements:** the draft Operator Supply and Agency Reseller Agreements name Capital Travel Service as the contracting party. They must be redrafted with the operator as seller and Online Era as its commercial and collecting agent. Which clauses change? *(v3: redrafted as the v2 agreements, "Online Era as collection agent", 28 Sep 2026.)* |
+| 24 | ***New in v3.* An agency as operator and seller:** the operator is normally an agency with travelers on the departure. It then sells to the travelers it brought and to those other agencies or Sawa brought. Does an agency that sold places as a sub-agent (Agency Sales Agreement) need anything more to be the seller to all of them? Must the traveler be told, before reserving, that the operator may be any approved agency on the departure? |
+| 25 | ***New in v3.* Tiered prices:** is "the price of the tier the departure is in when the payment request is sent, with the difference refunded if it gets cheaper by the cut-off" a sufficiently certain price under the Consumer Protection Law (181/2018)? Must the page show all three tiers before reservation (it does)? |
+| 26 | ***New in v3.* Exchange rate:** the price list is in EGP and charged in EUR at a published rate fixed at reservation. Any rule on quoting or charging foreign travelers in EUR for an EGP-priced service? |

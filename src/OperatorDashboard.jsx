@@ -317,7 +317,9 @@ function Money({ user, flash }) {
             {data.statements.length ? (
               <table className="dash-table"><tbody>{data.statements.map((st) => (
                 <tr key={st.id}>
-                  <td>{st.snapshot?.departure?.code} {st.snapshot?.departure?.title}<div className="field-hint">{dayLabel(st.snapshot?.departure?.date)}</div></td>
+                  <td>{st.snapshot?.departure?.code} {st.snapshot?.departure?.title}<div className="field-hint">{dayLabel(st.snapshot?.departure?.date)}</div>
+                    {/* Phase 5: paid twice, kept apart — this is the operator side. */}
+                    {st.snapshot?.distribution?.ownAgencyShare && <div className="field-hint">{st.snapshot.distribution.ownAgencyShare.note}</div>}</td>
                   <td className="tnum">{egp(st.snapshot?.balance)}</td>
                   <td>{st.state}{st.autoAcceptOn && <div className="field-hint">accepted automatically on {stamp(st.autoAcceptOn)} unless disputed</div>}
                     {st.disputeReason && <div className="field-hint">Your dispute: {st.disputeReason}</div>}

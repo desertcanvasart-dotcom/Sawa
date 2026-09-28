@@ -148,6 +148,8 @@ Each area has one table. File references point to the as-built evidence in [`01-
 
 ## 16. Agency commission per seat per product
 
+> **Superseded by phase 5 (28 Sep 2026, `docs/phase5/REPORT.md`).** There is no per-seat commission: agencies are paid a share of each departure's pool (shared/pool-model.js).
+
 | Target capability | Current state | Gap | Effort | Risk | Notes |
 |---|---|---|---|---|---|
 | Fixed amount per seat, set per product | `referrals.commission_percent` (report only, `app.js:2040-2064`); agencies actually paid by headcount profit share (`settlement.js:105-148`) | **remove + new** | M | M | Commission table per product, versioned like the rate card |

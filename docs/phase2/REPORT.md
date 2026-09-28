@@ -4,6 +4,8 @@ Branch `feat/operators-roster-ratecard`. Built to the phase 2 brief and the deci
 
 **Nothing here charges, refunds or pays anyone, and nothing calculates commission.** The expected operator amount is shown for reference only.
 
+> **Superseded by phase 5 (28 Sep 2026, `docs/phase5/REPORT.md`).** The operator's amount is now the entitlement of the pool model (operating cost × (1 + operator fee)); the band fees and per-traveler amounts below were converted into cost lines by migration 061. The agency commission per seat is retired. The roster is the fallback: at GoAhead the departure is first offered to the approved agency with the most travelers on it (phase 5 part 1).
+
 **Everything is behind the `catalogue_v2` flag.** With the flag off:
 - the public site and booking behave as before;
 - the operator portal answers 404;

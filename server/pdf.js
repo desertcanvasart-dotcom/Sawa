@@ -130,8 +130,17 @@ export function statementPdf(statement) {
       ]),
       { text: "", gap: 6 },
     ] : []),
+    // Phase 5: the departure's calculation, in EGP (shared/pool-model.js).
+    ...(s.distribution?.model === "pool" ? [
+      { rule: true },
+      { text: "How this departure's money is shared (EGP)", size: 11, bold: true, gap: 4 },
+      ...(s.distribution.lines || []).map((l) => ({ text: `${l.label}: ${egp(l.amountEgp)}`, size: 10, bold: l.key === "operator_entitlement" || l.key === "minimum_departure_guarantee", gap: 0 })),
+      ...(s.distribution.ownAgencyShare ? [{ text: s.distribution.ownAgencyShare.note, size: 9 }] : []),
+      ...(s.distribution.problem ? [{ text: `Not complete: ${s.distribution.problem}.`, size: 9 }] : []),
+      { text: "", gap: 6 },
+    ] : []),
     // The distribution of the departure's collections (27 Sep 2026), in EUR.
-    ...(s.distribution ? [
+    ...(s.distribution && s.distribution.model !== "pool" ? [
       { rule: true },
       { text: "Distribution of collections (EUR)", size: 11, bold: true, gap: 4 },
       ...(s.distribution.lines || []).map((l) => ({ text: `${l.label}: ${eur(l.amountEur)}`, size: 10, bold: l.key === "agent_commission" || l.key === "minimum_departure_guarantee", gap: 0 })),

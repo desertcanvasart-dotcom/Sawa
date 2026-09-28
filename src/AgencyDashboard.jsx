@@ -1185,10 +1185,14 @@ function Kpi({ icon: Icon, label, value, foot, accent }) {
   );
 }
 
-// ---- Commission (model phase 3, catalogue_v2) -------------------------------
-// Commission per seat in EUR, locked at booking; earned when the traveler
-// travels, 50% on a late cancellation where Sawa keeps a fee, nothing if the
-// date doesn't reach GoAhead. Monthly statements, sent by the 10th.
+// ---- Commission and pool shares (catalogue_v2) -------------------------------
+// Phase 5 (28 Sep 2026): an agency is paid a share of each departure's pool,
+// not a fixed commission per seat. For every place it sold: the pool per
+// traveler (half for a late cancellation where a fee was kept), worked out in
+// EGP when the departure is over, and paid monthly in EUR at the CBE rate on
+// the statement date. Bookings made before the change keep their per-seat
+// commission. An agency that also operates a departure is paid its operator
+// entitlement separately, on its operator statement.
 function AgencyCommission() {
   const [data, setData] = useState(null);
   const [err, setErr] = useState("");
@@ -1200,10 +1204,14 @@ function AgencyCommission() {
     }).catch((e) => setErr(e.message));
   }, []);
   const eur = (n) => (n == null ? "—" : `EUR ${Number(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
-  const STATE = { pending: "Pending: earned when the traveler travels", earned: "Earned", half: "50%: late cancellation", void: "None" };
+  const egp = (n) => (n == null ? "—" : `EGP ${Number(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
+  const STATE = { pending: "Pending: worked out when the departure is over", earned: "Earned", half: "50%: late cancellation", void: "None" };
+  const pool = data?.commissions?.some((c) => c.basis === "pool");
   return (
     <>
-      <div className="dash-head"><div><h1>Commission</h1><p>Per seat, in EUR, locked when you book. Paid monthly; the statement arrives by the 10th.</p></div></div>
+      <div className="dash-head"><div><h1>{pool ? "Pool shares" : "Commission"}</h1><p>{pool
+        ? "For every place you sell, a share of the departure's pool: what is left of the price after the operator's entitlement and the collecting agent's commission, divided by the travelers on it. Worked out in EGP once the departure is over; paid monthly in EUR at the CBE rate on the statement date, with the statement by the 10th."
+        : "Per seat, in EUR, locked when you book. Paid monthly; the statement arrives by the 10th."}</p></div></div>
       {err && <div className="auth-error">{err}</div>}
       {data && (
         <>
@@ -1211,7 +1219,18 @@ function AgencyCommission() {
             <h2>Statements</h2>
             {data.statements.length ? (
               <table className="dash-table"><tbody>{data.statements.map((s) => (
-                <tr key={s.id}><td>{s.period}</td><td className="tnum">{eur(s.totalEur)}{s.currency === "EGP" && s.totalEgp != null && <div className="field-hint">EGP {Number(s.totalEgp).toLocaleString("en-US")} at {s.egpPerEur} ({s.fxDay})</div>}</td>
+                <tr key={s.id}><td>{s.period}
+                    {/* Phase 5: each departure's whole calculation, so every share can be checked. */}
+                    {(s.departures || []).map((d) => (
+                      <div key={d.departureId} className="field-hint">
+                        {fmtDate(d.date)} {d.product}: {d.calculation
+                          ? `revenue ${egp(d.calculation.revenue)} − entitlement ${egp(d.calculation.entitlement)} (operating cost ${egp(d.calculation.operatingCost)} + operator fee ${egp(d.calculation.operatorFee)}) − the collecting agent ${egp(d.calculation.commission)} = pool ${egp(d.calculation.pool)}, ${egp(d.calculation.poolPerTraveller)} per traveler × your ${d.places} = ${egp(d.shareEgp)}`
+                          : "calculation not complete"}
+                        {d.operatorNote && <div>{d.operatorNote}</div>}
+                      </div>
+                    ))}</td>
+                  <td className="tnum">{eur(s.totalEur)}{s.basis === "pool" && s.totalEgp != null && <div className="field-hint">{egp(s.totalEgp)} at {s.egpPerEur} EGP per EUR ({s.fxDay})</div>}
+                    {s.basis !== "pool" && s.currency === "EGP" && s.totalEgp != null && <div className="field-hint">EGP {Number(s.totalEgp).toLocaleString("en-US")} at {s.egpPerEur} ({s.fxDay})</div>}</td>
                   <td>{s.state === "paid" ? "Paid" : "Sent"}</td></tr>
               ))}</tbody></table>
             ) : <p className="field-hint">No statements yet.</p>}
@@ -1220,10 +1239,12 @@ function AgencyCommission() {
             <h2>Seats</h2>
             {data.commissions.length ? (
               <table className="dash-table">
-                <thead><tr><th>Date</th><th>Tour</th><th>Client</th><th>Seats</th><th>Commission</th><th>Status</th></tr></thead>
+                <thead><tr><th>Date</th><th>Tour</th><th>Client</th><th>Seats</th><th>{pool ? "Share" : "Commission"}</th><th>Status</th></tr></thead>
                 <tbody>{data.commissions.map((c) => (
                   <tr key={c.pledgeId}><td>{fmtDate(c.date)}</td><td>{c.product}</td><td>{c.client}</td><td className="tnum">{c.seats}</td>
-                    <td className="tnum">{c.perSeatEur == null ? "—" : `${eur(c.perSeatEur)} × ${c.seats}`}{c.earnedEur != null && c.state !== "pending" && <div className="field-hint">{eur(c.earnedEur)}</div>}</td>
+                    <td className="tnum">{c.basis === "pool"
+                      ? (c.state === "pending" ? "—" : <>{c.poolPerTravellerEgp == null ? "—" : `${egp(c.poolPerTravellerEgp)} × ${c.seats}${c.shareFactor != null && c.shareFactor !== 1 ? ` × ${c.shareFactor}` : ""}`}<div className="field-hint">{egp(c.earnedEgp)}</div></>)
+                      : <>{c.perSeatEur == null ? "—" : `${eur(c.perSeatEur)} × ${c.seats}`}{c.earnedEur != null && c.state !== "pending" && <div className="field-hint">{eur(c.earnedEur)}</div>}</>}</td>
                     <td>{STATE[c.state]}</td></tr>
                 ))}</tbody>
               </table>
@@ -1232,7 +1253,9 @@ function AgencyCommission() {
           {data.invoices.length > 0 && (
             <div className="dash-card">
               <h2>Invoices</h2>
-              <p className="field-hint">Your agency is billed the published price less your commission.</p>
+              <p className="field-hint">{pool
+                ? "Your agency pays the full price of each seat by the payment deadline; your pool share comes on the monthly statement."
+                : "Your agency is billed the published price less your commission."}</p>
               <table className="dash-table"><tbody>{data.invoices.map((i) => (
                 <tr key={i.id}><td>{i.title}<div className="field-hint">{fmtDate(i.date)}</div></td><td className="tnum">{eur(i.grossEur)} − {eur(i.commissionEur)} = <b>{eur(i.amountEur)}</b></td>
                   <td>due {fmtDate(i.dueOn)}</td><td>{i.state}</td></tr>

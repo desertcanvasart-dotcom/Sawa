@@ -18,7 +18,7 @@ import {
 import {
   rosterMonth, setPlanLine, buildMonth, overrideEntry, publishMonth, decideSwap, requestSwap, operatorRoster,
 } from "./roster.js";
-import { ratesFor, saveRateDraft, publishRate, importRateCard, mapRate } from "./rates.js";
+import { ratesFor, saveRateDraft, publishRate, importRateCard, mapRate, migrationReportLines } from "./rates.js";
 import { acknowledge, declineAssignment, assignByAdmin, manifestFor, expectedAmountFor, mapAssignment } from "./assignments.js";
 import { DOCUMENT_KINDS, STRIKE_KINDS, strikesInWindow, OPERATOR_STATUSES } from "../shared/operators.js";
 import { parseReceiptDataUrl } from "./receipts.js";
@@ -38,7 +38,7 @@ const operatorFields = z.object({
   contacts: z.array(z.object({ name: z.string().trim().max(120), role: text(80), phone: text(40), email: text(200) })).max(10).optional(),
 }).strict();
 
-export function registerOperatorRoutes(app, { requireAuth, requireRole, h, logAudit, provisionUser, supabaseAdmin, sendEmail }) {
+export function registerOperatorRoutes(app, { requireAuth, requireRole, h, logAudit, provisionUser, supabaseAdmin, sendEmail, invalidatePublic = () => {} }) {
   const staff = [requireAuth, requireRole("super_admin", "ops_staff")];
   const superAdmin = [requireAuth, requireRole("super_admin")];
   const operatorOnly = [requireAuth, requireRole("operator_owner", "operator_staff")];
@@ -265,6 +265,15 @@ export function registerOperatorRoutes(app, { requireAuth, requireRole, h, logAu
     res.json({ products: products.rows.map((p) => ({ ...p, id: Number(p.id), versions: by.get(Number(p.id)) || [] })) });
   }));
 
+  // What migration 061 converted, for the rate card screen.
+  app.get("/api/admin/rates/migration-report", ...staff, route(async (_req, res) => {
+    const rows = (await pool.query(
+      `SELECT c.catalogue_no, c.code, v.version, v.state, v.cost_lines, v.source
+         FROM catalogue_rate_versions v JOIN catalogue_products c ON c.id = v.product_id
+        ORDER BY c.catalogue_no, v.version`)).rows;
+    res.json({ lines: migrationReportLines(rows) });
+  }));
+
   app.put("/api/admin/rates/:productId/draft", ...staff, route(async (req, res) => {
     const version = await saveRateDraft(pool, id(req.params.productId), req.body?.values || {}, { by: by(req) });
     await logAudit(req, { action: "rates.draft", entity: "catalogue_product", entityId: version.productId, detail: { version: version.version } });
@@ -275,6 +284,8 @@ export function registerOperatorRoutes(app, { requireAuth, requireRole, h, logAu
     const effectiveFrom = req.body?.effectiveFrom ? ymdSchema.parse(req.body.effectiveFrom) : null;
     const version = await publishRate({ productId: id(req.params.productId), versionId: id(req.params.versionId), effectiveFrom, by: by(req) });
     await logAudit(req, { action: "rates.publish", entity: "catalogue_product", entityId: version.productId, detail: { version: version.version, effectiveFrom: version.effectiveFrom } });
+    // Phase 5: the tour pages show the rate card's tier prices.
+    invalidatePublic();
     res.json({ version });
   }));
 

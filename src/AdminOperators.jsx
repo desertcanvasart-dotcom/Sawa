@@ -8,20 +8,17 @@ import React, { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, RefreshCw, Upload, Check, X, AlertTriangle } from "lucide-react";
 import { apiFetch } from "./supabaseClient";
 import {
-  DOCUMENT_KINDS, DOCUMENT_LABELS, STRIKE_KINDS, STRIKE_LABELS, STRIKE_FLAG_AT, ACK_HOURS, rateFieldsFor,
+  DOCUMENT_KINDS, DOCUMENT_LABELS, STRIKE_KINDS, STRIKE_LABELS, STRIKE_FLAG_AT, ACK_HOURS,
 } from "../shared/operators.js";
+import {
+  DEFAULT_POOL_TIERS, DEFAULT_COMMISSION_PCT, COST_BASES, COST_BASIS_LABELS, poolRateError, poolRateTable, tierPriceEur, tierPriceLine,
+} from "../shared/pool-model.js";
 import { TYPE_LABELS } from "../shared/catalogue.js";
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const STATUS_TONE = { pending: "tag-warn", active: "tag-on", suspended: "tag-off", removed: "tag-off" };
 const STATUS_LABEL = { pending: "Pending", active: "Active", suspended: "Suspended", removed: "Removed" };
 const ASSIGN_LABEL = { offered: "Offered, awaiting acknowledgement", acknowledged: "Acknowledged", expired: "Not acknowledged in time" };
-const RATE_LABELS = {
-  perTraveler: "Per traveler", landPerTraveler: "Land services per traveler",
-  roomTwin: "Twin room or cabin, per trip", roomSingle: "Single room or cabin, per trip",
-  fee4_6: "Departure fee, 4–6 travelers", fee7_9: "Departure fee, 7–9 travelers", fee10_12: "Departure fee, 10–12 travelers",
-  commissionPerSeat: "Agency commission per seat",
-};
 const egp = (n) => (n == null ? "—" : `EGP ${Number(n).toLocaleString("en-US", { maximumFractionDigits: 2 })}`);
 const dayLabel = (ymd) => (ymd ? new Intl.DateTimeFormat("en-US", { timeZone: "Africa/Cairo", weekday: "short", month: "short", day: "numeric", year: "numeric" }).format(new Date(`${ymd}T12:00:00Z`)) : "—");
 const stamp = (iso) => (iso ? new Intl.DateTimeFormat("en-US", { timeZone: "Africa/Cairo", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).format(new Date(iso)) : "—");
@@ -506,6 +503,7 @@ export function RatesSection({ flash }) {
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const [report, setReport] = useState(null);
+  const [migration, setMigration] = useState(null);
   const [editing, setEditing] = useState(null);
 
   async function load() {
@@ -531,10 +529,21 @@ export function RatesSection({ flash }) {
   return (
     <>
       <Head title="Rate card"
-        sub="What each operator is paid per product, in EGP, and the agency commission per seat, in EUR. A departure keeps the version in force when its first seat sold."
+        sub="Per product, in EGP: the selling price and operator fee per tier, the cost lines, the collecting agent's commission and the published EUR rate. The operator is paid its entitlement; agencies share the pool. A departure keeps the version in force when its first seat sold."
         action={<label className="btn-ghost" style={{ cursor: "pointer" }}><Upload size={16} />Import spreadsheet
           <input type="file" accept=".xlsx" hidden disabled={busy} onChange={(e) => importFile(e.target.files?.[0])} /></label>} />
       {err && <div className="auth-error">{err}</div>}
+      {/* Phase 5: what migration 061 converted from the phase 2 rate card. */}
+      <div className="cat-actions" style={{ justifyContent: "flex-start", marginBottom: 8 }}>
+        <button type="button" className="btn-ghost sm" onClick={() => call("/admin/rates/migration-report").then((j) => setMigration(j.lines)).catch((e) => setErr(e.message))}>What the conversion changed</button>
+      </div>
+      {migration && (
+        <div className="dash-card" style={{ marginBottom: 12 }}>
+          <h2>Converted to the pool model (migration 061)</h2>
+          <ul>{migration.map((l, i) => <li key={i} style={{ whiteSpace: "pre-wrap" }}>{l}</li>)}</ul>
+          <div className="cat-actions"><button className="btn-ghost" onClick={() => setMigration(null)}>Close</button></div>
+        </div>
+      )}
       {report && (
         <div className="dash-card" style={{ marginBottom: 12 }}>
           <h2>Import</h2>
@@ -573,14 +582,37 @@ export function RatesSection({ flash }) {
   );
 }
 
+// Phase 5 (28 Sep 2026): the pricing and money model (shared/pool-model.js).
+// Tiers with an EGP selling price and an operator fee; cost lines per group
+// or per traveler with an amount per tier; the collecting agent's commission; the
+// published EUR rate. The table below it is the same calculation the
+// statements use, live, for 2 to 12 travelers.
+const blankTiers = () => DEFAULT_POOL_TIERS.map((t) => ({ ...t, priceEgp: "", operatorFeePct: String(t.operatorFeePct) }));
+const toForm = (v) => ({
+  tiers: (v?.tiers?.length ? v.tiers : null)?.map((t) => ({ from: String(t.from), to: String(t.to), priceEgp: t.priceEgp ?? "", operatorFeePct: t.operatorFeePct ?? "" })) || blankTiers(),
+  costLines: (v?.costLines || []).map((l) => ({ name: l.name, basis: l.basis, amounts: (l.amounts || []).map((a) => a ?? "") })),
+  commissionPct: v?.commissionPct ?? DEFAULT_COMMISSION_PCT,
+  eurRate: v?.eurRate ?? "",
+});
+const numOrNull = (x) => (x === "" || x == null ? null : Number(x));
+const fromForm = (f) => ({
+  tiers: f.tiers.map((t) => ({ from: Number(t.from), to: Number(t.to), priceEgp: numOrNull(t.priceEgp), operatorFeePct: numOrNull(t.operatorFeePct) })),
+  costLines: f.costLines.map((l) => ({ name: l.name, basis: l.basis, amounts: l.amounts.map(numOrNull) })),
+  commissionPct: numOrNull(f.commissionPct),
+  eurRate: numOrNull(f.eurRate),
+});
+const egpFmt = (n) => (n == null ? "—" : Number(n).toLocaleString("en-US", { maximumFractionDigits: 2 }));
+
 function RateEditor({ product, flash, onClose }) {
   const [versions, setVersions] = useState(product.versions);
   const draft = versions.find((v) => v.state === "draft");
-  const fields = [...rateFieldsFor(product.type), "commissionPerSeat"];
-  const [values, setValues] = useState(() => Object.fromEntries(fields.map((k) => [k, draft?.[k] ?? versions[versions.length - 1]?.[k] ?? ""])));
+  const [form, setForm] = useState(() => toForm(draft || versions[versions.length - 1]));
   const [effectiveFrom, setEffectiveFrom] = useState("");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
+  const model = fromForm(form);
+  const problem = poolRateError(model);
+  const table = problem ? null : poolRateTable(model);
 
   async function reload() {
     const j = await call("/admin/rates");
@@ -590,40 +622,101 @@ function RateEditor({ product, flash, onClose }) {
     e?.preventDefault();
     setBusy(true); setErr("");
     try {
-      const clean = Object.fromEntries(Object.entries(values).map(([k, v]) => [k, v === "" ? null : Number(v)]));
-      await call(`/admin/rates/${product.id}/draft`, "PUT", { values: clean });
+      await call(`/admin/rates/${product.id}/draft`, "PUT", { values: model });
       flash("Draft saved."); await reload();
     } catch (e2) { setErr(e2.message); } finally { setBusy(false); }
   }
   async function publish() {
     setBusy(true); setErr("");
     try {
-      const clean = Object.fromEntries(Object.entries(values).map(([k, v]) => [k, v === "" ? null : Number(v)]));
-      const { version } = await call(`/admin/rates/${product.id}/draft`, "PUT", { values: clean });
+      const { version } = await call(`/admin/rates/${product.id}/draft`, "PUT", { values: model });
       await call(`/admin/rates/${product.id}/versions/${version.id}/publish`, "POST", { effectiveFrom: effectiveFrom || undefined });
       flash(`Version ${version.version} published.`); await reload();
     } catch (e2) { setErr(e2.message); } finally { setBusy(false); }
   }
+  const setTier = (i, k, v) => setForm({ ...form, tiers: form.tiers.map((t, j) => (j === i ? { ...t, [k]: v } : t)) });
+  const setLine = (i, patch) => setForm({ ...form, costLines: form.costLines.map((l, j) => (j === i ? { ...l, ...patch } : l)) });
+  const addTier = () => {
+    const last = form.tiers[form.tiers.length - 1];
+    const from = last ? Number(last.to) + 1 : 4;
+    setForm({ tiers: [...form.tiers, { from: String(from), to: String(from + 2), priceEgp: "", operatorFeePct: "" }], costLines: form.costLines.map((l) => ({ ...l, amounts: [...l.amounts, ""] })), commissionPct: form.commissionPct, eurRate: form.eurRate });
+  };
+  const removeTier = (i) => setForm({ ...form, tiers: form.tiers.filter((_, j) => j !== i), costLines: form.costLines.map((l) => ({ ...l, amounts: l.amounts.filter((_, j) => j !== i) })) });
+  const addLine = () => setForm({ ...form, costLines: [...form.costLines, { name: "", basis: "per_group", amounts: form.tiers.map(() => "") }] });
 
   return (
     <>
-      <Head title={`#${product.catalogue_no} ${product.title}`} sub={`${TYPE_LABELS[product.type] || product.type} · operator amounts in EGP, agency commission in EUR`}
+      <Head title={`#${product.catalogue_no} ${product.title}`} sub={`${TYPE_LABELS[product.type] || product.type} · all amounts in EGP; travelers see and pay EUR at the published rate`}
         action={<button className="btn-ghost" onClick={onClose}><ArrowLeft size={16} />Rate card</button>} />
       {err && <div className="auth-error">{err}</div>}
       <form className="dash-card" style={{ marginBottom: 12 }} onSubmit={save}>
         <h2>{draft ? `Draft v${draft.version}` : "New draft"}</h2>
+        <h3>Tiers</h3>
+        <div className="table-wrap"><table className="dash-table">
+          <thead><tr><th>From</th><th>To</th><th>Selling price per traveler (EGP)</th><th>Operator fee (% of operating cost)</th><th>Travelers see</th><th /></tr></thead>
+          <tbody>{form.tiers.map((t, i) => (
+            <tr key={i}>
+              <td><input type="number" min="1" step="1" value={t.from} onChange={(e) => setTier(i, "from", e.target.value)} style={{ width: 70 }} /></td>
+              <td><input type="number" min="1" step="1" value={t.to} onChange={(e) => setTier(i, "to", e.target.value)} style={{ width: 70 }} /></td>
+              <td><input type="number" min="0" step="0.01" value={t.priceEgp} onChange={(e) => setTier(i, "priceEgp", e.target.value)} /></td>
+              <td><input type="number" min="0" max="100" step="0.1" value={t.operatorFeePct} onChange={(e) => setTier(i, "operatorFeePct", e.target.value)} style={{ width: 90 }} /></td>
+              <td className="tnum">{tierPriceEur(numOrNull(t.priceEgp), numOrNull(form.eurRate)) == null ? "—" : `€${tierPriceEur(numOrNull(t.priceEgp), numOrNull(form.eurRate))}`}</td>
+              <td>{form.tiers.length > 1 && <button type="button" className="btn-mini" onClick={() => removeTier(i)}>Remove</button>}</td>
+            </tr>
+          ))}</tbody>
+        </table></div>
+        <div className="cat-actions" style={{ justifyContent: "flex-start" }}><button type="button" className="btn-ghost sm" onClick={addTier}>Add a tier</button></div>
+        <h3>Cost lines</h3>
+        <div className="table-wrap"><table className="dash-table">
+          <thead><tr><th>Name</th><th>Basis</th>{form.tiers.map((t, i) => <th key={i}>{t.from}–{t.to} (EGP)</th>)}<th /></tr></thead>
+          <tbody>{form.costLines.map((l, i) => (
+            <tr key={i}>
+              <td><input value={l.name} maxLength={80} placeholder="e.g. Transport" onChange={(e) => setLine(i, { name: e.target.value })} /></td>
+              <td><select value={l.basis} onChange={(e) => setLine(i, { basis: e.target.value })}>
+                {COST_BASES.map((b) => <option key={b} value={b}>{COST_BASIS_LABELS[b]}</option>)}
+              </select></td>
+              {form.tiers.map((_, j) => (
+                <td key={j}><input type="number" min="0" step="0.01" value={l.amounts[j] ?? ""} onChange={(e) => setLine(i, { amounts: l.amounts.map((a, k) => (k === j ? e.target.value : a)) })} style={{ width: 100 }} /></td>
+              ))}
+              <td><button type="button" className="btn-mini" onClick={() => setForm({ ...form, costLines: form.costLines.filter((_, j) => j !== i) })}>Remove</button></td>
+            </tr>
+          ))}</tbody>
+        </table></div>
+        <div className="cat-actions" style={{ justifyContent: "flex-start" }}><button type="button" className="btn-ghost sm" onClick={addLine}>Add a cost line</button></div>
         <div className="form-grid">
-          {fields.map((k) => (
-            <label className="field" key={k}><span>{RATE_LABELS[k]} ({k === "commissionPerSeat" ? "EUR" : "EGP"})</span>
-              <input type="number" min="0" step="0.01" value={values[k] ?? ""} onChange={(e) => setValues({ ...values, [k]: e.target.value })} />
-            </label>
-          ))}
+          <label className="field"><span>Collecting agent's commission (% of the selling price)</span>
+            <input type="number" min="0" max="99.99" step="0.1" value={form.commissionPct} onChange={(e) => setForm({ ...form, commissionPct: e.target.value })} /></label>
+          <label className="field"><span>Published EUR rate (EGP per EUR)</span>
+            <input type="number" min="0" step="0.0001" value={form.eurRate} onChange={(e) => setForm({ ...form, eurRate: e.target.value })} /></label>
           <label className="field"><span>Takes effect</span><input type="date" value={effectiveFrom} onChange={(e) => setEffectiveFrom(e.target.value)} /></label>
         </div>
-        <p className="field-hint">A published version applies to departures that haven't sold a seat yet. Departures already sold keep the version they were locked to.</p>
+        <p className="field-hint">The published EUR rate is used only to show and charge travelers in EUR (each tier price ÷ the rate, in whole euros). Everything below, and every statement, is in EGP. A published version applies to departures that haven't sold a seat yet; departures already sold keep the version they were locked to.</p>
+        {tierPriceLine(model.tiers, model.eurRate) && <p className="field-hint">Tour page: {tierPriceLine(model.tiers, model.eurRate)}</p>}
+        {problem && <div className="auth-error">{problem}</div>}
+
+        <h3>By group size</h3>
+        {table ? (
+          <>
+            {table.warnings.length > 0 && <ul>{table.warnings.map((w, i) => <li key={i}><span className="tag tag-warn">{w.kind === "negative_pool" ? "Guarantee needed" : "Pool shrinks"}</span> {w.text}</li>)}</ul>}
+            <div className="table-wrap"><table className="dash-table">
+              <thead><tr><th>Travelers</th><th>Tier</th><th>Revenue</th><th>Operating cost</th><th>Operator fee</th><th>Entitlement</th><th>Agent</th><th>Pool</th><th>Pool / traveler</th><th>vs one fewer</th></tr></thead>
+              <tbody>{table.rows.map((r) => (
+                <tr key={r.headcount} className={r.negativePool || r.poolShrinks ? "row-warn" : ""}>
+                  <td className="tnum">{r.headcount}</td>
+                  {r.complete ? (<>
+                    <td>{r.tier}</td><td className="tnum">{egpFmt(r.revenue)}</td><td className="tnum">{egpFmt(r.operatingCost)}</td>
+                    <td className="tnum">{egpFmt(r.operatorFee)}</td><td className="tnum">{egpFmt(r.entitlement)}</td><td className="tnum">{egpFmt(r.commission)}</td>
+                    <td className="tnum">{r.negativePool ? <b>{egpFmt(r.pool)}</b> : egpFmt(r.pool)}</td><td className="tnum">{egpFmt(r.poolPerTraveller)}</td>
+                    <td className="tnum">{r.poolChange == null ? "—" : `${r.poolChange > 0 ? "+" : ""}${egpFmt(r.poolChange)}`}</td>
+                  </>) : <td colSpan={9} className="field-hint">Missing: {r.missing.slice(0, 4).join(", ")}{r.missing.length > 4 ? "…" : ""}</td>}
+                </tr>
+              ))}</tbody>
+            </table></div>
+          </>
+        ) : <p className="field-hint">Fix the rate card above to see the table.</p>}
         <div className="cat-actions">
-          <button className="btn-ghost" disabled={busy}>Save draft</button>
-          <button type="button" className="btn-primary" disabled={busy} onClick={publish}>Publish</button>
+          <button className="btn-ghost" disabled={busy || !!problem}>Save draft</button>
+          <button type="button" className="btn-primary" disabled={busy || !!problem} onClick={publish}>Publish</button>
         </div>
       </form>
       <div className="dash-card">
@@ -631,13 +724,18 @@ function RateEditor({ product, flash, onClose }) {
         {versions.length ? (
           <div className="table-wrap">
             <table className="dash-table">
-              <thead><tr><th>Version</th><th>State</th><th>From</th>{fields.map((k) => <th key={k}>{RATE_LABELS[k]}</th>)}</tr></thead>
+              <thead><tr><th>Version</th><th>State</th><th>From</th><th>Prices (EGP)</th><th>Operator fee</th><th>Cost lines</th><th>Commission</th><th>EUR rate</th></tr></thead>
               <tbody>
                 {versions.map((v) => (
                   <tr key={v.id}>
                     <td>v{v.version}</td><td>{v.state}{v.publishedBy && <div className="field-hint">{v.publishedBy}</div>}</td>
                     <td>{v.effectiveFrom ? dayLabel(v.effectiveFrom) : "—"}</td>
-                    {fields.map((k) => <td key={k} className="tnum">{v[k] == null ? "—" : Number(v[k]).toLocaleString("en-US")}</td>)}
+                    <td className="tnum">{(v.tiers || []).map((t) => egpFmt(t.priceEgp)).join(" / ")}</td>
+                    <td className="tnum">{(v.tiers || []).map((t) => (t.operatorFeePct == null ? "—" : `${t.operatorFeePct}%`)).join(" / ")}</td>
+                    <td>{(v.costLines || []).map((l) => `${l.name} (${COST_BASIS_LABELS[l.basis] || l.basis})`).join(", ") || "—"}
+                      {v.source?.migration061 && <div className="field-hint">Converted by migration 061: {(v.source.migration061.notes || []).join("; ")}</div>}</td>
+                    <td className="tnum">{v.commissionPct}%</td>
+                    <td className="tnum">{v.eurRate ?? "—"}</td>
                   </tr>
                 ))}
               </tbody>
@@ -942,10 +1040,12 @@ function SettlementBlock({ departureId, flash }) {
           {/* The distribution of the departure's collections (27 Sep 2026). */}
           {st.snapshot?.distribution && (
             <table className="dash-table"><tbody>
+              {/* Phase 5: EGP lines of the pool calculation; before it, EUR. */}
               {(st.snapshot.distribution.lines || []).map((l) => (
-                <tr key={l.key}><td>{l.key === "agent_commission" || l.key === "minimum_departure_guarantee" ? <b>{l.label}</b> : l.label}</td>
-                  <td className="tnum">EUR {Number(l.amountEur).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td></tr>
+                <tr key={l.key}><td>{["agent_commission", "minimum_departure_guarantee", "operator_entitlement"].includes(l.key) ? <b>{l.label}</b> : l.label}</td>
+                  <td className="tnum">{st.snapshot.distribution.model === "pool" ? "EGP" : "EUR"} {Number(l.amountEgp ?? l.amountEur).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td></tr>
               ))}
+              {st.snapshot.distribution.ownAgencyShare && <tr><td colSpan={2} className="field-hint">{st.snapshot.distribution.ownAgencyShare.note}</td></tr>}
               {st.snapshot.distribution.problem && <tr><td colSpan={2}><span className="tag tag-warn">{st.snapshot.distribution.problem}</span></td></tr>}
             </tbody></table>
           )}

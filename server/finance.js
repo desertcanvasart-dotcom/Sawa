@@ -130,7 +130,7 @@ export async function financeItems(db = pool, { from = null, to = null, party = 
       // Sent by the 10th; due on the last day of the month it's sent.
       const due = s.sent_at ? new Date(Date.UTC(new Date(s.sent_at).getUTCFullYear(), new Date(s.sent_at).getUTCMonth() + 1, 0)).toISOString().slice(0, 10) : null;
       return {
-        kind: "commission_statement", id: Number(s.id), type: `Agency commission, ${s.period}`, direction: "out",
+        kind: "commission_statement", id: Number(s.id), type: `${s.basis === "pool" ? "Agency pool shares" : "Agency commission"}, ${s.period}`, direction: "out",
         party: { kind: "agency", id: s.agency_id, name: s.agency_name }, departure: null,
         currency: s.currency, amount: s.currency === "EGP" ? num(s.total_egp) : num(s.total_eur), amountEur: num(s.total_eur),
         dueOn: due, standing: standingOf(s.state, due), holdReason: s.hold_reason, payment: payment("commission_statement", s.id),
@@ -260,7 +260,7 @@ async function hasPayRequests(c) {
 }
 
 // ---------------------------------------------------------------- margin
-// Per catalog departure: EUR charged (by charge date, net of refunds),
+// Before migration 061: per catalog departure, EUR charged (by charge date, net of refunds),
 // operator cost (EGP) converted at the rate on each charge date, commissions
 // and payment fees → margin in EUR. A missing rate is shown, never guessed.
 export async function marginReport(db = pool, { from, to }) {
@@ -276,6 +276,26 @@ export async function marginReport(db = pool, { from, to }) {
   const tiers = payAtGoAhead ? await import("./cancellation-tiers.js") : null;
   const fx = tiers ? await tiers.latestFxRate(db) : null;
   const out = [];
+  // Phase 5 (migration 061): the one calculation (server/pool-settlement.js).
+  // The collecting agent's result in EGP: its commission, the pool on direct places,
+  // less any Minimum Departure Guarantee, less payment costs, plus the FX line
+  // (EUR collected at the CBE rate on each day, against nominal EGP revenue).
+  const poolSettlement = await import("./pool-settlement.js");
+  if (await poolSettlement.poolModelAvailable(db)) {
+    for (const d of deps) {
+      const money = await poolSettlement.departureMoney(db, Number(d.id));
+      out.push({
+        departure: { id: Number(d.id), date: ymd(d.date), status: d.status, label: `${d.code} ${d.title}` },
+        model: "pool", currency: "EGP", ...money,
+        marginEgp: money?.onlineEra?.resultEgp ?? null,
+        problem: !money?.complete ? `rate card incomplete (${(money?.missing || []).slice(0, 3).join(", ")})`
+          : money.fx.missingRates.length ? `exchange rate missing for ${money.fx.missingRates.join(", ")}`
+          : !money.paymentFeesSet ? "payment fee setting missing" : null,
+        lossWarnings: tiers ? await tiers.departureLossWarnings(db, { departureId: Number(d.id), fx }) : [],
+      });
+    }
+    return out;
+  }
   for (const d of deps) {
     const charges = (await db.query(
       `SELECT b.amount, b.paid_at, b.state FROM booking_payments b JOIN pledges p ON p.id = b.pledge_id

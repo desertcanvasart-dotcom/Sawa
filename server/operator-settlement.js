@@ -16,6 +16,7 @@ import { pool, withTransaction } from "./db/index.js";
 import { BRAND } from "./brand.js";
 import { CatalogueError, todayIn } from "./catalogue.js";
 import { expectedAmountFor } from "./assignments.js";
+import { departureMoney, poolModelAvailable } from "./pool-settlement.js";
 import { notifyOperator, operatorRecipients } from "./operators.js";
 import { applySetoffs, releaseSetoffs, syncBalanceReceivable, createReceivable, setoffLines } from "./receivables.js";
 import { shiftDate } from "../shared/catalogue.js";
@@ -290,6 +291,39 @@ export async function departureDistribution(c, departureId, { entitlementEgp }) 
   };
 }
 
+// Phase 5: the departure's calculation as the operator statement shows it,
+// EGP throughout. An operator whose own agency sold places on the departure is
+// paid twice, and the two are kept apart: the entitlement here, as operator;
+// the pool share on its agency statement, as an agency.
+async function poolDistribution(c, departureId, operatorId) {
+  const money = await departureMoney(c, departureId);
+  if (!money?.complete) return { model: "pool", currency: "EGP", lines: [], problem: `rate card incomplete (${(money?.missing || []).join(", ")})` };
+  const l = money.lines;
+  const agencyIds = (money.shares?.agencies || []).map((a) => a.agencyId);
+  const names = new Map(agencyIds.length ? (await c.query("SELECT id, name FROM agencies WHERE id = ANY($1::text[])", [agencyIds])).rows.map((r) => [r.id, r.name]) : []);
+  const ownAgency = operatorId != null ? (await c.query("SELECT agency_id FROM operators WHERE id = $1", [operatorId])).rows[0]?.agency_id || null : null;
+  const own = (money.shares?.agencies || []).find((a) => a.agencyId === ownAgency) || null;
+  const lines = [
+    { key: "revenue", label: `Revenue: ${money.headcount} × EGP ${l.priceEgp} (tier ${l.tier})`, amountEgp: l.revenue },
+    { key: "operating_cost", label: "Operating cost", amountEgp: l.operatingCost },
+    { key: "operator_fee", label: `Operator fee, ${l.operatorFeePct}%`, amountEgp: l.operatorFee },
+    { key: "operator_entitlement", label: "Operator entitlement", amountEgp: l.entitlement },
+    { key: "online_era_commission", label: `${BRAND.legalName} commission, ${l.commissionPct}%`, amountEgp: l.commission },
+    { key: "pool", label: "Pool", amountEgp: l.pool },
+    { key: "pool_per_traveller", label: "Pool per traveler", amountEgp: l.poolPerTraveller },
+    ...(money.shares?.agencies || []).map((a) => ({ key: `agency:${a.agencyId}`, label: `Pool share, ${names.get(a.agencyId) || a.agencyId} (${a.places}${a.latePlaces ? ` + ${a.latePlaces} late` : ""} places)`, amountEgp: a.amount })),
+    ...(money.onlineEra ? [{ key: "online_era_pool", label: `Pool share, ${BRAND.legalName} (${money.onlineEra.directPlaces} direct places and the rest)`, amountEgp: money.onlineEra.pool }] : []),
+    ...(l.guarantee > 0 ? [{ key: "minimum_departure_guarantee", label: `Minimum Departure Guarantee, paid by ${BRAND.legalName}`, amountEgp: l.guarantee }] : []),
+  ];
+  return {
+    model: "pool", currency: "EGP", stage: money.stage, headcount: money.headcount, lines,
+    entitlementEgp: l.entitlement,
+    ownAgencyShare: own ? { agencyId: own.agencyId, places: own.places, amountEgp: own.amount,
+      note: `Your agency's pool share on its own ${own.places} place${own.places === 1 ? "" : "s"} (EGP ${own.amount}) is paid on your agency statement, not here.` } : null,
+    problem: null,
+  };
+}
+
 async function statementSnapshot(c, departureId, figures = null) {
   const f = figures || await settlementFigures(c, departureId);
   const manifest = (await c.query("SELECT frozen_at, travelers, seat_count FROM catalogue_manifests WHERE departure_id = $1", [departureId])).rows[0];
@@ -325,8 +359,12 @@ async function statementSnapshot(c, departureId, figures = null) {
         netBalance: f.balance == null ? null : round2(Math.max(0, f.balance) - balanceSetoff),
       };
     })() : { setoffs: [], receivables: [], netBalance: f.balance }),
-    // The distribution of the departure's collections (27 Sep 2026).
-    distribution: await departureDistribution(c, departureId, { entitlementEgp: f.expected.total }),
+    // The distribution of the departure's collections: from phase 5 the one
+    // calculation of shared/pool-model.js, in EGP; before migration 061, the
+    // 27 Sep 2026 distribution in EUR.
+    distribution: await poolModelAvailable(c)
+      ? await poolDistribution(c, departureId, f.party?.operatorId ?? null)
+      : await departureDistribution(c, departureId, { entitlementEgp: f.expected.total }),
     collectingAgent: { name: BRAND.legalName, registrationNo: BRAND.registrationNumber, license: BRAND.agentLicense },
     generatedAt: new Date().toISOString(),
   };
