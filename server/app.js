@@ -54,11 +54,16 @@ import {
 import { registerPayAtGoAheadRoutes } from "./pay-at-goahead-routes.js";
 import { partyLinkFor, partyForBooking, partyView, partyToJoin, joinParty, linkParty, unlinkParty, partiesAvailable, JOINABLE_STATUSES } from "./booking-parties.js";
 import { SAFETY_NONE } from "../shared/settlement-rules.js";
+import {
+  holdForConfirmation, holdBooking, heldByToken, heldByCode, heldCodeTaken, isExpired, markConfirmed, markRefused,
+  cancelHeld, resendLink, confirmBookingUrl, MAX_RESENDS,
+} from "./booking-confirmation.js";
+import { verifyTurnstile, turnstileSiteKey } from "./turnstile.js";
 import { catalogueV2Enabled } from "./features.js";
 import { publicCatalogue, overlayBootstrap, clearPublicCatalogue } from "./catalogue-public.js";
 import {
   sendEmail, sendEmailInBackground, emailMode,
-  inviteEmail, bookingConfirmationEmail, departureMergedEmail, payAtGoAheadBookingEmail, goAheadEmail, cancellationEmail,
+  inviteEmail, bookingConfirmationEmail, departureMergedEmail, payAtGoAheadBookingEmail, goAheadEmail, cancellationEmail, confirmBookingEmail,
   listingApprovedEmail, listingRejectedEmail,
   departureRequestReceivedEmail, departureRequestApprovedEmail, departureRequestDeclinedEmail,
   operatorApplicationEmail, operatorApplicationReceiptEmail, operatorApplicationText,
@@ -203,6 +208,23 @@ const writeLimiter = rateLimit({
   windowMs: 60_000, max: 30, standardHeaders: true, legacyHeaders: false,
   message: { error: "Too many requests. Please slow down and try again shortly." },
 });
+// At most 5 booking attempts an hour from one address (a booking or a date
+// request, made or refused), with a message a real traveler can act on.
+// BOOKING_RATE_LIMIT_PER_HOUR overrides it; the test suite's servers
+// (NODE_ENV=test) default to a high ceiling so suites that book many times
+// keep working, and the tests of this limit set it.
+const BOOKING_ATTEMPTS_PER_HOUR = Number(process.env.BOOKING_RATE_LIMIT_PER_HOUR) || (process.env.NODE_ENV === "test" ? 1000 : 5);
+const bookingAttemptLimiter = rateLimit({
+  windowMs: 3_600_000, max: BOOKING_ATTEMPTS_PER_HOUR, standardHeaders: true, legacyHeaders: false,
+  message: { error: "You've made several booking attempts in the last hour. Please wait a little and try again, or email hello@sawa.tours and we'll book it for you." },
+});
+
+// Cloudflare Turnstile on the public booking forms, checked here. Skipped
+// with a warning when TURNSTILE_SECRET_KEY isn't set (server/turnstile.js).
+async function requireTurnstile(req) {
+  const r = await verifyTurnstile({ token: req.body?.turnstileToken, ip: req.ip });
+  if (!r.ok) throw new AppError(403, "We couldn't check that this booking came from a person. Please reload the page and try again.");
+}
 app.use("/api/", generalLimiter);
 
 // Attach req.user from the Supabase JWT (if present) on every request.
@@ -332,7 +354,8 @@ async function uniqueBookingCode(c) {
   for (let attempt = 0; attempt < 5; attempt++) {
     const code = publicBookingCode();
     const hit = await c.query(`SELECT 1 FROM pledges WHERE UPPER(booking_code) = $1`, [code]);
-    if (!hit.rowCount) return code;
+    // A booking held for email confirmation (058) keeps its code when made.
+    if (!hit.rowCount && !(await heldCodeTaken(c, code))) return code;
   }
   throw new AppError(500, "Could not allocate a booking code.");
 }
@@ -370,6 +393,8 @@ const publicBookingSchema = z.object({
   // Group bookings (catalogue_v2): the "Join my group" link the booking came
   // through. Ignored with the flag off.
   partyToken: z.string().trim().max(80).optional(),
+  // Cloudflare Turnstile's token from the form (checked on the server).
+  turnstileToken: z.string().trim().max(2048).optional(),
 });
 
 // Model phase 2 — what the operator's manifest needs, all optional. Read only
@@ -765,6 +790,8 @@ async function buildBootstrap(user) {
     ),
     // S04 — tells the booking form whether to ask for a phone code.
     phoneVerification: phoneVerificationEnabled(),
+    // Cloudflare Turnstile's public site key, or null (no check shown).
+    turnstileSiteKey: turnstileSiteKey(),
     cities: cities.rows.map(mapCity),
     tourProducts: mappedProducts.map((p) => presentProduct(p, user)),
     // pending_review = traveler-requested, awaiting ops approval. Only
@@ -1412,13 +1439,35 @@ app.post("/api/public/phone-verifications/check", writeLimiter, h(async (req, re
 }));
 
 // stricter write limiter guards this and the public cancel below from abuse.
-app.post("/api/public/departures/:id/bookings", writeLimiter, h(async (req, res) => {
-  const input = parse(publicBookingSchema, req.body);
-  const manifest = manifestFields(req.body);
-  input.customerPhone = verifiedPhoneFor(input);
+//
+// A direct booking is held until the traveler confirms their email (migration
+// 058): every check below runs, then the booking waits in
+// booking_confirmations and the traveler gets a "Confirm my booking" link.
+// The link calls placePublicBooking again with the held booking, which runs
+// the same checks and makes it. Answer 202 while held, 201 once made.
+app.post("/api/public/departures/:id/bookings", writeLimiter, bookingAttemptLimiter, h(async (req, res) => {
+  await requireTurnstile(req);
+  const out = await placePublicBooking(req, { departureId: Number(req.params.id), body: req.body });
+  await logAudit(req, out.audit);
+  res.status(out.status).json(out.json);
+}));
+
+async function placePublicBooking(req, { departureId, body, confirmation = null }) {
+  const input = confirmation ? { ...confirmation.payload.input } : parse(publicBookingSchema, body);
+  const manifest = confirmation ? confirmation.payload.manifest : manifestFields(body);
+  if (!confirmation) input.customerPhone = verifiedPhoneFor(input);
+  delete input.turnstileToken;
+  delete input.phoneToken;
+  const hold = !confirmation && await holdForConfirmation(pool);
   const result = await withTransaction(async (c) => {
-    const dep = await loadDeparture(c, Number(req.params.id), { forUpdate: true });
+    const dep = await loadDeparture(c, departureId, { forUpdate: true });
     if (!dep) throw new AppError(404, "Departure not found.");
+    // Two clicks on the same link must make one booking: the held booking is
+    // locked after the date, and made only while still unconfirmed.
+    if (confirmation) {
+      const still = (await c.query("SELECT status FROM booking_confirmations WHERE id = $1 FOR UPDATE", [confirmation.id])).rows[0];
+      if (still?.status !== "unconfirmed") throw Object.assign(new AppError(409, "This booking is already confirmed."), { alreadyConfirmed: true });
+    }
     // S04 — one live booking per verified number per date. A double-click or a
     // retried request used to make two; a party books its seats in one.
     if (phoneVerificationEnabled() && dep.pledges.some((p) => p.status !== "cancelled" && p.customerPhone === input.customerPhone)) {
@@ -1441,6 +1490,15 @@ app.post("/api/public/departures/:id/bookings", writeLimiter, h(async (req, res)
     if (bookingClosed(dep, product)) throw new AppError(409, "Bookings for this date have closed.");
     const catalogueCtx = await requireCompleteBooking(c, dep.id, manifest, input.seats, input.customerPhone);
     if (party && !catalogueCtx) throw new AppError(409, "Group links aren't available for this date.");
+    if (hold) {
+      // Every check passed: hold it for the traveler's confirmation. Nothing
+      // is written to pledges, so it counts towards nothing yet.
+      const held = await holdBooking(c, {
+        departureId: dep.id, bookingCode: await uniqueBookingCode(c), email: input.customerEmail, seats: input.seats,
+        payload: { input, manifest },
+      });
+      return { held, departure: dep };
+    }
     const pricing = computePledgePricing(dep, product, input);
     const refCode = cleanRefCode(input.refCode);
     if (refCode) {
@@ -1458,7 +1516,7 @@ app.post("/api/public/departures/:id/bookings", writeLimiter, h(async (req, res)
       customerEmail: input.customerEmail || null,
       customerPhone: input.customerPhone || null,
       source: "public",
-      bookingCode: await uniqueBookingCode(c),
+      bookingCode: confirmation ? confirmation.booking_code : await uniqueBookingCode(c),
       refCode: refCode || null,
       manifest,
       ...pricing,
@@ -1471,12 +1529,27 @@ app.post("/api/public/departures/:id/bookings", writeLimiter, h(async (req, res)
       await payNowIfGoingAhead(c, pledgeId, catalogueCtx.departureId);
     }
     if (party) await joinParty(c, { partyId: party.id, pledgeId });
+    if (confirmation) await markConfirmed(c, { id: confirmation.id, pledgeId });
     const departure = await loadDeparture(c, dep.id);
     const saved = await c.query(`SELECT * FROM pledges WHERE id=$1`, [pledgeId]);
     return { departure, booking: mapPledge(saved.rows[0]), payAtGoAhead: !!catalogueCtx, partyId: party?.id ?? null };
   });
-  await logAudit(req, { action: "booking.create", entity: "pledge", entityId: result.booking.id,
-    detail: { departureId: Number(req.params.id), seats: input.seats, source: "public", ...(result.partyId ? { partyId: result.partyId } : {}) } });
+  if (result.held) {
+    const d = result.departure;
+    const code = result.held.row.booking_code;
+    sendEmailInBackground(Promise.resolve(confirmBookingEmail({
+      to: input.customerEmail, customerName: input.customerName, route: d.route,
+      dateLabel: d.startDate ? `${d.startDate} – ${d.endDate}` : d.date, seats: input.seats, bookingCode: code,
+      url: confirmBookingUrl(result.held.token),
+    })));
+    return { status: 202, audit: { action: "booking.hold", entity: "booking", entityId: code, detail: { departureId, seats: input.seats, source: "public" } }, json: {
+      departure: presentDeparture(d, req.user), confirmationRequired: true,
+      booking: { bookingCode: code, seats: input.seats, customers: input.customerName, status: "unconfirmed" },
+    } };
+  }
+  const audit = { action: "booking.create", entity: "pledge", entityId: result.booking.id,
+    detail: { departureId, seats: input.seats, source: "public", ...(result.partyId ? { partyId: result.partyId } : {}),
+      ...(confirmation ? { confirmedEmail: true } : {}) } };
   if (input.customerEmail && result.payAtGoAhead) {
     // Model phase 4: nothing is paid until GoAhead, then the full price; the
     // email repeats the cancellation tiers this booking was made under.
@@ -1499,8 +1572,8 @@ app.post("/api/public/departures/:id/bookings", writeLimiter, h(async (req, res)
   notifyOps(result.departure, result.booking, input, { isRequest: false });
   // The direct traveller gets their own booking receipt back in full.
   emitDepartureSync(result.departure.id);
-  res.status(201).json({ departure: presentDeparture(result.departure, req.user), booking: result.booking });
-}));
+  return { status: 201, audit, json: { departure: presentDeparture(result.departure, req.user), booking: result.booking } };
+}
 
 // Platform staff remove a pledge outright. Agencies no longer come through
 // here: this erases the row and stops only at supplier_confirmed, so an agency
@@ -1643,7 +1716,11 @@ app.get("/api/public/bookings/:code", h(async (req, res) => {
       LIMIT 1`,
     [code]
   );
-  if (!r.rows.length) throw new AppError(404, "Booking not found.");
+  if (!r.rows.length) {
+    const held = await heldByCode(pool, code);
+    if (!held) throw new AppError(404, "Booking not found.");
+    return res.json({ booking: await heldBookingView(held) });
+  }
   const b = r.rows[0];
   const goAhead = Number(b.min_seats) || 4;
   const seatsBooked = Number(b.seats_booked) || 0;
@@ -1740,6 +1817,75 @@ app.get("/api/public/bookings/:code", h(async (req, res) => {
     routePath,
     ...view,
   } });
+}));
+
+// A booking held for email confirmation (058), as the booking page shows it.
+// It isn't a booking yet, so it shows no seat count and no payment.
+const HELD_VIEW = {
+  unconfirmed: { statusLabel: "Waiting for your confirmation", statusTone: "pending",
+    note: "Check your email to confirm your booking. It's made when you click the link, and lapses if it isn't confirmed within 24 hours." },
+  expired: { statusLabel: "Not confirmed", statusTone: "cancelled",
+    note: "This booking wasn't confirmed within 24 hours, so it lapsed. Nothing was charged. You can book again while places remain." },
+  cancelled: { statusLabel: "Canceled", statusTone: "cancelled", note: "This booking was canceled before it was confirmed. Nothing was charged." },
+  refused: { statusLabel: "Not booked", statusTone: "cancelled", note: "We couldn't make this booking when it was confirmed. Nothing was charged." },
+};
+async function heldBookingView(held, now = Date.now()) {
+  const state = isExpired(held, now) ? "expired" : held.status;
+  const d = (await pool.query(
+    `SELECT d.route, d.date, d.start_date, d.city, tp.title FROM departures d LEFT JOIN tour_products tp ON tp.id = d.tour_product_id WHERE d.id = $1`,
+    [held.departure_id])).rows[0] || {};
+  const day = d.start_date || d.date;
+  const dateLabel = day ? new Intl.DateTimeFormat("en", { weekday: "short", day: "numeric", month: "short", year: "numeric", timeZone: "UTC" })
+    .format(new Date(`${isoDate(day)}T12:00:00Z`)) : "";
+  const v = HELD_VIEW[state] || HELD_VIEW.unconfirmed;
+  return {
+    code: held.booking_code, tourTitle: d.title || d.route || "", city: d.city || "", dateLabel, seats: Number(held.seats),
+    state: `held_${state}`, ...v, ...(state === "refused" && held.refused_reason ? { note: `${v.note} ${held.refused_reason}` } : {}),
+    confirmed: false, showProgress: false, canCancel: state === "unconfirmed",
+    confirmation: { state, resendsLeft: state === "unconfirmed" ? Math.max(0, MAX_RESENDS - Number(held.resends)) : 0 },
+  };
+}
+
+// The "Confirm my booking" link (058). A POST, made by the page behind the
+// link, so a mail client that prefetches links can't confirm for anyone. The
+// booking is made now, through the same checks as the booking form.
+app.post("/api/public/booking-confirmations/:token", writeLimiter, h(async (req, res) => {
+  const held = await heldByToken(pool, String(req.params.token || ""));
+  if (!held) throw new AppError(404, "This link isn't valid. If you asked for a new email, use the link in the newest one.");
+  if (held.status === "confirmed") return res.json({ state: "already", code: held.booking_code });
+  if (held.status !== "unconfirmed" || isExpired(held)) return res.json({ state: isExpired(held) ? "expired" : held.status, code: held.booking_code });
+  let out;
+  try {
+    out = await placePublicBooking(req, { departureId: Number(held.departure_id), confirmation: held });
+  } catch (e) {
+    if (e?.alreadyConfirmed) return res.json({ state: "already", code: held.booking_code });
+    if (!(e?.status >= 400 && e.status < 500)) throw e;
+    // The date changed while the booking waited (full, closed, canceled).
+    await markRefused(pool, { id: held.id, reason: e.message });
+    await logAudit(req, { action: "booking.hold_refused", entity: "booking", entityId: held.booking_code, detail: { reason: e.message } });
+    return res.status(409).json({ state: "refused", code: held.booking_code, error: `We couldn't make this booking: ${e.message} Nothing was charged.` });
+  }
+  await logAudit(req, out.audit);
+  await logAudit(req, { action: "booking.email_confirmed", entity: "pledge", entityId: out.json.booking.id, detail: { bookingCode: held.booking_code } });
+  res.json({ state: "confirmed", code: held.booking_code });
+}));
+
+// Send the confirmation email again: a new link, at most 3 times.
+app.post("/api/public/bookings/:code/resend-confirmation", writeLimiter, h(async (req, res) => {
+  const code = String(req.params.code || "").trim();
+  const r = await resendLink(pool, { code });
+  if (r.error === 404) throw new AppError(404, "Booking not found.");
+  if (r.error === 409) throw new AppError(409, "This booking isn't waiting for confirmation any more.");
+  if (r.error === 429) throw new AppError(429, `The confirmation email has already been sent again ${MAX_RESENDS} times. Email hello@sawa.tours and we'll confirm it for you.`);
+  const d = (await pool.query("SELECT route, date, start_date, end_date FROM departures WHERE id = $1", [r.row.departure_id])).rows[0] || {};
+  const input = r.row.payload?.input || {};
+  sendEmailInBackground(Promise.resolve(confirmBookingEmail({
+    to: r.row.email, customerName: input.customerName, route: d.route,
+    dateLabel: d.start_date ? `${isoDate(d.start_date)} – ${isoDate(d.end_date)}` : isoDate(d.date), seats: Number(r.row.seats),
+    bookingCode: r.row.booking_code, url: confirmBookingUrl(r.token),
+  })));
+  await logAudit(req, { action: "booking.hold_resend", entity: "booking", entityId: r.row.booking_code, detail: { resends: r.row.resends } });
+  res.json({ sent: true, resendsLeft: Math.max(0, MAX_RESENDS - r.row.resends) });
 }));
 
 // Model phase 4: the traveler of an agency booking accepts the cancellation
@@ -1886,6 +2032,15 @@ app.post("/api/public/waitlist/:token/book", writeLimiter, h(async (req, res) =>
 app.post("/api/public/bookings/:code/cancel", writeLimiter, h(async (req, res) => {
   const code = String(req.params.code || "").trim();
   if (!code) throw new AppError(422, "Booking code required.");
+  // A booking still waiting for its email confirmation (058) isn't in
+  // pledges yet: canceling it just drops the hold.
+  const held = await heldByCode(pool, code);
+  if (held && !held.pledge_id) {
+    if (await cancelHeld(pool, { code })) {
+      await logAudit(req, { action: "booking.hold_cancel", entity: "booking", entityId: held.booking_code });
+    }
+    return res.json({ cancelled: true });
+  }
 
   const result = await withTransaction(async (c) => {
     // The pledge and its departure are read under the departure's lock, because
@@ -2186,7 +2341,8 @@ async function createDateRequest(input, req, requester = {}) {
   });
 }
 
-app.post("/api/public/departure-requests", writeLimiter, h(async (req, res) => {
+app.post("/api/public/departure-requests", writeLimiter, bookingAttemptLimiter, h(async (req, res) => {
+  await requireTurnstile(req);
   const input = parse(publicDepartureRequestSchema, req.body);
   input.customerPhone = verifiedPhoneFor(input);
   const result = await createDateRequest(input, req);

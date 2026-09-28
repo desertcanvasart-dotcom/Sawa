@@ -67,6 +67,13 @@ test("Twilio Verify is called as documented", async () => {
 const route = (sig) => {
   const f = app.indexOf(sig);
   assert.ok(f > 0, `not found: ${sig}`);
+  // The booking route's body is placePublicBooking (058: shared with the
+  // "Confirm my booking" link), so its checks are read there.
+  if (sig === 'app.post("/api/public/departures/:id/bookings"') {
+    assert.match(app.slice(f, app.indexOf("\n}));", f)), /placePublicBooking\(req/);
+    const p = app.indexOf("async function placePublicBooking(");
+    return app.slice(p, app.indexOf("\n}\n", p));
+  }
   return app.slice(f, app.indexOf("\n}));", f));
 };
 

@@ -48,7 +48,11 @@ test("both public routes that create demand notify ops", () => {
     assert.ok(from > 0, `route not found: ${sig}`);
     return app.slice(from, app.indexOf("\n}));", from));
   };
-  assert.match(route('app.post("/api/public/departures/:id/bookings"'), /notifyOps\([^)]*isRequest: false/);
+  // The booking route's body is placePublicBooking (058: shared with the
+  // "Confirm my booking" link, which makes the held booking).
+  assert.match(route('app.post("/api/public/departures/:id/bookings"'), /placePublicBooking\(req/);
+  const place = app.slice(app.indexOf("async function placePublicBooking("), app.indexOf("\n}\n", app.indexOf("async function placePublicBooking(")));
+  assert.match(place, /notifyOps\([^)]*isRequest: false/);
   assert.match(route('app.post("/api/public/departure-requests"'), /notifyOps\([^)]*isRequest: true/);
 });
 

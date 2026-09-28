@@ -1138,6 +1138,22 @@ export function waitlistOfferEmail({ to, name, title, dateLabel, seats, expiresA
   return { to, subject, html, text, kind: "waitlist_offer" };
 }
 
+// A direct booking isn't made until the traveler confirms their email
+// (migration 058). One-time link; unconfirmed after 24 hours, it lapses.
+export function confirmBookingEmail({ to, customerName, route, dateLabel, seats, bookingCode, url }) {
+  const subject = `Confirm your booking — ${route}`;
+  const seatWord = seats === 1 ? "1 seat" : `${seats} seats`;
+  const text = `Hello${customerName ? ` ${customerName}` : ""}, please confirm your booking of ${seatWord} on ${route} on ${dateLabel}. `
+    + "Your booking is made when you click the link below, and it counts towards the date's GoAhead from then. "
+    + `If it isn't confirmed within 24 hours it lapses and nothing is charged. Confirm my booking: ${url}`
+    + `${bookingCode ? ` Booking code: ${bookingCode}.` : ""} If you didn't make this booking, ignore this email.`;
+  const html = shell(subject,
+    `<p style="margin:0 0 20px">${esc(text.split(" Confirm my booking:")[0])}</p>${button(url, "Confirm my booking")}`
+    + `<p style="margin:20px 0 0;font-size:13px;color:#6b6b6b">${esc(`${bookingCode ? `Booking code: ${bookingCode}. ` : ""}If you didn't make this booking, ignore this email.`)}</p>`,
+    { eyebrow: "Booking", preheader: "One click and your seats are booked." });
+  return { to, subject, html, text, kind: "booking_confirm" };
+}
+
 // To ops: the links to make in Tab, and the seats about to be released.
 export function payAtGoAheadOpsEmail({ to, kind, items = [], portalUrl }) {
   const subject = kind === "links"
