@@ -362,6 +362,17 @@ export function startJobScheduler(env = process.env) {
   emailFirst.unref();
   emailRepeat.unref();
 
+  // 058 — a direct booking not confirmed by email within 24 hours expires,
+  // silently. Every 15 minutes; nothing to do before the migration.
+  const holdTick = () => runSafely("booking-confirmation-expiry", async (opts) => {
+    const { expireUnconfirmed } = await import("../booking-confirmation.js");
+    return expireUnconfirmed({ log: opts.log });
+  });
+  const holdFirst = setTimeout(holdTick, FIRST_RUN_DELAY_MS * 4);
+  const holdRepeat = setInterval(holdTick, EMAIL_RETRY_MS);
+  holdFirst.unref();
+  holdRepeat.unref();
+
   console.log(`[jobs] scheduler on — cancel-unconfirmed in ${FIRST_RUN_DELAY_MS / 1000}s, then every 24h`);
   console.log(dryRun
     ? "[jobs] cancel-unconfirmed is DRY-RUN — it will log what it would cancel and email, and do neither. Set CANCEL_JOB_DRY_RUN=0 to go live."
@@ -384,5 +395,6 @@ export function startJobScheduler(env = process.env) {
     clearTimeout(noticeFirst); clearInterval(noticeRepeat);
     clearTimeout(catGenFirst); clearInterval(catGenRepeat);
     clearTimeout(catStatusFirst); clearInterval(catStatusRepeat);
+    clearTimeout(holdFirst); clearInterval(holdRepeat);
   };
 }

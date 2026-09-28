@@ -463,8 +463,8 @@ export async function auditEmailTemplates() {
     "payAtGoAheadReceiptEmail", "payAtGoAheadSellerChangedEmail",
     // Duplicate dates merged (055).
     "departureMergedEmail",
-    // Reservation integrity (catalogue_v2), listed the day it was written.
-    "bookingEmailConfirmEmail"];
+    // Bookings wait for the traveler's email to be confirmed (058).
+    "confirmBookingEmail"];
   // Where one shared fixture can't serve: `kind` means a different thing to
   // each of these, so each gets the value its own caller passes.
   const FX_FOR = {

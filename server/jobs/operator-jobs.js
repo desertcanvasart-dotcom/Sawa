@@ -42,10 +42,6 @@ export function runOperatorAssignments({ log = console.log, now, env = process.e
     // Model phase 4 first: payment requests at GoAhead, reminders, warnings
     // and releases at the deadline, so a manifest frozen in the same tick
     // holds manifest seats only (clause 10.1).
-    // Reservation integrity (migration 057) before that: the 24-hour email
-    // reminder, and unconfirmed seats released at the cut-off.
-    const { runIntegrityTick } = await import("../booking-integrity.js");
-    const integrity = await runIntegrityTick({ log, now, send: sendEmail });
     const { runPayAtGoAheadTick } = await import("../pay-at-goahead.js");
     const payAtGoAhead = await runPayAtGoAheadTick({ log, now, send: sendEmail, env });
     const assignments = await runAssignmentTick({ log, now, send: sendEmail });
@@ -53,7 +49,7 @@ export function runOperatorAssignments({ log = console.log, now, env = process.e
     // departure, statements accepted at 30 days, commissions decided.
     const settlement = await runSettlementTick({ log, now });
     const commissions = await decideCommissions({ log, now });
-    return { integrity, payAtGoAhead, ...assignments, ...settlement, ...commissions };
+    return { payAtGoAhead, ...assignments, ...settlement, ...commissions };
   }, log, env);
 }
 

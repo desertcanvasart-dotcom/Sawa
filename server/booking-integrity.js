@@ -1,28 +1,19 @@
-// Reservation integrity (migration 057), behind catalogue_v2. Two measures,
-// neither of which ever refuses a booking:
+// Reservation integrity (migration 057), behind catalogue_v2: cluster flags.
+// Never refuses a booking.
 //
-// 1. Confirmed emails. A direct booking on a catalog departure that hasn't
-//    reached GoAhead yet holds its seats at once, but they count towards the
-//    GoAhead minimum only after the traveler confirms their email. A reminder
-//    goes at 24 hours; a booking still unconfirmed at the departure's cut-off
-//    is released. A booking with a payment request is left to the payment
-//    flow (paying proves the address; an unpaid seat is released by it).
-//
-// 2. Cluster flags. Three or more single-seat reservations on one departure
-//    within 6 hours that share a device fingerprint, an IP range or a phone
-//    country code are flagged for staff, with the reason. Staff mark a flag
-//    "confirmed group" (the bookings are linked as a party), "suspicious" (its
-//    seats don't count towards GoAhead until reviewed) or clear it.
+// Three or more single-seat reservations on one departure within 6 hours that
+// share a device fingerprint, an IP range or a phone country code are flagged
+// for staff, with the reason. Staff mark a flag "confirmed group" (the
+// bookings are linked as a party), "suspicious" (its seats don't count towards
+// GoAhead until reviewed) or clear it. (Email confirmation, once part of this,
+// is live for every direct booking: server/booking-confirmation.js, 058.)
 //
 // Privacy (decided 28 Sep 2026): only a salted hash of the device fingerprint,
 // the IP address cut to its /24 (IPv6: /48) and the phone's country calling
 // code are stored, and they are deleted after 30 days (the reason values on a
 // flag are blanked at the same time).
-import { randomBytes } from "node:crypto";
 import { pool, withTransaction } from "./db/index.js";
-import { BRAND } from "./brand.js";
 import { CatalogueError } from "./catalogue.js";
-import { departureFor } from "./pay-at-goahead.js";
 import { refreshStatus } from "./departure-status.js";
 import { deviceHash, ipPrefix, phoneCountryCode } from "./booking-signals.js";
 
@@ -31,15 +22,10 @@ export { deviceHash, ipPrefix, phoneCountryCode };
 export const CLUSTER_MIN = 3;
 export const CLUSTER_WINDOW_HOURS = 6;
 export const SIGNAL_RETENTION_DAYS = 30;
-export const CONFIRM_REMINDER_HOURS = 24;
 const HOUR = 3600000;
 const DAY = 24 * HOUR;
 
 const inTx = (db, fn) => (db === pool ? withTransaction(fn) : fn(db));
-const site = () => String(process.env.APP_URL || BRAND.url || "").replace(/\/$/, "");
-export const confirmUrl = (token) => `${site()}/confirm-email/${encodeURIComponent(token)}`;
-const dateLabel = (d) => new Intl.DateTimeFormat("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric", timeZone: "UTC" })
-  .format(new Date(`${String(d).slice(0, 10)}T12:00:00Z`));
 
 // Whether migration 057 is applied. Asked before any query that needs it, so
 // a missing table never aborts the surrounding transaction.
@@ -55,12 +41,16 @@ const KINDS = [
   { key: "phone_cc", kind: "phone_cc", show: (v) => v },
 ];
 
-// Inside the booking's transaction: what the booking came with.
-export async function recordSignals(c, { pledgeId, departureId, seats, device, ip, phone }) {
+// Inside the booking's transaction: what the booking came with, already
+// reduced (reduceSignals). `at`: when the form was submitted, for a booking
+// made later from the email link (058), so the 6-hour window is the form's.
+export async function recordSignals(c, { pledgeId, departureId, seats, signals, at = null }) {
+  if (!signals) return;
   await c.query(
-    `INSERT INTO booking_signals (pledge_id, departure_id, seats, device_hash, ip_prefix, phone_cc) VALUES ($1, $2, $3, $4, $5, $6)
+    `INSERT INTO booking_signals (pledge_id, departure_id, seats, device_hash, ip_prefix, phone_cc, created_at)
+     VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7::timestamptz, now()))
      ON CONFLICT (pledge_id) DO NOTHING`,
-    [pledgeId, departureId, seats, deviceHash(device || {}), ipPrefix(ip), phoneCountryCode(phone)]);
+    [pledgeId, departureId, seats, signals.deviceHash || null, signals.ipPrefix || null, signals.phoneCc || null, at]);
 }
 
 // After a booking: does it complete a cluster? Flags it (or grows the open
@@ -98,85 +88,6 @@ export async function detectCluster(c, { pledgeId }) {
   return (await c.query(
     "INSERT INTO booking_flags (departure_id, pledge_ids, reasons) VALUES ($1, $2, $3) RETURNING *",
     [me.departure_id, members, JSON.stringify(reasons)])).rows[0];
-}
-
-// ---------------------------------------------------------------- email
-// At booking, before the booking is written: the confirmation token, when this
-// booking must confirm its email. Only a direct booking on a catalog departure
-// still before GoAhead; after it the date is decided and payment is asked at
-// once. The token is written with the booking, before its date's status is
-// recomputed, so an unconfirmed seat never moves the date to GoAhead.
-export async function emailConfirmationToken(c, { catalogueDepartureId, email }) {
-  if (!email) return null;
-  const dep = (await c.query("SELECT status FROM catalogue_departures WHERE id = $1", [catalogueDepartureId])).rows[0];
-  if (dep?.status !== "open") return null;
-  return randomBytes(18).toString("base64url");
-}
-
-// The link in the email. Idempotent: a second click answers the same. The
-// date's status is recomputed, since this seat may complete its minimum.
-export async function confirmEmail(db, { token }) {
-  if (!(await integrityAvailable(db))) throw new CatalogueError(404, "This link isn't valid.");
-  return inTx(db, async (c) => {
-    const found = (await c.query("SELECT id, departure_id FROM pledges WHERE email_confirm_token = $1", [String(token || "")])).rows[0];
-    if (!found) throw new CatalogueError(404, "This link isn't valid.");
-    // The date first, then the booking: the order every booking write takes.
-    await c.query("SELECT id FROM departures WHERE id = $1 FOR UPDATE", [found.departure_id]);
-    const p = (await c.query("SELECT id, booking_code, status, email_confirmed_at FROM pledges WHERE id = $1 FOR UPDATE", [found.id])).rows[0];
-    if (p.status === "cancelled") return { code: p.booking_code, state: "cancelled", departureId: Number(found.departure_id) };
-    if (p.email_confirmed_at) return { code: p.booking_code, state: "already", departureId: Number(found.departure_id) };
-    await c.query("UPDATE pledges SET email_confirmed_at = now() WHERE id = $1", [p.id]);
-    await refreshStatus(c, found.departure_id);
-    return { code: p.booking_code, state: "confirmed", departureId: Number(found.departure_id) };
-  });
-}
-
-// Every 15 minutes, before the manifest freezes: the 24-hour reminder, and
-// the release at the cut-off.
-export async function runIntegrityTick({ db = pool, now = Date.now(), send = null, log = () => {} } = {}) {
-  if (!(await integrityAvailable(db))) return { skipped: "migration 057 not applied" };
-  const r = await db.query(
-    `SELECT p.id, p.departure_id, p.customers, p.customer_email, p.seats, p.booking_code, p.email_confirm_token, p.email_reminded_at, p.created_at,
-            cd.id AS catalogue_departure_id
-       FROM pledges p JOIN catalogue_departures cd ON cd.legacy_departure_id = p.departure_id
-      WHERE p.email_confirm_token IS NOT NULL AND p.email_confirmed_at IS NULL AND p.status <> 'cancelled'
-        AND NOT EXISTS (SELECT 1 FROM payment_requests q WHERE q.pledge_id = p.id)
-      ORDER BY p.created_at, p.id`);
-  let reminded = 0;
-  let released = 0;
-  for (const p of r.rows) {
-    const dep = await departureFor(db, { id: Number(p.catalogue_departure_id) });
-    if (!dep) continue;
-    const mail = { to: p.customer_email, name: p.customers, route: dep.product.title, dateLabel: dateLabel(dep.date), seats: Number(p.seats), bookingCode: p.booking_code };
-    if (Number.isFinite(dep.cutoffAt) && now >= dep.cutoffAt) {
-      const done = await inTx(db, async (c) => {
-        await c.query("SELECT id FROM departures WHERE id = $1 FOR UPDATE", [p.departure_id]);
-        const u = await c.query(
-          `UPDATE pledges SET status = 'cancelled', cancelled_at = now(), cancelled_reason = 'email_unconfirmed'
-            WHERE id = $1 AND status <> 'cancelled' AND email_confirmed_at IS NULL`, [p.id]);
-        if (u.rowCount) await refreshStatus(c, p.departure_id);
-        return u.rowCount;
-      });
-      if (!done) continue;
-      released += 1;
-      log(`integrity: released unconfirmed booking ${p.booking_code} at the cut-off`);
-      if (send && p.customer_email) {
-        const { bookingEmailConfirmEmail } = await import("./email.js");
-        await send(bookingEmailConfirmEmail({ ...mail, url: site(), stage: "released" }));
-      }
-      continue;
-    }
-    if (!p.email_reminded_at && now - new Date(p.created_at).getTime() >= CONFIRM_REMINDER_HOURS * HOUR) {
-      const u = await db.query("UPDATE pledges SET email_reminded_at = now() WHERE id = $1 AND email_reminded_at IS NULL", [p.id]);
-      if (!u.rowCount) continue;
-      reminded += 1;
-      if (send && p.customer_email) {
-        const { bookingEmailConfirmEmail } = await import("./email.js");
-        await send(bookingEmailConfirmEmail({ ...mail, url: confirmUrl(p.email_confirm_token), stage: "reminder" }));
-      }
-    }
-  }
-  return { emailReminders: reminded, unconfirmedReleased: released };
 }
 
 // Daily: signals older than 30 days are deleted, and the values on older flags

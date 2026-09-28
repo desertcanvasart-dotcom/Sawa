@@ -43,3 +43,8 @@ export function phoneCountryCode(phone) {
   return `+${d.slice(0, 3)}`;
 }
 
+
+// The three, reduced, from a booking request. Nothing raw is kept.
+export function reduceSignals({ ip, phone, device } = {}, salt) {
+  return { deviceHash: deviceHash(device || {}, salt), ipPrefix: ipPrefix(ip), phoneCc: phoneCountryCode(phone) };
+}

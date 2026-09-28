@@ -66,6 +66,7 @@ const MIGRATIONS = [
   { name: "055_departure_merges", file: "schema_055_departure_merges.sql" },
   { name: "056_booking_parties", file: "schema_056_booking_parties.sql" },
   { name: "057_booking_integrity", file: "schema_057_booking_integrity.sql" },
+  { name: "058_booking_confirmations", file: "schema_058_booking_confirmations.sql" },
 ];
 
 async function main() {

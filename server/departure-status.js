@@ -13,8 +13,8 @@ import { recordGoAhead } from "./goahead-alert.js";
 import { catalogueV2Enabled } from "./features.js";
 
 // Reservation integrity (catalogue_v2, migration 057): on a catalog departure,
-// only seats that count towards GoAhead move it there. An unconfirmed email or
-// a cluster staff marked suspicious holds its seats without counting.
+// only seats that count towards GoAhead move it there. A cluster staff marked
+// suspicious holds its seats without counting.
 // Null when that doesn't apply (flag off, not applied, a legacy departure).
 async function countedSeats(c, departureId) {
   if (!catalogueV2Enabled()) return null;

@@ -1,8 +1,5 @@
 // Reservation integrity (migration 057, catalogue_v2) on a real Postgres:
 //
-//   email       a direct booking's seats count towards GoAhead only once its
-//               email is confirmed; held meanwhile; reminded at 24 hours;
-//               released at the cut-off still unconfirmed
 //   clusters    three single-seat reservations on one date within 6 hours
 //               sharing a device, a network or a phone country code are
 //               flagged with the reason, never refused; staff mark them a
@@ -11,6 +8,8 @@
 //   privacy     only hashes, /24 prefixes and country codes are stored,
 //               deleted at 30 days; the privacy page's sentence goes out
 //               with the flag
+//   058         a booking made from the email-confirmation link carries the
+//               signals of the form it was submitted from
 //   flag off    nothing of the above
 //
 // Skips without TEST_DATABASE_URL (see test-db.js). Tests run in order.
@@ -21,6 +20,7 @@ import { createServer } from "node:http";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import pg from "pg";
+import { createHash } from "node:crypto";
 import { freshDatabase, dropDatabase, testDbSkip } from "./test-db.js";
 import { shiftDate } from "../shared/catalogue.js";
 
@@ -36,7 +36,7 @@ const USERS = {
 
 let db, dbUrl, fakeAuth, servers = [];
 let cat, ops, rates, asg, pag, integ;
-let productId, X, on, off;
+let productId, X, on, off, held;
 const deps = {};
 const s = {};
 const today = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(new Date());
@@ -133,6 +133,7 @@ before(async () => {
   [deps.a, deps.b, deps.c, deps.d, deps.e] = r.rows.map((x) => ({ id: Number(x.id), legacy: Number(x.legacy_departure_id) }));
   on = await startServer({ FEATURES: "catalogue_v2", TRUST_PROXY: "1" });
   off = await startServer({ FEATURES: "", TRUST_PROXY: "1" });
+  held = await startServer({ FEATURES: "catalogue_v2", TRUST_PROXY: "1", BOOKING_EMAIL_CONFIRMATION: "on" });
 });
 
 after(async () => {
@@ -165,68 +166,8 @@ async function book(base, dep, seats, { ip = null, ua = "Mozilla/5.0 (Test)", hi
 const post = (base, path, body, headers = json) => fetch(`${base}${path}`, { method: "POST", headers, body: JSON.stringify(body || {}) })
   .then(async (r) => ({ status: r.status, body: await r.json().catch(() => ({})) }));
 const get = (base, path, headers = {}) => fetch(`${base}${path}`, { headers }).then(async (r) => ({ status: r.status, body: await r.json().catch(() => ({})) }));
-const tokenOf = async (id) => (await one("SELECT email_confirm_token FROM pledges WHERE id = $1", [id])).email_confirm_token;
 const seatsOf = (dep) => one("SELECT s.seats_sold, g.goahead_seats FROM catalogue_departure_seats s JOIN catalogue_departure_goahead g USING (catalogue_departure_id) WHERE s.catalogue_departure_id = $1", [dep.id]);
 const legacyStatus = async (dep) => (await one("SELECT status FROM departures WHERE id = $1", [dep.legacy])).status;
-
-test("a direct booking holds its seats at once but counts towards GoAhead only once its email is confirmed", { skip }, async () => {
-  const a1 = await book(on, deps.a, 2);
-  const a2 = await book(on, deps.a, 2);
-  assert.equal(a1.status, 201, JSON.stringify(a1.body));
-  assert.equal(a2.status, 201);
-  assert.deepEqual(await seatsOf(deps.a), { seats_sold: 4, goahead_seats: 0 }, "both held, neither counts");
-  assert.equal(await legacyStatus(deps.a), "open", "four seats sold, the minimum, but the date hasn't reached GoAhead");
-  await cat.runStatusJob({});
-  assert.equal((await one("SELECT status FROM catalogue_departures WHERE id = $1", [deps.a.id])).status, "open");
-  const mail = await one("SELECT * FROM email_log WHERE kind = 'booking_email_confirm' ORDER BY id LIMIT 1");
-  assert.ok(mail, "the confirmation email is sent");
-  const page = await get(on, `/api/public/bookings/${a1.code}`);
-  assert.equal(page.body.booking.emailUnconfirmed, true);
-  assert.ok(await one("SELECT 1 FROM audit_log WHERE action = 'booking.create' AND entity_id = $1 AND detail->>'emailConfirmation' = 'required'", [a1.id]));
-
-  const t1 = await tokenOf(a1.id);
-  const c1 = await post(on, `/api/public/email-confirmations/${t1}`);
-  assert.deepEqual([c1.status, c1.body.state, c1.body.code], [200, "confirmed", a1.code]);
-  assert.equal((await post(on, `/api/public/email-confirmations/${t1}`)).body.state, "already", "a second click answers the same");
-  assert.deepEqual(await seatsOf(deps.a), { seats_sold: 4, goahead_seats: 2 });
-  assert.equal(await legacyStatus(deps.a), "open");
-  await post(on, `/api/public/email-confirmations/${await tokenOf(a2.id)}`);
-  assert.equal(await legacyStatus(deps.a), "minimum_reached", "the confirmation that completes the minimum moves the date");
-  await cat.runStatusJob({});
-  assert.equal((await one("SELECT status FROM catalogue_departures WHERE id = $1", [deps.a.id])).status, "go_ahead");
-  assert.equal((await get(on, `/api/public/bookings/${a1.code}`)).body.booking.emailUnconfirmed, false);
-  assert.ok(await one("SELECT 1 FROM audit_log WHERE action = 'booking.email_confirmed'"));
-  assert.equal((await post(on, "/api/public/email-confirmations/nope")).status, 404);
-
-  // After GoAhead the date is decided: a new booking isn't asked to confirm.
-  const late = await book(on, deps.a, 1);
-  assert.equal(await tokenOf(late.id), null);
-});
-
-test("an unconfirmed booking is reminded once at 24 hours and released at the cut-off; a confirmed one stays", { skip }, async () => {
-  const b1 = await book(on, deps.b, 1);
-  const b2 = await book(on, deps.b, 1);
-  await post(on, `/api/public/email-confirmations/${await tokenOf(b2.id)}`);
-  const sent = [];
-  const send = async (m) => { sent.push(m); return { ok: true }; };
-  const made = new Date((await one("SELECT created_at FROM pledges WHERE id = $1", [b1.id])).created_at).getTime();
-  assert.deepEqual(await integ.runIntegrityTick({ db, now: made + 23 * HOUR, send }), { emailReminders: 0, unconfirmedReleased: 0 });
-  assert.deepEqual(await integ.runIntegrityTick({ db, now: made + 24 * HOUR, send }), { emailReminders: 1, unconfirmedReleased: 0 });
-  assert.equal(sent.length, 1);
-  assert.equal(sent[0].kind, "booking_email_confirm_reminder");
-  assert.match(sent[0].text, /\/confirm-email\//);
-  assert.equal((await integ.runIntegrityTick({ db, now: made + 30 * HOUR, send })).emailReminders, 0, "once");
-
-  const dep = await pag.departureFor(db, { id: deps.b.id });
-  const out = await integ.runIntegrityTick({ db, now: dep.cutoffAt, send });
-  assert.equal(out.unconfirmedReleased, 1);
-  const p1 = await one("SELECT status, cancelled_reason FROM pledges WHERE id = $1", [b1.id]);
-  assert.deepEqual([p1.status, p1.cancelled_reason], ["cancelled", "email_unconfirmed"]);
-  assert.equal((await one("SELECT status FROM pledges WHERE id = $1", [b2.id])).status, "confirmed", "the confirmed booking stays");
-  assert.equal(sent.at(-1).kind, "booking_email_released");
-  assert.match(sent.at(-1).text, /Nothing was charged/);
-  assert.equal((await integ.runIntegrityTick({ db, now: dep.cutoffAt + HOUR, send })).unconfirmedReleased, 0);
-});
 
 test("three single-seat reservations within 6 hours sharing a device, network or phone country are flagged with the reason, never refused", { skip }, async () => {
   const same = { ip: "41.33.12.7", ua: "Mozilla/5.0 (Bot)", hint: "800|600", phone: "+201001112233" };
@@ -241,6 +182,7 @@ test("three single-seat reservations within 6 hours sharing a device, network or
   assert.deepEqual(flag.reasons.map((r) => [r.kind, r.value, r.count]).sort(),
     [["device", "same device", 3], ["ip", "41.33.12.0/24", 3], ["phone_cc", "+20", 3]].sort());
   assert.ok(await one("SELECT 1 FROM audit_log WHERE action = 'booking_flag.raise' AND entity_id = $1", [String(flag.id)]));
+  assert.equal(await legacyStatus(deps.c), "open", "three seats, under the minimum of four");
 
   // What is stored: a hash, a /24 and a country code; never the raw values.
   const sig = await one("SELECT * FROM booking_signals WHERE pledge_id = $1", [c1.id]);
@@ -248,13 +190,6 @@ test("three single-seat reservations within 6 hours sharing a device, network or
   assert.deepEqual([sig.ip_prefix, sig.phone_cc], ["41.33.12.0/24", "+20"]);
   assert.ok(!JSON.stringify(sig).includes("41.33.12.7") && !JSON.stringify(sig).includes("1001112233"));
 
-  // A fourth joins the open flag; a two-seat booking is never part of one.
-  const c4 = await book(on, deps.c, 1, { ...same, ip: "41.33.12.201", phone: "+201001112266" });
-  const two = await book(on, deps.c, 2, same);
-  const grown = await one("SELECT * FROM booking_flags WHERE id = $1", [flag.id]);
-  assert.equal(grown.pledge_ids.length, 4);
-  assert.ok(grown.pledge_ids.includes(c4.id) && !grown.pledge_ids.includes(two.id));
-  assert.equal((await db.query("SELECT 1 FROM booking_flags")).rowCount, 1);
   // Outside 6 hours they don't cluster.
   const far = { ip: "196.1.1.1", ua: "Mozilla/5.0 (Slow)", hint: "1|1", phone: "+33612345678" };
   await book(on, deps.d, 1, far);
@@ -262,13 +197,13 @@ test("three single-seat reservations within 6 hours sharing a device, network or
   await db.query("UPDATE booking_signals SET created_at = created_at - interval '7 hours' WHERE departure_id = $1", [deps.d.legacy]);
   await book(on, deps.d, 1, { ...far, phone: "+33612345670" });
   assert.equal((await db.query("SELECT 1 FROM booking_flags WHERE departure_id = $1", [deps.d.legacy])).rowCount, 0);
-  s.c = { flagId: flag.id, ids: [c1.id, c2.id, c3.id, c4.id], two: two.id };
+  s.c = { flagId: flag.id, same };
 
   // The admin calendar shows the flag with its reasons.
   const cal = await get(on, "/api/admin/catalogue/departures", staff);
   const row = cal.body.departures.find((d) => d.id === deps.c.id);
   assert.equal(row.flags.length, 1);
-  assert.deepEqual([row.flags[0].state, row.flags[0].seats, row.flags[0].bookings.length], ["open", 4, 4]);
+  assert.deepEqual([row.flags[0].state, row.flags[0].seats, row.flags[0].bookings.length], ["open", 3, 3]);
   assert.equal(row.flags[0].reasons.length, 3);
 });
 
@@ -276,8 +211,13 @@ test("staff mark a cluster suspicious (held from GoAhead until reviewed), clear 
   assert.equal((await post(on, `/api/admin/booking-flags/${s.c.flagId}/decision`, { decision: "suspicious" })).status, 401, "staff only");
   const sus = await post(on, `/api/admin/booking-flags/${s.c.flagId}/decision`, { decision: "suspicious" }, staff);
   assert.equal(sus.status, 200, JSON.stringify(sus.body));
-  // Every email confirmed: 6 seats would count, but the 4 held don't.
-  for (const id of [...s.c.ids, s.c.two]) await post(on, `/api/public/email-confirmations/${await tokenOf(id)}`);
+  // A fourth joins the suspicious flag and is held too; a two-seat booking is
+  // never part of one. Six seats sold would reach the minimum; two count.
+  const c4 = await book(on, deps.c, 1, { ...s.c.same, ip: "41.33.12.201", phone: "+201001112266" });
+  const two = await book(on, deps.c, 2, s.c.same);
+  const grown = await one("SELECT * FROM booking_flags WHERE id = $1", [s.c.flagId]);
+  assert.equal(grown.pledge_ids.length, 4);
+  assert.ok(grown.pledge_ids.includes(c4.id) && !grown.pledge_ids.includes(two.id));
   assert.deepEqual(await seatsOf(deps.c), { seats_sold: 6, goahead_seats: 2 });
   assert.equal(await legacyStatus(deps.c), "open");
   await cat.runStatusJob({});
@@ -308,6 +248,25 @@ test("staff mark a cluster suspicious (held from GoAhead until reviewed), clear 
   assert.deepEqual(after.body.departures.find((d) => d.id === deps.e.id).flags, [], "a decided flag leaves the calendar");
 });
 
+test("a booking made from the email-confirmation link (058) carries the signals of the form it was submitted from", { skip }, async () => {
+  const b = await book(held, deps.b, 1, { ip: "81.10.20.30", ua: "Mozilla/5.0 (Held)", hint: "1|2", phone: "+447700900111" });
+  assert.equal(b.status, 202, JSON.stringify(b.body));
+  const code = b.body.booking.bookingCode;
+  const hold = await one("SELECT * FROM booking_confirmations WHERE booking_code = $1", [code]);
+  assert.deepEqual([hold.payload.signals.ipPrefix, hold.payload.signals.phoneCc], ["81.10.20.0/24", "+44"], "reduced when held");
+  assert.ok(!JSON.stringify(hold.payload).includes("81.10.20.30"), "the raw address isn't kept");
+  assert.equal((await db.query("SELECT 1 FROM booking_signals s JOIN pledges p ON p.id = s.pledge_id WHERE p.booking_code = $1", [code])).rowCount, 0);
+  await db.query("UPDATE booking_confirmations SET created_at = now() - interval '2 hours' WHERE id = $1", [hold.id]);
+  const token = `tok-${code}`;
+  await db.query("UPDATE booking_confirmations SET token_hash = $2 WHERE id = $1", [hold.id, createHash("sha256").update(token).digest("hex")]);
+  // Confirmed from another network: the signals are still the form's.
+  const r = await fetch(`${held}/api/public/booking-confirmations/${token}`, { method: "POST", headers: { ...json, "X-Forwarded-For": "5.5.5.5" } });
+  assert.equal((await r.json()).state, "confirmed");
+  const sig = await one("SELECT s.* FROM booking_signals s JOIN pledges p ON p.id = s.pledge_id WHERE p.booking_code = $1", [code]);
+  assert.deepEqual([sig.ip_prefix, sig.phone_cc], ["81.10.20.0/24", "+44"]);
+  assert.ok(Date.now() - new Date(sig.created_at).getTime() > 1.5 * HOUR, "dated when the form was submitted");
+});
+
 test("signals are deleted after 30 days and the values on older flags blanked", { skip }, async () => {
   await db.query("UPDATE booking_signals SET created_at = now() - interval '31 days' WHERE departure_id = $1", [deps.c.legacy]);
   await db.query("UPDATE booking_flags SET created_at = now() - interval '31 days' WHERE departure_id = $1", [deps.c.legacy]);
@@ -328,15 +287,12 @@ test("the privacy page's sentence goes out with the flag", { skip }, async () =>
   assert.doesNotMatch(without, /catalogue_v2/);
 });
 
-test("with catalogue_v2 off: no confirmation, no signals, no flags, and the routes answer 404", { skip }, async () => {
+test("with catalogue_v2 off: no signals, no flags, and the routes answer 404", { skip }, async () => {
   const before = Number((await one("SELECT COUNT(*) AS n FROM booking_signals")).n);
   const res = await fetch(`${off}/api/public/departures/${deps.d.legacy}/bookings`, {
     method: "POST", headers: json, body: JSON.stringify({ customerName: "Flag Off", customerEmail: "off@example.test", seats: 1 }),
   });
   assert.equal(res.status, 201, await res.text());
-  const made = await one("SELECT id, email_confirm_token FROM pledges WHERE customer_email = 'off@example.test'");
-  assert.equal(made.email_confirm_token, null);
   assert.equal(Number((await one("SELECT COUNT(*) AS n FROM booking_signals")).n), before);
-  assert.equal((await post(off, "/api/public/email-confirmations/x")).status, 404);
   assert.equal((await post(off, `/api/admin/booking-flags/${s.c.flagId}/decision`, { decision: "cleared" }, staff)).status, 404);
 });

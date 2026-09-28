@@ -408,8 +408,8 @@ export async function runStatusJob({ db = pool, now = Date.now(), log = () => {}
     }
 
     const instants = departureInstants(dep, product, timingFor(world, product, dep.specVersionId));
-    // Reservation integrity (catalogue_v2): an unconfirmed or held seat is
-    // sold but doesn't count towards the minimum.
+    // Reservation integrity (catalogue_v2): a seat held as suspicious is sold
+    // but doesn't count towards the minimum.
     const counted = catalogueV2Enabled() && dep.goaheadSeats !== undefined ? dep.goaheadSeats : dep.seatsSold;
     const next = nextStatus({ ...dep, seatsSold: counted, ...instants, goaheadMin: product.goaheadMin, type: product.type }, now);
     if (next.status === dep.status) continue;

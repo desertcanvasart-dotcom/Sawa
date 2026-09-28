@@ -16,7 +16,7 @@ const directive = (h, name) => h.split(";").map((s) => s.trim()).find((s) => s.s
 
 test("scripts and connections only from this site and the services it uses", () => {
   const h = cspHeader("/");
-  assert.match(directive(h, "script-src"), /^script-src 'self' 'unsafe-inline' https:\/\/www\.googletagmanager\.com( 'sha256-[A-Za-z0-9+/]+=*')+$/,
+  assert.match(directive(h, "script-src"), /^script-src 'self' 'unsafe-inline' https:\/\/www\.googletagmanager\.com https:\/\/challenges\.cloudflare\.com( 'sha256-[A-Za-z0-9+/]+=*')+$/,
     "sources, then only hashes: a browser that reads hashes ignores 'unsafe-inline'");
   assert.match(directive(h, "connect-src"), /^connect-src 'self' https:\/\/\*\.supabase\.co /);
   assert.equal(directive(h, "object-src"), "object-src 'none'");
@@ -27,7 +27,8 @@ test("scripts and connections only from this site and the services it uses", () 
 });
 
 test("the portal may frame the site's own widget, and nothing else new", () => {
-  assert.equal(directive(cspHeader("/portal/widget"), "frame-src"), "frame-src 'self' https://*.supabase.co https://www.googletagmanager.com");
+  // Cloudflare Turnstile's challenge frame, on the booking forms.
+  assert.equal(directive(cspHeader("/portal/widget"), "frame-src"), "frame-src 'self' https://*.supabase.co https://www.googletagmanager.com https://challenges.cloudflare.com");
 });
 
 test("only the widget may be framed by other sites", () => {
