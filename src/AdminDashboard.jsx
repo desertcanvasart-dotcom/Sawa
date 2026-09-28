@@ -1728,7 +1728,7 @@ function DeparturesSection({ data, reload, flash }) {
     m.set(k, (m.get(k) || 0) + 1);
     return m;
   }, new Map());
-  const isDup = (d) => LIVE_DEP.includes(d.status) && !d.mergedIntoId && (dupCount.get(`${d.tourProductId}|${depDay(d)}`) || 0) > 1;
+  const isDup = (d) => LIVE_DEP.includes(d.status) && !d.mergedIntoId && !depDeparted(d) && (dupCount.get(`${d.tourProductId}|${depDay(d)}`) || 0) > 1;
   const loadMerges = () => apiFetch("/admin/departure-merges").then((r) => (r.ok ? r.json() : { merges: [] })).then((j) => setMerges(j.merges || [])).catch(() => setMerges([]));
   useEffect(() => { loadMerges(); }, []);
   async function revert(m) {
@@ -1737,12 +1737,16 @@ function DeparturesSection({ data, reload, flash }) {
     const j = await r.json().catch(() => ({}));
     if (r.ok) { flash("Merge undone."); reload(); loadMerges(); } else flash(j.error || "Could not undo the merge.");
   }
+  const today = cairoToday();
   const shown = deps.filter((d) => {
     if (filter === "all") return true;
-    if (filter === "ready") return d.status !== "supplier_confirmed" && d.status !== "cancelled" && seatsOf(d) >= (d.minSeats || 4);
+    // Open, Ready and Confirmed are dates still to run; the rest are under Past / closed.
+    if (filter === "past") return d.status !== "cancelled" && (depClosed(d) || depDeparted(d, today));
+    if (filter === "cancelled") return d.status === "cancelled";
+    if (depInactive(d, today)) return false;
+    if (filter === "ready") return d.status !== "supplier_confirmed" && seatsOf(d) >= (d.minSeats || 4);
     if (filter === "confirmed") return d.status === "supplier_confirmed";
     if (filter === "open") return d.status === "open" || (d.status === "minimum_reached" && seatsOf(d) < (d.minSeats || 4));
-    if (filter === "cancelled") return d.status === "cancelled";
     return true;
   });
 
@@ -1768,9 +1772,9 @@ function DeparturesSection({ data, reload, flash }) {
         } />
 
       <div className="seg">
-        {["all", "open", "ready", "confirmed", "cancelled"].map((k) => (
+        {[["all", "All"], ["open", "Open"], ["ready", "Ready"], ["confirmed", "Confirmed"], ["past", "Past / closed"], ["cancelled", "Cancelled"]].map(([k, label]) => (
           <button key={k} className={filter === k ? "active" : ""} onClick={() => setFilter(k)}>
-            {k[0].toUpperCase() + k.slice(1)}
+            {label}
           </button>
         ))}
       </div>
@@ -1781,19 +1785,20 @@ function DeparturesSection({ data, reload, flash }) {
           <tbody>
             {shown.map((d) => {
               const seats = seatsOf(d), min = d.minSeats || 4, ready = seats >= min;
+              const inactive = depInactive(d, today);
               return (
-                <tr key={d.id} className={d.status === "cancelled" ? "row-archived" : ""}>
+                <tr key={d.id} className={inactive ? "row-archived" : ""}>
                   <td><strong>{isPkg(d) && <span className="tag tag-pkg">Pkg</span>} {d.route}</strong><div className="sub">{(d.cities || [d.city]).join(" → ")}</div></td>
                   <td>{fmtDate(d.startDate || d.date)}{d.endDate ? ` – ${fmtDate(d.endDate)}` : ""}</td>
                   <td><span className={ready ? "seats ok" : "seats"}>{seats}/{min}</span><span className="sub">max {d.maxSeats}</span></td>
                   <td>{money(d.livePrice)}</td>
                   <td><StatusTag d={d} />{d.mergedIntoId ? <div className="sub">merged into {d.mergedIntoId}</div> : isDup(d) ? <div><span className="tag tag-warn">Same day listed twice</span></div> : null}</td>
                   <td className="row-actions">
-                    {isDup(d) && <button className="btn-mini" onClick={() => setMerging(d)}>Merge into…</button>}
-                    {d.status !== "supplier_confirmed" && d.status !== "cancelled" && !d.mergedIntoId && (
+                    {isDup(d) && !inactive && <button className="btn-mini" onClick={() => setMerging(d)}>Merge into…</button>}
+                    {d.status !== "supplier_confirmed" && !inactive && (
                       <button className="btn-mini" disabled={!ready} onClick={() => confirm(d)}><Check size={14} />Confirm</button>
                     )}
-                    {d.status !== "cancelled" && <button className="icon-btn danger" title="Cancel departure" onClick={() => cancel(d)}><X size={15} /></button>}
+                    {!inactive && <button className="icon-btn danger" title="Cancel departure" onClick={() => cancel(d)}><X size={15} /></button>}
                   </td>
                 </tr>
               );
@@ -1907,9 +1912,28 @@ function MergeModal({ from, deps, onClose, onDone }) {
   );
 }
 
+// A date whose last day is before today (Cairo) has left: nothing about it can
+// be confirmed or canceled from this list any more.
+function depDeparted(d, today = cairoToday()) {
+  const end = String(d.endDate || d.startDate || d.date || "").slice(0, 10);
+  return !!end && end < today;
+}
+// Closed covers a date merged into another (055 closes the duplicate): the
+// travelers were moved, so it is not forming.
+function depClosed(d) {
+  return d.status === "closed" || !!d.mergedIntoId;
+}
+// No Confirm/Cancel: canceled, closed or merged, or already departed.
+function depInactive(d, today) {
+  return d.status === "cancelled" || depClosed(d) || depDeparted(d, today);
+}
+
 function StatusTag({ d }) {
   const seats = seatsOf(d), min = d.minSeats || 4;
   if (d.status === "cancelled") return <span className="tag tag-off">Canceled</span>;
+  if (d.mergedIntoId) return <span className="tag tag-off">Merged</span>;
+  if (d.status === "closed") return <span className="tag tag-off">Closed</span>;
+  if (depDeparted(d)) return <span className="tag tag-off">{d.status === "supplier_confirmed" ? "Departed · GoAhead" : "Departed"}</span>;
   if (d.status === "supplier_confirmed") return <span className="tag tag-on">GoAhead</span>;
   if (seats >= min) return <span className="tag tag-ready">Ready</span>;
   return <span className="tag">Forming</span>;
@@ -2263,7 +2287,7 @@ function BookingsSection({ data, stats, reload, flash = () => {}, isSuperAdmin =
                       <td>{b.source === "public" || b.source === "public_request" ? <span className="tag">Direct</span> : b.agency}</td>
                       <td>{b.seats}</td>
                       <td>{money(b.bookingTotal)}</td>
-                      <td>{money(b.balanceDue)}{b.balanceDueDate && <div className="sub">by {fmtDate(b.balanceDueDate)}</div>}</td>
+                      <td>{money(b.balanceDue)}{b.balanceDueDate && <div className="sub">by {fmtDate(b.balanceDueDate)}</div>}{b.status !== "paid" && b.status !== "cancelled" && Number(b.depositDue) > 0 && <div className="sub">+ {money(b.depositDue)} deposit unpaid</div>}</td>
                       <td><span className={`tag ${bookingStatusTag(b.status)}`}>{bookingStatusLabel(b)}</span></td>
                     </tr>
                   ))}
