@@ -7071,3 +7071,12 @@ button:disabled {
 .bk-bulk .bk-danger { color: #a3261b; border-color: #e3b3ad; }
 .dash-table .bk-check { width: 36px; text-align: center; }
 .dash-table tr.selected td { background: var(--sand-50); }
+
+/* Departures & bookings (28 Sep 2026): a date opens to its travelers. */
+.depbook-tabs { margin: 0 0 14px; }
+.dash-table td.dep-toggle { width: 22px; padding-right: 0; color: var(--d-ink-faint, #8a8a8a); }
+.dep-toggle svg { transition: transform .15s ease; }
+.dep-toggle svg.rot90 { transform: rotate(90deg); }
+.dash-table tr.dep-travelers > td { background: #faf8f4; padding-top: 4px; padding-bottom: 12px; }
+.dash-table.sub-table { background: #fff; border: 1px solid #ece5d8; border-radius: 10px; }
+.dash-table.sub-table th { font-size: 11px; }
