@@ -63,6 +63,7 @@ const MIGRATIONS = [
   { name: "052_pay_safeguards_terms", file: "schema_052_pay_safeguards_terms.sql" },
   { name: "053_seller_disclosure", file: "schema_053_seller_disclosure.sql" },
   { name: "054_partner_listing", file: "schema_054_partner_listing.sql" },
+  { name: "055_departure_merges", file: "schema_055_departure_merges.sql" },
 ];
 
 async function main() {
