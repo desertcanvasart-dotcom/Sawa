@@ -787,7 +787,7 @@ function RequestDateForm({ product, reference, agencyName, canJoin, onJoin, onDo
       if (pkg) { body.roomingType = rooming; body.accommodationTier = tierId; }
       const r = await apiFetch("/agency/departure-requests", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       const j = await r.json();
-      if (r.status === 409 && j.code === "near_matches") { setMatches(j.nearMatches || []); return; }
+      if (r.status === 409 && j.code === "near_matches") { setMatches(Object.assign(j.nearMatches || [], { exactDay: !!j.exactDay })); return; }
       if (!r.ok) throw new Error(j.error || "Could not send the request.");
       setSent({ date, seats: body.seats });
       setMatches(null);
@@ -828,8 +828,8 @@ function RequestDateForm({ product, reference, agencyName, canJoin, onJoin, onDo
 
       {matches && (
         <div className="tb-matches" role="alert">
-          <strong>Dates are already forming near {fmtDate(date)}.</strong>
-          <p>Joining one fills it faster than starting another:</p>
+          <strong>{matches.exactDay ? `This tour already has a date on ${fmtDate(date)}.` : `Dates are already forming near ${fmtDate(date)}.`}</strong>
+          <p>{matches.exactDay ? "Book your travelers on it: a second date for the same day isn't made." : "Joining one fills it faster than starting another:"}</p>
           <ul>
             {matches.map((m) => (
               <li key={m.id}>
@@ -838,7 +838,7 @@ function RequestDateForm({ product, reference, agencyName, canJoin, onJoin, onDo
               </li>
             ))}
           </ul>
-          <button type="button" className="link-btn" disabled={busy} onClick={(e) => submit(e, { ignoreMatches: true })}>No — request {fmtDate(date)} anyway</button>
+          {!matches.exactDay && <button type="button" className="link-btn" disabled={busy} onClick={(e) => submit(e, { ignoreMatches: true })}>No — request {fmtDate(date)} anyway</button>}
         </div>
       )}
 

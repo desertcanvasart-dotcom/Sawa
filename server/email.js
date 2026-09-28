@@ -1287,3 +1287,22 @@ export function payAtGoAheadSellerChangedEmail({
     { eyebrow: "Your booking", preheader: `${seller} now operates your ${title}.` });
   return { to, subject, html, text: lines.join("\n\n"), kind: "pay_at_goahead_seller_changed" };
 }
+
+// Duplicate dates of one tour were merged (055): the traveler's booking moved
+// to the date kept. Same tour, same day, nothing else changes.
+export function departureMergedEmail({ to, name, route, dateLabel, bookingCode, url }) {
+  const subject = `Your ${route} on ${dateLabel}: nothing changes`;
+  const lines = [
+    `Hello${name ? ` ${name}` : ""},`,
+    `We've tidied up our listings: your ${route} on ${dateLabel} was listed more than once, and we've joined the listings into one. It's the same tour on the same day, and your booking${bookingCode ? ` (${bookingCode})` : ""} is unchanged: the same seats, the same price, nothing to do.`,
+    `You'll now see everyone traveling that day together. Your booking page, from now on:`,
+    url,
+  ];
+  const html = shell(subject,
+    `<p style="margin:0 0 16px">${esc(lines[0])}</p>
+     <p style="margin:0 0 16px">${esc(lines[1])}</p>
+     <p style="margin:0 0 20px">${esc(lines[2])}</p>
+     ${button(url, "See your booking")}`,
+    { eyebrow: "Your booking", preheader: `Same tour, same day: your booking is unchanged.` });
+  return { to, subject, html, text: lines.join("\n\n"), kind: "departure_merged" };
+}

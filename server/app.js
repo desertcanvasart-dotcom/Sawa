@@ -46,6 +46,7 @@ import { catalogueContextFor, assertBookingComplete } from "./booking-details.js
 import { recordAgencyBooking } from "./commissions.js";
 import { fixBookingTerms } from "./cancellation-tiers.js";
 import { recordTermsVersion } from "./terms-versions.js";
+import { mergePreview, mergeDepartures, revertMerge, mergedTarget, listMerges, emailMovedTravelers, MergeError } from "./departure-merge.js";
 import {
   requestPayment, departureFor, seatsHeldForWaitlist, bookingPayView, acceptBookingTerms, joinWaitlist, acceptSellerChangeOffer,
   waitlistOffer, claimWaitlistOffer, completeWaitlistOffer,
@@ -58,7 +59,7 @@ import { catalogueV2Enabled } from "./features.js";
 import { publicCatalogue, overlayBootstrap, clearPublicCatalogue } from "./catalogue-public.js";
 import {
   sendEmail, sendEmailInBackground, emailMode,
-  inviteEmail, bookingConfirmationEmail, payAtGoAheadBookingEmail, goAheadEmail, cancellationEmail, bookingEmailConfirmEmail,
+  inviteEmail, bookingConfirmationEmail, departureMergedEmail, payAtGoAheadBookingEmail, goAheadEmail, cancellationEmail, bookingEmailConfirmEmail,
   listingApprovedEmail, listingRejectedEmail,
   departureRequestReceivedEmail, departureRequestApprovedEmail, departureRequestDeclinedEmail,
   operatorApplicationEmail, operatorApplicationReceiptEmail, operatorApplicationText,
@@ -263,7 +264,7 @@ function viewPledges(pledges, user) {
 // review trail (why a listing was rejected, and when). Hiding them in the page
 // did nothing; they were in the JSON and in the HTML the server inlines.
 const STAFF_ONLY_PRODUCT_FIELDS = ["baseCost", "submittedAt", "reviewedAt", "rejectionReason"];
-const STAFF_ONLY_DEPARTURE_FIELDS = ["baseCost"];
+const STAFF_ONLY_DEPARTURE_FIELDS = ["baseCost", "operatorAgencyOverride", "mergedIntoId"];
 // Ops notes on a date reach signed-in agencies (their tour preview falls back
 // to them) but never an anonymous visitor.
 const SIGNED_IN_DEPARTURE_FIELDS = ["notes"];
@@ -779,6 +780,8 @@ async function buildBootstrap(user) {
     // keep the full list: their dashboards count past departures as history.
     departures: departures.rows
       .filter((d) => canSeeAll || d.status !== "pending_review")
+      // 055: a merged date is gone from the site; its links redirect to the kept one.
+      .filter((d) => canSeeAll || d.merged_into_id == null)
       .map((d) => mapDeparture(d, byDep.get(d.id) || []))
       .filter((d) => user || !departureStarted(d))
       // productsById so each departure's confirm deadline honours any override
@@ -844,6 +847,17 @@ app.post("/api/admin/departures", requireAuth, requireRole("super_admin", "ops_s
   const result = await withTransaction(async (c) => {
     const product = await loadProduct(c, body.tourProductId);
     if (!product) throw new AppError(404, "Tour product not found.");
+
+    // Same tour, same day (27 Sep 2026): a booking that arrives by phone joins
+    // the date that already exists; a second listing of one day is refused.
+    const sameDay = (await c.query(
+      `SELECT id, status FROM departures
+        WHERE tour_product_id = $1 AND COALESCE(start_date, date) = $2::date
+          AND status IN ('pending_review', 'open', 'minimum_reached', 'supplier_confirmed')
+        ORDER BY id LIMIT 1`, [product.id, body.startDate || body.date])).rows[0];
+    if (sameDay) {
+      throw Object.assign(new AppError(409, `This tour already has a date on that day (departure ${sameDay.id}, ${sameDay.status.replace(/_/g, " ")}). Add the booking to it instead.`), { existingDepartureId: Number(sameDay.id) });
+    }
 
     // Operating days. The traveller-request route has refused an ineligible day
     // since it was written; THIS path never checked, so a Tuesday sailing could
@@ -1284,6 +1298,7 @@ app.post("/api/departures/:id/pledges", requireAuth, requireRole("agency_owner",
     const dep = await loadDeparture(c, Number(req.params.id), { forUpdate: true });
     if (!dep) throw new AppError(404, "Departure not found.");
     if (dep.status === "cancelled") throw new AppError(409, "This departure has been canceled.");
+    if (dep.mergedIntoId) throw Object.assign(new AppError(409, "This date was joined with another listing of the same tour and day. Book on that one."), { mergedIntoId: dep.mergedIntoId });
     if (dep.status === "pending_review") throw new AppError(409, "This departure is awaiting review and not open for bookings yet.");
     if (seatsTotal(dep.pledges) + await heldForWaitlist(c, dep.id) + input.seats > dep.maxSeats) {
       throw new AppError(409, "This pledge exceeds capacity.");
@@ -1414,6 +1429,7 @@ app.post("/api/public/departures/:id/bookings", writeLimiter, h(async (req, res)
       throw new AppError(409, "This phone number already holds a booking on this date. Check your email for its booking code, or reply to it to change the number of seats.");
     }
     if (dep.status === "cancelled") throw new AppError(409, "This departure has been canceled.");
+    if (dep.mergedIntoId) throw Object.assign(new AppError(409, "This date was joined with another listing of the same tour and day. Book on that one."), { mergedIntoId: dep.mergedIntoId });
     if (dep.status === "pending_review") throw new AppError(409, "This departure is awaiting review and not open for bookings yet.");
     // Group bookings: a booking made through a "Join my group" link joins that
     // party. The party is locked first, so two members joining at once can't
@@ -2078,14 +2094,63 @@ async function createDateRequest(input, req, requester = {}) {
       throw new AppError(422, `${product.title} takes up to ${capacity} traveler${capacity === 1 ? "" : "s"} per date.`);
     }
 
-    // Join-first rule: surface open departures for the same tour within the
-    // match window. The client must explicitly reject them (ignoreMatches)
-    // before a new departure is created — fragmenting demand kills pooling.
+    // Same tour, same day (27 Sep 2026): eleven travelers of one group booked
+    // the same tour and day separately, and each made a new date — the check
+    // below saw only `open` dates, so a date still in review (or already going
+    // ahead) was invisible, and the traveler could always press "request my
+    // date anyway". An exact day now joins the date that exists, whatever the
+    // traveler chose:
+    //   - a date awaiting review: this booking joins the request (pending, like
+    //     the first), and is approved or declined with it;
+    //   - an open or going-ahead date: 409 exact_day, and the client books it
+    //     through the normal booking route (its checks, pricing and emails).
+    // Only when every such date is full is a second date for that day made.
+    const merged = (await c.query("SELECT to_regclass('public.departure_merges') AS t")).rows[0].t != null;
+    const sameDay = await c.query(
+      `SELECT id, status FROM departures
+        WHERE tour_product_id = $1 AND COALESCE(start_date, date) = $2::date
+          AND status IN ('pending_review', 'open', 'minimum_reached', 'supplier_confirmed')
+          ${merged ? "AND merged_into_id IS NULL" : ""}
+        ORDER BY (status = 'pending_review'), id FOR UPDATE`,
+      [product.id, input.date]);
+    const bookable = [];
+    for (const row of sameDay.rows) {
+      const d = await loadDeparture(c, row.id);
+      if (!d || seatsTotal(d.pledges) + input.seats > d.maxSeats) continue;
+      if (d.status === "pending_review") {
+        if (bookable.length) continue;
+        const joinPricing = computePledgePricing(d, product, input);
+        const joinRef = requester.agencyId ? "" : cleanRefCode(input.refCode);
+        if (joinRef) await c.query("INSERT INTO referrals (code) VALUES ($1) ON CONFLICT (code) DO NOTHING", [joinRef]);
+        const joinId = newPledgeId(d.id);
+        await insertPledge(c, d.id, {
+          id: joinId,
+          agencyId: requester.agencyId || "direct_customer",
+          agency: requester.agencyName || "Direct traveler",
+          seats: input.seats, customers: input.customerName, customerEmail: input.customerEmail,
+          customerPhone: input.customerPhone || null,
+          source: requester.agencyId ? "agency_request" : "public_request",
+          createdByUserId: requester.userId || null,
+          bookingCode: await uniqueBookingCode(c), refCode: joinRef || null,
+          ...joinPricing, status: "pending",
+        });
+        const joined = await loadDeparture(c, d.id);
+        const savedJoin = await c.query(`SELECT * FROM pledges WHERE id=$1`, [joinId]);
+        return { departure: joined, booking: mapPledge(savedJoin.rows[0]), joinedRequest: true };
+      }
+      bookable.push(presentDeparture(d, req.user));
+    }
+    if (bookable.length) return { exactDay: bookable };
+
+    // Join-first rule: surface bookable departures for the same tour within
+    // the match window. The client may reject these near dates (ignoreMatches)
+    // — a different day is a real choice — but never the same day (above).
     if (!input.ignoreMatches) {
       const win = await c.query(
         `SELECT id FROM departures
-         WHERE tour_product_id = $1 AND status = 'open'
+         WHERE tour_product_id = $1 AND status IN ('open', 'minimum_reached', 'supplier_confirmed')
            AND COALESCE(start_date, date) BETWEEN ($2::date - $3::int) AND ($2::date + $3::int)
+           ${merged ? "AND merged_into_id IS NULL" : ""}
          ORDER BY COALESCE(start_date, date) ASC`,
         [product.id, input.date, NEAR_MATCH_WINDOW_DAYS]
       );
@@ -2169,6 +2234,14 @@ app.post("/api/public/departure-requests", writeLimiter, h(async (req, res) => {
   input.customerPhone = verifiedPhoneFor(input);
   const result = await createDateRequest(input, req);
 
+  if (result.exactDay) {
+    // The same tour already runs that day: book on it, never beside it.
+    return res.status(409).json({
+      error: "This tour already has a group on that day. Join it instead.",
+      code: "near_matches", exactDay: true,
+      nearMatches: result.exactDay,
+    });
+  }
   if (result.nearMatches) {
     // Not an error for the traveler — the UI offers these to join instead.
     return res.status(409).json({
@@ -2179,8 +2252,8 @@ app.post("/api/public/departure-requests", writeLimiter, h(async (req, res) => {
   }
 
   await logAudit(req, {
-    action: "departure_request.create", entity: "departure", entityId: String(result.departure.id),
-    detail: { tourProductId: input.tourProductId, date: input.date, seats: input.seats, source: "public" },
+    action: result.joinedRequest ? "departure_request.join" : "departure_request.create", entity: "departure", entityId: String(result.departure.id),
+    detail: { tourProductId: input.tourProductId, date: input.date, seats: input.seats, source: "public", joinedExisting: !!result.joinedRequest },
   });
   const d = result.departure;
   sendEmailInBackground(departureRequestReceivedEmail({
@@ -2204,6 +2277,13 @@ app.post("/api/agency/departure-requests", requireAuth, requireRole("agency_owne
   const input = { ...body, customerName: (body.customers || "Customer details pending").trim() };
   const result = await createDateRequest(input, req, { agencyId: agency.id, agencyName: agency.name, userId: req.user.id });
 
+  if (result.exactDay) {
+    return res.status(409).json({
+      error: "This tour already has a date on that day. Join it instead.",
+      code: "near_matches", exactDay: true,
+      nearMatches: result.exactDay,
+    });
+  }
   if (result.nearMatches) {
     return res.status(409).json({
       error: "Open departures already exist near this date.",
@@ -2212,8 +2292,8 @@ app.post("/api/agency/departure-requests", requireAuth, requireRole("agency_owne
     });
   }
   await logAudit(req, {
-    action: "departure_request.create", entity: "departure", entityId: String(result.departure.id),
-    detail: { tourProductId: input.tourProductId, date: input.date, seats: input.seats, source: "agency", agencyId: agency.id },
+    action: result.joinedRequest ? "departure_request.join" : "departure_request.create", entity: "departure", entityId: String(result.departure.id),
+    detail: { tourProductId: input.tourProductId, date: input.date, seats: input.seats, source: "agency", agencyId: agency.id, joinedExisting: !!result.joinedRequest },
   });
   // Sawa's own customers are emailed by Sawa; an operator's customer is the
   // operator's to tell. Ops is told either way.
@@ -4129,6 +4209,65 @@ app.patch("/api/admin/tour-products/:id", requireAuth, requireRole("super_admin"
 }));
 
 // Admin: cancel a departure (platform staff).
+// ---- Merging duplicate dates (055) ------------------------------------------
+// The other live dates of the same tour and day: the candidates to merge.
+app.get("/api/admin/departures/:id/duplicates", requireAuth, requireRole("super_admin", "ops_staff"), h(async (req, res) => {
+  const id = Number(req.params.id);
+  const d = (await pool.query("SELECT id, tour_product_id, date, start_date FROM departures WHERE id = $1", [id])).rows[0];
+  if (!d) throw new AppError(404, "Departure not found.");
+  const rows = (await pool.query(
+    `SELECT d.id, d.route, d.status, d.max_seats,
+            COALESCE((SELECT SUM(p.seats) FROM pledges p WHERE p.departure_id = d.id AND p.status <> 'cancelled'), 0)::int AS seats
+       FROM departures d
+      WHERE d.tour_product_id = $1 AND COALESCE(d.start_date, d.date) = COALESCE($2::date, $3::date) AND d.id <> $4
+        AND d.status IN ('pending_review', 'open', 'minimum_reached', 'supplier_confirmed')
+        ${await departureMergesReady() ? "AND d.merged_into_id IS NULL" : ""}
+      ORDER BY d.id`, [d.tour_product_id, d.start_date, d.date, id])).rows;
+  res.json({ departureId: id, duplicates: rows.map((r) => ({ id: Number(r.id), route: r.route, status: r.status, seats: r.seats, maxSeats: Number(r.max_seats) })) });
+}));
+
+const mergeSchema = z.object({
+  keptId: z.coerce.number().int().positive(),
+  duplicateIds: z.array(z.coerce.number().int().positive()).min(1, "Choose at least one duplicate.").max(50),
+  operatorAgencyId: z.string().trim().max(120).nullable().optional(),
+});
+async function departureMergesReady() {
+  return (await pool.query("SELECT to_regclass('public.departure_merges') AS t")).rows[0].t != null;
+}
+const mergesNotOn = () => Object.assign(new AppError(503, "Merging isn't switched on yet: migration 055 has not been applied to this database."), { expose: true });
+const mergeFail = (e) => { if (e instanceof MergeError) throw new AppError(e.status, e.message); throw e; };
+
+app.post("/api/admin/departures/merge/preview", requireAuth, requireRole("super_admin", "ops_staff"), h(async (req, res) => {
+  if (!(await departureMergesReady())) throw mergesNotOn();
+  const input = parse(mergeSchema, req.body);
+  res.json(await mergePreview(pool, input).catch(mergeFail));
+}));
+
+app.post("/api/admin/departures/merge", requireAuth, requireRole("super_admin", "ops_staff"), h(async (req, res) => {
+  if (!(await departureMergesReady())) throw mergesNotOn();
+  const input = parse(mergeSchema, req.body);
+  const out = await mergeDepartures({ ...input, by: req.user.email || null }).catch(mergeFail);
+  // One email to each moved traveler: same tour, same day, booking unchanged.
+  // Awaited, because the count reached is recorded on the merge.
+  const emailed = await emailMovedTravelers(pool, out, { send: sendEmail, template: departureMergedEmail, base: process.env.APP_URL || BRAND.url });
+  await logAudit(req, { action: "departure.merge", entity: "departure", entityId: String(out.merge.keptId), detail: {
+    mergeId: out.merge.id, kept: out.merge.keptId, merged: out.merge.duplicateIds, movedBookings: out.merge.movedBookings,
+    bookings: out.moved.map((p) => ({ id: p.id, from: p.from })), operatorAgencyId: out.merge.operatorAgencyId, emailed,
+  } });
+  res.status(201).json({ merge: { ...out.merge, emailed }, kept: out.kept });
+}));
+
+app.get("/api/admin/departure-merges", requireAuth, requireRole("super_admin", "ops_staff"), h(async (_req, res) => {
+  res.json({ merges: await listMerges(pool) });
+}));
+
+app.post("/api/admin/departure-merges/:id/revert", requireAuth, requireRole("super_admin", "ops_staff"), h(async (req, res) => {
+  if (!(await departureMergesReady())) throw mergesNotOn();
+  const out = await revertMerge({ mergeId: Number(req.params.id), by: req.user.email || null }).catch(mergeFail);
+  await logAudit(req, { action: "departure.merge_reverted", entity: "departure", entityId: String(out.keptId), detail: out });
+  res.json(out);
+}));
+
 app.post("/api/admin/departures/:id/cancel", requireAuth, requireRole("super_admin", "ops_staff"), h(async (req, res) => {
   // PP5 / PP2.2 — the same helper the job uses. The date and its pledges change
   // together, and the recipient list is read BEFORE either.
@@ -4335,6 +4474,18 @@ if (existsSync(siteDir)) {
   // extensions:["html"] serves /operators from operators.html, etc.
   app.use(express.static(siteDir, { extensions: ["html"] }));
 }
+
+// 055: a link to a merged date (/tour/<slug>?date=<id>) goes to the date kept.
+app.use(h(async (req, res, next) => {
+  if (req.method !== "GET" || !/^\/(tour|package)\/[^/]+\/?$/.test(req.path)) return next();
+  const want = Number(req.query?.date);
+  if (!Number.isInteger(want) || want <= 0) return next();
+  const target = await mergedTarget(pool, want);
+  if (!target || target === want) return next();
+  const q = new URLSearchParams(req.query);
+  q.set("date", String(target));
+  return res.redirect(301, `${req.path}?${q.toString()}`);
+}));
 
 // catalogue_v2: a retired product's old URL goes to the product it was merged
 // into (301); a product whose catalogue title changed its slug moves to the new

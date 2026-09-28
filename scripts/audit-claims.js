@@ -461,6 +461,8 @@ export async function auditEmailTemplates() {
     "payAtGoAheadBookingEmail", "payAtGoAheadEscalationEmail", "payAtGoAheadApologyEmail",
     // The receipt Sawa issues as collecting agent, listed the day it was written.
     "payAtGoAheadReceiptEmail", "payAtGoAheadSellerChangedEmail",
+    // Duplicate dates merged (055).
+    "departureMergedEmail",
     // Reservation integrity (catalogue_v2), listed the day it was written.
     "bookingEmailConfirmEmail"];
   // Where one shared fixture can't serve: `kind` means a different thing to
