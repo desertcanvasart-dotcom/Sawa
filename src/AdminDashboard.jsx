@@ -1873,6 +1873,7 @@ function MergeModal({ from, deps, onClose, onDone }) {
           {preview && (
             <>
               {preview.problems.length > 0 && <div className="auth-error" role="alert">{preview.problems.map((p, i) => <div key={i}>{p}</div>)}</div>}
+              {preview.intoCatalogue && <p className="field-hint">Departure {keptId} is a catalog date: its operator runs the merged date, and the moved bookings become catalog bookings (pay at GoAhead, the cancellation tiers in force; asked to pay now if the date is already going ahead).</p>}
               <p>After the merge: <b>{preview.seatsAfter}</b> travelers on departure {keptId} (max {preview.kept?.maxSeats}){preview.goAheadAfter ? ", at or above its GoAhead minimum" : `, ${Math.max(0, (preview.kept?.minSeats || 4) - preview.seatsAfter)} short of GoAhead`}.</p>
               {preview.needsOperatorChoice && (
                 <label className="field"><span>These dates are run by different agencies. Who runs the kept date?</span>

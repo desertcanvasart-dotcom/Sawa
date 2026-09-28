@@ -15,13 +15,24 @@
 // email. Everything is in the audit log, and a merge can be reverted within
 // 24 hours.
 //
-// Refused: a different product or day; a catalog departure (settled by the
-// rate card, one per product and day by construction); a canceled or closed
+// Refused: a different product or day; a catalog departure as a duplicate
+// (the catalog makes one per product and day, so it is always the one kept);
+// a canceled or closed
 // date; a result bigger than the kept date's maximum group; a duplicate
 // already settled (its cost sheet final or a loss decided) or paid out (in a
 // Wednesday run); a kept date already paid out. When the duplicates are run
 // by different agencies, admin chooses who runs the kept date, and sees the
 // effect on the old profit split first.
+//
+// Into a catalog date (28 Sep 2026): a legacy date made beside a catalog date
+// for the same tour and day (a request before the join-first fix, or by
+// hand) merges into the catalog one. With catalogue_v2 on, each moved booking
+// becomes a catalog booking there: pay at GoAhead, the cancellation tiers and
+// Terms in force, the published EUR rate and its tier price, an agency's pool
+// row; if the date is already going ahead with its operator confirmed, the
+// payment request goes out. The operator is the catalog date's; the old
+// profit split doesn't apply. Refused while a moved booking has a payment
+// under the old flow. The undo is refused once a payment has been requested.
 import { pool, withDepartureWrites } from "./db/index.js";
 import { mapPledge } from "./db/mappers.js";
 import { refreshStatus } from "./departure-status.js";
@@ -30,6 +41,7 @@ import { paymentsByPledge } from "./payments.js";
 import { directOperatorId } from "./domain.js";
 import { DIRECT_BOOKINGS_OPERATOR } from "./brand.js";
 import { operatorOf, loadOperatorInputs } from "./operator-lookup.js";
+import { catalogueV2Enabled } from "./features.js";
 
 export const REVERT_WINDOW_HOURS = 24;
 const LIVE_STATES = ["pending_review", "open", "minimum_reached", "supplier_confirmed"];
@@ -54,13 +66,17 @@ async function readDepartures(db, ids, { lock = false } = {}) {
     "SELECT * FROM pledges WHERE departure_id = ANY($1::int[]) ORDER BY created_at ASC, id ASC", [ids])).rows;
   const catalogue = (await has(db, "catalogue_departures")) ? new Set((await db.query(
     "SELECT legacy_departure_id AS id FROM catalogue_departures WHERE legacy_departure_id = ANY($1::int[])", [ids])).rows.map((r) => Number(r.id))) : new Set();
-  const settled = new Set(), paidOut = new Set();
+  const settled = new Set(), paidOut = new Set(), legacyPaid = new Set();
+  if (await has(db, "booking_payments")) {
+    for (const r of (await db.query(
+      "SELECT DISTINCT b.pledge_id FROM booking_payments b JOIN pledges p ON p.id = b.pledge_id WHERE p.departure_id = ANY($1::int[]) AND b.state = 'paid'", [ids])).rows) legacyPaid.add(r.pledge_id);
+  }
   if (await has(db, "departure_settlements")) {
     for (const r of (await db.query(
       "SELECT departure_id FROM departure_settlements WHERE departure_id = ANY($1::int[]) AND (costs_final_at IS NOT NULL OR loss_decided_at IS NOT NULL)", [ids])).rows) settled.add(Number(r.departure_id));
     for (const r of (await db.query("SELECT DISTINCT departure_id FROM payout_lines WHERE departure_id = ANY($1::int[])", [ids])).rows) paidOut.add(Number(r.departure_id));
   }
-  return { rows, byId, pledges, catalogue, settled, paidOut };
+  return { rows, byId, pledges, catalogue, settled, paidOut, legacyPaid };
 }
 
 const liveSeats = (pledges, depId) => pledges
@@ -88,7 +104,15 @@ function problemsOf({ keptId, duplicateIds, data }) {
     const d = data.byId.get(id);
     if (!d) continue;
     if (!LIVE_STATES.includes(d.status)) out.push(`Departure ${id} is ${d.status}; only live dates can be merged.`);
-    if (data.catalogue.has(id)) out.push(`Departure ${id} is a catalog departure; the catalog makes one per tour and day, so it is never merged here.`);
+  }
+  for (const id of duplicateIds) {
+    if (data.catalogue.has(id)) out.push(`Departure ${id} is a catalog departure: keep it, and merge the other date into it.`);
+  }
+  if (data.catalogue.has(keptId)) {
+    const paid = data.pledges.filter((p) => duplicateIds.includes(Number(p.departure_id)) && p.status !== "cancelled" && data.legacyPaid.has(p.id));
+    if (paid.length) {
+      out.push(`Booking${paid.length === 1 ? "" : "s"} ${paid.map((p) => p.booking_code || p.id).join(", ")} already paid under the old deposit flow, and a catalog date asks for payment at GoAhead. Refund ${paid.length === 1 ? "it" : "them"} first, or keep the old date.`);
+    }
   }
   if (data.paidOut.has(keptId)) out.push(`The departure to keep (${keptId}) has already been paid out in a Wednesday run.`);
   // A date still awaiting review can be kept only if every duplicate is too:
@@ -163,9 +187,11 @@ export async function mergePreview(db = pool, { keptId, duplicateIds }) {
   const problems = problemsOf({ keptId, duplicateIds, data });
   const kept = data.byId.get(keptId);
   const operators = kept ? await operatorsOf(db, ids.filter((id) => data.byId.has(id))) : [];
-  const distinct = [...new Set(operators.map((o) => o.agencyId).filter(Boolean))];
+  const intoCatalogue = data.catalogue.has(keptId);
+  const distinct = intoCatalogue ? [] : [...new Set(operators.map((o) => o.agencyId).filter(Boolean))];
   const seats = ids.reduce((n, id) => n + liveSeats(data.pledges, id), 0);
   return {
+    intoCatalogue,
     ok: problems.length === 0, problems,
     kept: kept ? { id: keptId, route: kept.route, day: day(kept), status: kept.status, minSeats: Number(kept.min_seats), maxSeats: Number(kept.max_seats) } : null,
     departures: ids.filter((id) => data.byId.has(id)).map((id) => ({
@@ -176,7 +202,7 @@ export async function mergePreview(db = pool, { keptId, duplicateIds }) {
     seatsAfter: seats,
     goAheadAfter: kept ? seats >= Math.max(1, Number(kept.min_seats) || 4) : false,
     operators, needsOperatorChoice: distinct.length > 1, operatorChoices: distinct.map((id) => ({ agencyId: id, name: operators.find((o) => o.agencyId === id)?.name || id })),
-    split: kept && !problems.length ? await splitOf(db, ids, data) : null,
+    split: kept && !problems.length && !intoCatalogue ? await splitOf(db, ids, data) : null,
   };
 }
 
@@ -191,7 +217,8 @@ export async function mergeDepartures({ keptId, duplicateIds, operatorAgencyId =
     const data = await readDepartures(c, ids, { lock: true });
     const problems = problemsOf({ keptId, duplicateIds, data });
     if (problems.length) throw new MergeError(409, problems.join(" "));
-    const operators = await operatorsOf(c, ids);
+    const intoCatalogue = data.catalogue.has(keptId);
+    const operators = intoCatalogue ? [] : await operatorsOf(c, ids);
     const distinct = [...new Set(operators.map((o) => o.agencyId).filter(Boolean))];
     if (distinct.length > 1 && !distinct.includes(operatorAgencyId)) {
       throw new MergeError(422, "These dates are run by different agencies. Choose who runs the kept date.");
@@ -212,6 +239,13 @@ export async function mergeDepartures({ keptId, duplicateIds, operatorAgencyId =
       kept: { status: kept.status, notes: kept.notes, operatorAgencyOverride: kept.operator_agency_override || null },
       duplicates: duplicateIds.map((id) => ({ id, status: data.byId.get(id).status })),
       pledges: moved.map((p) => ({ id: p.id, from: Number(p.departure_id), status: p.status })),
+      // Into a catalog date: each moved booking as it was, so the undo can restore it.
+      ...(intoCatalogue ? { intoCatalogue: true, bookings: moved.map((p) => ({
+        id: p.id, payment_mode: p.payment_mode ?? null, cancellation_tier_version_id: p.cancellation_tier_version_id ?? null,
+        terms_fixed_at: p.terms_fixed_at ?? null, terms_fixed_by: p.terms_fixed_by ?? null, traveller_terms_accepted_at: p.traveller_terms_accepted_at ?? null,
+        terms_version_id: p.terms_version_id ?? null, published_eur_rate: p.published_eur_rate ?? null,
+        price_per_person: p.price_per_person ?? null, booking_total: p.booking_total ?? null,
+      })) } : {}),
       costs: costs.map((r) => ({ id: Number(r.id), from: Number(r.departure_id) })),
       adjustments: adjustments.map((r) => ({ id: Number(r.id), from: Number(r.departure_id) })),
       held: held.map((r) => ({ id: Number(r.id), from: Number(r.departure_id) })),
@@ -229,6 +263,7 @@ export async function mergeDepartures({ keptId, duplicateIds, operatorAgencyId =
         distinct.length > 1 ? operatorAgencyId : kept.operator_agency_override || null]);
     await c.query("UPDATE departures SET status = 'closed', merged_into_id = $1 WHERE id = ANY($2::int[])", [keptId, duplicateIds]);
     await refreshStatus(c, keptId);
+    if (intoCatalogue && catalogueV2Enabled()) await makeCatalogueBookings(c, { keptId, pledges: moved.filter((p) => p.status !== "cancelled") });
     for (const id of ids) touch(id);
     const rec = (await c.query(
       `INSERT INTO departure_merges (kept_departure_id, merged_departure_ids, snapshot, operator_agency_id, moved_bookings, merged_by)
@@ -243,6 +278,29 @@ export async function mergeDepartures({ keptId, duplicateIds, operatorAgencyId =
       })),
     };
   });
+}
+
+// Into a catalog date, with catalogue_v2 on: each moved booking is made a
+// catalog booking, as the booking routes make one.
+async function makeCatalogueBookings(c, { keptId, pledges }) {
+  if (!pledges.length) return;
+  const cat = (await c.query("SELECT id FROM catalogue_departures WHERE legacy_departure_id = $1", [keptId])).rows[0];
+  const { fixBookingTerms } = await import("./cancellation-tiers.js");
+  const { stampBookingPrice } = await import("./pool-settlement.js");
+  const { recordAgencyBooking } = await import("./commissions.js");
+  const { departureFor, requestPayment } = await import("./pay-at-goahead.js");
+  for (const p of pledges) {
+    if (p.payment_mode === "pay_at_goahead") continue;
+    const agencyBooking = p.agency_id && p.agency_id !== "direct_customer";
+    await fixBookingTerms(c, { pledgeId: p.id, by: agencyBooking ? "agency" : "traveller" });
+    await stampBookingPrice(c, { pledgeId: p.id });
+    if (agencyBooking) {
+      const agency = (await c.query("SELECT * FROM agencies WHERE id = $1", [p.agency_id])).rows[0];
+      if (agency) await recordAgencyBooking(c, { pledgeId: p.id, agency, catalogueDepartureId: Number(cat.id) });
+    }
+  }
+  const departure = await departureFor(c, { id: Number(cat.id) });
+  if (departure?.status === "go_ahead") for (const p of pledges) await requestPayment(c, { pledgeId: p.id, departure });
 }
 
 // Undo a merge within 24 hours: the bookings, cost lines and adjustments go
@@ -270,6 +328,21 @@ export async function revertMerge({ mergeId, by, now = Date.now() }) {
       return !now2 || Number(now2.departure_id) !== keptId;
     });
     if (stray.length) throw new MergeError(409, `Booking${stray.length === 1 ? "" : "s"} ${stray.map((p) => p.id).join(", ")} moved again since the merge, so it can't be reverted.`);
+    if (snap.intoCatalogue) {
+      const ids2 = snap.pledges.map((p) => p.id);
+      const asked = (await has(c, "payment_requests")) ? (await c.query(
+        "SELECT 1 FROM payment_requests WHERE pledge_id = ANY($1::text[]) AND state <> 'cancelled' LIMIT 1", [ids2])).rowCount : 0;
+      if (asked) throw new MergeError(409, "A moved booking has already been asked to pay on the catalog date, so the merge can't be undone. Cancel or refund it there instead.");
+      if (await has(c, "agency_commissions")) await c.query("DELETE FROM agency_commissions WHERE pledge_id = ANY($1::text[]) AND state = 'pending'", [ids2]);
+      if (await has(c, "agency_invoices")) await c.query("DELETE FROM agency_invoices WHERE pledge_id = ANY($1::text[]) AND state = 'due'", [ids2]);
+      for (const b of snap.bookings || []) {
+        const cols = Object.keys(b).filter((k) => k !== "id");
+        const present = new Set((await c.query(
+          "SELECT column_name FROM information_schema.columns WHERE table_name = 'pledges' AND column_name = ANY($1::text[])", [cols])).rows.map((r) => r.column_name));
+        const use = cols.filter((k) => present.has(k));
+        if (use.length) await c.query(`UPDATE pledges SET ${use.map((k, i) => `${k} = $${i + 2}`).join(", ")} WHERE id = $1`, [b.id, ...use.map((k) => b[k])]);
+      }
+    }
     for (const p of snap.pledges) {
       await c.query("UPDATE pledges SET departure_id = $2 WHERE id = $1", [p.id, p.from]);
       if (p.status === "pending") await c.query("UPDATE pledges SET status = 'pending' WHERE id = $1 AND status = 'confirmed'", [p.id]);
