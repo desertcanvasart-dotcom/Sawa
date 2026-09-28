@@ -47,9 +47,13 @@ export function runOperatorAssignments({ log = console.log, now, env = process.e
     const assignments = await runAssignmentTick({ log, now, send: sendEmail });
     // Model phase 3: advances priced, balances and statements after the
     // departure, statements accepted at 30 days, commissions decided.
+    // Model phase 5: the calculation at the cut-off (tier, refunds of the
+    // difference) and when the departure is over (the pool shares).
+    const { runPoolTick } = await import("../pool-settlement.js");
+    const poolTick = await runPoolTick({ log, now, env });
     const settlement = await runSettlementTick({ log, now });
     const commissions = await decideCommissions({ log, now });
-    return { payAtGoAhead, ...assignments, ...settlement, ...commissions };
+    return { payAtGoAhead, ...assignments, ...poolTick, ...settlement, ...commissions };
   }, log, env);
 }
 

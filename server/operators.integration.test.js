@@ -252,7 +252,7 @@ test("the rate card imports as drafts without its EXAMPLE rows; a version locks 
   assert.ok(imported.problems.every((p) => !/EXAMPLE/i.test(p)));
   // The card's amounts are blank, so the draft can't be published as is.
   const draft = (await rates.ratesFor(db, productId)).find((v) => v.state === "draft");
-  await assert.rejects(rates.publishRate({ productId, versionId: draft.id, by: "it" }), /Fill in every rate/);
+  await assert.rejects(rates.publishRate({ productId, versionId: draft.id, by: "it" }), /Fill in the rate card/);
 
   await rates.saveRateDraft(db, productId, { perTraveler: 40, fee4_6: 150, fee7_9: 200, fee10_12: 260 }, { by: "it" });
   const v1 = await rates.publishRate({ productId, versionId: draft.id, by: "it" });

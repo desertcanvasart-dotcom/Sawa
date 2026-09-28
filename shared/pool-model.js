@@ -1,13 +1,15 @@
 // The pricing and money model (model phase 5, final 28 Sep 2026), with no
 // database and no clock: one calculation that the rate card editor, the
 // payment requests, the operator and agency statements, the margin report and
-// Finance all call. Every amount is EGP unless the name says EUR.
+// Finance all call. Every amount is EGP unless the name says EUR. "The
+// collecting agent" is Sawa's operating company, BRAND.legalName in
+// server/brand.js (the name is written in one place: entity-disclosure.test.js).
 //
 // A rate version, per product:
 //
 //   tiers        [{ from, to, priceEgp, operatorFeePct }]   defaults 4–6, 7–9, 10–12
 //   costLines    [{ name, basis: "per_group" | "per_traveller", amounts: [one per tier] }]
-//   commissionPct   Online Era's commission, % of the selling price (default 10)
+//   commissionPct   the collecting agent's commission, % of the selling price (default 10)
 //   eurRate         the published EUR rate, EGP per EUR: only for showing and
 //                   charging travelers in EUR; nothing below is converted with it
 //
@@ -17,12 +19,12 @@
 //   revenue         headcount × the tier's EGP price (nominal, never the EUR collected)
 //   operating cost  the per-group lines + headcount × the per-traveller lines
 //   entitlement     operating cost × (1 + operator fee %): the operator's, in EGP
-//   commission      revenue × commission %: Online Era's (payment costs come out of it)
+//   commission      revenue × commission %: the collecting agent's (payment costs come out of it)
 //   pool            revenue − entitlement − commission
 //   pool/traveller  pool ÷ headcount: an agency-sold place (the operator's own
-//                   included) earns it for the agency; a direct place, for Online Era
+//                   included) earns it for the agency; a direct place, for the collecting agent
 //
-// A negative pool: no agency share, and Online Era pays the operator's
+// A negative pool: no agency share, and the collecting agent pays the operator's
 // shortfall (the Minimum Departure Guarantee). A late cancellation where a fee
 // is kept earns the agency half the pool per traveller for that place.
 
@@ -82,7 +84,7 @@ export function poolRateGaps(rate) {
   (rate.costLines || []).forEach((l) => {
     tiers.forEach((t, i) => { if (!isNum(l.amounts?.[i])) gaps.push(`${l.name || "cost line"} ${tierLabel(t)}`); });
   });
-  if (!isNum(rate.commissionPct)) gaps.push("Online Era commission");
+  if (!isNum(rate.commissionPct)) gaps.push("agent commission");
   return gaps;
 }
 
@@ -97,6 +99,31 @@ export function operatingCostFor(rate, tierIdx, headcount) {
     total += amount;
   }
   return { total: cents(total), lines };
+}
+
+// The operator's entitlement alone: operating cost × (1 + fee %). It needs
+// the cost lines and the fees, not the selling prices, so a version converted
+// from phase 2 (fee 0%) still gives the operator its rate-card amount.
+export function operatorEntitlement(rate, headcount) {
+  const n = Math.max(0, Number(headcount) || 0);
+  const tiers = rate?.tiers || [];
+  const missing = [];
+  if (!tiers.length) missing.push("tiers");
+  if (tiers.length) {
+    const idx = poolTierIndex(tiers, n);
+    const tier = tiers[idx];
+    if (!isNum(tier.operatorFeePct)) missing.push(`operator fee ${tierLabel(tier)}`);
+    for (const l of rate.costLines || []) if (!isNum(l.amounts?.[idx])) missing.push(`${l.name || "cost line"} ${tierLabel(tier)}`);
+    if (!missing.length) {
+      const cost = operatingCostFor(rate, idx, n);
+      const operatorFee = cents(cost.total * Number(tier.operatorFeePct) / 100);
+      return {
+        complete: true, missing: [], headcount: n, tier: tierLabel(tier), operatingCost: cost.total, costLines: cost.lines,
+        operatorFeePct: Number(tier.operatorFeePct), operatorFee, entitlement: cents(cost.total + operatorFee),
+      };
+    }
+  }
+  return { complete: false, missing, headcount: n, entitlement: null };
 }
 
 // The whole calculation for one departure. null amounts, with `missing`, while
@@ -132,8 +159,8 @@ export function departureEconomics(rate, headcount) {
 //   late_fee_kept   a late cancellation where a fee was kept: half of it
 //   none            nothing (canceled with no fee kept, or resold)
 // Whatever an agency doesn't get (direct places, the other half of a late
-// cancellation, places that earn nothing) stays with Online Era. A negative
-// pool pays no agency; Online Era pays the guarantee.
+// cancellation, places that earn nothing) stays with the collecting agent. A negative
+// pool pays no agency; the collecting agent pays the guarantee.
 export function poolShares(econ, places = []) {
   if (!econ?.complete) return { agencies: [], onlineEra: null, problem: "rate card incomplete" };
   const ppt = econ.pool > 0 && econ.poolPerTraveller != null ? econ.poolPerTraveller : 0;
@@ -210,7 +237,7 @@ export function poolRateError(rate) {
     if (!Array.isArray(l.amounts) || l.amounts.length !== tiers.length) return `Cost line "${l.name}" needs one amount per tier.`;
     if (l.amounts.some((a) => isNum(a) && Number(a) < 0)) return `Cost line "${l.name}": amounts can't be negative.`;
   }
-  if (isNum(rate.commissionPct) && (Number(rate.commissionPct) < 0 || Number(rate.commissionPct) >= 100)) return "The Online Era commission is a percentage from 0 to under 100.";
+  if (isNum(rate.commissionPct) && (Number(rate.commissionPct) < 0 || Number(rate.commissionPct) >= 100)) return "The agent's commission is a percentage from 0 to under 100.";
   if (rate.eurRate != null && rate.eurRate !== "" && !(Number(rate.eurRate) > 0)) return "The published EUR rate must be more than zero.";
   return null;
 }
@@ -232,7 +259,7 @@ export function tierDifferenceEur({ paidEur, seats, finalEachEur }) {
   return Math.max(0, cents(Number(paidEur) - Number(finalEachEur) * (Number(seats) || 0)));
 }
 
-// Online Era's FX line: the EUR actually collected (net of refunds), each
+// The collecting agent's FX line: the EUR actually collected (net of refunds), each
 // amount at the CBE rate on its day, less the nominal EGP revenue. It never
 // reaches an operator or an agency. A day with no rate is reported, not guessed.
 export function fxResult({ movements = [], rates = new Map(), revenueEgp }) {

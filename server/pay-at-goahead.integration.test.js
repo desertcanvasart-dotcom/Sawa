@@ -18,7 +18,7 @@
 //                the band recalculated (clause 10.1); frozen: manifest seats
 //   guarantee    below 4 still runs; 4–6 band + per traveler; the advance's
 //                excess becomes a receivable and is set off
-//   commission   void on unpaid; earned when paid and traveled
+//   pool share   void on unpaid; earned from the pool when paid and traveled (phase 5)
 //   refunds      full price × retained %, recorded with the amount
 //   flag off     legacy bookings unchanged
 //
@@ -146,9 +146,15 @@ before(async () => {
   await cat.publishDraft({ productId, versionId: Number(draft), by: "it" });
   await cat.generateDepartures({ materialise: true });
 
-  // The rate card example: 2,200 EGP per traveler; fees 1,500 / 2,000 / 2,600;
-  // commission €10 a seat.
-  const rd = await rates.saveRateDraft(db, productId, { perTraveler: 2200, fee4_6: 1500, fee7_9: 2000, fee10_12: 2600, commissionPerSeat: 10 }, { by: "it" });
+  // The rate card example: 2,200 EGP per traveler; fees 1,500 / 2,000 / 2,600
+  // (phase 5: a per-traveler and a per-group cost line, operator fee 0%). A
+  // selling price of 4,750 EGP in every tier, at 50 EGP per EUR, is the €95
+  // the bookings below are charged; the collecting agent's commission 10%.
+  await rates.saveRateDraft(db, productId, { perTraveler: 2200, fee4_6: 1500, fee7_9: 2000, fee10_12: 2600, commissionPerSeat: 10 }, { by: "it" });
+  const drafted = (await rates.ratesFor(db, productId)).find((v) => v.state === "draft");
+  const rd = await rates.saveRateDraft(db, productId, {
+    tiers: drafted.tiers.map((t) => ({ ...t, priceEgp: 4750 })), costLines: drafted.costLines, commissionPct: 10, eurRate: 50,
+  }, { by: "it" });
   await rates.publishRate({ productId, versionId: rd.id, by: "it" });
 
   X = (await ops.createOperator(db, { legalName: "Nile Tours S.A.E.", email: "dispatch@nile-tours.test" }, "it")).id;
@@ -338,7 +344,7 @@ test("at GoAhead: one full-price request per live booking, the agency-billed sea
   assert.deepEqual([ana.state, ana.payer, Number(ana.amount_eur), ana.provider, ana.reference],
     ["awaiting_link", "traveller", 190, "tab-manual", (await one("SELECT booking_code FROM pledges WHERE id = $1", [deps.a.ana])).booking_code]);
   const agency = await reqOf(deps.a.agency);
-  assert.deepEqual([agency.payer, Number(agency.amount_eur)], ["agency", 190 - 20], "the invoice amount: price less commission");
+  assert.deepEqual([agency.payer, Number(agency.amount_eur)], ["agency", 190], "phase 5: the full price; the pool share comes on the statement");
   assert.equal(await reqOf(deps.a.gone), undefined, "none for a canceled booking");
   const tasks = (await db.query("SELECT * FROM payment_tasks WHERE kind = 'create_link' AND state = 'open'")).rows;
   assert.equal(tasks.length, 3);
@@ -414,7 +420,7 @@ test("ops are warned 2 hours before a release; a payment recorded after the warn
   const m = await asg.manifestFor(db, { departureId: deps.a.id });
   assert.equal(m.seatCount, 4);
   const amount = await asg.expectedAmountFor(db, deps.a.id);
-  assert.deepEqual([amount.travelers, amount.band, amount.total], [4, "4-6", 1500 + 4 * 2200]);
+  assert.deepEqual([amount.travelers, amount.band, amount.total], [4, "4–6", 1500 + 4 * 2200]);
   // The commission on the released agency seat is void.
   await comm.decideCommissions({});
   const c = await one("SELECT * FROM agency_commissions WHERE pledge_id = $1", [deps.a.agency]);
@@ -512,10 +518,13 @@ test("the guarantee: releases take the departure to 2; it still runs; the operat
   const adv2 = await one("SELECT * FROM operator_payables WHERE assignment_id = $1 AND kind = 'advance'", [a2.id]);
   assert.equal(Number(adv2.setoff_egp), 3900);
 
-  // Commission: agency B's seats were paid and traveled — earned.
-  await comm.decideCommissions({});
+  // Phase 5: agency B's seats were paid and traveled. The pool on the two:
+  // revenue 2 × 4,750 = 9,500; entitlement 1,500 + 2 × 2,200 = 5,900 (fee 0%);
+  // commission 950; pool 2,650, 1,325 per traveler — all of it agency B's.
+  const { runPoolTick } = await import("./pool-settlement.js");
+  await runPoolTick({});
   const c = await one("SELECT * FROM agency_commissions WHERE pledge_id = $1", [d.agencyB]);
-  assert.deepEqual([c.state, Number(c.earned_eur)], ["earned", 20]);
+  assert.deepEqual([c.basis, c.state, Number(c.pool_per_traveller_egp), Number(c.earned_egp)], ["pool", "earned", 1325, 2650]);
 });
 
 // ---------------------------------------------------------------- refunds
@@ -982,39 +991,42 @@ test("reassigned after travelers paid: once the new operator acknowledges, each 
   assert.equal((await one("SELECT status FROM pledges WHERE id = $1", [q])).status, "confirmed", "the booking stands");
 });
 
-test("the settlement statement distributes the collections: gross, payment costs, agency commission, the operator entitlement and the agent's commission", { skip }, async () => {
+test("the settlement statement shows the one calculation, in EGP: revenue, costs, fee, entitlement, commission, pool and shares; FX reaches only the agent", { skip }, async () => {
   const { BRAND } = await import("./brand.js");
-  // Departure D (the guarantee test): 2 travelers paid €190, agency commission €20, entitlement 5,900 EGP.
-  // The entitlement converts at the CBE rate on each traveler's charge date
-  // (the margin report's rule): no rate for that day, no figure.
+  const { departureMoney } = await import("./pool-settlement.js");
+  // Departure D (the guarantee test): 2 travelers, both agency B's, paid €190.
   const chargeDays = (await db.query(
     "SELECT DISTINCT to_char(paid_at AT TIME ZONE 'Africa/Cairo', 'YYYY-MM-DD') AS day FROM payment_requests WHERE departure_id = $1 AND state = 'paid'", [deps.d.id])).rows.map((r) => r.day);
   assert.equal(chargeDays.length, 1);
   const [paidDay] = chargeDays;
   await db.query("DELETE FROM fx_rates WHERE day = $1", [paidDay]);
   await fin.setFxRate(db, { day: deps.d.date, egpPerEur: 50, by: "it" });
-  const none = await settle.departureDistribution(db, deps.d.id, { entitlementEgp: 5900 });
-  assert.equal(none.problem, `exchange rate missing for ${paidDay}`, "the departure date's rate isn't used");
-  assert.equal(none.agentCommissionEur, null);
+  const none = await departureMoney(db, deps.d.id);
+  assert.deepEqual(none.fx.missingRates, [paidDay], "the departure date's rate isn't used for the charge");
+  assert.equal(none.onlineEra.resultEgp, null);
   await fin.setFxRate(db, { day: paidDay, egpPerEur: 50, by: "it" });
-  const f = await settle.departureDistribution(db, deps.d.id, { entitlementEgp: 5900 });
-  assert.deepEqual([f.grossEur, f.agencyCommissionEur, f.entitlementEur, f.paymentCostsEur], [190, 20, 118, 0]);
-  assert.equal(f.agentCommissionEur, 52, "190 − 20 − 118");
-  assert.equal(f.guaranteeEur, 0);
-  assert.equal(f.lines.at(-1).label, `${BRAND.legalName} commission`);
-  // With a 3% fee and a higher rate, collections fall short: the guarantee.
+  const m = await departureMoney(db, deps.d.id);
+  assert.deepEqual([m.lines.revenue, m.lines.operatingCost, m.lines.entitlement, m.lines.commission, m.lines.pool, m.lines.poolPerTraveller],
+    [9500, 5900, 5900, 950, 2650, 1325]);
+  assert.deepEqual(m.shares.agencies.map((a) => [a.agencyId, a.amount]), [["ag_b", 2650]]);
+  assert.deepEqual([m.fx.collectedEur, m.fx.collectedEgp, m.fx.fxEgp], [190, 9500, 0]);
+  assert.equal(m.onlineEra.resultEgp, 950, "its commission; no fee setting yet");
+  // A 3% payment fee comes out of the agent's commission; a weaker rate on the
+  // charge day is the agent's FX loss. Neither moves the operator or agency B.
   await fin.setFeeSetting(db, { percent: 3, fixedEur: 0, by: "it" });
   await fin.setFxRate(db, { day: paidDay, egpPerEur: 25, by: "it" });
-  const g = await settle.departureDistribution(db, deps.d.id, { entitlementEgp: 5900 });
-  assert.deepEqual([g.paymentCostsEur, g.entitlementEur, g.agentCommissionEur, g.guaranteeEur], [5.7, 236, 0, 71.7]);
-  assert.ok(g.lines.some((l) => l.key === "minimum_departure_guarantee" && l.label === `Minimum Departure Guarantee, paid by ${BRAND.legalName}`));
+  const g = await departureMoney(db, deps.d.id);
+  assert.deepEqual([g.onlineEra.paymentCostsEgp, g.fx.fxEgp, g.onlineEra.resultEgp], [142.5, -4750, 950 - 142.5 - 4750]);
+  assert.deepEqual([g.lines.entitlement, g.shares.agencies[0].amount], [5900, 2650]);
   // The statement carries it, and so does its PDF.
   const st = await settle.statementFor(db, deps.d.id);
-  assert.ok(st.snapshot.distribution, "the statement snapshot has the distribution");
+  assert.equal(st.snapshot.distribution.model, "pool");
+  assert.deepEqual(st.snapshot.distribution.lines.find((l) => l.key === "operator_entitlement").amountEgp, 5900);
+  assert.ok(st.snapshot.distribution.lines.some((l) => l.key === "online_era_commission" && l.label === `${BRAND.legalName} commission, 10%`));
   const { statementPdf } = await import("./pdf.js");
-  const pdf = statementPdf({ ...st, snapshot: { ...st.snapshot, distribution: g } }).toString("latin1");
-  assert.match(pdf, /Distribution of collections/);
-  assert.match(pdf, /Minimum Departure Guarantee/);
+  const pdf = statementPdf(st).toString("latin1");
+  assert.ok(pdf.includes("How this departure's money is shared \\(EGP\\)"), "the pool section, in EGP");
+  assert.match(pdf, /Pool per traveler: EGP 1,325/);
   assert.ok(pdf.includes(`Sawa \\(${BRAND.legalName}\\)`), "the header names Sawa's operating company");
   assert.ok(!/Capital Travel/.test(pdf));
   await db.query("DELETE FROM finance_settings WHERE key = 'payment_fees'");

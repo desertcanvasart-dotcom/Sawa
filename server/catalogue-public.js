@@ -14,14 +14,19 @@
 //   - a retired product's old URL 301-redirects to the product it was merged
 //     into; a hidden product's URL goes to the itineraries page
 //
-// Price, photos and the overview text still come from the listing: pricing
-// belongs to a later phase, and the booking engine prices from the listing.
+// Photos and the overview text still come from the listing. The price does
+// too, until the product's rate card (phase 5, migration 061) has its tier
+// prices and a published EUR rate: from then on each tier's EGP price at that
+// rate, in whole euros ("€X per person, €Y from 7 travelers, €Z from 10"),
+// and the booking is charged the tier the departure is in (pool-settlement.js).
 import { pool } from "./db/index.js";
 import { tourPath, tourSlug } from "../shared/slug.js";
 import { activeSpec, publicDateLabel, publiclyListed } from "../shared/catalogue.js";
 import {
   mapCatalogueProduct, mapSpec, todayIn, departureInstants, isMissingCatalogueTables, goaheadColumns,
 } from "./catalogue.js";
+import { mapRate, rateInForce } from "./rates.js";
+import { tierPriceEur, tierPriceLine } from "../shared/pool-model.js";
 
 const TTL_MS = 30_000;
 let memo = { at: 0, value: undefined, pending: null };
@@ -58,6 +63,23 @@ async function build(now) {
                  WHERE cd.status IN ('open', 'go_ahead') AND cd.legacy_departure_id IS NOT NULL AND cd.date >= $1`, [today])),
   ]);
   const listingBy = new Map(listings.rows.map((t) => [t.id, t]));
+  // The rate card's prices, where they are complete (phase 5).
+  const ratesByProduct = new Map();
+  try {
+    for (const v of (await pool.query("SELECT * FROM catalogue_rate_versions WHERE state = 'published'")).rows.map(mapRate)) {
+      if (!ratesByProduct.has(v.productId)) ratesByProduct.set(v.productId, []);
+      ratesByProduct.get(v.productId).push(v);
+    }
+  } catch (e) {
+    if (e?.code !== "42P01") throw e;
+  }
+  const pricingFor = (productId) => {
+    const rate = rateInForce(ratesByProduct.get(productId) || [], today);
+    const line = rate ? tierPriceLine(rate.tiers, rate.eurRate) : null;
+    if (!line) return null;
+    const tiers = rate.tiers.map((t) => ({ from: t.from, to: t.to, eur: tierPriceEur(t.priceEgp, rate.eurRate) }));
+    return { line, tiers, rateVersion: rate.version };
+  };
   const specsBy = new Map();
   for (const s of specs.rows.map(mapSpec)) {
     if (!specsBy.has(s.productId)) specsBy.set(s.productId, []);
@@ -74,7 +96,7 @@ async function build(now) {
     // build links, so both sides agree on every URL.
     const path = listing ? tourPath({ title: product.title, city: listing.city, type: listing.type }) : null;
     const oldPath = listing ? tourPath(listing) : null;
-    return { product, listing, spec, visible, path, oldPath };
+    return { product, listing, spec, visible, path, oldPath, pricing: pricingFor(product.id) };
   });
   const byCatalogueId = new Map(all.map((e) => [e.product.id, e]));
 
@@ -145,6 +167,8 @@ function publicSpec(entry) {
     endCity: entry.product.endCity,
     specVersion: entry.spec?.version ?? null,
     needsNationality: entry.product.needsNationality === true,
+    priceLine: entry.pricing?.line || null,
+    priceTiersEur: entry.pricing?.tiers || null,
     guideLanguages: specList(c.guideLanguages),
     meals: c.meals || null,
     pickupArea: c.pickupArea || null,
@@ -155,11 +179,20 @@ function publicSpec(entry) {
   };
 }
 
+// The listing-shaped price fields for a product priced by its rate card:
+// the tiers as breakpoints (shared/pricing.js reads them), the first tier as
+// the published rate and the last as the break price.
+const pricedFields = (pricing) => (pricing ? {
+  publishedRate: pricing.tiers[0].eur, breakPrice: pricing.tiers[pricing.tiers.length - 1].eur,
+  priceTiers: pricing.tiers.map((t) => ({ seats: t.from, price: t.eur })),
+} : {});
+
 // A mapped (camelCase) product from the bootstrap, as the catalogue shows it.
 export function overlayProduct(p, entry) {
   const c = entry.spec?.content || {};
   return {
     ...p,
+    ...pricedFields(entry.pricing),
     title: entry.product.title,
     included: specList(c.inclusions),
     notIncluded: specList(c.exclusions),
@@ -176,8 +209,10 @@ export function overlayProduct(p, entry) {
 // A tour_products row (snake_case), for the server-rendered page and sitemap.
 export function overlayRow(row, entry) {
   const c = entry.spec?.content || {};
+  const priced = pricedFields(entry.pricing);
   return {
     ...row,
+    ...(entry.pricing ? { published_rate: priced.publishedRate, break_price: priced.breakPrice, price_tiers: priced.priceTiers } : {}),
     title: entry.product.title,
     included: specList(c.inclusions),
     not_included: specList(c.exclusions),
@@ -197,12 +232,14 @@ export function overlayBootstrap(payload, cat, viewer) {
     .filter((p) => cat.byListingId.has(p.id))
     .map((p) => overlayProduct(p, cat.byListingId.get(p.id)));
   const titleBy = new Map(products.map((p) => [p.id, p.title]));
+  const pricedBy = new Map([...cat.byListingId.entries()].filter(([, e]) => e.pricing).map(([id, e]) => [id, pricedFields(e.pricing)]));
   const ownBooking = (d) => viewer?.agencyId && (d.pledges || []).some((pl) => pl.agencyId === viewer.agencyId);
   const departures = (payload.departures || [])
     .filter((d) => cat.dates.has(Number(d.id)) || ownBooking(d))
     .map((d) => ({
       ...d,
       ...(titleBy.has(d.tourProductId) ? { route: titleBy.get(d.tourProductId) } : {}),
+      ...(pricedBy.get(d.tourProductId) || {}),
       operatorAgencyId: null,
       ...(cat.dates.get(Number(d.id)) || {}),
     }));

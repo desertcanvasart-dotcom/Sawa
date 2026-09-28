@@ -18,7 +18,8 @@ import { CatalogueError, todayIn, departureInstants, mapCatalogueProduct } from 
 import { rosteredOperator } from "./roster.js";
 import { rosterEligibility, addStrike, notifyOperator, operatorRecipients, documentGaps } from "./operators.js";
 import { rateById, lockRatesForSoldDepartures } from "./rates.js";
-import { ACK_HOURS, MANIFEST_ACCESS_DAYS, expectedOperatorAmount, roomsFor } from "../shared/operators.js";
+import { ACK_HOURS, MANIFEST_ACCESS_DAYS, roomsFor } from "../shared/operators.js";
+import { operatorEntitlement } from "../shared/pool-model.js";
 import { shiftDate } from "../shared/catalogue.js";
 import { groupParties, partiesAvailable } from "./booking-parties.js";
 
@@ -488,24 +489,30 @@ export async function revokeExpiredManifestAccess({ db = pool, now = Date.now() 
 }
 
 // ---------------------------------------------------------------- amount
-// The expected operator amount for a departure, from its locked rate version
-// and its manifest: live before the cut-off, frozen after. Display only.
+// The operator's amount for a departure, from its locked rate version and its
+// manifest: live before the cut-off, frozen after.
+//
+// Phase 5 (28 Sep 2026): the operator entitlement of shared/pool-model.js,
+// operating cost × (1 + the tier's operator fee), in EGP. A version converted
+// from phase 2 (migration 061: band fee per group, per-traveler amount per
+// traveler, fee 0%) pays what the old rate card paid. The advance, balance and
+// set-off rules that read this are unchanged.
 export async function expectedAmountFor(db, departureId) {
   const d = await departureContext(db, departureId);
   const rate = await rateById(db, d.rateVersionId);
-  const frozen = (await db.query("SELECT seat_count, rooms FROM catalogue_manifests WHERE departure_id = $1", [departureId])).rows[0];
-  let count;
-  let rooms;
-  if (frozen) {
-    count = Number(frozen.seat_count);
-    rooms = frozen.rooms || {};
-  } else {
-    const pledges = await livePledges(db, d.legacyDepartureId);
-    count = pledges.reduce((s, p) => s + (Number(p.seats) || 0), 0);
-    rooms = roomsFor(pledges.map((p) => ({ seats: p.seats, roomingType: p.rooming_type })));
-  }
-  const result = expectedOperatorAmount({ type: d.product.type, rate, bandCount: count, perHeadCount: count, rooms });
-  return { ...result, currency: "EGP", rateVersion: rate?.version ?? null, frozen: !!frozen, travelers: count };
+  const frozen = (await db.query("SELECT seat_count FROM catalogue_manifests WHERE departure_id = $1", [departureId])).rows[0];
+  const count = frozen
+    ? Number(frozen.seat_count)
+    : (await livePledges(db, d.legacyDepartureId)).reduce((s, p) => s + (Number(p.seats) || 0), 0);
+  const base = { currency: "EGP", rateVersion: rate?.version ?? null, frozen: !!frozen, travelers: count };
+  if (!rate) return { ...base, total: null, lines: [], missing: ["rate version"], band: null };
+  const e = operatorEntitlement(rate, count);
+  if (!e.complete) return { ...base, total: null, lines: [], missing: e.missing, band: null };
+  const lines = [
+    ...e.costLines.map((l) => ({ label: `${l.name}${l.basis === "per_traveller" ? " per traveler" : ", per group"}`, qty: l.qty, unit: l.unit, amount: l.amount })),
+    ...(e.operatorFee ? [{ label: `Operator fee, ${e.operatorFeePct}% of operating cost`, qty: 1, unit: e.operatorFee, amount: e.operatorFee }] : []),
+  ];
+  return { ...base, total: e.entitlement, lines, missing: [], band: e.tier, operatingCost: e.operatingCost, operatorFeePct: e.operatorFeePct, operatorFee: e.operatorFee };
 }
 
 // ---------------------------------------------------------------- the tick

@@ -18,7 +18,7 @@ import {
 import {
   rosterMonth, setPlanLine, buildMonth, overrideEntry, publishMonth, decideSwap, requestSwap, operatorRoster,
 } from "./roster.js";
-import { ratesFor, saveRateDraft, publishRate, importRateCard, mapRate } from "./rates.js";
+import { ratesFor, saveRateDraft, publishRate, importRateCard, mapRate, migrationReportLines } from "./rates.js";
 import { acknowledge, declineAssignment, assignByAdmin, manifestFor, expectedAmountFor, mapAssignment } from "./assignments.js";
 import { DOCUMENT_KINDS, STRIKE_KINDS, strikesInWindow, OPERATOR_STATUSES } from "../shared/operators.js";
 import { parseReceiptDataUrl } from "./receipts.js";
@@ -263,6 +263,15 @@ export function registerOperatorRoutes(app, { requireAuth, requireRole, h, logAu
     const by = new Map();
     for (const v of versions.rows.map(mapRate)) (by.get(v.productId) || by.set(v.productId, []).get(v.productId)).push(v);
     res.json({ products: products.rows.map((p) => ({ ...p, id: Number(p.id), versions: by.get(Number(p.id)) || [] })) });
+  }));
+
+  // What migration 061 converted, for the rate card screen.
+  app.get("/api/admin/rates/migration-report", ...staff, route(async (_req, res) => {
+    const rows = (await pool.query(
+      `SELECT c.catalogue_no, c.code, v.version, v.state, v.cost_lines, v.source
+         FROM catalogue_rate_versions v JOIN catalogue_products c ON c.id = v.product_id
+        ORDER BY c.catalogue_no, v.version`)).rows;
+    res.json({ lines: migrationReportLines(rows) });
   }));
 
   app.put("/api/admin/rates/:productId/draft", ...staff, route(async (req, res) => {

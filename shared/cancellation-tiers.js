@@ -127,6 +127,14 @@ export function refundFor({ paidEur, priceEur, retainedPct, resold = false }) {
 export function owedPerSeatEgp(productType, rate) {
   if (!rate) return null;
   const n = (v) => (v == null || v === "" ? null : Number(v));
+  // Phase 5 (shared/pool-model.js): the per-traveler cost lines at the first
+  // tier, plus its operator fee. Per-group lines are owed whoever cancels.
+  if (Array.isArray(rate.costLines) && rate.costLines.length && rate.tiers?.length) {
+    const per = rate.costLines.filter((l) => l.basis === "per_traveller").map((l) => n(l.amounts?.[0]));
+    if (per.some((a) => a == null)) return null;
+    const fee = n(rate.tiers[0].operatorFeePct) ?? 0;
+    return round2(per.reduce((a, b) => a + b, 0) * (1 + fee / 100));
+  }
   if (usesDeadline(productType)) {
     const land = n(rate.landPerTraveler);
     const twin = n(rate.roomTwin);

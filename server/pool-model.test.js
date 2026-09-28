@@ -1,12 +1,12 @@
 // Model phase 5 — the pricing and money model with no database, on the inputs
 // the model was agreed with (28 Sep 2026): prices 2,540 / 2,487 / 2,360 EGP;
 // transport 2,200 / 2,200 / 3,300 per group; guide 2,000 per group; entry 700
-// per traveler; operator fee 5% / 6% / 10%; Online Era 10%.
+// per traveler; operator fee 5% / 6% / 10%; the collecting agent 10%.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   departureEconomics, poolShares, poolRateTable, poolRateError, poolTierIndex, tierPriceEur, tierPriceLine,
-  bookingChargeEur, tierDifferenceEur, fxResult, poolStatementEur, convertLegacyRate, poolRateGaps, DEFAULT_POOL_TIERS,
+  bookingChargeEur, tierDifferenceEur, operatorEntitlement, fxResult, poolStatementEur, convertLegacyRate, poolRateGaps, DEFAULT_POOL_TIERS,
 } from "../shared/pool-model.js";
 
 const MODEL_RATE = {
@@ -36,7 +36,7 @@ test("8 travelers: revenue 19,896; entitlement 10,388; commission 1,989.6; pool 
     ["7–9", 19896, 9800, 588, 10388, 1989.6, 7518.4, 939.8]);
 });
 
-test("8 travelers, Agency A operating (3 places), Agency B (2), 3 direct: A 2,819.4 + entitlement, B 1,879.6, Online Era 4,809", () => {
+test("8 travelers, Agency A operating (3 places), Agency B (2), 3 direct: A 2,819.4 + entitlement, B 1,879.6, the collecting agent 4,809", () => {
   const e = departureEconomics(MODEL_RATE, 8);
   const s = poolShares(e, [
     { agencyId: "A", count: 3, outcome: "travelled" },
@@ -65,7 +65,7 @@ test("9 travelers: pool 9,014.7. 10: pool 7,710, and the editor warns that the 1
   assert.equal(t.rows.find((r) => r.headcount === 9).poolShrinks, false);
 });
 
-test("2 travelers (guaranteed, first tier): pool −1,308; Online Era pays a 1,308 guarantee; agencies get nothing", () => {
+test("2 travelers (guaranteed, first tier): pool −1,308; the collecting agent pays a 1,308 guarantee; agencies get nothing", () => {
   const e = departureEconomics(MODEL_RATE, 2);
   assert.deepEqual([e.tier, e.revenue, e.entitlement, e.commission, e.pool, e.guarantee], ["4–6", 5080, 5880, 508, -1308, 1308]);
   const s = poolShares(e, [{ agencyId: "A", count: 2, outcome: "travelled" }]);
@@ -114,7 +114,7 @@ test("tier drop: 7–9 to 10–12 after payment refunds the EUR difference; a fa
   assert.equal(tierDifferenceEur({ paidEur: paid, seats: 2, finalEachEur: dearer.eachEur }), 0);
 });
 
-test("FX: the published rate against the CBE charge-date rate changes only Online Era's FX line", () => {
+test("FX: the published rate against the CBE charge-date rate changes only the collecting agent's FX line", () => {
   const e = departureEconomics(MODEL_RATE, 8);
   const movements = [{ amountEur: 400, day: "2026-10-01" }];
   const at = (r) => fxResult({ movements, rates: new Map([["2026-10-01", r]]), revenueEgp: e.revenue });
@@ -162,4 +162,12 @@ test("migration: band fees become a per-group line, the per-traveler amount a pe
   assert.equal(cruise.costLines[1].name, "Land services");
   assert.deepEqual(cruise.costLines[2], { name: "Room or cabin (twin share)", basis: "per_traveller", amounts: [2500, 2500, 2500] });
   assert.ok(cruise.notes.some((n) => /single room 4000 not carried/.test(n)));
+});
+
+test("the entitlement needs costs and fees, not prices: a converted phase 2 version pays what the old rate card paid", () => {
+  assert.equal(operatorEntitlement(MODEL_RATE, 8).entitlement, 10388);
+  const c = convertLegacyRate({ perTraveler: 700, fee4_6: 4200, fee7_9: 4200, fee10_12: 5300 });
+  const e = operatorEntitlement(c, 8);
+  assert.deepEqual([e.complete, e.operatingCost, e.operatorFee, e.entitlement], [true, 4200 + 8 * 700, 0, 9800]);
+  assert.equal(operatorEntitlement({ ...c, costLines: [{ name: "Guide", basis: "per_group", amounts: [null, 1, 1] }] }, 5).complete, false);
 });
