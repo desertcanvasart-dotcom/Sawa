@@ -1140,11 +1140,14 @@ export function waitlistOfferEmail({ to, name, title, dateLabel, seats, expiresA
 
 // A direct booking isn't made until the traveler confirms their email
 // (migration 058). One-time link; unconfirmed after 24 hours, it lapses.
-export function confirmBookingEmail({ to, customerName, route, dateLabel, seats, bookingCode, url }) {
-  const subject = `Confirm your booking — ${route}`;
+// A date request (migration 060) is confirmed the same way; only the words differ.
+export function confirmBookingEmail({ to, customerName, route, dateLabel, seats, bookingCode, url, dateRequest = false }) {
+  const subject = `Confirm your ${dateRequest ? "date request" : "booking"} — ${route}`;
   const seatWord = seats === 1 ? "1 seat" : `${seats} seats`;
-  const text = `Hello${customerName ? ` ${customerName}` : ""}, please confirm your booking of ${seatWord} on ${route} on ${dateLabel}. `
-    + "Your booking is made when you click the link below, and it counts towards the date's GoAhead from then. "
+  const text = `Hello${customerName ? ` ${customerName}` : ""}, please confirm your ${dateRequest ? "request for" : "booking of"} ${seatWord} on ${route} on ${dateLabel}. `
+    + (dateRequest
+      ? "Your request goes to Sawa's team for review when you click the link below. "
+      : "Your booking is made when you click the link below, and it counts towards the date's GoAhead from then. ")
     + `If it isn't confirmed within 24 hours it lapses and nothing is charged. Confirm my booking: ${url}`
     + `${bookingCode ? ` Booking code: ${bookingCode}.` : ""} If you didn't make this booking, ignore this email.`;
   const html = shell(subject,

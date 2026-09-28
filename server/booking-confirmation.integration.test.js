@@ -222,6 +222,74 @@ test("a date that filled up while the booking waited is refused at confirmation;
   assert.equal((await one("SELECT status FROM booking_confirmations WHERE booking_code = $1", [b.code])).status, "refused");
 });
 
+// Migration 060: a traveler's date request is held the same way.
+const requestDate = (server, day, email, extra = {}) => post(server, "/api/public/departure-requests", {
+  tourProductId: TOUR, date: day, customerName: "Requester", customerEmail: email, customerPhone: "+201000000009", seats: 2,
+  ignoreMatches: true, turnstileToken: "good", ...extra,
+});
+const datesOn = async (day) => Number((await one("SELECT COUNT(*) AS n FROM departures WHERE tour_product_id = $1 AND date = $2", [TOUR, day])).n);
+
+test("a date request waits for its email too: no date and no booking until the link is clicked, then the request is made once", { skip }, async () => {
+  const day = cairoDay(40);
+  const r = await requestDate(main, day, "req1@example.test");
+  assert.equal(r.status, 202, JSON.stringify(r.body));
+  assert.deepEqual([r.body.confirmationRequired, r.body.booking.status], [true, "unconfirmed"]);
+  const code = r.body.booking.bookingCode;
+  assert.equal(await datesOn(day), 0, "no date is made for an unconfirmed email");
+  const held = await one("SELECT * FROM booking_confirmations WHERE booking_code = $1", [code]);
+  assert.deepEqual([held.kind, held.departure_id, held.tour_product_id, held.status], ["date_request", null, TOUR, "unconfirmed"]);
+  assert.ok(!JSON.stringify(held.payload).includes("turnstile"), "the Turnstile token isn't kept");
+  // Emails go in the background: wait for it.
+  let mail;
+  for (let i = 0; i < 60 && !(mail = await one("SELECT * FROM email_log WHERE recipient = 'req1@example.test' ORDER BY id DESC LIMIT 1")); i++) {
+    await new Promise((r) => setTimeout(r, 50));
+  }
+  assert.match(mail.subject, /^Confirm your date request/);
+  const page = await get(main, `/api/public/bookings/${code}`);
+  assert.deepEqual([page.status, page.body.booking.state, page.body.booking.tourTitle], [200, "held_unconfirmed", "Confirm Tour"]);
+
+  const link = await linkFor(code);
+  const c = await post(main, `/api/public/booking-confirmations/${link}`);
+  assert.deepEqual([c.status, c.body.state], [200, "confirmed"], JSON.stringify(c.body));
+  const p = await one("SELECT p.*, d.status AS dep_status FROM pledges p JOIN departures d ON d.id = p.departure_id WHERE p.booking_code = $1", [code]);
+  assert.deepEqual([p.dep_status, p.status, p.source, p.seats], ["pending_review", "pending", "public_request", 2]);
+  assert.ok(await one("SELECT 1 FROM audit_log WHERE action = 'departure_request.create' AND entity_id = $1", [String(p.departure_id)]));
+  let received;
+  for (let i = 0; i < 60 && !(received = await one("SELECT 1 FROM email_log WHERE recipient = 'req1@example.test' AND kind <> 'booking_confirm'")); i++) {
+    await new Promise((r) => setTimeout(r, 50));
+  }
+  assert.ok(received, "the request-received email follows");
+  assert.deepEqual([(await post(main, `/api/public/booking-confirmations/${link}`)).body.state, await datesOn(day)], ["already", 1]);
+
+  // A second traveler's request for that day joins the date in review, once confirmed.
+  const r2 = await requestDate(main, day, "req2@example.test");
+  assert.equal(r2.status, 202);
+  assert.equal(Number((await one("SELECT departure_id FROM booking_confirmations WHERE booking_code = $1", [r2.body.booking.bookingCode])).departure_id), Number(p.departure_id));
+  const c2 = await post(main, `/api/public/booking-confirmations/${await linkFor(r2.body.booking.bookingCode)}`);
+  assert.equal(c2.body.state, "confirmed");
+  assert.equal(Number((await one("SELECT departure_id FROM pledges WHERE booking_code = $1", [r2.body.booking.bookingCode])).departure_id), Number(p.departure_id));
+  assert.equal(await datesOn(day), 1);
+});
+
+test("a date request whose day got a group meanwhile is refused at confirmation, and sent to book on it; an agency's request isn't held", { skip }, async () => {
+  const day = cairoDay(41);
+  const r = await requestDate(main, day, "req3@example.test");
+  assert.equal(r.status, 202);
+  await db.query(
+    `INSERT INTO departures (id, type, tour_product_id, route, date, time, city, min_seats, max_seats, published_rate, break_price, status)
+     VALUES (910099,'day_tour',$1,'Confirm Tour',$2,'08:00','Cairo',4,12,80,64,'open')`, [TOUR, day]);
+  const c = await post(main, `/api/public/booking-confirmations/${await linkFor(r.body.booking.bookingCode)}`);
+  assert.deepEqual([c.status, c.body.state], [409, "refused"]);
+  assert.match(c.body.error, /A group formed on that day.*Nothing was charged/);
+  assert.equal(await datesOn(day), 1, "no second date");
+
+  const ag = await fetch(`${main.base}/api/agency/departure-requests`, {
+    method: "POST", headers: { ...json, Authorization: "Bearer ag-token" },
+    body: JSON.stringify({ tourProductId: TOUR, date: cairoDay(42), customers: "Agency client", customerEmail: "client@example.test", customerPhone: "+201000000010", seats: 2, ignoreMatches: true }),
+  });
+  assert.equal(ag.status, 201, "an agency's request is made at once");
+});
+
 test("unconfirmed after 24 hours, a booking expires with no email; the link then says so", { skip }, async () => {
   const b = await book(main, DEP.c, 2);
   const link = await linkFor(b.code);
