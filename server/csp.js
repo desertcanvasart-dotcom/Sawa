@@ -83,16 +83,20 @@ export function siteScriptHashes(files = [...htmlFiles(join(ROOT, "site")), join
 let HASHES = null;
 const hashes = () => (HASHES ??= siteScriptHashes());
 
+const TURNSTILE = "https://challenges.cloudflare.com";
+
 export const CSP_DIRECTIVES = {
   "default-src": ["'self'"],
-  "script-src": ["'self'", "'unsafe-inline'", "https://www.googletagmanager.com"],
+  // Cloudflare Turnstile, the bot check on the booking forms: its script, its
+  // challenge frame and its calls.
+  "script-src": ["'self'", "'unsafe-inline'", "https://www.googletagmanager.com", TURNSTILE],
   "style-src": ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
   "font-src": ["'self'", "https://fonts.gstatic.com", "data:"],
   "img-src": ["'self'", "data:", "blob:", SUPABASE, ...GOOGLE_ANALYTICS],
-  "connect-src": ["'self'", SUPABASE, "wss://*.supabase.co", ...GOOGLE_ANALYTICS],
+  "connect-src": ["'self'", SUPABASE, "wss://*.supabase.co", ...GOOGLE_ANALYTICS, TURNSTILE],
   // 'self': the Promote page previews the agency's own widget (/embed/*).
   // Supabase: a PDF receipt previewed inline on a cost line (signed link).
-  "frame-src": ["'self'", SUPABASE, "https://www.googletagmanager.com"],
+  "frame-src": ["'self'", SUPABASE, "https://www.googletagmanager.com", TURNSTILE],
   "object-src": ["'none'"],
   "base-uri": ["'self'"],
   "form-action": ["'self'", "mailto:"],

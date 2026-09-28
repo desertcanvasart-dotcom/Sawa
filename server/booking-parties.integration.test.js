@@ -19,6 +19,7 @@ import { createServer } from "node:http";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import pg from "pg";
+import { createHash } from "node:crypto";
 import { freshDatabase, dropDatabase, testDbSkip } from "./test-db.js";
 import { shiftDate } from "../shared/catalogue.js";
 
@@ -299,4 +300,20 @@ test("with catalogue_v2 off the party routes answer 404 and a token in a booking
   assert.equal(made.party_id, null);
   const page = await get(off, `/api/public/bookings/${s.lead.code}`);
   assert.equal(page.body.booking.group, null);
+});
+
+test("email confirmation (058) holds a catalog booking too; confirming makes it a pay-at-GoAhead booking with its details", { skip }, async () => {
+  const held = await startServer({ FEATURES: "catalogue_v2", BOOKING_EMAIL_CONFIRMATION: "on" });
+  const before = Number((await one("SELECT COUNT(*) AS n FROM pledges WHERE departure_id = $1", [deps.c.legacy])).n);
+  const b = await bookPublic(held, deps.c, 2, { name: "Held Traveler" });
+  assert.equal(b.status, 202, JSON.stringify(b.body));
+  const code = b.body.booking.bookingCode;
+  assert.equal(Number((await one("SELECT COUNT(*) AS n FROM pledges WHERE departure_id = $1", [deps.c.legacy])).n), before, "nothing counts yet");
+  const token = `tok-${code}`;
+  await db.query("UPDATE booking_confirmations SET token_hash = $2 WHERE booking_code = $1", [code, createHash("sha256").update(token).digest("hex")]);
+  const c = await post(held, `/api/public/booking-confirmations/${token}`);
+  assert.deepEqual([c.status, c.body.state], [200, "confirmed"]);
+  const p = await one("SELECT * FROM pledges WHERE booking_code = $1", [code]);
+  assert.deepEqual([p.payment_mode, p.terms_fixed_by, p.pickup_point, p.seats], ["pay_at_goahead", "traveller", "Mena House", 2]);
+  assert.deepEqual(p.traveller_names, ["Held Traveler", "Held Traveler guest 2"]);
 });

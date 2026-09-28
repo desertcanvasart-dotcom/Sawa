@@ -68,6 +68,8 @@ const OperatorDashboard = lazy(() => import("./OperatorDashboard.jsx").then((m) 
 import { TravelerDetailsFields, emptyTravelerDetails, travelerDetailsBody, travelerDetailsError } from "./TravelerDetails.jsx";
 import { BookingPayAtGoAhead, WaitlistJoin, WaitlistOfferPage } from "./PayAtGoAheadPublic.jsx";
 import { JoinGroupLink, JoinGroupPage, partyTokenFromUrl } from "./GroupBooking.jsx";
+import { TurnstileBox } from "./Turnstile.jsx";
+import { ConfirmBookingPage, ResendConfirmation } from "./BookingConfirmation.jsx";
 
 
 // Three named traveler quotes lived here — Valencia, Munich, Abu Dhabi, each
@@ -411,6 +413,9 @@ const INLINE_BOOTSTRAP = (() => {
 // page renders as before.
 let CATALOGUE_V2 = INLINE_BOOTSTRAP?.catalogue?.enabled === true;
 const catalogueV2 = () => CATALOGUE_V2;
+// Cloudflare Turnstile's public site key from the bootstrap (null: no check).
+let TURNSTILE_SITE_KEY = INLINE_BOOTSTRAP?.turnstileSiteKey || null;
+const turnstileSiteKey = () => TURNSTILE_SITE_KEY;
 
 function App() {
   const [path, setPath] = useState(window.location.pathname);
@@ -522,6 +527,7 @@ function App() {
       setOperatorsByProduct((prev) => same(prev, data.operatorsByProduct) ? prev : (data.operatorsByProduct || {}));
       setPhoneVerification(data.phoneVerification === true);
       CATALOGUE_V2 = data.catalogue?.enabled === true;
+      TURNSTILE_SITE_KEY = data.turnstileSiteKey || null;
       setDepartures((prev) => same(prev, data.departures) ? prev : (data.departures || []));
       setSelectedId((prev) => prev || data.departures?.[0]?.id || null);
       const firstDayTour = (data.tourProducts || []).find((p) => !isPackage(p));
@@ -880,7 +886,7 @@ function App() {
   // Resolves to { ok: true } or { ok: false, error }. The tour page renders
   // before the shared `notice` banner, so a failure reported only there was
   // never seen — the caller shows the error itself and keeps the form (F01).
-  async function bookPublicDeparture({ departureId, customerName, customerEmail, customerPhone, phoneToken, seats, roomingType, accommodationTier, manifest }) {
+  async function bookPublicDeparture({ departureId, customerName, customerEmail, customerPhone, phoneToken, turnstileToken, seats, roomingType, accommodationTier, manifest }) {
     if (isSaving) return { ok: false, error: "" };
     setIsSaving(true);
     setNotice("");
@@ -888,11 +894,17 @@ function App() {
       const response = await fetch(`${API_BASE}/public/departures/${departureId}/bookings`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ customerName, customerEmail, customerPhone, phoneToken, seats: Number(seats), roomingType, accommodationTier, refCode: getStoredRef(), ...(catalogueV2() && partyTokenFromUrl() ? { partyToken: partyTokenFromUrl() } : {}), ...(manifest || {}) }),
+        body: JSON.stringify({ customerName, customerEmail, customerPhone, phoneToken, turnstileToken: turnstileToken || undefined, seats: Number(seats), roomingType, accommodationTier, refCode: getStoredRef(), ...(catalogueV2() && partyTokenFromUrl() ? { partyToken: partyTokenFromUrl() } : {}), ...(manifest || {}) }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Could not request seats.");
       setDepartures((current) => current.map((departure) => (departure.id === data.departure.id ? data.departure : departure)));
+      // Held until the traveler confirms their email (202): not a booking yet.
+      if (data.confirmationRequired) {
+        setPublicBooking({ departureId: data.departure.id, code: data.booking.bookingCode, seats: data.booking.seats, unconfirmed: true, email: customerEmail });
+        setNotice("Check your email to confirm your booking.");
+        return { ok: true };
+      }
       setPublicBooking({
         departureId: data.departure.id,
         pledgeId: data.booking.id,
@@ -971,6 +983,9 @@ function App() {
   // Model phase 4: the page behind a waitlist offer.
   const waitlistMatch = path.match(/^\/waitlist\/([^/?#]+)$/);
   if (waitlistMatch && catalogueV2()) return <WaitlistOfferPage token={decodeURIComponent(waitlistMatch[1])} />;
+  // The "Confirm my booking" link from the email (live).
+  const confirmBookingMatch = path.match(/^\/confirm-booking\/([^/?#]+)$/);
+  if (confirmBookingMatch) return <ConfirmBookingPage token={decodeURIComponent(confirmBookingMatch[1])} />;
   // Group bookings: the page behind a "Join my group" link.
   const joinMatch = path.match(/^\/join\/([^/?#]+)$/);
   if (joinMatch && catalogueV2()) return <JoinGroupPage token={decodeURIComponent(joinMatch[1])} />;
@@ -1533,6 +1548,8 @@ function TourDetailV2({ isSaving, navigate, phoneVerification = false, onBookPub
   // S04 — the token for the number the traveller confirmed. Editing the number
   // afterwards drops it: the server checks the token against the number sent.
   const [phoneToken, setPhoneToken] = useState(null);
+  const [turnstileToken, setTurnstileToken] = useState("");
+  const [turnstileReset, setTurnstileReset] = useState(0);
   const [verifiedPhone, setVerifiedPhone] = useState("");
   const phoneConfirmed = !phoneVerification || (!!phoneToken && verifiedPhone === phone.trim());
   const [seats, setSeats] = useState(1);
@@ -1646,11 +1663,13 @@ function TourDetailV2({ isSaving, navigate, phoneVerification = false, onBookPub
     }
     const result = await onBookPublicDeparture({
       departureId: dep.id, customerName: name.trim(), customerEmail: email.trim(),
-      customerPhone: phone.trim(), phoneToken: phoneToken || undefined, seats: nSeats,
+      customerPhone: phone.trim(), phoneToken: phoneToken || undefined, turnstileToken, seats: nSeats,
       // Only meaningful for packages; the server ignores them for day tours.
       ...(isPackage(tour) ? { roomingType, accommodationTier: tierId } : {}),
       ...(manifestForm ? { manifest: travelerDetailsBody(details) } : {}),
     });
+    // A Turnstile token is good for one submission.
+    setTurnstileReset((n) => n + 1);
     // F01 — the form used to clear straight away, before the server answered:
     // a full date, a closed cutoff or a dropped connection left the traveller
     // with an empty form and no message. Clear only on a confirmed booking.
@@ -1734,6 +1753,7 @@ function TourDetailV2({ isSaving, navigate, phoneVerification = false, onBookPub
         body: JSON.stringify({
           tourProductId: tour.id, date: reqDate, customerName: name.trim(),
           customerEmail: email.trim(), customerPhone: phone.trim(), phoneToken: phoneToken || undefined, seats: nSeats, ignoreMatches,
+          turnstileToken: turnstileToken || undefined,
           // The seed pledge is priced on submission, so a traveler starting
           // their own package date needs the same tier/room choice as one
           // joining an existing date — otherwise it silently seeds at the
@@ -1742,6 +1762,7 @@ function TourDetailV2({ isSaving, navigate, phoneVerification = false, onBookPub
         }),
       });
       const data = await response.json();
+      setTurnstileReset((n) => n + 1);
       if (response.status === 409 && data.code === "near_matches") {
         // exactDay: the tour already has a group that very day — join it; no
         // second group for the same day (27 Sep 2026).
@@ -2168,6 +2189,7 @@ function TourDetailV2({ isSaving, navigate, phoneVerification = false, onBookPub
                       <PaymentTimeline />
                       <CancellationSchedule tour={tour} depositPct={depositPct} />
                     </div>}
+                    <TurnstileBox siteKey={turnstileSiteKey()} onToken={setTurnstileToken} resetKey={turnstileReset} />
                     <div className="book-cta">
                       {reqMode ? (
                         <>
@@ -2186,10 +2208,12 @@ function TourDetailV2({ isSaving, navigate, phoneVerification = false, onBookPub
                             // Canceling a held seat is an action, not navigation, and it was an
                             // <a> with no href: unreachable by keyboard and announced to screen
                             // readers as plain text. A real <button> restores focus and Enter/Space.
-                            <div className="bk-ok" role="status">Seat held — {publicBooking.code}. {publicBooking.depositDue ? `${CURRENCY_SYMBOL}${publicBooking.depositDue} ${CURRENCY} deposit due at GoAhead.` : ""} <button type="button" className="bk-cancel" onClick={async () => { setErr(""); const r = await onCancelPublicBooking(); if (r && !r.ok) setErr(r.error); }}>Cancel</button></div>
+                            publicBooking.unconfirmed ? (
+                              <div className="bk-ok" role="status">Check your email to confirm your booking ({publicBooking.code}). It's made when you click the link we sent{publicBooking.email ? ` to ${publicBooking.email}` : ""}, and lapses after 24 hours. <button type="button" className="bk-cancel" onClick={async () => { setErr(""); const r = await onCancelPublicBooking(); if (r && !r.ok) setErr(r.error); }}>Cancel</button></div>
+                            ) : <div className="bk-ok" role="status">Seat held — {publicBooking.code}. {publicBooking.depositDue ? `${CURRENCY_SYMBOL}${publicBooking.depositDue} ${CURRENCY} deposit due at GoAhead.` : ""} <button type="button" className="bk-cancel" onClick={async () => { setErr(""); const r = await onCancelPublicBooking(); if (r && !r.ok) setErr(r.error); }}>Cancel</button></div>
                           )}
                           {/* Group bookings: share the date with the rest of the group. */}
-                          {publicBooking && Number(publicBooking.departureId) === Number(dep?.id) && manifestForm && publicBooking.code && (
+                          {publicBooking && Number(publicBooking.departureId) === Number(dep?.id) && manifestForm && publicBooking.code && !publicBooking.unconfirmed && (
                             <JoinGroupLink code={publicBooking.code} />
                           )}
                           {manifestForm && partyTokenFromUrl() && !publicBooking && (
@@ -3067,6 +3091,8 @@ function EmbedBookTour({ product, refCode, phoneVerification }) {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [phoneToken, setPhoneToken] = useState(null);
+  const [turnstileToken, setTurnstileToken] = useState("");
+  const [turnstileReset, setTurnstileReset] = useState(0);
   const [verifiedPhone, setVerifiedPhone] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
@@ -3118,7 +3144,7 @@ function EmbedBookTour({ product, refCode, phoneVerification }) {
 
   const traveller = () => ({
     customerName: name.trim(), customerEmail: email.trim(), customerPhone: phone.trim() || undefined,
-    phoneToken: phoneToken || undefined, seats: nSeats,
+    phoneToken: phoneToken || undefined, seats: nSeats, turnstileToken: turnstileToken || undefined,
     ...(pkg ? { roomingType, accommodationTier: tierId } : {}),
     refCode: refCode || undefined,
     ...(detailsForm ? travelerDetailsBody(details) : {}),
@@ -3131,8 +3157,9 @@ function EmbedBookTour({ product, refCode, phoneVerification }) {
     if (problem) return setErr(problem);
     if (preview) return setErr("Preview only — nothing was booked. On your website this reserves the seats and emails the customer.");
     const { r, j } = await post(`/public/departures/${dep.id}/bookings`, traveller());
+    setTurnstileReset((n) => n + 1);
     if (!r.ok) throw new Error(j.error || "Could not reserve seats.");
-    setDone({ kind: "booked", booking: j.booking || {}, date: dep.date });
+    setDone({ kind: j.confirmationRequired ? "unconfirmed" : "booked", booking: j.booking || {}, date: dep.date });
   }
 
   async function request(ignoreMatches = false) {
@@ -3144,6 +3171,7 @@ function EmbedBookTour({ product, refCode, phoneVerification }) {
     if (problem) return setErr(problem);
     if (preview) return setErr("Preview only — nothing was sent. On your website this sends the date request to Sawa.");
     const { r, j } = await post("/public/departure-requests", { tourProductId: product.id, date: reqDate, ignoreMatches, ...traveller() });
+    setTurnstileReset((n) => n + 1);
     // Join-first: open dates close by are offered before a new one is made.
     if (r.status === 409 && j.code === "near_matches") { setMatches(Object.assign(j.nearMatches || [], { exactDay: !!j.exactDay })); return; }
     if (!r.ok) throw new Error(j.error || "Could not request this date.");
@@ -3165,11 +3193,13 @@ function EmbedBookTour({ product, refCode, phoneVerification }) {
     return (
       <div className="eb-panel eb-done" role="status">
         <span className="eb-done-mark"><Check size={22} /></span>
-        <strong className="eb-title">{done.kind === "requested" ? "Your date is requested" : "Your seats are held"}</strong>
+        <strong className="eb-title">{done.kind === "requested" ? "Your date is requested" : done.kind === "unconfirmed" ? "Check your email to confirm your booking" : "Your seats are held"}</strong>
         <p>{n} seat{n === 1 ? "" : "s"} on <b>{product.title}</b>, {formatDate(done.date, { alwaysYear: true })}.</p>
         {b.bookingCode && <p className="eb-code">Booking code <b>{b.bookingCode}</b></p>}
         <p className="eb-muted">
-          {done.kind === "requested"
+          {done.kind === "unconfirmed"
+            ? `We've emailed a link to ${email || "you"}. Your booking is made when you click it, and lapses if it isn't confirmed within 24 hours. Nothing is charged now.`
+            : done.kind === "requested"
             ? `Nothing is charged now. Sawa reviews the date and emails ${email || "you"} once it opens for other travelers to join.`
             : `Nothing is charged now. We've emailed the details to ${email || "you"}; the deposit link follows once this date reaches GoAhead.`}
         </p>
@@ -3290,6 +3320,7 @@ function EmbedBookTour({ product, refCode, phoneVerification }) {
           <p>Nothing is charged today. The shared price drops as the group grows.</p>
         </div>
 
+        {!preview && <TurnstileBox siteKey={turnstileSiteKey()} onToken={setTurnstileToken} resetKey={turnstileReset} />}
         {err && <div className={preview && err.startsWith("Preview only") ? "eb-preview" : "eb-err"} role="alert">{err}</div>}
         {requesting ? (
           <button className="embed-cta eb-submit" type="submit" disabled={busy}>
@@ -3861,6 +3892,7 @@ function BookingLookupPage({ navigate, path }) {
             <BookingPayment payment={b.payment} />
             {b.payAtGoAhead && <BookingPayAtGoAhead code={b.code} view={b.payAtGoAhead} onChanged={() => lookup()} />}
             {b.group && <JoinGroupLink code={b.code} group={b.group} />}
+            {b.confirmation?.state === "unconfirmed" && <ResendConfirmation code={b.code} resendsLeft={b.confirmation.resendsLeft} />}
             {/* Whether this is offered at all comes from the server (canCancel),
                 for the same reason the note does: only it knows the state, and
                 a page that decided for itself is how a cancelled date came to
