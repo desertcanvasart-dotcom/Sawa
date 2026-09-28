@@ -54,6 +54,8 @@ import {
 import { registerPayAtGoAheadRoutes } from "./pay-at-goahead-routes.js";
 import { partyLinkFor, partyForBooking, partyView, partyToJoin, joinParty, linkParty, unlinkParty, partiesAvailable, JOINABLE_STATUSES } from "./booking-parties.js";
 import { SAFETY_NONE } from "../shared/settlement-rules.js";
+import { integrityAvailable, recordSignals, detectCluster } from "./booking-integrity.js";
+import { reduceSignals } from "./booking-signals.js";
 import {
   holdForConfirmation, holdBooking, heldByToken, heldByCode, heldCodeTaken, isExpired, markConfirmed, markRefused,
   cancelHeld, resendLink, confirmBookingUrl, MAX_RESENDS,
@@ -395,6 +397,9 @@ const publicBookingSchema = z.object({
   partyToken: z.string().trim().max(80).optional(),
   // Cloudflare Turnstile's token from the form (checked on the server).
   turnstileToken: z.string().trim().max(2048).optional(),
+  // Reservation integrity (catalogue_v2): what the browser reports about
+  // itself, hashed with the user agent and never stored raw.
+  deviceHint: z.string().trim().max(400).optional(),
 });
 
 // Model phase 2 — what the operator's manifest needs, all optional. Read only
@@ -1449,6 +1454,7 @@ app.post("/api/public/departures/:id/bookings", writeLimiter, bookingAttemptLimi
   await requireTurnstile(req);
   const out = await placePublicBooking(req, { departureId: Number(req.params.id), body: req.body });
   await logAudit(req, out.audit);
+  if (out.flagAudit) await logAudit(req, out.flagAudit);
   res.status(out.status).json(out.json);
 }));
 
@@ -1456,8 +1462,14 @@ async function placePublicBooking(req, { departureId, body, confirmation = null 
   const input = confirmation ? { ...confirmation.payload.input } : parse(publicBookingSchema, body);
   const manifest = confirmation ? confirmation.payload.manifest : manifestFields(body);
   if (!confirmation) input.customerPhone = verifiedPhoneFor(input);
+  // Reservation integrity (catalogue_v2): the form's signals, reduced at once
+  // (a hash, a /24, a country code) and kept with a held booking.
+  const signals = confirmation ? (confirmation.payload.signals || null) : reduceSignals({
+    ip: req.ip, phone: input.customerPhone, device: { userAgent: req.get("user-agent"), language: req.get("accept-language"), hint: input.deviceHint },
+  });
   delete input.turnstileToken;
   delete input.phoneToken;
+  delete input.deviceHint;
   const hold = !confirmation && await holdForConfirmation(pool);
   const result = await withTransaction(async (c) => {
     const dep = await loadDeparture(c, departureId, { forUpdate: true });
@@ -1495,7 +1507,7 @@ async function placePublicBooking(req, { departureId, body, confirmation = null 
       // is written to pledges, so it counts towards nothing yet.
       const held = await holdBooking(c, {
         departureId: dep.id, bookingCode: await uniqueBookingCode(c), email: input.customerEmail, seats: input.seats,
-        payload: { input, manifest },
+        payload: { input, manifest, ...(catalogueV2Enabled() ? { signals } : {}) },
       });
       return { held, departure: dep };
     }
@@ -1530,9 +1542,18 @@ async function placePublicBooking(req, { departureId, body, confirmation = null 
     }
     if (party) await joinParty(c, { partyId: party.id, pledgeId });
     if (confirmation) await markConfirmed(c, { id: confirmation.id, pledgeId });
+    // Reservation integrity (catalogue_v2, migration 057): a cluster of
+    // single-seat reservations is flagged for staff; it never refuses anything.
+    // A booking made from the email link carries the signals of the form it
+    // was submitted from, reduced when it was held.
+    let flag = null;
+    if (catalogueCtx && catalogueV2Enabled() && await integrityAvailable(c)) {
+      await recordSignals(c, { pledgeId, departureId: dep.id, seats: input.seats, signals, at: confirmation?.created_at || null });
+      flag = await detectCluster(c, { pledgeId });
+    }
     const departure = await loadDeparture(c, dep.id);
     const saved = await c.query(`SELECT * FROM pledges WHERE id=$1`, [pledgeId]);
-    return { departure, booking: mapPledge(saved.rows[0]), payAtGoAhead: !!catalogueCtx, partyId: party?.id ?? null };
+    return { departure, booking: mapPledge(saved.rows[0]), payAtGoAhead: !!catalogueCtx, partyId: party?.id ?? null, flagId: flag?.id ?? null };
   });
   if (result.held) {
     const d = result.departure;
@@ -1549,7 +1570,8 @@ async function placePublicBooking(req, { departureId, body, confirmation = null 
   }
   const audit = { action: "booking.create", entity: "pledge", entityId: result.booking.id,
     detail: { departureId, seats: input.seats, source: "public", ...(result.partyId ? { partyId: result.partyId } : {}),
-      ...(confirmation ? { confirmedEmail: true } : {}) } };
+      ...(confirmation ? { confirmedEmail: true } : {}), ...(result.flagId ? { flagId: result.flagId } : {}) } };
+  const flagAudit = result.flagId ? { action: "booking_flag.raise", entity: "booking_flag", entityId: result.flagId, detail: { pledgeId: result.booking.id } } : null;
   if (input.customerEmail && result.payAtGoAhead) {
     // Model phase 4: nothing is paid until GoAhead, then the full price; the
     // email repeats the cancellation tiers this booking was made under.
@@ -1572,7 +1594,7 @@ async function placePublicBooking(req, { departureId, body, confirmation = null 
   notifyOps(result.departure, result.booking, input, { isRequest: false });
   // The direct traveller gets their own booking receipt back in full.
   emitDepartureSync(result.departure.id);
-  return { status: 201, audit, json: { departure: presentDeparture(result.departure, req.user), booking: result.booking } };
+  return { status: 201, audit, flagAudit, json: { departure: presentDeparture(result.departure, req.user), booking: result.booking } };
 }
 
 // Platform staff remove a pledge outright. Agencies no longer come through
@@ -1866,6 +1888,7 @@ app.post("/api/public/booking-confirmations/:token", writeLimiter, h(async (req,
     return res.status(409).json({ state: "refused", code: held.booking_code, error: `We couldn't make this booking: ${e.message} Nothing was charged.` });
   }
   await logAudit(req, out.audit);
+  if (out.flagAudit) await logAudit(req, out.flagAudit);
   await logAudit(req, { action: "booking.email_confirmed", entity: "pledge", entityId: out.json.booking.id, detail: { bookingCode: held.booking_code } });
   res.json({ state: "confirmed", code: held.booking_code });
 }));
@@ -4550,6 +4573,11 @@ if (existsSync(siteDir)) {
     return null;
   };
 
+  // Copy that goes out with catalogue_v2 (the privacy page's sentence on
+  // reservation signals) is marked <!-- catalogue_v2 -->…<!-- /catalogue_v2 -->
+  // and left out while the flag is off.
+  const flaggedCopy = (html) => (catalogueV2Enabled() ? html : html.replace(/<!-- catalogue_v2 -->[\s\S]*?<!-- \/catalogue_v2 -->\n?/g, ""));
+
   app.use((req, res, next) => {
     if (req.method !== "GET" && req.method !== "HEAD") return next();
     let abs = null;
@@ -4560,7 +4588,7 @@ if (existsSync(siteDir)) {
       const key = `${abs}|${req.path}`;
       let hit = schemaCache.get(key);
       if (!hit || hit.mtimeMs !== mtimeMs) {
-        hit = { mtimeMs, html: injectStaticSchema(readFileSync(abs, "utf8"), req.path) };
+        hit = { mtimeMs, html: injectStaticSchema(flaggedCopy(readFileSync(abs, "utf8")), req.path) };
         schemaCache.set(key, hit);
       }
       // Matches what express.static would have sent, so adding schema does not

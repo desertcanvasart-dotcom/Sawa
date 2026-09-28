@@ -70,6 +70,7 @@ import { BookingPayAtGoAhead, WaitlistJoin, WaitlistOfferPage } from "./PayAtGoA
 import { JoinGroupLink, JoinGroupPage, partyTokenFromUrl } from "./GroupBooking.jsx";
 import { TurnstileBox } from "./Turnstile.jsx";
 import { ConfirmBookingPage, ResendConfirmation } from "./BookingConfirmation.jsx";
+import { deviceHint } from "./deviceHint.js";
 
 
 // Three named traveler quotes lived here — Valencia, Munich, Abu Dhabi, each
@@ -894,7 +895,7 @@ function App() {
       const response = await fetch(`${API_BASE}/public/departures/${departureId}/bookings`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ customerName, customerEmail, customerPhone, phoneToken, turnstileToken: turnstileToken || undefined, seats: Number(seats), roomingType, accommodationTier, refCode: getStoredRef(), ...(catalogueV2() && partyTokenFromUrl() ? { partyToken: partyTokenFromUrl() } : {}), ...(manifest || {}) }),
+        body: JSON.stringify({ customerName, customerEmail, customerPhone, phoneToken, turnstileToken: turnstileToken || undefined, seats: Number(seats), roomingType, accommodationTier, refCode: getStoredRef(), ...(catalogueV2() && partyTokenFromUrl() ? { partyToken: partyTokenFromUrl() } : {}), ...(catalogueV2() ? { deviceHint: deviceHint() } : {}), ...(manifest || {}) }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Could not request seats.");

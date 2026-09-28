@@ -11,6 +11,7 @@
 import { pool, withTransaction } from "./db/index.js";
 import { TOUR_TIMEZONE, zonedDateTimeToUtc } from "./tz.js";
 import { cancelDepartureAndPledges } from "./departure-cancel.js";
+import { catalogueV2Enabled } from "./features.js";
 import {
   PRODUCT_TYPES, PRODUCT_STATUSES, shiftDate, plannedDates, nextStatus, canRunBelowMinimum,
   activeSpec, publishBlockers, specGaps, usesDeadline, legacyTypeFor, DEFAULT_GOAHEAD_DEADLINE_DAYS,
@@ -93,6 +94,15 @@ export function mapRule(r) {
   };
 }
 
+// Migration 057 (catalogue_v2): the seats that count towards GoAhead, joined
+// where the view exists. Empty strings before it is applied.
+export async function goaheadColumns(db) {
+  const ok = (await db.query("SELECT to_regclass('catalogue_departure_goahead') IS NOT NULL AS ok")).rows[0].ok;
+  return ok
+    ? { select: ", g.goahead_seats", join: "LEFT JOIN catalogue_departure_goahead g ON g.catalogue_departure_id = cd.id" }
+    : { select: "", join: "" };
+}
+
 export function mapCatalogueDeparture(r) {
   return {
     id: Number(r.id),
@@ -103,6 +113,8 @@ export function mapCatalogueDeparture(r) {
     origin: r.origin,
     legacyDepartureId: r.legacy_departure_id,
     seatsSold: Number(r.seats_sold || 0),
+    // Migration 057: the seats that count towards GoAhead (catalogue_v2).
+    ...(r.goahead_seats != null ? { goaheadSeats: Number(r.goahead_seats) } : {}),
     runBelowMinimum: r.run_below_minimum,
     overrideBy: r.override_by,
     overrideReason: r.override_reason,
@@ -158,10 +170,12 @@ export async function listDepartures(db = pool, { from, to, productId } = {}) {
   if (from) { args.push(from); where.push(`cd.date >= $${args.length}`); }
   if (to) { args.push(to); where.push(`cd.date <= $${args.length}`); }
   if (productId) { args.push(productId); where.push(`cd.product_id = $${args.length}`); }
+  const g = await goaheadColumns(db);
   const r = await db.query(
-    `SELECT cd.*, s.seats_sold
+    `SELECT cd.*, s.seats_sold${g.select}
        FROM catalogue_departures cd
        JOIN catalogue_departure_seats s ON s.catalogue_departure_id = cd.id
+       ${g.join}
       ${where.length ? `WHERE ${where.join(" AND ")}` : ""}
       ORDER BY cd.date, cd.product_id`,
     args
@@ -366,10 +380,12 @@ export async function runStatusJob({ db = pool, now = Date.now(), log = () => {}
   const today = todayIn(now);
   const world = await loadWorld(db);
   const products = new Map(world.products.map((p) => [p.id, p]));
+  const g = await goaheadColumns(db);
   const rows = await db.query(
-    `SELECT cd.*, s.seats_sold
+    `SELECT cd.*, s.seats_sold${g.select}
        FROM catalogue_departures cd
        JOIN catalogue_departure_seats s ON s.catalogue_departure_id = cd.id
+       ${g.join}
       WHERE cd.status IN ('open', 'go_ahead')`
   );
   const out = { go_ahead: 0, cancelled_below_minimum: 0, completed: 0, stamped: 0 };
@@ -392,7 +408,10 @@ export async function runStatusJob({ db = pool, now = Date.now(), log = () => {}
     }
 
     const instants = departureInstants(dep, product, timingFor(world, product, dep.specVersionId));
-    const next = nextStatus({ ...dep, ...instants, goaheadMin: product.goaheadMin, type: product.type }, now);
+    // Reservation integrity (catalogue_v2): a seat held as suspicious is sold
+    // but doesn't count towards the minimum.
+    const counted = catalogueV2Enabled() && dep.goaheadSeats !== undefined ? dep.goaheadSeats : dep.seatsSold;
+    const next = nextStatus({ ...dep, seatsSold: counted, ...instants, goaheadMin: product.goaheadMin, type: product.type }, now);
     if (next.status === dep.status) continue;
 
     const changed = await transition(db, dep, next, product);

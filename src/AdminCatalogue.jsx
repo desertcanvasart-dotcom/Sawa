@@ -469,6 +469,46 @@ function RulesPanel({ detail, reload, flash }) {
   );
 }
 
+// ------------------------------------------------ reservation flags
+// Reservation integrity (catalogue_v2): clusters of single-seat reservations
+// on one date. A flag never blocks anything; staff decide what it is.
+const FLAG_REASON = {
+  device: (r) => "from the same device",
+  ip: (r) => `from the same network${r.value ? ` (${r.value})` : ""}`,
+  phone_cc: (r) => `with phone numbers from the same country${r.value ? ` (${r.value})` : ""}`,
+};
+export const flagReason = (r) => `${r.count || 3} single-seat reservations within ${r.windowHours || 6} hours ${(FLAG_REASON[r.kind] || (() => "sharing a signal"))(r)}`;
+
+function ReservationFlags({ flags, onDecided, flash }) {
+  const [busy, setBusy] = useState(false);
+  if (!flags?.length) return null;
+  async function decide(f, decision) {
+    const ask = {
+      confirmed_group: "Mark these bookings as one group? They're linked as a party and listed together on the manifest.",
+      suspicious: "Mark these bookings suspicious? Their seats stay held but stop counting towards GoAhead until you review them. A date already going ahead isn't changed.",
+      cleared: "Clear this flag? The seats count towards GoAhead again.",
+    }[decision];
+    if (!window.confirm(ask)) return;
+    setBusy(true);
+    try {
+      await call(`/admin/booking-flags/${f.id}/decision`, "POST", { decision });
+      flash(decision === "confirmed_group" ? "Marked as one group and linked." : decision === "suspicious" ? "Marked suspicious. Its seats don't count towards GoAhead until reviewed." : "Flag cleared.");
+      onDecided();
+    } catch (e) { flash(e.message); } finally { setBusy(false); }
+  }
+  return flags.map((f) => (
+    <div key={f.id} className="field-hint" style={{ marginTop: 6 }}>
+      <span className={`tag ${f.state === "suspicious" ? "tag-off" : "tag-warn"}`}>{f.state === "suspicious" ? "Suspicious: seats held from GoAhead" : "Flagged"}</span>
+      {" "}{f.reasons.map(flagReason).join("; ")}. {f.seats} seat{f.seats === 1 ? "" : "s"}: {f.bookings.map((b) => b.code || b.id).join(", ")}.
+      <div className="row-actions" style={{ marginTop: 4 }}>
+        <button className="btn-ghost sm" disabled={busy} onClick={() => decide(f, "confirmed_group")}>Confirmed group</button>
+        {f.state !== "suspicious" && <button className="btn-ghost sm" disabled={busy} onClick={() => decide(f, "suspicious")}>Suspicious</button>}
+        <button className="btn-ghost sm" disabled={busy} onClick={() => decide(f, "cleared")}>{f.state === "suspicious" ? "Reviewed: count again" : "Clear"}</button>
+      </div>
+    </div>
+  ));
+}
+
 // ============================================================ Calendar view
 export function CalendarSection({ flash }) {
   const [data, setData] = useState(null);
@@ -567,7 +607,10 @@ export function CalendarSection({ flash }) {
                   <td>{d.code} {d.title}
                     <div className="field-hint">{d.origin === "adopted" ? "existing date, old rules" : d.legacyDepartureId ? "bookable" : "not bookable yet"}</div>
                   </td>
-                  <td className="tnum">{d.seatsSold} / {d.maxGroup}<div className="field-hint">{d.label}</div></td>
+                  <td className="tnum">{d.seatsSold} / {d.maxGroup}<div className="field-hint">{d.label}</div>
+                    {d.goaheadSeats !== undefined && d.goaheadSeats !== d.seatsSold && <div className="field-hint">{d.goaheadSeats} count towards GoAhead</div>}
+                    <ReservationFlags flags={d.flags} onDecided={load} flash={flash} />
+                  </td>
                   <td>
                     <span className={`tag ${DEP_TONE[d.status]}`}>{DEP_LABEL[d.status]}</span>
                     {d.runBelowMinimum && <div className="field-hint" title={d.overrideReason}>run below minimum by {d.overrideBy}</div>}

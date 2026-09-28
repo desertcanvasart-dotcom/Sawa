@@ -11,6 +11,8 @@ import {
   generateDepartures, runStatusJob, departureInstants, todayIn, mapSpec,
 } from "./catalogue.js";
 import { catalogueV2Enabled } from "./features.js";
+import { flagsByDeparture, decideFlag, FLAG_DECISIONS } from "./booking-integrity.js";
+import { linkParty } from "./booking-parties.js";
 import {
   PRODUCT_TYPES, PRODUCT_STATUSES, activeSpec, specGaps, publicDateLabel, shiftDate,
 } from "../shared/catalogue.js";
@@ -171,6 +173,9 @@ export function registerCatalogueRoutes(app, { requireAuth, requireRole, h, logA
     const byId = new Map(products.map((p) => [p.id, p]));
     const listingBy = new Map(listings.rows.map((t) => [t.id, t]));
     const ops = await operatorOverlay(from, to);
+    // Reservation integrity (catalogue_v2, migration 057): open and suspicious
+    // cluster flags, with their reasons.
+    const flags = catalogueV2Enabled() ? await flagsByDeparture(pool, departures.map((d) => d.id)) : new Map();
     res.json({
       from, to, operators: ops?.operators || null,
       departures: departures.map((d) => {
@@ -180,7 +185,8 @@ export function registerCatalogueRoutes(app, { requireAuth, requireRole, h, logA
         return {
           ...d,
           code: p?.code, title: p?.title, type: p?.type, goaheadMin: p?.goaheadMin, maxGroup: p?.maxGroup,
-          label: publicDateLabel({ ...d, goaheadMin: p?.goaheadMin }),
+          label: publicDateLabel({ ...d, seatsSold: d.goaheadSeats ?? d.seatsSold, goaheadMin: p?.goaheadMin }),
+          ...(catalogueV2Enabled() ? { flags: flags.get(d.id) || [] } : {}),
           cutoffAt: Number.isFinite(at.cutoffAt) ? new Date(at.cutoffAt).toISOString() : null,
           deadlineAt: Number.isFinite(at.deadlineAt) ? new Date(at.deadlineAt).toISOString() : null,
           startsAt: Number.isFinite(at.startsAt) ? new Date(at.startsAt).toISOString() : null,
@@ -245,6 +251,23 @@ export function registerCatalogueRoutes(app, { requireAuth, requireRole, h, logA
     });
     invalidatePublic();
     res.json({ departure });
+  }));
+
+  // Reservation integrity: staff decide a cluster flag. "confirmed_group"
+  // links its bookings as a party; "suspicious" holds its seats from GoAhead
+  // until reviewed; "cleared" counts them again.
+  app.post("/api/admin/booking-flags/:id/decision", ...staff, route(async (req, res) => {
+    if (!catalogueV2Enabled()) throw new CatalogueError(404, "Not found.");
+    const decision = String(req.body?.decision || "");
+    if (!FLAG_DECISIONS.includes(decision)) throw new CatalogueError(422, "Choose confirmed group, suspicious or cleared.");
+    const note = req.body?.note ? String(req.body.note).trim().slice(0, 500) : null;
+    const result = await decideFlag(pool, { flagId: id(req.params.id), decision, by: by(req), note, linkParty });
+    await logAudit(req, {
+      action: `booking_flag.${decision}`, entity: "booking_flag", entityId: result.flagId,
+      detail: { from: result.from, departureId: result.departureId, bookings: result.bookings, partyId: result.partyId, note },
+    });
+    invalidatePublic();
+    res.json(result);
   }));
 
   // Run the generator and the status job now, instead of waiting for the

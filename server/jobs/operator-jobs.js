@@ -9,7 +9,7 @@
 //   operator-daily        daily: document expiry (suspend, 30- and 7-day
 //                         reminders), manifest access 90 days after the trip,
 //                         booking-detail requests and commission statements
-//                         (phase 3)
+//                         (phase 3), reservation signals deleted at 30 days
 //
 // With the flag off they do nothing. Until migration 049 is applied they do
 // nothing either. None of them moves money.
@@ -66,7 +66,10 @@ export function runOperatorDaily({ log = console.log, now, env = process.env } =
     // monthly commission statements (by the 10th).
     const details = await runCompletionRequests({ log, now, send: sendEmail, env });
     const statements = await runCommissionStatements({ log, now, send: sendEmail, env });
-    return { ...documents, ...manifests, details, statements };
+    // Reservation integrity: signals are kept 30 days.
+    const { purgeSignals } = await import("../booking-integrity.js");
+    const signals = await purgeSignals({ now });
+    return { ...documents, ...manifests, details, statements, ...signals };
   }, log, env);
 }
 
