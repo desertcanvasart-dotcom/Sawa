@@ -168,6 +168,10 @@ export function mapDeparture(r, pledges = []) {
     depositPercent: num(r.deposit_percent),
     pledges: pledges.map(mapPledge),
   };
+  // 055: a merged date points at the one kept; a kept date may carry the
+  // operator admin chose at the merge. Only when set (staff-only fields).
+  if (r.merged_into_id != null) out.mergedIntoId = num(r.merged_into_id);
+  if (r.operator_agency_override) out.operatorAgencyOverride = r.operator_agency_override;
   if (r.type === "package") {
     out.startDate = isoDate(r.start_date);
     out.endDate = isoDate(r.end_date);

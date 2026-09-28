@@ -1710,11 +1710,33 @@ function ListingPreviewModal({ p, agencyName, busy, onApprove, onReject, onClose
 }
 
 /* ---------------- Departures ---------------- */
+const LIVE_DEP = ["pending_review", "open", "minimum_reached", "supplier_confirmed"];
+const depDay = (d) => String(d.startDate || d.date || "").slice(0, 10);
+
 function DeparturesSection({ data, reload, flash }) {
   const [filter, setFilter] = useState("all");
   const [pub, setPub] = useState(null); // {type}
+  const [merging, setMerging] = useState(null); // the departure the merge starts from
+  const [merges, setMerges] = useState([]);
   useBackToClose(!!pub, () => setPub(null));
+  useBackToClose(!!merging, () => setMerging(null));
   const deps = data.departures || [];
+  // Duplicate days (27 Sep 2026): more than one live date of one tour on one day.
+  const dupCount = deps.reduce((m, d) => {
+    if (!LIVE_DEP.includes(d.status) || d.mergedIntoId) return m;
+    const k = `${d.tourProductId}|${depDay(d)}`;
+    m.set(k, (m.get(k) || 0) + 1);
+    return m;
+  }, new Map());
+  const isDup = (d) => LIVE_DEP.includes(d.status) && !d.mergedIntoId && (dupCount.get(`${d.tourProductId}|${depDay(d)}`) || 0) > 1;
+  const loadMerges = () => apiFetch("/admin/departure-merges").then((r) => (r.ok ? r.json() : { merges: [] })).then((j) => setMerges(j.merges || [])).catch(() => setMerges([]));
+  useEffect(() => { loadMerges(); }, []);
+  async function revert(m) {
+    if (!window.confirm(`Undo merge ${m.id}? The bookings go back to departures ${m.duplicateIds.join(", ")}, which reopen as they were. Travelers are not emailed again.`)) return;
+    const r = await apiFetch(`/admin/departure-merges/${m.id}/revert`, { method: "POST" });
+    const j = await r.json().catch(() => ({}));
+    if (r.ok) { flash("Merge undone."); reload(); loadMerges(); } else flash(j.error || "Could not undo the merge.");
+  }
   const shown = deps.filter((d) => {
     if (filter === "all") return true;
     if (filter === "ready") return d.status !== "supplier_confirmed" && d.status !== "cancelled" && seatsOf(d) >= (d.minSeats || 4);
@@ -1765,9 +1787,10 @@ function DeparturesSection({ data, reload, flash }) {
                   <td>{fmtDate(d.startDate || d.date)}{d.endDate ? ` – ${fmtDate(d.endDate)}` : ""}</td>
                   <td><span className={ready ? "seats ok" : "seats"}>{seats}/{min}</span><span className="sub">max {d.maxSeats}</span></td>
                   <td>{money(d.livePrice)}</td>
-                  <td><StatusTag d={d} /></td>
+                  <td><StatusTag d={d} />{d.mergedIntoId ? <div className="sub">merged into {d.mergedIntoId}</div> : isDup(d) ? <div><span className="tag tag-warn">Same day listed twice</span></div> : null}</td>
                   <td className="row-actions">
-                    {d.status !== "supplier_confirmed" && d.status !== "cancelled" && (
+                    {isDup(d) && <button className="btn-mini" onClick={() => setMerging(d)}>Merge…</button>}
+                    {d.status !== "supplier_confirmed" && d.status !== "cancelled" && !d.mergedIntoId && (
                       <button className="btn-mini" disabled={!ready} onClick={() => confirm(d)}><Check size={14} />Confirm</button>
                     )}
                     {d.status !== "cancelled" && <button className="icon-btn danger" title="Cancel departure" onClick={() => cancel(d)}><X size={15} /></button>}
@@ -1780,8 +1803,106 @@ function DeparturesSection({ data, reload, flash }) {
         </table>
       </div>
 
+      {merges.some((m) => !m.revertedAt && Date.parse(m.revertibleUntil) > Date.now()) && (
+        <div className="bk-trunc" role="status">
+          <strong>Recent merges</strong> (can be undone for 24 hours):
+          <ul>{merges.filter((m) => !m.revertedAt && Date.parse(m.revertibleUntil) > Date.now()).map((m) => (
+            <li key={m.id}>Departures {m.duplicateIds.join(", ")} into {m.keptId} · {m.movedBookings} booking{m.movedBookings === 1 ? "" : "s"} moved, {m.emailed} emailed · by {m.mergedBy || "—"}
+              {" "}<button className="btn-mini" onClick={() => revert(m)}>Undo</button></li>
+          ))}</ul>
+        </div>
+      )}
+
       {pub && <PublishModal type={pub.type} data={data} onClose={() => setPub(null)} onDone={(code) => { setPub(null); flash(code ? `Date created with its first booking — code ${code}.` : "Date created."); reload(); }} />}
+      {merging && <MergeModal from={merging} deps={deps} onClose={() => setMerging(null)} onDone={(msg) => { setMerging(null); flash(msg); reload(); loadMerges(); }} />}
     </>
+  );
+}
+
+// Merge duplicate dates of one tour and day (055). Choose the date to keep and
+// the duplicates; the preview shows the result, any reason it's refused, who
+// runs the kept date (a choice when they differ) and the old profit split.
+function MergeModal({ from, deps, onClose, onDone }) {
+  const sameDay = deps.filter((d) => d.tourProductId === from.tourProductId && depDay(d) === depDay(from)
+    && LIVE_DEP.includes(d.status) && !d.mergedIntoId);
+  const [keptId, setKeptId] = useState(() => {
+    // Default: the date going furthest (GoAhead first), then the most seats.
+    const rank = (d) => ["supplier_confirmed", "minimum_reached", "open", "pending_review"].indexOf(d.status);
+    return [...sameDay].sort((a, b) => rank(a) - rank(b) || seatsOf(b) - seatsOf(a) || a.id - b.id)[0]?.id;
+  });
+  const [dupIds, setDupIds] = useState(() => sameDay.map((d) => d.id));
+  const [operator, setOperator] = useState("");
+  const [preview, setPreview] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const duplicates = dupIds.filter((id) => id !== keptId);
+  async function post(path, body) {
+    const r = await apiFetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.error || "That didn't work.");
+    return j;
+  }
+  useEffect(() => {
+    if (!keptId || !duplicates.length) { setPreview(null); return; }
+    setErr("");
+    post("/admin/departures/merge/preview", { keptId, duplicateIds: duplicates }).then(setPreview).catch((e) => { setPreview(null); setErr(e.message); });
+  }, [keptId, duplicates.join(",")]);
+  async function confirm() {
+    setBusy(true); setErr("");
+    try {
+      const j = await post("/admin/departures/merge", { keptId, duplicateIds: duplicates, operatorAgencyId: operator || null });
+      onDone(`Merged into departure ${j.merge.keptId}: ${j.merge.movedBookings} booking${j.merge.movedBookings === 1 ? "" : "s"} moved, ${j.merge.emailed} traveler${j.merge.emailed === 1 ? "" : "s"} emailed. You can undo it for 24 hours.`);
+    } catch (e) { setErr(e.message); } finally { setBusy(false); }
+  }
+  const eur = (n) => money(n);
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 760 }}>
+        <div className="modal-head"><h2>Merge {from.route}, {fmtDate(depDay(from))}</h2><button className="icon-btn" onClick={onClose}><X size={18} /></button></div>
+        <div className="modal-body">
+          <p className="field-hint">Every booking moves to the date you keep, with its travelers, payments and ops notes. The others close and leave the site; their links go to the kept date. Each moved traveler gets one email: same tour, same day, booking unchanged.</p>
+          <table className="dash-table"><thead><tr><th>Keep</th><th>Merge</th><th>Departure</th><th>Status</th><th>Seats</th></tr></thead><tbody>
+            {sameDay.map((d) => (
+              <tr key={d.id}>
+                <td><input type="radio" name="kept" checked={keptId === d.id} onChange={() => setKeptId(d.id)} aria-label={`Keep departure ${d.id}`} /></td>
+                <td><input type="checkbox" disabled={keptId === d.id} checked={keptId !== d.id && dupIds.includes(d.id)} onChange={(e) => setDupIds(e.target.checked ? [...dupIds, d.id] : dupIds.filter((x) => x !== d.id))} aria-label={`Merge departure ${d.id}`} /></td>
+                <td>{d.id}</td><td><StatusTag d={d} /></td><td>{seatsOf(d)} / max {d.maxSeats}</td>
+              </tr>
+            ))}
+          </tbody></table>
+          {preview && (
+            <>
+              {preview.problems.length > 0 && <div className="auth-error" role="alert">{preview.problems.map((p, i) => <div key={i}>{p}</div>)}</div>}
+              <p>After the merge: <b>{preview.seatsAfter}</b> travelers on departure {keptId} (max {preview.kept?.maxSeats}){preview.goAheadAfter ? ", at or above its GoAhead minimum" : `, ${Math.max(0, (preview.kept?.minSeats || 4) - preview.seatsAfter)} short of GoAhead`}.</p>
+              {preview.needsOperatorChoice && (
+                <label className="field"><span>These dates are run by different agencies. Who runs the kept date?</span>
+                  <select value={operator} onChange={(e) => setOperator(e.target.value)}>
+                    <option value="">Choose</option>
+                    {preview.operatorChoices.map((o) => <option key={o.agencyId} value={o.agencyId}>{o.name}</option>)}
+                  </select>
+                </label>
+              )}
+              {preview.split && (
+                <>
+                  <h4>The old profit split (on the money collected so far)</h4>
+                  <table className="dash-table"><thead><tr><th>Party</th><th>Separate dates</th><th>Merged</th></tr></thead><tbody>
+                    {preview.split.byAgency.map((a) => <tr key={a.agencyId || "none"}><td>{a.name}</td><td>{eur(a.before)}</td><td>{eur(a.after)}</td></tr>)}
+                    <tr><td>Sawa</td><td>{eur(preview.split.sawaBefore)}</td><td>{eur(preview.split.sawaAfter)}</td></tr>
+                  </tbody></table>
+                </>
+              )}
+            </>
+          )}
+          {err && <div className="auth-error" role="alert">{err}</div>}
+        </div>
+        <div className="modal-foot">
+          <button className="btn-ghost" onClick={onClose}>Cancel</button>
+          <button className="btn-primary" disabled={busy || !preview?.ok || (preview.needsOperatorChoice && !operator)} onClick={confirm}>
+            {busy ? "Merging…" : `Merge ${duplicates.length} into departure ${keptId}`}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 

@@ -55,27 +55,35 @@ export async function operatorFor(departureId, db = pool) {
   // without an operator (it did before one was ever set).
   if (catalogueV2Enabled()) return null;
   try {
-    const dep = (await db.query("SELECT * FROM departures WHERE id=$1", [departureId])).rows[0];
-    if (!dep) return null;
-    const [pledges, product, agencies, inputs] = await Promise.all([
-      db.query("SELECT * FROM pledges WHERE departure_id=$1 ORDER BY created_at ASC, id ASC", [departureId]),
-      dep.tour_product_id ? db.query("SELECT * FROM tour_products WHERE id=$1", [dep.tour_product_id]) : { rows: [] },
-      db.query("SELECT * FROM agencies"),
-      loadOperatorInputs(db),
-    ]);
-    const productRow = product.rows[0] ? mapProduct(product.rows[0]) : null;
-    const departure = { ...mapDeparture(dep, []), pledges: withDepositTimes(pledges.rows.map(mapPledge), inputs.depositPaidAt) };
-    const id = operatorForDeparture(departure, {
-      listingAgencyId: product.rows[0]?.agency_id || null,
-      directAgencyId: directOperatorId(agencies.rows, DIRECT_BOOKINGS_OPERATOR),
-      referralAgencies: inputs.referralAgencies,
-      lockAtMs: bookingClosesAtMs(departure, productRow),
-    });
-    const row = id ? agencies.rows.find((a) => a.id === id) : null;
-    return row ? publicOperator(mapAgency(row)) : null;
+    const found = await operatorOf(departureId, db);
+    return found?.row ? publicOperator(mapAgency(found.row)) : null;
   } catch (e) {
     rethrowIfProgrammerError(e);
     console.warn(`[email] couldn't work out the operator for departure ${departureId}:`, e.message);
     return null;
   }
+}
+
+// The agency id that runs a legacy departure under the U01 rule (or admin's
+// choice at a merge), and its row. Throws on a database failure; the merge
+// tool shows it, where operatorFor above swallows it for an email.
+export async function operatorOf(departureId, db = pool) {
+  const dep = (await db.query("SELECT * FROM departures WHERE id=$1", [departureId])).rows[0];
+  if (!dep) return null;
+  const [pledges, product, agencies, inputs] = await Promise.all([
+    db.query("SELECT * FROM pledges WHERE departure_id=$1 ORDER BY created_at ASC, id ASC", [departureId]),
+    dep.tour_product_id ? db.query("SELECT * FROM tour_products WHERE id=$1", [dep.tour_product_id]) : { rows: [] },
+    db.query("SELECT * FROM agencies"),
+    loadOperatorInputs(db),
+  ]);
+  const productRow = product.rows[0] ? mapProduct(product.rows[0]) : null;
+  const departure = { ...mapDeparture(dep, []), pledges: withDepositTimes(pledges.rows.map(mapPledge), inputs.depositPaidAt) };
+  const id = operatorForDeparture(departure, {
+    listingAgencyId: product.rows[0]?.agency_id || null,
+    directAgencyId: directOperatorId(agencies.rows, DIRECT_BOOKINGS_OPERATOR),
+    referralAgencies: inputs.referralAgencies,
+    lockAtMs: bookingClosesAtMs(departure, productRow),
+  });
+  const row = id ? agencies.rows.find((a) => a.id === id) || null : null;
+  return { id: id || null, row };
 }
