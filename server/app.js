@@ -35,7 +35,8 @@ import {
   departureActionBuckets,
 } from "./domain.js";
 import { attachUser, requireAuth, requireRole, isPlatform, isAgency, AuthError } from "./auth.js";
-import { supabaseAdmin } from "./supabase.js";
+import { requestTiming } from "./request-timing.js";
+import { supabaseAdmin, clearAuthCache } from "./supabase.js";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import { logAudit } from "./audit.js";
@@ -182,6 +183,9 @@ app.post("/api/csp-report",
 
 // 12mb allows base64-encoded image uploads (~9mb raw) through /api/admin/uploads.
 // (The route-level json parser ran too late because this global one parses first.)
+// Where each API request's time goes: a Server-Timing header, and a log line
+// for a slow one (server/request-timing.js).
+app.use(requestTiming());
 app.use(express.json({ limit: "12mb" }));
 
 // --- CORS: restrict to known origins (configurable via CORS_ORIGINS) ---
@@ -2980,6 +2984,9 @@ async function provisionUser({ email, fullName, role, agencyId, operatorId }) {
 // could not sign in. A failure printing exactly what success prints — the same
 // shape as the revoke gap, with the polarity reversed.
 async function setLoginAccess(userId, allowed) {
+  // Remembered sign-in checks (server/supabase.js) are dropped, so a revoked
+  // login doesn't ride on one.
+  if (!allowed) clearAuthCache();
   // Not "revoked"/"restored": in log mode there is no auth provider and so no
   // login to change. That is a third state, and collapsing it into either of
   // the other two is how "on" came to mean "working".
