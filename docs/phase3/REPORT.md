@@ -122,6 +122,8 @@ Rules:
 
 ### E. Agency commission
 
+> **Superseded by phase 5 (28 Sep 2026, `docs/phase5/REPORT.md`).** The per-seat commission below is retired for new bookings: agencies earn the departure's pool per traveler, in EGP, paid monthly in EUR at the CBE rate on the statement date; agency billing pays the full price. Rows made before migration 061 keep these rules.
+
 1. **Locked at booking.** When an agency books a seat on a catalog departure, the commission per seat is locked in EUR from the rate version in force (`agency_commissions`). A later version doesn't change it.
 2. **Earned** once the departure completes and the traveler traveled.
    - A late cancellation where Sawa keeps a fee earns 50%. That means a traveler cancellation after GoAhead in a fee band of the default schedule: under 48 hours for day tours, under 30 days for cruises and multi-day.

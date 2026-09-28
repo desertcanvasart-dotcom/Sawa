@@ -198,6 +198,8 @@ Both modes can live behind a per-product flag, starting with one day tour, as th
    - No card and no payment. The traveler accepts the Terms at booking; this is already recorded on the public booking route.
    - The booking counts toward GoAhead at once. Every booking already does: `catalogue_departure_seats` sums live bookings, and so does the legacy `refreshStatus`.
    - The phase 3 traveler details stay required under the flag, as built.
+> **Superseded by phase 5 (28 Sep 2026, `docs/phase5/REPORT.md`).** The request charges the tier price at the time it is sent (not a fixed published price); agency-billed seats pay the full price; a cheaper tier by the cut-off refunds the difference.
+
 2. **GoAhead** (the phase 1 status job; catalog departures only). Each live booking needs one payment link for the **full published price**, following the settled decision "charge at GoAhead = full published price". Legacy departures keep today's deposit link plus balance link.
    - **Agency-billed seats:** the agency gets the link, for its phase 3 invoice amount (published price less commission).
    - **Standard agency seats:** the traveler gets it, as for direct bookings.

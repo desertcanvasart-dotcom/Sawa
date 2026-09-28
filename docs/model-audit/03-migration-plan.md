@@ -354,6 +354,8 @@ A **phase 0** of prerequisites comes first.
 - **Could break:** the legacy Wednesday runs, if the payout tables are shared. Keep the legacy code path separate.
 
 ### Phase 5: Agency commission, billing and statements (M)
+
+> **Superseded by phase 5 (28 Sep 2026, `docs/phase5/REPORT.md`).** Phase 5 became the final pricing and money model: tiered EGP prices, cost lines, operator fee, the collecting agent's commission and the pool shared per traveler; the operator is an agency on the departure, the roster the fallback. The commission rows below (per-product rates, per-seat accrual, billing at price less commission) are replaced.
 - **Scope:**
   - Per-product commission rates (versioned).
   - Accrual at booking; earned when the traveller travels; partial on retained late-cancel fees (D13).
