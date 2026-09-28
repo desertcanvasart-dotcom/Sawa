@@ -20,6 +20,7 @@ import { rosterEligibility, addStrike, notifyOperator, operatorRecipients } from
 import { rateById, lockRatesForSoldDepartures } from "./rates.js";
 import { ACK_HOURS, MANIFEST_ACCESS_DAYS, expectedOperatorAmount, roomsFor } from "../shared/operators.js";
 import { shiftDate } from "../shared/catalogue.js";
+import { groupParties, partiesAvailable } from "./booking-parties.js";
 
 const inTx = (db, fn) => (db === pool ? withTransaction(fn) : fn(db));
 const ymd = (v) => (v instanceof Date ? v.toISOString().slice(0, 10) : v ? String(v).slice(0, 10) : null);
@@ -236,9 +237,13 @@ export async function assignByAdmin(db, { departureId, operatorId, by, now = Dat
 // operator needs to run it: name, pickup point, a contact number (the lead
 // traveler's), nationality where the product's tickets need it, and
 // safety-related needs. No email, no price.
+//
+// Group bookings (migration 056): a party's bookings are listed together, lead
+// first, and only the lead's row carries a contact number.
 export function manifestRows(pledges, { needsNationality = false, payments = null } = {}) {
   const rows = [];
-  for (const p of pledges) {
+  for (const p of groupParties(pledges)) {
+    const party = p._party;
     // Model phase 4, before the cut-off: whether the booking has paid. A
     // released seat is a canceled booking and isn't here (clause 10.1).
     const pay = payments && p.payment_mode === "pay_at_goahead" ? payments.get(p.id) || null : undefined;
@@ -261,9 +266,10 @@ export function manifestRows(pledges, { needsNationality = false, payments = nul
         booking: p.booking_code || String(p.id).slice(-8),
         ...(missing.length ? { missing } : {}),
         name: names[i] || (i === 0 ? lead : `${lead || "Guest"}, guest ${i + 1}`),
-        lead: i === 0,
+        lead: i === 0 && (!party || party.isLead),
+        ...(party ? { party: { lead: party.lead, leadBooking: party.leadBooking, size: party.size } } : {}),
         pickupPoint: p.pickup_point || null,
-        contactNumber: i === 0 ? (p.customer_phone || null) : null,
+        contactNumber: i === 0 && (!party || party.isLead) ? (p.customer_phone || null) : null,
         nationality: needsNationality ? (p.nationality || null) : undefined,
         safetyNeeds: i === 0 ? (p.safety_needs || null) : null,
         canceledAfterCutoff: p.status === "cancelled" || undefined,
@@ -276,6 +282,12 @@ export function manifestRows(pledges, { needsNationality = false, payments = nul
 
 async function livePledges(c, legacyDepartureId) {
   if (!legacyDepartureId) return [];
+  // With migration 056, each booking carries its party's lead for the manifest.
+  if (await partiesAvailable(c)) {
+    return (await c.query(
+      `SELECT p.*, bp.lead_pledge_id AS party_lead_pledge_id FROM pledges p LEFT JOIN booking_parties bp ON bp.id = p.party_id
+        WHERE p.departure_id = $1 AND p.status <> 'cancelled' ORDER BY p.created_at, p.id`, [legacyDepartureId])).rows;
+  }
   return (await c.query(
     "SELECT * FROM pledges WHERE departure_id = $1 AND status <> 'cancelled' ORDER BY created_at, id", [legacyDepartureId])).rows;
 }

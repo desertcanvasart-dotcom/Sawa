@@ -1034,12 +1034,14 @@ export function ManifestTable({ travelers }) {
             const Missing = () => <span className="tag tag-warn">Missing</span>;
             return (
               <tr key={i} style={t.canceledAfterCutoff ? { opacity: 0.6 } : undefined}>
-                <td>{t.booking}</td>
+                <td>{t.booking}{t.party && (t.lead
+                  ? <div><span className="tag">Group lead · {t.party.size} travelers</span></div>
+                  : t.party.leadBooking !== t.booking && <div className="field-hint">with {t.party.lead || t.party.leadBooking}'s group</div>)}</td>
                 <td>{t.name}{miss.has("name") && <> <Missing /></>}{t.canceledAfterCutoff && <div className="field-hint">canceled after the cut-off</div>}
                   {t.payment?.standing === "paid" && <div><span className="tag tag-on">Paid</span></div>}
                   {t.payment?.standing === "due" && <div><span className="tag tag-warn">{t.payment.dueAt ? `Payment due by ${payDue(t.payment.dueAt)}` : "Payment due"}</span></div>}</td>
                 <td>{miss.has("pickupPoint") ? <Missing /> : t.pickupPoint || "—"}</td>
-                <td>{miss.has("phone") ? <Missing /> : t.contactNumber || (t.lead ? "—" : "")}</td>
+                <td>{miss.has("phone") && (!t.party || t.lead) ? <Missing /> : t.contactNumber || (t.lead ? "—" : t.party && t.party.leadBooking !== t.booking ? "via group lead" : "")}</td>
                 {nationality && <td>{miss.has("nationality") ? <Missing /> : t.nationality || "—"}</td>}
                 <td>{miss.has("safetyNeeds") ? <Missing /> : t.safetyNeeds || (t.lead ? "—" : "")}</td>
               </tr>
