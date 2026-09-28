@@ -38,7 +38,7 @@ const operatorFields = z.object({
   contacts: z.array(z.object({ name: z.string().trim().max(120), role: text(80), phone: text(40), email: text(200) })).max(10).optional(),
 }).strict();
 
-export function registerOperatorRoutes(app, { requireAuth, requireRole, h, logAudit, provisionUser, supabaseAdmin, sendEmail }) {
+export function registerOperatorRoutes(app, { requireAuth, requireRole, h, logAudit, provisionUser, supabaseAdmin, sendEmail, invalidatePublic = () => {} }) {
   const staff = [requireAuth, requireRole("super_admin", "ops_staff")];
   const superAdmin = [requireAuth, requireRole("super_admin")];
   const operatorOnly = [requireAuth, requireRole("operator_owner", "operator_staff")];
@@ -284,6 +284,8 @@ export function registerOperatorRoutes(app, { requireAuth, requireRole, h, logAu
     const effectiveFrom = req.body?.effectiveFrom ? ymdSchema.parse(req.body.effectiveFrom) : null;
     const version = await publishRate({ productId: id(req.params.productId), versionId: id(req.params.versionId), effectiveFrom, by: by(req) });
     await logAudit(req, { action: "rates.publish", entity: "catalogue_product", entityId: version.productId, detail: { version: version.version, effectiveFrom: version.effectiveFrom } });
+    // Phase 5: the tour pages show the rate card's tier prices.
+    invalidatePublic();
     res.json({ version });
   }));
 

@@ -206,7 +206,8 @@ async function decidePoolRows(c, calc) {
     const place = byPledge.get(r.pledge_id);
     const outcome = place?.outcome || "none";
     const factor = outcome === "travelled" ? 1 : outcome === "late_fee_kept" ? 0.5 : 0;
-    const state = factor === 1 ? "earned" : factor > 0 ? "half" : "void";
+    // No positive pool: nothing to share, whatever the place's outcome.
+    const state = ppt <= 0 || factor === 0 ? "void" : factor === 1 ? "earned" : "half";
     const reason = calc.economics.pool <= 0 ? "The pool was not positive: no agency share (the collecting agent paid the guarantee)."
       : outcome === "travelled" ? "Traveled: the pool per traveler."
       : outcome === "late_fee_kept" ? "Late cancellation with a fee kept: half the pool per traveler."
