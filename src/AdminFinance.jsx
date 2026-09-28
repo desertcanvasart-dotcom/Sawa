@@ -1,8 +1,9 @@
 // Admin → Finance (model phase 3): what is owed and what was paid (operator
 // advances and balances, agency commission statements, agency invoices), the
 // margin report, agency commission and billing, and the reference tables
-// (exchange rates, public holidays, penalty amounts, payment fees). Records
-// only: finance pays by bank transfer and records it here.
+// (exchange rates, public holidays, penalty amounts, payment fees), and the
+// automatic exchange rate and site-wide traveler rate (064). Records only:
+// finance pays by bank transfer and records it here.
 import React, { useEffect, useState } from "react";
 import { AlertTriangle } from "lucide-react";
 import { apiFetch } from "./supabaseClient";
@@ -311,6 +312,94 @@ function Margin() {
   );
 }
 
+// 064 — the automatic rate: alerts, rates waiting for approval, and the
+// site-wide traveler rate (buffer, override, history).
+const TRAVELLER_REASON = { initial: "first rate", weekly: "weekly update", market_move: "market moved more than 3%", override: "set by hand" };
+function FxPanel({ flash, onChange }) {
+  const [fx, setFx] = useState(null);
+  const [err, setErr] = useState("");
+  const [catalogueOn, setCatalogueOn] = useState(false);
+  const [buffer, setBuffer] = useState("");
+  const [override, setOverride] = useState({ rate: "", reason: "" });
+  const [busy, setBusy] = useState(false);
+  async function load() {
+    try {
+      const j = await call("/admin/finance/fx");
+      setFx(j);
+      setBuffer(String(j.bufferPct));
+    } catch (e) { setErr(e.message); }
+  }
+  useEffect(() => {
+    load();
+    call("/admin/features").then((j) => setCatalogueOn(j.catalogueV2 === true)).catch(() => setCatalogueOn(false));
+  }, []);
+  const run = async (fn, msg) => {
+    setErr(""); setBusy(true);
+    try { await fn(); flash(msg); await load(); onChange?.(); } catch (e) { setErr(e.message); } finally { setBusy(false); }
+  };
+  if (!fx) return err ? <div className="auth-error">{err}</div> : null;
+  const t = fx.traveller;
+  return (
+    <>
+      {fx.alerts.map((a) => (
+        <div key={a.id} className="auth-error" role="status">
+          <AlertTriangle size={14} />{" "}
+          {a.kind === "fetch_failed"
+            ? <>The exchange rate couldn't be fetched for {dayLabel(a.detail.day)}. Still using {a.detail.lastGood ? `${a.detail.lastGood.egpPerEur} from ${dayLabel(a.detail.lastGood.day)}` : "no rate"}. {(a.detail.errors || []).join("; ")}</>
+            : <>The rate fetched for {dayLabel(a.detail.day)} ({a.detail.egpPerEur}) is {a.detail.changePct}% from {a.detail.previous?.egpPerEur}. It isn't used until approved below.</>}
+        </div>
+      ))}
+      {fx.pending.length > 0 && (
+        <div className="dash-card" style={{ marginBottom: 12 }}>
+          <h2>Waiting for approval</h2>
+          <p className="field-hint">A fetched rate more than 5% from the previous one. Approve it if the market really moved; reject it if the source is wrong (then enter the day's rate by hand below).</p>
+          <table className="dash-table"><tbody>{fx.pending.map((r) => (
+            <tr key={r.day}><td>{dayLabel(r.day)}</td><td className="tnum">{r.egpPerEur}</td>
+              <td className="field-hint">was {r.previousEgpPerEur ?? "—"} · {r.sourceNote || r.source}</td>
+              <td className="row-actions">
+                <button className="btn-primary sm" disabled={busy} onClick={() => run(() => call(`/admin/finance/fx-rates/${r.day}/approve`, "POST"), "Rate approved.")}>Approve</button>
+                <button className="btn-ghost sm" disabled={busy} onClick={() => run(() => call(`/admin/finance/fx-rates/${r.day}/reject`, "POST"), "Rate rejected.")}>Reject</button>
+              </td></tr>
+          ))}</tbody></table>
+        </div>
+      )}
+      <div className="dash-card" style={{ marginBottom: 12 }}>
+        <h2>Traveler rate (EGP per 1 EUR)</h2>
+        <p className="field-hint">
+          One rate for the whole site: every EUR price is the EGP price ÷ this rate, rounded up, and a booking keeps the rate in force when it was made.
+          It is the latest approved market rate less the buffer, renewed weekly, or at once when the market moves more than 3% from the rate it was worked out from.
+          {!catalogueOn && " The public catalog is off, so travelers don't see it yet and it isn't renewed automatically."}
+        </p>
+        <div className="bk-summary">
+          <div className="bk-kpi"><span>In force</span><strong>{t ? t.egpPerEur : "—"}</strong><i>{t ? `${TRAVELLER_REASON[t.reason] || t.reason} · ${dayLabel(t.effectiveAt?.slice(0, 10))}` : "none yet"}</i></div>
+          <div className="bk-kpi"><span>Market rate</span><strong>{fx.market ? fx.market.egpPerEur : "—"}</strong><i>{fx.market ? `${dayLabel(fx.market.day)} · ${fx.market.source === "manual" ? "entered by hand" : fx.market.source}` : "none yet"}</i></div>
+          <div className="bk-kpi"><span>Market less buffer</span><strong>{fx.suggested ?? "—"}</strong><i>{fx.due ? `update due: ${TRAVELLER_REASON[fx.due] || fx.due}` : "no update due"}</i></div>
+        </div>
+        <form className="cat-actions" style={{ justifyContent: "flex-start" }} onSubmit={(e) => { e.preventDefault(); run(() => call("/admin/finance/traveller-rate/buffer", "PUT", { bufferPct: Number(buffer) }), "Buffer saved. It applies from the next update."); }}>
+          <label>Buffer %<input type="number" step="0.1" min="0" max="20" value={buffer} onChange={(e) => setBuffer(e.target.value)} style={{ width: 90 }} required /></label>
+          <button className="btn-ghost sm" disabled={busy}>Save buffer</button>
+          <button type="button" className="btn-ghost sm" disabled={busy} onClick={() => run(() => call("/admin/finance/fx/fetch", "POST"), "Fetch done.")}>Fetch today's rate now</button>
+        </form>
+        <form className="cat-actions" style={{ justifyContent: "flex-start" }} onSubmit={(e) => { e.preventDefault(); run(() => call("/admin/finance/traveller-rate/override", "POST", { egpPerEur: Number(override.rate), reason: override.reason }).then(() => setOverride({ rate: "", reason: "" })), "Traveler rate set. It is logged with your reason."); }}>
+          <input type="number" step="0.0001" min="0" placeholder="Set by hand, e.g. 52.40" value={override.rate} onChange={(e) => setOverride({ ...override, rate: e.target.value })} required />
+          <input placeholder="Reason (required, logged)" value={override.reason} onChange={(e) => setOverride({ ...override, reason: e.target.value })} required style={{ minWidth: 260 }} />
+          <button className="btn-primary sm" disabled={busy}>Override</button>
+        </form>
+        <p className="field-hint">An override stands until the next weekly or early update.</p>
+        {fx.history.length > 0 && (
+          <table className="dash-table"><thead><tr><th>From</th><th>Rate</th><th>Why</th><th>Market</th><th>By</th></tr></thead><tbody>{fx.history.map((h) => (
+            <tr key={h.id}><td>{new Date(h.effectiveAt).toLocaleString("en-GB", { timeZone: "Africa/Cairo", dateStyle: "medium", timeStyle: "short" })}</td>
+              <td className="tnum">{h.egpPerEur}</td><td>{TRAVELLER_REASON[h.reason] || h.reason}{h.note && <div className="field-hint">{h.note}</div>}</td>
+              <td className="tnum">{h.marketEgpPerEur ?? "—"}{h.bufferPct != null && h.reason !== "override" ? <div className="field-hint">less {h.bufferPct}%</div> : null}</td>
+              <td className="field-hint">{h.setBy}</td></tr>
+          ))}</tbody></table>
+        )}
+        <p className="field-hint">Sources, in order: {fx.providers.map((p) => p.label).join("; then ")}. CBE data: source Central Bank of Egypt.</p>
+      </div>
+    </>
+  );
+}
+
 function Settings({ flash }) {
   const [data, setData] = useState(null);
   const [err, setErr] = useState("");
@@ -330,16 +419,19 @@ function Settings({ flash }) {
   return (
     <>
       {err && <div className="auth-error">{err}</div>}
+      <FxPanel flash={flash} onChange={load} />
       <div className="dash-card" style={{ marginBottom: 12 }}>
         <h2>Exchange rates (EGP per 1 EUR)</h2>
-        <p className="field-hint">The Central Bank of Egypt rate, entered by date. Used for Egyptian agencies' commission statements and the margin report. Nothing is fetched automatically.</p>
+        <p className="field-hint">The market rate, one a day: fetched automatically every morning (Cairo), or entered here by hand, which replaces the day's fetched rate. Used for the FX line, Egyptian agencies' commission statements and the margin report. A rate marked "waiting" or "rejected" is never used.</p>
         <form className="cat-actions" style={{ justifyContent: "flex-start" }} onSubmit={(e) => { e.preventDefault(); run(() => call(`/admin/finance/fx-rates/${fx.day}`, "PUT", { egpPerEur: Number(fx.rate), sourceNote: "CBE" }), "Rate saved."); }}>
           <input type="date" value={fx.day} onChange={(e) => setFx({ ...fx, day: e.target.value })} required />
           <input type="number" step="0.0001" min="0" placeholder="e.g. 55.25" value={fx.rate} onChange={(e) => setFx({ ...fx, rate: e.target.value })} required />
           <button className="btn-primary sm">Save rate</button>
         </form>
         <table className="dash-table"><tbody>{data.fxRates.slice(0, 31).map((r) => (
-          <tr key={r.day}><td>{dayLabel(r.day)}</td><td className="tnum">{r.egpPerEur}</td><td className="field-hint">{r.enteredBy}</td>
+          <tr key={r.day} className={r.status === "rejected" ? "row-archived" : ""}><td>{dayLabel(r.day)}</td><td className="tnum">{r.egpPerEur}</td>
+            <td>{r.status === "pending" ? <span className="tag tag-warn">waiting for approval</span> : r.status === "rejected" ? <span className="tag tag-off">rejected</span> : null}
+              <div className="field-hint">{r.source === "manual" ? `entered by ${r.enteredBy || "—"}` : `${r.sourceNote || r.source}${r.providerAsOf && r.providerAsOf !== r.day ? ` · published ${dayLabel(r.providerAsOf)}` : ""}${r.fetchedAt ? ` · fetched ${new Date(r.fetchedAt).toLocaleString("en-GB", { timeZone: "Africa/Cairo", dateStyle: "medium", timeStyle: "short" })}` : ""}`}</div></td>
             <td className="row-actions"><button className="btn-ghost sm" onClick={() => run(() => call(`/admin/finance/fx-rates/${r.day}`, "DELETE"), "Rate removed.")}>Remove</button></td></tr>
         ))}</tbody></table>
       </div>

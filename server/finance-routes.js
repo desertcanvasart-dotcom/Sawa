@@ -22,6 +22,9 @@ import { bankAccountsFor, submitBankDetails, decideBankDetails } from "./bank-de
 import { mapCommission, mapStatement, buildCommissionStatement } from "./commissions.js";
 import { bookingDetailsByToken, saveBookingDetailsByToken } from "./booking-details.js";
 import { statementPdf } from "./pdf.js";
+import {
+  fxOverview, runFxDaily, decideFxRate, afterManualRate, setTravellerBuffer, overrideTravellerRate,
+} from "./fx.js";
 import { mapReceivable } from "./receivables.js";
 
 const ymdSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use a date like 2026-11-13.");
@@ -95,6 +98,51 @@ export function registerFinanceRoutes(app, { requireAuth, requireRole, h, logAud
   app.put("/api/admin/finance/fx-rates/:day", ...staff, route(async (req, res) => {
     const out = await setFxRate(pool, { day: ymdSchema.parse(req.params.day), egpPerEur: req.body?.egpPerEur, sourceNote: req.body?.sourceNote, by: by(req) });
     await logAudit(req, { action: "finance.fx_rate", entity: "fx_rate", entityId: out.day, detail: out });
+    // The rate is saved either way; a follow-up that fails (before 064) is
+    // logged, not hidden.
+    await afterManualRate(pool, { by: by(req) })
+      .catch((e) => console.error("[finance] after a manual rate: pending alert and traveler rate not updated —", e.message));
+    res.json(out);
+  }));
+
+  // 064 — the automatic rate. Before the migration these answer 503.
+  const fxRoute = async (fn) => {
+    try {
+      return await fn();
+    } catch (e) {
+      if (e?.code === "42P01" || e?.code === "42703") {
+        throw Object.assign(new CatalogueError(503, "The automatic exchange rate isn't switched on yet: migration 064 has not been applied to this database."), { expose: true });
+      }
+      throw e;
+    }
+  };
+  app.get("/api/admin/finance/fx", ...staff, route(async (_req, res) => {
+    res.json(await fxRoute(() => fxOverview(pool)));
+  }));
+  // Fetch today's rate now (the daily job does the same; a day that already
+  // has a rate is left alone).
+  app.post("/api/admin/finance/fx/fetch", ...staff, writeLimiter, route(async (req, res) => {
+    const out = await fxRoute(() => runFxDaily({ db: pool, send: sendEmail }));
+    await logAudit(req, { action: "finance.fx_fetch", entity: "fx_rate", entityId: out.market?.day || null, detail: out });
+    res.json(out);
+  }));
+  app.post("/api/admin/finance/fx-rates/:day/:decision", ...staff, route(async (req, res) => {
+    const decision = String(req.params.decision);
+    if (!["approve", "reject"].includes(decision)) throw new CatalogueError(404, "Not found.");
+    const out = await fxRoute(() => decideFxRate(pool, { day: ymdSchema.parse(req.params.day), approve: decision === "approve", by: by(req) }));
+    await logAudit(req, { action: `finance.fx_rate.${decision}`, entity: "fx_rate", entityId: req.params.day, detail: out });
+    res.json(out);
+  }));
+  app.put("/api/admin/finance/traveller-rate/buffer", ...staff, route(async (req, res) => {
+    const out = await fxRoute(() => setTravellerBuffer(pool, { bufferPct: req.body?.bufferPct, by: by(req) }));
+    await logAudit(req, { action: "finance.traveller_rate.buffer", entity: "finance_settings", entityId: "traveller_rate", detail: out });
+    res.json(out);
+  }));
+  // A manual traveler rate, with the reason: recorded in the rate's own
+  // history and in the audit log.
+  app.post("/api/admin/finance/traveller-rate/override", ...staff, route(async (req, res) => {
+    const out = await fxRoute(() => overrideTravellerRate(pool, { egpPerEur: req.body?.egpPerEur, reason: req.body?.reason, by: by(req) }));
+    await logAudit(req, { action: "finance.traveller_rate.override", entity: "fx_traveller_rate", entityId: out.id, detail: out });
     res.json(out);
   }));
   app.delete("/api/admin/finance/fx-rates/:day", ...staff, route(async (req, res) => {

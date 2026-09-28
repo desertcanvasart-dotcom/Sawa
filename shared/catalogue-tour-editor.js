@@ -11,6 +11,7 @@ import { tierPriceRows, tierPriceSummary } from "./pool-model.js";
 import { cutoffLabel } from "./booking-policy.js";
 
 export const NO_RATE_CARD = "No published rate card: this tour can't be booked";
+export const NO_EXCHANGE_RATE = "Exchange rate not set";
 
 // The legacy fields a catalogue product hides.
 export const LEGACY_PRICING_FIELDS = [
@@ -33,7 +34,8 @@ export function catalogueTourView(info) {
     hasRate: !!summary,
     single,
     howWorked: single ? `EGP ${Number(single.egp).toLocaleString("en-US")} ÷ traveler rate ${single.eurRate}, rounded up` : null,
-    warning: summary ? null : NO_RATE_CARD,
+    // A rate card with prices but no site-wide traveler rate: no euro price to show.
+    warning: summary ? null : info.rate && info.rate.eurRate == null ? NO_EXCHANGE_RATE : NO_RATE_CARD,
     rows: summary ? rows : [],
     summary,
     facts: [

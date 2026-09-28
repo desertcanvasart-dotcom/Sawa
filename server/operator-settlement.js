@@ -272,7 +272,7 @@ export async function departureDistribution(c, departureId, { entitlementEgp }) 
   // the charges; a refund lowers Gross Collections but carries no share.
   const days = [...new Set(charges.map((x) => x.day))];
   const rates = new Map(days.length ? (await c.query(
-    "SELECT day, egp_per_eur FROM fx_rates WHERE day = ANY($1::date[])", [days])).rows.map((r) => [ymd(r.day), Number(r.egp_per_eur)]) : []);
+    "SELECT day, egp_per_eur FROM fx_rates WHERE day = ANY($1::date[]) AND status = 'approved'", [days])).rows.map((r) => [ymd(r.day), Number(r.egp_per_eur)]) : []);
   const converted = entitlementEgp != null && charges.length
     ? departureMargin({ charges, operatorEgp: Number(entitlementEgp), rates })
     : null;

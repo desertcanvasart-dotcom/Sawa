@@ -529,7 +529,7 @@ export function RatesSection({ flash }) {
   return (
     <>
       <Head title="Rate card"
-        sub="Per product, in EGP: the selling price and operator fee per tier, the cost lines, the collecting agent's commission and the published EUR rate. The operator is paid its entitlement; agencies share the pool. A departure keeps the version in force when its first seat sold."
+        sub="Per product, in EGP: the selling price and operator fee per tier, the cost lines and the collecting agent's commission. Euro prices use the one site-wide traveler rate, set in Finance. The operator is paid its entitlement; agencies share the pool. A departure keeps the version in force when its first seat sold."
         action={<label className="btn-ghost" style={{ cursor: "pointer" }}><Upload size={16} />Import spreadsheet
           <input type="file" accept=".xlsx" hidden disabled={busy} onChange={(e) => importFile(e.target.files?.[0])} /></label>} />
       {err && <div className="auth-error">{err}</div>}
@@ -584,22 +584,21 @@ export function RatesSection({ flash }) {
 
 // Phase 5 (28 Sep 2026): the pricing and money model (shared/pool-model.js).
 // Tiers with an EGP selling price and an operator fee; cost lines per group
-// or per traveler with an amount per tier; the collecting agent's commission; the
-// published EUR rate. The table below it is the same calculation the
+// or per traveler with an amount per tier; the collecting agent's commission.
+// EUR prices come from the site-wide traveler rate (064, Finance), shown here
+// but not set here. The table below it is the same calculation the
 // statements use, live, for 2 to 12 travelers.
 const blankTiers = () => DEFAULT_POOL_TIERS.map((t) => ({ ...t, priceEgp: "", operatorFeePct: t.operatorFeePct == null ? "" : String(t.operatorFeePct) }));
 const toForm = (v) => ({
   tiers: (v?.tiers?.length ? v.tiers : null)?.map((t) => ({ from: String(t.from), to: String(t.to), priceEgp: t.priceEgp ?? "", operatorFeePct: t.operatorFeePct ?? "" })) || blankTiers(),
   costLines: (v?.costLines || []).map((l) => ({ name: l.name, basis: l.basis, amounts: (l.amounts || []).map((a) => a ?? "") })),
   commissionPct: v?.commissionPct ?? DEFAULT_COMMISSION_PCT,
-  eurRate: v?.eurRate ?? "",
 });
 const numOrNull = (x) => (x === "" || x == null ? null : Number(x));
 const fromForm = (f) => ({
   tiers: f.tiers.map((t) => ({ from: Number(t.from), to: Number(t.to), priceEgp: numOrNull(t.priceEgp), operatorFeePct: numOrNull(t.operatorFeePct) })),
   costLines: f.costLines.map((l) => ({ name: l.name, basis: l.basis, amounts: l.amounts.map(numOrNull) })),
   commissionPct: numOrNull(f.commissionPct),
-  eurRate: numOrNull(f.eurRate),
 });
 const egpFmt = (n) => (n == null ? "—" : Number(n).toLocaleString("en-US", { maximumFractionDigits: 2 }));
 
@@ -611,6 +610,11 @@ function RateEditor({ product, flash, onClose }) {
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const model = fromForm(form);
+  // The site-wide traveler rate (Finance): what the EUR column and the tour
+  // page line use. Null before 064 or before there is a rate.
+  const [traveller, setTraveller] = useState(undefined);
+  useEffect(() => { call("/admin/finance/fx").then((j) => setTraveller(j.traveller || null)).catch(() => setTraveller(null)); }, []);
+  const eurRate = traveller?.egpPerEur ?? null;
   const problem = poolRateError(model);
   const table = problem ? null : poolRateTable(model);
 
@@ -639,14 +643,14 @@ function RateEditor({ product, flash, onClose }) {
   const addTier = () => {
     const last = form.tiers[form.tiers.length - 1];
     const from = last ? Number(last.to) + 1 : 4;
-    setForm({ tiers: [...form.tiers, { from: String(from), to: String(from + 2), priceEgp: "", operatorFeePct: "" }], costLines: form.costLines.map((l) => ({ ...l, amounts: [...l.amounts, ""] })), commissionPct: form.commissionPct, eurRate: form.eurRate });
+    setForm({ tiers: [...form.tiers, { from: String(from), to: String(from + 2), priceEgp: "", operatorFeePct: "" }], costLines: form.costLines.map((l) => ({ ...l, amounts: [...l.amounts, ""] })), commissionPct: form.commissionPct });
   };
   const removeTier = (i) => setForm({ ...form, tiers: form.tiers.filter((_, j) => j !== i), costLines: form.costLines.map((l) => ({ ...l, amounts: l.amounts.filter((_, j) => j !== i) })) });
   const addLine = () => setForm({ ...form, costLines: [...form.costLines, { name: "", basis: "per_group", amounts: form.tiers.map(() => "") }] });
 
   return (
     <>
-      <Head title={`#${product.catalogue_no} ${product.title}`} sub={`${TYPE_LABELS[product.type] || product.type} · all amounts in EGP; travelers see and pay EUR at the published rate`}
+      <Head title={`#${product.catalogue_no} ${product.title}`} sub={`${TYPE_LABELS[product.type] || product.type} · all amounts in EGP; travelers see and pay EUR at the site-wide traveler rate`}
         action={<button className="btn-ghost" onClick={onClose}><ArrowLeft size={16} />Rate card</button>} />
       {err && <div className="auth-error">{err}</div>}
       <form className="dash-card rate-editor" style={{ marginBottom: 12 }} onSubmit={save}>
@@ -662,7 +666,7 @@ function RateEditor({ product, flash, onClose }) {
               <td><input className="re-num" type="number" min="1" step="1" value={t.to} onChange={(e) => setTier(i, "to", e.target.value)} style={{ width: 70 }} /></td>
               <td><input className="re-num" type="number" min="0" step="0.01" value={t.priceEgp} onChange={(e) => setTier(i, "priceEgp", e.target.value)} /></td>
               <td><input className="re-num" type="number" min="0" max="100" step="0.1" value={t.operatorFeePct} onChange={(e) => setTier(i, "operatorFeePct", e.target.value)} style={{ width: 90 }} /></td>
-              <td className="tnum">{tierPriceEur(numOrNull(t.priceEgp), numOrNull(form.eurRate)) == null ? "—" : `€${tierPriceEur(numOrNull(t.priceEgp), numOrNull(form.eurRate))}`}</td>
+              <td className="tnum">{eurRate == null ? (traveller === undefined ? "…" : "Exchange rate not set") : tierPriceEur(numOrNull(t.priceEgp), eurRate) == null ? "—" : `€${tierPriceEur(numOrNull(t.priceEgp), eurRate)}`}</td>
               <td>{form.tiers.length > 1 && <button type="button" className="btn-mini" onClick={() => removeTier(i)}>Remove</button>}</td>
             </tr>
           ))}</tbody>
@@ -689,12 +693,14 @@ function RateEditor({ product, flash, onClose }) {
         <div className="form-grid re-grid3">
           <label className="field"><span>Collecting agent's commission (% of the selling price)</span>
             <input type="number" min="0" max="99.99" step="0.1" value={form.commissionPct} onChange={(e) => setForm({ ...form, commissionPct: e.target.value })} /></label>
-          <label className="field"><span>Published EUR rate (EGP per EUR)</span>
-            <input type="number" min="0" step="0.0001" value={form.eurRate} onChange={(e) => setForm({ ...form, eurRate: e.target.value })} /></label>
+          <div className="field"><span>Traveler rate (EGP per EUR, site-wide)</span>
+            <strong className="tnum">{traveller === undefined ? "…" : eurRate ?? "Exchange rate not set"}</strong>
+            <span className="field-hint">{traveller ? `In force since ${dayLabel(traveller.effectiveAt?.slice(0, 10))}. Set in Finance → Rates and settings.` : "Set in Finance → Rates and settings."}</span></div>
           <label className="field"><span>Takes effect</span><input type="date" value={effectiveFrom} onChange={(e) => setEffectiveFrom(e.target.value)} /></label>
         </div>
-        <p className="field-hint">The published EUR rate is used only to show and charge travelers in EUR (each tier price ÷ the rate, rounded up to a whole euro). Everything below, and every statement, is in EGP. A published version applies to departures that haven't sold a seat yet; departures already sold keep the version they were locked to.</p>
-        {tierPriceLine(model.tiers, model.eurRate) && <p className="field-hint">Tour page: {tierPriceLine(model.tiers, model.eurRate)}</p>}
+        <p className="field-hint">The traveler rate is used only to show and charge travelers in EUR (each tier price ÷ the rate, rounded up to the whole euro). It is one rate for the whole site, renewed from the market rate, and a booking keeps the rate in force when it was made. Everything below, and every statement, is in EGP. A published version applies to departures that haven't sold a seat yet; departures already sold keep the version they were locked to.</p>
+        {traveller !== undefined && eurRate == null && <p className="field-hint"><b>Exchange rate not set.</b> No euro prices are shown to travelers and no payment requests are sent until a rate is approved in Finance → Rates and settings.</p>}
+        {eurRate != null && tierPriceLine(model.tiers, eurRate) && <p className="field-hint">Tour page today: {tierPriceLine(model.tiers, eurRate)}</p>}
         {problem && <div className="auth-error">{problem}</div>}
 
         <h3><span className="re-step">4</span>By group size</h3>
@@ -727,7 +733,7 @@ function RateEditor({ product, flash, onClose }) {
         {versions.length ? (
           <div className="table-wrap">
             <table className="dash-table">
-              <thead><tr><th>Version</th><th>From</th><th>Tiers (EGP per traveler · operator fee)</th><th>Cost lines</th><th>Commission</th><th>EUR rate</th></tr></thead>
+              <thead><tr><th>Version</th><th>From</th><th>Tiers (EGP per traveler · operator fee)</th><th>Cost lines</th><th>Commission</th></tr></thead>
               <tbody>
                 {versions.map((v) => (
                   <tr key={v.id}>
@@ -738,9 +744,9 @@ function RateEditor({ product, flash, onClose }) {
                       <li key={i}><span className="re-range">{t.from}–{t.to}</span> <span className="tnum">{egpFmt(t.priceEgp)}</span> <span className="re-muted">· {t.operatorFeePct == null ? "—" : `${t.operatorFeePct}%`}</span></li>
                     ))}</ul></td>
                     <td>{(v.costLines || []).length ? <ul className="re-list">{v.costLines.map((l, i) => <li key={i}>{l.name} <span className="re-muted">{COST_BASIS_LABELS[l.basis] || l.basis}</span></li>)}</ul> : "—"}
-                      {v.source?.migration061 && <div className="field-hint">Converted by migration 061: {(v.source.migration061.notes || []).join("; ")}</div>}</td>
+                      {v.source?.migration061 && <div className="field-hint">Converted by migration 061: {(v.source.migration061.notes || []).join("; ")}</div>}
+                      {v.source?.migration064?.eurRate != null && <div className="field-hint">Had its own EUR rate ({v.source.migration064.eurRate}) until 064; travelers are now priced at the site-wide rate.</div>}</td>
                     <td className="tnum">{v.commissionPct}%</td>
-                    <td className="tnum">{v.eurRate ?? "—"}</td>
                   </tr>
                 ))}
               </tbody>

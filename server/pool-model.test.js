@@ -1,7 +1,8 @@
 // Model phase 5 — the pricing and money model with no database, on the inputs
 // the model was agreed with (28 Sep 2026): prices 2,540 / 2,487 / 2,360 EGP;
 // transport 2,200 / 2,200 / 3,300 per group; guide 2,000 per group; entry 700
-// per traveler; operator fee 5% / 6% / 10%; the collecting agent 10%.
+// per traveler; operator fee 5% / 6% / 10%; the collecting agent 10%. EUR at
+// a traveler rate of 50, rounded up (064).
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
@@ -21,7 +22,6 @@ const MODEL_RATE = {
     { name: "Entry fees", basis: "per_traveller", amounts: [700, 700, 700] },
   ],
   commissionPct: 10,
-  eurRate: 50,
 };
 
 test("4 travelers: operating cost 7,000; entitlement 7,350; commission 1,016; pool 1,794 (448.5 each)", () => {
@@ -97,7 +97,7 @@ test("tiers: below the first uses the first, above the last the last", () => {
   assert.equal(poolTierIndex(MODEL_RATE.tiers, 14), 2);
 });
 
-test("travelers see whole euros at the published rate", () => {
+test("travelers see whole euros at the traveler rate, rounded up", () => {
   assert.equal(tierPriceEur(2540, 50), 51);
   assert.equal(tierPriceEur(2487, 50), 50);
   assert.equal(tierPriceEur(2360, 50), 48, "rounded up (29 Sep 2026), it was 47");
@@ -148,7 +148,6 @@ test("rate versions that can't be saved", () => {
   assert.match(poolRateError({ ...MODEL_RATE, tiers: [MODEL_RATE.tiers[0], { ...MODEL_RATE.tiers[2] }] }), /start right after/);
   assert.match(poolRateError({ ...MODEL_RATE, costLines: [{ name: "X", basis: "per_room", amounts: [1, 1, 1] }] }), /basis/);
   assert.match(poolRateError({ ...MODEL_RATE, costLines: [{ name: "X", basis: "per_group", amounts: [1] }] }), /one amount per tier/);
-  assert.match(poolRateError({ ...MODEL_RATE, eurRate: 0 }), /EUR rate/);
 });
 
 test("migration: band fees become a per-group line, the per-traveler amount a per-traveler line, operator fee 0%", () => {

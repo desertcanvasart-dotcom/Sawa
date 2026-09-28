@@ -27,6 +27,7 @@ import {
 } from "./catalogue.js";
 import { mapRate, rateInForce } from "./rates.js";
 import { tierPriceEur, tierPriceLine, tierPriceSummary } from "../shared/pool-model.js";
+import { currentTravellerRate } from "./fx.js";
 
 const TTL_MS = 30_000;
 let memo = { at: 0, value: undefined, pending: null };
@@ -66,6 +67,8 @@ async function build(now) {
   const listingBy = new Map(listings.rows.map((t) => [t.id, t]));
   // The rate card's prices, where they are complete (phase 5).
   const ratesByProduct = new Map();
+  // Every EUR price from the one site-wide traveler rate (064).
+  const eurRate = (await currentTravellerRate(pool))?.egpPerEur ?? null;
   try {
     for (const v of (await pool.query("SELECT * FROM catalogue_rate_versions WHERE state = 'published'")).rows.map(mapRate)) {
       if (!ratesByProduct.has(v.productId)) ratesByProduct.set(v.productId, []);
@@ -76,10 +79,10 @@ async function build(now) {
   }
   const pricingFor = (productId) => {
     const rate = rateInForce(ratesByProduct.get(productId) || [], today);
-    const line = rate ? tierPriceLine(rate.tiers, rate.eurRate) : null;
+    const line = rate ? tierPriceLine(rate.tiers, eurRate) : null;
     if (!line) return null;
-    const tiers = rate.tiers.map((t) => ({ from: t.from, to: t.to, eur: tierPriceEur(t.priceEgp, rate.eurRate) }));
-    return { line, summary: tierPriceSummary(rate.tiers, rate.eurRate), tiers, rateVersion: rate.version };
+    const tiers = rate.tiers.map((t) => ({ from: t.from, to: t.to, eur: tierPriceEur(t.priceEgp, eurRate) }));
+    return { line, summary: tierPriceSummary(rate.tiers, eurRate), tiers, rateVersion: rate.version };
   };
   const specsBy = new Map();
   for (const s of specs.rows.map(mapSpec)) {

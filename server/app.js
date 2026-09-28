@@ -43,6 +43,7 @@ import { logAudit } from "./audit.js";
 import { registerCatalogueRoutes } from "./catalogue-routes.js";
 import { registerOperatorRoutes } from "./operator-routes.js";
 import { registerFinanceRoutes } from "./finance-routes.js";
+import { onTravellerRateChange } from "./fx.js";
 import { catalogueContextFor, assertBookingComplete } from "./booking-details.js";
 import { recordAgencyBooking } from "./commissions.js";
 import { fixBookingTerms } from "./cancellation-tiers.js";
@@ -715,6 +716,8 @@ const cacheClearers = [];
 // The tour lookup and slug index in seo.js embed product rows, so a catalogue
 // write has to drop them with everything else.
 cacheClearers.push(() => clearSeoCaches());
+// 064 — a traveler-rate change by the daily job moves every EUR price.
+onTravellerRateChange(() => invalidatePublicBootstrap());
 function invalidatePublicBootstrap() {
   clearPublicCatalogue();
   publicBootstrap.invalidate();

@@ -331,6 +331,19 @@ export function startJobScheduler(env = process.env) {
     const { runOperatorDaily } = await import("./operator-jobs.js");
     return runOperatorDaily({ log: opts.log, env });
   });
+  // 064 — the exchange rate. Every 6 hours, fetching on the first tick of
+  // each Cairo day (a day with a rate is left alone), so a restart or a deploy
+  // costs no extra call and a failed morning is retried the same day. Emails
+  // ops only, so there is no dry-run switch; FX_FETCH_DISABLED=1 stops it.
+  const fxTick = () => runSafely("fx-daily", async (opts) => {
+    if (env.FX_FETCH_DISABLED === "1") return { skipped: "FX_FETCH_DISABLED=1" };
+    const { runFxJob } = await import("./fx-daily.js");
+    return runFxJob({ log: opts.log, env });
+  });
+  const fxFirst = setTimeout(fxTick, FIRST_RUN_DELAY_MS * 7);
+  const fxRepeat = setInterval(fxTick, 6 * HOUR_MS);
+  fxFirst.unref();
+  fxRepeat.unref();
   const catGenFirst = setTimeout(catalogueGenerateTick, FIRST_RUN_DELAY_MS * 2);
   const catGenRepeat = setInterval(catalogueGenerateTick, DAY_MS);
   const catStatusFirst = setTimeout(catalogueStatusTick, FIRST_RUN_DELAY_MS * 4);
@@ -379,6 +392,7 @@ export function startJobScheduler(env = process.env) {
     : "[jobs] cancel-unconfirmed is LIVE — it will cancel departures and email travelers.");
   console.log(`[jobs] catalogue-generate in ${(FIRST_RUN_DELAY_MS * 2) / 1000}s, then every 24h; catalogue-status every 15 min — `
     + (catalogueV2Enabled(env) ? "catalogue_v2 is ON: generated departures are bookable" : "catalogue_v2 is off: catalogue tables only, nothing public"));
+  console.log(`[jobs] fx-daily in ${(FIRST_RUN_DELAY_MS * 7) / 1000}s, then every 6h — the day's EUR/EGP rate, fetched once a day`);
   console.log(`[jobs] email-retry in ${(FIRST_RUN_DELAY_MS * 3) / 1000}s, then every 15 min — re-sends failed or interrupted emails`);
   console.log(`[jobs] audit-watch in ${(FIRST_RUN_DELAY_MS * 5) / 1000}s, then every 24h, against ${auditWatchBase(env)} — read-only, writes nothing`);
   console.log(goAheadDry
@@ -396,5 +410,6 @@ export function startJobScheduler(env = process.env) {
     clearTimeout(catGenFirst); clearInterval(catGenRepeat);
     clearTimeout(catStatusFirst); clearInterval(catStatusRepeat);
     clearTimeout(holdFirst); clearInterval(holdRepeat);
+    clearTimeout(fxFirst); clearInterval(fxRepeat);
   };
 }

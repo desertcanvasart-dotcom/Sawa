@@ -153,9 +153,12 @@ before(async () => {
   await rates.saveRateDraft(db, productId, { perTraveler: 2200, fee4_6: 1500, fee7_9: 2000, fee10_12: 2600, commissionPerSeat: 10 }, { by: "it" });
   const drafted = (await rates.ratesFor(db, productId)).find((v) => v.state === "draft");
   const rd = await rates.saveRateDraft(db, productId, {
-    tiers: drafted.tiers.map((t) => ({ ...t, priceEgp: 4750 })), costLines: drafted.costLines, commissionPct: 10, eurRate: 50,
+    tiers: drafted.tiers.map((t) => ({ ...t, priceEgp: 4750 })), costLines: drafted.costLines, commissionPct: 10,
   }, { by: "it" });
   await rates.publishRate({ productId, versionId: rd.id, by: "it" });
+  // The site-wide traveler rate (064): 50 EGP per EUR.
+  const fx = await import("./fx.js");
+  await fx.overrideTravellerRate(db, { egpPerEur: 50, reason: "test: the agreed rate", by: "it" });
 
   X = (await ops.createOperator(db, { legalName: "Nile Tours S.A.E.", email: "dispatch@nile-tours.test" }, "it")).id;
   for (const kind of ["tourism_license", "etaa_membership", "liability_insurance", "vehicle_insurance"]) {

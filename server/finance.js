@@ -1,6 +1,7 @@
 // Finance (model phase 3): what is owed and what was paid, the exchange-rate
 // table, public holidays, penalty amounts and the margin report. Records
-// only: no provider or bank is called, and no external rate source either.
+// only: no provider or bank is called. The rate table is also filled daily
+// from an exchange-rate source since 064 (server/fx.js).
 import { pool, withTransaction } from "./db/index.js";
 import { CatalogueError, todayIn } from "./catalogue.js";
 import { payableAccount } from "./bank-details.js";
@@ -17,15 +18,24 @@ const isYmd = (v) => /^\d{4}-\d{2}-\d{2}$/.test(String(v || ""));
 export async function listFxRates(db = pool, { from = null, to = null } = {}) {
   const r = await db.query(
     `SELECT * FROM fx_rates WHERE ($1::date IS NULL OR day >= $1) AND ($2::date IS NULL OR day <= $2) ORDER BY day DESC LIMIT 400`, [from, to]);
-  return r.rows.map((x) => ({ day: ymd(x.day), egpPerEur: Number(x.egp_per_eur), sourceNote: x.source_note, enteredBy: x.entered_by, enteredAt: x.entered_at }));
+  // 064: fetched rows say where from, and a pending or rejected one is shown
+  // but never used (only `approved` rows are read anywhere else).
+  return r.rows.map((x) => ({
+    day: ymd(x.day), egpPerEur: Number(x.egp_per_eur), sourceNote: x.source_note, enteredBy: x.entered_by, enteredAt: x.entered_at,
+    status: x.status || "approved", source: x.source || "manual", fetchedAt: x.fetched_at || null, providerAsOf: ymd(x.provider_as_of),
+    previousEgpPerEur: x.previous_egp_per_eur == null ? null : Number(x.previous_egp_per_eur),
+  }));
 }
 export async function setFxRate(db, { day, egpPerEur, sourceNote = null, by }) {
   if (!isYmd(day)) throw new CatalogueError(422, "Use a date like 2026-11-13.");
   const rate = Number(egpPerEur);
   if (!Number.isFinite(rate) || rate <= 0 || rate > 10000) throw new CatalogueError(422, "Enter EGP per 1 EUR, e.g. 55.25.");
   await db.query(
-    `INSERT INTO fx_rates (day, egp_per_eur, source_note, entered_by) VALUES ($1, $2, $3, $4)
-     ON CONFLICT (day) DO UPDATE SET egp_per_eur = EXCLUDED.egp_per_eur, source_note = EXCLUDED.source_note, entered_by = EXCLUDED.entered_by, entered_at = now()`,
+    // Entered by hand: approved, and it replaces a fetched rate for the day
+    // (including one waiting for approval).
+    `INSERT INTO fx_rates (day, egp_per_eur, source_note, entered_by, status, source) VALUES ($1, $2, $3, $4, 'approved', 'manual')
+     ON CONFLICT (day) DO UPDATE SET egp_per_eur = EXCLUDED.egp_per_eur, source_note = EXCLUDED.source_note, entered_by = EXCLUDED.entered_by, entered_at = now(),
+       status = 'approved', source = 'manual', fetched_at = NULL, provider_as_of = NULL, decided_by = EXCLUDED.entered_by, decided_at = now()`,
     [day, rate, sourceNote ? String(sourceNote).slice(0, 200) : "CBE", by]);
   return { day, egpPerEur: rate };
 }
@@ -269,7 +279,7 @@ export async function marginReport(db = pool, { from, to }) {
        FROM catalogue_departures cd JOIN catalogue_products c ON c.id = cd.product_id
       WHERE cd.date BETWEEN $1 AND $2 AND cd.status IN ('go_ahead', 'completed') ORDER BY cd.date`, [from, to])).rows;
   if (!deps.length) return [];
-  const rates = new Map((await db.query("SELECT day, egp_per_eur FROM fx_rates")).rows.map((r) => [ymd(r.day), Number(r.egp_per_eur)]));
+  const rates = new Map((await db.query("SELECT day, egp_per_eur FROM fx_rates WHERE status = 'approved'")).rows.map((r) => [ymd(r.day), Number(r.egp_per_eur)]));
   const fees = await feeSetting(db);
   const { expectedAmountFor } = await import("./assignments.js");
   const payAtGoAhead = await hasPayRequests(db);

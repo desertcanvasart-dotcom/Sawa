@@ -160,7 +160,7 @@ const monthEnd = (period) => {
 };
 
 export async function rateOn(db, day) {
-  const r = (await db.query("SELECT egp_per_eur FROM fx_rates WHERE day = $1", [day])).rows[0];
+  const r = (await db.query("SELECT egp_per_eur FROM fx_rates WHERE day = $1 AND status = 'approved'", [day])).rows[0];
   return r ? Number(r.egp_per_eur) : null;
 }
 

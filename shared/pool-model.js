@@ -10,8 +10,10 @@
 //   tiers        [{ from, to, priceEgp, operatorFeePct }]   defaults 4–6, 7–9, 10–12
 //   costLines    [{ name, basis: "per_group" | "per_traveller", amounts: [one per tier] }]
 //   commissionPct   the collecting agent's commission, % of the selling price (default 10)
-//   eurRate         the published EUR rate, EGP per EUR: only for showing and
-//                   charging travelers in EUR; nothing below is converted with it
+//
+// Travelers see and pay EUR at the site-wide traveler rate (064,
+// server/fx.js), not a rate on the version: `eurRate` below is always that
+// rate, passed in. Nothing in the pool calculation is converted with it.
 //
 // Per departure, from the manifest at the cut-off:
 //
@@ -27,6 +29,8 @@
 // A negative pool: no agency share, and the collecting agent pays the operator's
 // shortfall (the Minimum Departure Guarantee). A late cancellation where a fee
 // is kept earns the agency half the pool per traveller for that place.
+
+import { eurFromEgp } from "./fx-rules.js";
 
 export const COST_BASES = ["per_group", "per_traveller"];
 export const COST_BASIS_LABELS = { per_group: "per group", per_traveller: "per traveler" };
@@ -75,14 +79,12 @@ export function withFeeOverride(rate, pct) {
   return { ...rate, feeOverridePct: p, tiers: (rate.tiers || []).map((t) => ({ ...t, operatorFeePct: p })) };
 }
 
-// A tier's price in EUR, for travelers: EGP ÷ the published rate, rounded UP to
+// A tier's price in EUR, for travelers: EGP ÷ the site-wide traveler rate (064), rounded UP to
 // a whole euro (29 Sep 2026; it was rounded to the nearest). The one place the
 // conversion happens: the rate card editor, the tour page, the widget and the
 // charge itself all read it, so what is shown is what is charged.
 export function tierPriceEur(priceEgp, eurRate) {
-  if (!isNum(priceEgp) || !isNum(eurRate) || Number(eurRate) <= 0) return null;
-  // The tiny epsilon keeps an exact division (4850 / 97 = 50) from tipping up on float noise.
-  return Math.ceil(Number(priceEgp) / Number(eurRate) - 1e-9);
+  return eurFromEgp(priceEgp, eurRate);
 }
 
 // The tiers as travelers read them: [{ label: "4–6", eur }], one per tier.
@@ -276,7 +278,6 @@ export function poolRateError(rate) {
     if (l.amounts.some((a) => isNum(a) && Number(a) < 0)) return `Cost line "${l.name}": amounts can't be negative.`;
   }
   if (isNum(rate.commissionPct) && (Number(rate.commissionPct) < 0 || Number(rate.commissionPct) >= 100)) return "The agent's commission is a percentage from 0 to under 100.";
-  if (rate.eurRate != null && rate.eurRate !== "" && !(Number(rate.eurRate) > 0)) return "The published EUR rate must be more than zero.";
   return null;
 }
 
