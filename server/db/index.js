@@ -1,6 +1,7 @@
 import "dotenv/config";
 import pg from "pg";
 import { sslConfig } from "./ssl.js";
+import { addDb, addWait } from "../request-timing.js";
 
 const { Pool } = pg;
 
@@ -22,6 +23,26 @@ export const pool = new Pool({
 pool.on("error", (err) => {
   console.error("Unexpected idle client error", err);
 });
+
+// Request timing (server/request-timing.js): each query's time, and the time
+// spent waiting for a free connection, count against the request running it.
+const timedQuery = (target, fn) => function (...args) {
+  const t = performance.now();
+  const out = fn.apply(target === null ? this : target, args);
+  if (out && typeof out.then === "function") return out.finally(() => addDb(performance.now() - t));
+  return out;
+};
+pool.query = timedQuery(pool, pool.query);
+const connect = pool.connect.bind(pool);
+pool.connect = function (...args) {
+  if (args.length) return connect(...args);
+  const t = performance.now();
+  return connect().then((client) => {
+    addWait(performance.now() - t);
+    if (!client.__timed) { client.query = timedQuery(client, client.query); client.__timed = true; }
+    return client;
+  });
+};
 
 // Run a single query.
 export function query(text, params) {
