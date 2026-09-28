@@ -10,6 +10,21 @@
 // be run in isolation does not get run.
 import { DEFAULT_GO_AHEAD } from "../shared/group-size.js";
 import { recordGoAhead } from "./goahead-alert.js";
+import { catalogueV2Enabled } from "./features.js";
+
+// Reservation integrity (catalogue_v2, migration 057): on a catalog departure,
+// only seats that count towards GoAhead move it there. An unconfirmed email or
+// a cluster staff marked suspicious holds its seats without counting.
+// Null when that doesn't apply (flag off, not applied, a legacy departure).
+async function countedSeats(c, departureId) {
+  if (!catalogueV2Enabled()) return null;
+  const has = (await c.query("SELECT to_regclass('catalogue_departure_goahead') IS NOT NULL AS ok")).rows[0].ok;
+  if (!has) return null;
+  const r = (await c.query(
+    `SELECT g.goahead_seats FROM catalogue_departures cd JOIN catalogue_departure_goahead g ON g.catalogue_departure_id = cd.id
+      WHERE cd.legacy_departure_id = $1`, [departureId])).rows[0];
+  return r ? Number(r.goahead_seats) : null;
+}
 
 export async function refreshStatus(c, departureId) {
   const dep = await c.query(`SELECT * FROM departures WHERE id=$1`, [departureId]);
@@ -27,7 +42,8 @@ export async function refreshStatus(c, departureId) {
   // that it will not run. The cancellation email is already built and live.
   if (["pending_review", "minimum_reached", "supplier_confirmed", "closed", "cancelled"].includes(row.status)) return;
   // Cancelled pledges have freed their seats — exclude them from the count.
-  const seats = (await c.query(
+  const counted = await countedSeats(c, departureId);
+  const seats = counted ?? (await c.query(
     `SELECT COALESCE(SUM(seats),0) AS s FROM pledges WHERE departure_id=$1 AND status <> 'cancelled'`,
     [departureId]
   )).rows[0].s;

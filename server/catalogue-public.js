@@ -20,7 +20,7 @@ import { pool } from "./db/index.js";
 import { tourPath, tourSlug } from "../shared/slug.js";
 import { activeSpec, publicDateLabel, publiclyListed } from "../shared/catalogue.js";
 import {
-  mapCatalogueProduct, mapSpec, todayIn, departureInstants, isMissingCatalogueTables,
+  mapCatalogueProduct, mapSpec, todayIn, departureInstants, isMissingCatalogueTables, goaheadColumns,
 } from "./catalogue.js";
 
 const TTL_MS = 30_000;
@@ -53,9 +53,9 @@ async function build(now) {
     pool.query("SELECT * FROM catalogue_spec_versions WHERE state = 'published'"),
     pool.query(`SELECT id, title, city, type, default_time, nights, status, active FROM tour_products
                  WHERE id IN (SELECT legacy_product_id FROM catalogue_products WHERE legacy_product_id IS NOT NULL)`),
-    pool.query(`SELECT cd.*, s.seats_sold FROM catalogue_departures cd
-                  JOIN catalogue_departure_seats s ON s.catalogue_departure_id = cd.id
-                 WHERE cd.status IN ('open', 'go_ahead') AND cd.legacy_departure_id IS NOT NULL AND cd.date >= $1`, [today]),
+    goaheadColumns(pool).then((g) => pool.query(`SELECT cd.*, s.seats_sold${g.select} FROM catalogue_departures cd
+                  JOIN catalogue_departure_seats s ON s.catalogue_departure_id = cd.id ${g.join}
+                 WHERE cd.status IN ('open', 'go_ahead') AND cd.legacy_departure_id IS NOT NULL AND cd.date >= $1`, [today])),
   ]);
   const listingBy = new Map(listings.rows.map((t) => [t.id, t]));
   const specsBy = new Map();
@@ -111,7 +111,8 @@ async function build(now) {
       startTime: e.spec?.content?.startTime || e.listing.default_time, nights: e.listing.nights,
     });
     const status = row.status;
-    const seatsSold = Number(row.seats_sold) || 0;
+    // Migration 057: "N more to GoAhead" counts only the seats that count.
+    const seatsSold = Number(row.goahead_seats ?? row.seats_sold) || 0;
     if (!publiclyListed({ status, cutoffAt: at.cutoffAt }, now)) continue;
     const label = publicDateLabel({ status, seatsSold, goaheadMin: e.product.goaheadMin });
     dates.set(Number(row.legacy_departure_id), { catalogueStatus: status, catalogueLabel: label });

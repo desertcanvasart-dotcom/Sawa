@@ -460,7 +460,9 @@ export async function auditEmailTemplates() {
     "payAtGoAheadReleasedEmail", "waitlistOfferEmail", "payAtGoAheadOpsEmail",
     "payAtGoAheadBookingEmail", "payAtGoAheadEscalationEmail", "payAtGoAheadApologyEmail",
     // The receipt Sawa issues as collecting agent, listed the day it was written.
-    "payAtGoAheadReceiptEmail", "payAtGoAheadSellerChangedEmail"];
+    "payAtGoAheadReceiptEmail", "payAtGoAheadSellerChangedEmail",
+    // Reservation integrity (catalogue_v2), listed the day it was written.
+    "bookingEmailConfirmEmail"];
   // Where one shared fixture can't serve: `kind` means a different thing to
   // each of these, so each gets the value its own caller passes.
   const FX_FOR = {

@@ -1138,6 +1138,29 @@ export function waitlistOfferEmail({ to, name, title, dateLabel, seats, expiresA
   return { to, subject, html, text, kind: "waitlist_offer" };
 }
 
+// Reservation integrity (catalogue_v2): a direct booking's seats count towards
+// GoAhead once its email address is confirmed. `stage`: "confirm" at booking,
+// "reminder" at 24 hours, "released" when the seat is released at the cut-off
+// still unconfirmed.
+export function bookingEmailConfirmEmail({ to, name, route, dateLabel, seats, bookingCode, url, stage = "confirm" }) {
+  const hello = `Hello${name ? ` ${name}` : ""},`;
+  const seatWord = seats === 1 ? "seat" : `${seats} seats`;
+  if (stage === "released") {
+    const subject = `Your seat was released: ${route} on ${dateLabel}`;
+    const text = `${hello} your ${seatWord} on ${route} on ${dateLabel} ${seats === 1 ? "was" : "were"} released because this email address wasn't confirmed before the booking cut-off. Nothing was charged. `
+      + `If you still want to travel, book again while places remain.${bookingCode ? ` Booking code: ${bookingCode}.` : ""}`;
+    const html = shell(subject, `<p style="margin:0">${esc(text)}</p>`, { eyebrow: "Booking", preheader: "Nothing was charged." });
+    return { to, subject, html, text, kind: "booking_email_released" };
+  }
+  const subject = stage === "reminder" ? `Reminder: confirm your email for ${route}` : `Confirm your email for ${route}`;
+  const text = `${hello} please confirm this email address for your ${seatWord} on ${route} on ${dateLabel}. `
+    + "Your seat is held now, but it counts towards the GoAhead minimum only once your email is confirmed, and it is released at the booking cut-off if it isn't. "
+    + `Confirm here: ${url}${bookingCode ? ` Booking code: ${bookingCode}.` : ""}`;
+  const html = shell(subject, `<p style="margin:0 0 20px">${esc(text.split(" Confirm here")[0])}</p>${button(url, "Confirm my email")}`,
+    { eyebrow: "Booking", preheader: "One click keeps your seat." });
+  return { to, subject, html, text, kind: stage === "reminder" ? "booking_email_confirm_reminder" : "booking_email_confirm" };
+}
+
 // To ops: the links to make in Tab, and the seats about to be released.
 export function payAtGoAheadOpsEmail({ to, kind, items = [], portalUrl }) {
   const subject = kind === "links"

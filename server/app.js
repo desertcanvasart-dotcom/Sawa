@@ -53,11 +53,12 @@ import {
 import { registerPayAtGoAheadRoutes } from "./pay-at-goahead-routes.js";
 import { partyLinkFor, partyForBooking, partyView, partyToJoin, joinParty, linkParty, unlinkParty, partiesAvailable, JOINABLE_STATUSES } from "./booking-parties.js";
 import { SAFETY_NONE } from "../shared/settlement-rules.js";
+import { integrityAvailable, recordSignals, detectCluster, emailConfirmationToken, confirmEmail, confirmUrl } from "./booking-integrity.js";
 import { catalogueV2Enabled } from "./features.js";
 import { publicCatalogue, overlayBootstrap, clearPublicCatalogue } from "./catalogue-public.js";
 import {
   sendEmail, sendEmailInBackground, emailMode,
-  inviteEmail, bookingConfirmationEmail, payAtGoAheadBookingEmail, goAheadEmail, cancellationEmail,
+  inviteEmail, bookingConfirmationEmail, payAtGoAheadBookingEmail, goAheadEmail, cancellationEmail, bookingEmailConfirmEmail,
   listingApprovedEmail, listingRejectedEmail,
   departureRequestReceivedEmail, departureRequestApprovedEmail, departureRequestDeclinedEmail,
   operatorApplicationEmail, operatorApplicationReceiptEmail, operatorApplicationText,
@@ -369,6 +370,9 @@ const publicBookingSchema = z.object({
   // Group bookings (catalogue_v2): the "Join my group" link the booking came
   // through. Ignored with the flag off.
   partyToken: z.string().trim().max(80).optional(),
+  // Reservation integrity (catalogue_v2): what the browser reports about
+  // itself, hashed with the user agent and never stored raw.
+  deviceHint: z.string().trim().max(400).optional(),
 });
 
 // Model phase 2 — what the operator's manifest needs, all optional. Read only
@@ -1433,6 +1437,11 @@ app.post("/api/public/departures/:id/bookings", writeLimiter, h(async (req, res)
       await c.query("INSERT INTO referrals (code) VALUES ($1) ON CONFLICT (code) DO NOTHING", [refCode]);
     }
     const pledgeId = newPledgeId(dep.id);
+    // Reservation integrity (catalogue_v2, migration 057): the seats count
+    // towards GoAhead once the email is confirmed, and a cluster of
+    // single-seat reservations is flagged for staff. Neither refuses anything.
+    const integrity = !!catalogueCtx && await integrityAvailable(c);
+    const confirmToken = integrity ? await emailConfirmationToken(c, { catalogueDepartureId: catalogueCtx.departureId, email: input.customerEmail }) : null;
     const booking = {
       id: pledgeId,
       agencyId: "direct_customer",
@@ -1445,6 +1454,7 @@ app.post("/api/public/departures/:id/bookings", writeLimiter, h(async (req, res)
       bookingCode: await uniqueBookingCode(c),
       refCode: refCode || null,
       manifest,
+      emailConfirmToken: confirmToken,
       ...pricing,
     };
     await insertPledge(c, dep.id, booking);
@@ -1455,12 +1465,29 @@ app.post("/api/public/departures/:id/bookings", writeLimiter, h(async (req, res)
       await payNowIfGoingAhead(c, pledgeId, catalogueCtx.departureId);
     }
     if (party) await joinParty(c, { partyId: party.id, pledgeId });
+    let flag = null;
+    if (integrity) {
+      await recordSignals(c, {
+        pledgeId, departureId: dep.id, seats: input.seats, ip: req.ip, phone: input.customerPhone,
+        device: { userAgent: req.get("user-agent"), language: req.get("accept-language"), hint: input.deviceHint },
+      });
+      flag = await detectCluster(c, { pledgeId });
+    }
     const departure = await loadDeparture(c, dep.id);
     const saved = await c.query(`SELECT * FROM pledges WHERE id=$1`, [pledgeId]);
-    return { departure, booking: mapPledge(saved.rows[0]), payAtGoAhead: !!catalogueCtx, partyId: party?.id ?? null };
+    return { departure, booking: mapPledge(saved.rows[0]), payAtGoAhead: !!catalogueCtx, partyId: party?.id ?? null, confirmToken, flagId: flag?.id ?? null };
   });
   await logAudit(req, { action: "booking.create", entity: "pledge", entityId: result.booking.id,
-    detail: { departureId: Number(req.params.id), seats: input.seats, source: "public", ...(result.partyId ? { partyId: result.partyId } : {}) } });
+    detail: { departureId: Number(req.params.id), seats: input.seats, source: "public", ...(result.partyId ? { partyId: result.partyId } : {}),
+      ...(result.confirmToken ? { emailConfirmation: "required" } : {}), ...(result.flagId ? { flagId: result.flagId } : {}) } });
+  if (result.flagId) await logAudit(req, { action: "booking_flag.raise", entity: "booking_flag", entityId: result.flagId, detail: { pledgeId: result.booking.id } });
+  if (result.confirmToken && input.customerEmail) {
+    const d = result.departure;
+    sendEmailInBackground(Promise.resolve(bookingEmailConfirmEmail({
+      to: input.customerEmail, name: input.customerName, route: d.route, dateLabel: d.startDate ? `${d.startDate} – ${d.endDate}` : d.date,
+      seats: input.seats, bookingCode: result.booking.bookingCode, url: confirmUrl(result.confirmToken),
+    })));
+  }
   if (input.customerEmail && result.payAtGoAhead) {
     // Model phase 4: nothing is paid until GoAhead, then the full price; the
     // email repeats the cancellation tiers this booking was made under.
@@ -1613,8 +1640,9 @@ app.post("/api/operator-applications", writeLimiter, h(async (req, res) => {
 app.get("/api/public/bookings/:code", h(async (req, res) => {
   const code = String(req.params.code || "").trim();
   if (!code) throw new AppError(422, "Booking code required.");
+  const integrity = catalogueV2Enabled() && await integrityAvailable(pool);
   const r = await pool.query(
-    `SELECT p.id AS pledge_id, p.booking_code, p.seats, p.status AS pledge_status,
+    `SELECT p.id AS pledge_id, p.booking_code, p.seats, p.status AS pledge_status,${integrity ? " p.email_confirm_token IS NOT NULL AND p.email_confirmed_at IS NULL AS email_unconfirmed," : ""}
             p.booking_total, p.deposit_due, p.balance_due, p.balance_due_date,
             d.id AS dep_id, d.route, d.date, d.start_date, d.end_date, d.city,
             d.status AS dep_status, d.min_seats,
@@ -1716,6 +1744,8 @@ app.get("/api/public/bookings/:code", h(async (req, res) => {
     payment: payAtGoAhead ? null : payment,
     payAtGoAhead,
     group,
+    // Reservation integrity: the seats count towards GoAhead once confirmed.
+    emailUnconfirmed: b.email_unconfirmed === true && b.pledge_status !== "cancelled",
     city: b.city || "",
     dateLabel,
     seats: Number(b.seats),
@@ -1736,6 +1766,19 @@ app.post("/api/public/bookings/:code/accept-terms", writeLimiter, h(async (req, 
   const result = await acceptBookingTerms(pool, { code, versionId: req.body?.versionId });
   await logAudit(req, { action: "booking.accept_terms", entity: "booking", entityId: code.toUpperCase(), detail: { tierVersionId: result.versionId } });
   res.json(result);
+}));
+
+// Reservation integrity (catalogue_v2): the link in the confirmation email.
+// A POST, made by the page behind the link, so a mail client that prefetches
+// links doesn't confirm on the traveler's behalf.
+app.post("/api/public/email-confirmations/:token", writeLimiter, h(async (req, res) => {
+  if (!catalogueV2Enabled()) throw new AppError(404, "Not found.");
+  const result = await confirmEmail(pool, { token: String(req.params.token || "") });
+  if (result.state === "confirmed") {
+    await logAudit(req, { action: "booking.email_confirmed", entity: "booking", entityId: String(result.code || "").toUpperCase() });
+    emitDepartureSync(result.departureId);
+  }
+  res.json({ state: result.state, code: result.code });
 }));
 
 // Group bookings: the booking's "Join my group" link. The first request starts
@@ -2545,6 +2588,9 @@ async function insertPledge(c, departureId, p) {
         WHERE id = $1`,
       [p.id, p.manifest.pickupPoint, p.manifest.nationality, p.manifest.safetyNeeds, JSON.stringify(p.manifest.travelerNames)]);
   }
+  // Migration 057 (catalogue_v2): written before the status is recomputed, so
+  // a seat whose email isn't confirmed never moves the date to GoAhead.
+  if (p.emailConfirmToken) await c.query(`UPDATE pledges SET email_confirm_token = $2 WHERE id = $1`, [p.id, p.emailConfirmToken]);
   // Migration 052: the Terms version the booking accepted. A catalog booking
   // under the flag records the catalog version instead (fixBookingTerms).
   await recordTermsVersion(c, { pledgeId: p.id, scope: "legacy" });
@@ -4255,6 +4301,11 @@ if (existsSync(siteDir)) {
     return null;
   };
 
+  // Copy that goes out with catalogue_v2 (the privacy page's sentence on
+  // reservation signals) is marked <!-- catalogue_v2 -->…<!-- /catalogue_v2 -->
+  // and left out while the flag is off.
+  const flaggedCopy = (html) => (catalogueV2Enabled() ? html : html.replace(/<!-- catalogue_v2 -->[\s\S]*?<!-- \/catalogue_v2 -->\n?/g, ""));
+
   app.use((req, res, next) => {
     if (req.method !== "GET" && req.method !== "HEAD") return next();
     let abs = null;
@@ -4265,7 +4316,7 @@ if (existsSync(siteDir)) {
       const key = `${abs}|${req.path}`;
       let hit = schemaCache.get(key);
       if (!hit || hit.mtimeMs !== mtimeMs) {
-        hit = { mtimeMs, html: injectStaticSchema(readFileSync(abs, "utf8"), req.path) };
+        hit = { mtimeMs, html: injectStaticSchema(flaggedCopy(readFileSync(abs, "utf8")), req.path) };
         schemaCache.set(key, hit);
       }
       // Matches what express.static would have sent, so adding schema does not

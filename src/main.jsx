@@ -68,6 +68,7 @@ const OperatorDashboard = lazy(() => import("./OperatorDashboard.jsx").then((m) 
 import { TravelerDetailsFields, emptyTravelerDetails, travelerDetailsBody, travelerDetailsError } from "./TravelerDetails.jsx";
 import { BookingPayAtGoAhead, WaitlistJoin, WaitlistOfferPage } from "./PayAtGoAheadPublic.jsx";
 import { JoinGroupLink, JoinGroupPage, partyTokenFromUrl } from "./GroupBooking.jsx";
+import { EmailConfirmPage, deviceHint } from "./EmailConfirmPage.jsx";
 
 
 // Three named traveler quotes lived here — Valencia, Munich, Abu Dhabi, each
@@ -888,7 +889,7 @@ function App() {
       const response = await fetch(`${API_BASE}/public/departures/${departureId}/bookings`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ customerName, customerEmail, customerPhone, phoneToken, seats: Number(seats), roomingType, accommodationTier, refCode: getStoredRef(), ...(catalogueV2() && partyTokenFromUrl() ? { partyToken: partyTokenFromUrl() } : {}), ...(manifest || {}) }),
+        body: JSON.stringify({ customerName, customerEmail, customerPhone, phoneToken, seats: Number(seats), roomingType, accommodationTier, refCode: getStoredRef(), ...(catalogueV2() && partyTokenFromUrl() ? { partyToken: partyTokenFromUrl() } : {}), ...(catalogueV2() ? { deviceHint: deviceHint() } : {}), ...(manifest || {}) }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Could not request seats.");
@@ -974,6 +975,9 @@ function App() {
   // Group bookings: the page behind a "Join my group" link.
   const joinMatch = path.match(/^\/join\/([^/?#]+)$/);
   if (joinMatch && catalogueV2()) return <JoinGroupPage token={decodeURIComponent(joinMatch[1])} />;
+  // Reservation integrity: the link in the booking's confirmation email.
+  const confirmMatch = path.match(/^\/confirm-email\/([^/?#]+)$/);
+  if (confirmMatch && catalogueV2()) return <EmailConfirmPage token={decodeURIComponent(confirmMatch[1])} />;
 
   const isPortalRoute = path.startsWith("/admin") || path.startsWith("/agency") || path.startsWith("/portal");
   // Editorial pages do not need the tour catalogue to load successfully.
@@ -3854,6 +3858,9 @@ function BookingLookupPage({ navigate, path }) {
                 alone, which is how a cancelled date came to read "the guide and
                 transport are booked". */}
             <p className="booking-note">{b.note}</p>
+            {b.emailUnconfirmed && (
+              <p className="booking-note" role="status"><b>Please confirm your email.</b> We sent you a link. Your seats are held, but they count towards this date's GoAhead minimum only once your email is confirmed, and they're released at the booking cut-off if it isn't.</p>
+            )}
             <BookingPayment payment={b.payment} />
             {b.payAtGoAhead && <BookingPayAtGoAhead code={b.code} view={b.payAtGoAhead} onChanged={() => lookup()} />}
             {b.group && <JoinGroupLink code={b.code} group={b.group} />}

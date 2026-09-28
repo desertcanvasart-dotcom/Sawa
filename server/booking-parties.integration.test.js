@@ -216,6 +216,11 @@ test("booking through the link joins the same date and party; refused past the f
 });
 
 test("at GoAhead each member gets its own full-price payment request", { skip }, async () => {
+  // Reservation integrity (057): seats count towards GoAhead once each
+  // traveler has confirmed their email.
+  for (const r of (await db.query("SELECT email_confirm_token AS t FROM pledges WHERE departure_id = $1 AND email_confirm_token IS NOT NULL", [deps.a.legacy])).rows) {
+    assert.equal((await post(on, `/api/public/email-confirmations/${r.t}`)).status, 200);
+  }
   await cat.runStatusJob({});
   assert.equal((await one("SELECT status FROM catalogue_departures WHERE id = $1", [deps.a.id])).status, "go_ahead");
   await db.query(
