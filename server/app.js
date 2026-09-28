@@ -57,7 +57,7 @@ import { SAFETY_NONE } from "../shared/settlement-rules.js";
 import { integrityAvailable, recordSignals, detectCluster } from "./booking-integrity.js";
 import { reduceSignals } from "./booking-signals.js";
 import {
-  holdForConfirmation, holdBooking, heldByToken, heldByCode, heldCodeTaken, isExpired, markConfirmed, markRefused,
+  holdForConfirmation, holdBooking, dateRequestHoldAvailable, heldByToken, heldByCode, heldCodeTaken, isExpired, markConfirmed, markRefused,
   cancelHeld, resendLink, confirmBookingUrl, MAX_RESENDS,
 } from "./booking-confirmation.js";
 import { verifyTurnstile, turnstileSiteKey } from "./turnstile.js";
@@ -1853,9 +1853,11 @@ const HELD_VIEW = {
 };
 async function heldBookingView(held, now = Date.now()) {
   const state = isExpired(held, now) ? "expired" : held.status;
-  const d = (await pool.query(
+  const d = held.departure_id != null ? (await pool.query(
     `SELECT d.route, d.date, d.start_date, d.city, tp.title FROM departures d LEFT JOIN tour_products tp ON tp.id = d.tour_product_id WHERE d.id = $1`,
-    [held.departure_id])).rows[0] || {};
+    [held.departure_id])).rows[0] || {}
+    // A date request for a new day (060): the tour and the day asked for.
+    : { ...((await pool.query("SELECT title, city FROM tour_products WHERE id = $1", [held.tour_product_id])).rows[0] || {}), date: held.request_date };
   const day = d.start_date || d.date;
   const dateLabel = day ? new Intl.DateTimeFormat("en", { weekday: "short", day: "numeric", month: "short", year: "numeric", timeZone: "UTC" })
     .format(new Date(`${isoDate(day)}T12:00:00Z`)) : "";
@@ -1876,6 +1878,7 @@ app.post("/api/public/booking-confirmations/:token", writeLimiter, h(async (req,
   if (!held) throw new AppError(404, "This link isn't valid. If you asked for a new email, use the link in the newest one.");
   if (held.status === "confirmed") return res.json({ state: "already", code: held.booking_code });
   if (held.status !== "unconfirmed" || isExpired(held)) return res.json({ state: isExpired(held) ? "expired" : held.status, code: held.booking_code });
+  if (held.kind === "date_request") return confirmHeldDateRequest(req, res, held);
   let out;
   try {
     out = await placePublicBooking(req, { departureId: Number(held.departure_id), confirmation: held });
@@ -1893,6 +1896,30 @@ app.post("/api/public/booking-confirmations/:token", writeLimiter, h(async (req,
   res.json({ state: "confirmed", code: held.booking_code });
 }));
 
+// A held date request (060), confirmed: made now through createDateRequest's
+// checks. A group that formed on that day meanwhile is not joined silently:
+// the traveler is sent to book on it.
+async function confirmHeldDateRequest(req, res, held) {
+  const input = { ...(held.payload?.input || {}), ignoreMatches: true };
+  const refuse = async (reason) => {
+    await markRefused(pool, { id: held.id, reason });
+    await logAudit(req, { action: "departure_request.hold_refused", entity: "booking", entityId: held.booking_code, detail: { reason } });
+    return res.status(409).json({ state: "refused", code: held.booking_code, error: `We couldn't make this request: ${reason} Nothing was charged.` });
+  };
+  let result;
+  try {
+    result = await createDateRequest(input, req, {}, { confirmation: held });
+  } catch (e) {
+    if (e?.alreadyConfirmed) return res.json({ state: "already", code: held.booking_code });
+    if (!(e?.status >= 400 && e.status < 500)) throw e;
+    return refuse(e.message);
+  }
+  if (result.exactDay) return refuse("A group formed on that day while your request waited. Book a place on it from the tour page.");
+  await announceDateRequest(req, input, result, { confirmedEmail: true });
+  await logAudit(req, { action: "booking.email_confirmed", entity: "pledge", entityId: result.booking.id, detail: { bookingCode: held.booking_code, dateRequest: true } });
+  res.json({ state: "confirmed", code: held.booking_code });
+}
+
 // Send the confirmation email again: a new link, at most 3 times.
 app.post("/api/public/bookings/:code/resend-confirmation", writeLimiter, h(async (req, res) => {
   const code = String(req.params.code || "").trim();
@@ -1900,12 +1927,14 @@ app.post("/api/public/bookings/:code/resend-confirmation", writeLimiter, h(async
   if (r.error === 404) throw new AppError(404, "Booking not found.");
   if (r.error === 409) throw new AppError(409, "This booking isn't waiting for confirmation any more.");
   if (r.error === 429) throw new AppError(429, `The confirmation email has already been sent again ${MAX_RESENDS} times. Email hello@sawa.tours and we'll confirm it for you.`);
-  const d = (await pool.query("SELECT route, date, start_date, end_date FROM departures WHERE id = $1", [r.row.departure_id])).rows[0] || {};
+  const d = r.row.departure_id != null
+    ? (await pool.query("SELECT route, date, start_date, end_date FROM departures WHERE id = $1", [r.row.departure_id])).rows[0] || {}
+    : { route: (await pool.query("SELECT title FROM tour_products WHERE id = $1", [r.row.tour_product_id])).rows[0]?.title, date: r.row.request_date };
   const input = r.row.payload?.input || {};
   sendEmailInBackground(Promise.resolve(confirmBookingEmail({
     to: r.row.email, customerName: input.customerName, route: d.route,
     dateLabel: d.start_date ? `${isoDate(d.start_date)} – ${isoDate(d.end_date)}` : isoDate(d.date), seats: Number(r.row.seats),
-    bookingCode: r.row.booking_code, url: confirmBookingUrl(r.token),
+    bookingCode: r.row.booking_code, url: confirmBookingUrl(r.token), dateRequest: r.row.kind === "date_request",
   })));
   await logAudit(req, { action: "booking.hold_resend", entity: "booking", entityId: r.row.booking_code, detail: { resends: r.row.resends } });
   res.json({ sent: true, resendsLeft: Math.max(0, MAX_RESENDS - r.row.resends) });
@@ -2179,7 +2208,12 @@ app.get("/api/public/unavailable-dates", h(async (_req, res) => {
 // operating days, blackouts, join-first) and land in the same place: a
 // `pending_review` date with one `pending` booking, waiting on Date requests.
 // Returns { nearMatches } when open dates already exist close by.
-async function createDateRequest(input, req, requester = {}) {
+//
+// A traveler's request is held for email confirmation (migration 060) with
+// `hold`: every check below runs, then nothing is written but the held
+// request. The "Confirm my booking" link replays it with `confirmation`,
+// through the same checks, keeping its booking code.
+async function createDateRequest(input, req, requester = {}, { hold = false, confirmation = null } = {}) {
 
   const today = new Date(); today.setHours(12, 0, 0, 0);
   const picked = new Date(`${input.date}T12:00:00`);
@@ -2198,6 +2232,18 @@ async function createDateRequest(input, req, requester = {}) {
   }
 
   return withTransaction(async (c) => {
+    // Two clicks on the same link make one request.
+    if (confirmation) {
+      const still = (await c.query("SELECT status FROM booking_confirmations WHERE id = $1 FOR UPDATE", [confirmation.id])).rows[0];
+      if (still?.status !== "unconfirmed") throw Object.assign(new AppError(409, "This booking is already confirmed."), { alreadyConfirmed: true });
+    }
+    const holdRequest = async (departureId) => ({
+      product,
+      held: await holdBooking(c, {
+        kind: "date_request", departureId, tourProductId: product.id, requestDate: input.date,
+        bookingCode: await uniqueBookingCode(c), email: input.customerEmail, seats: input.seats, payload: { input },
+      }),
+    });
     const product = await loadProduct(c, input.tourProductId);
     if (!product || product.active === false || product.status !== "approved") {
       throw new AppError(404, "Tour not found.");
@@ -2259,6 +2305,7 @@ async function createDateRequest(input, req, requester = {}) {
       if (!d || seatsTotal(d.pledges) + input.seats > d.maxSeats) continue;
       if (d.status === "pending_review") {
         if (bookable.length) continue;
+        if (hold) return holdRequest(d.id);
         const joinPricing = computePledgePricing(d, product, input);
         const joinRef = requester.agencyId ? "" : cleanRefCode(input.refCode);
         if (joinRef) await c.query("INSERT INTO referrals (code) VALUES ($1) ON CONFLICT (code) DO NOTHING", [joinRef]);
@@ -2271,9 +2318,10 @@ async function createDateRequest(input, req, requester = {}) {
           customerPhone: input.customerPhone || null,
           source: requester.agencyId ? "agency_request" : "public_request",
           createdByUserId: requester.userId || null,
-          bookingCode: await uniqueBookingCode(c), refCode: joinRef || null,
+          bookingCode: confirmation ? confirmation.booking_code : await uniqueBookingCode(c), refCode: joinRef || null,
           ...joinPricing, status: "pending",
         });
+        if (confirmation) await markConfirmed(c, { id: confirmation.id, pledgeId: joinId });
         const joined = await loadDeparture(c, d.id);
         const savedJoin = await c.query(`SELECT * FROM pledges WHERE id=$1`, [joinId]);
         return { departure: joined, booking: mapPledge(savedJoin.rows[0]), joinedRequest: true };
@@ -2304,6 +2352,7 @@ async function createDateRequest(input, req, requester = {}) {
       }
     }
 
+    if (hold) return holdRequest(null);
     const isPkg = product.type === "package";
     let endDate = null;
     if (isPkg && product.nights) {
@@ -2354,7 +2403,7 @@ async function createDateRequest(input, req, requester = {}) {
       customerPhone: input.customerPhone || null,
       source: requester.agencyId ? "agency_request" : "public_request",
       createdByUserId: requester.userId || null,
-      bookingCode: await uniqueBookingCode(c),
+      bookingCode: confirmation ? confirmation.booking_code : await uniqueBookingCode(c),
       refCode: refCode || null,
       ...pricing,
       // Nobody has approved this date yet, so the booking is not confirmed
@@ -2363,6 +2412,7 @@ async function createDateRequest(input, req, requester = {}) {
       // took the column default and every request read "confirmed" in admin.
       status: "pending",
     });
+    if (confirmation) await markConfirmed(c, { id: confirmation.id, pledgeId });
     const departure = await loadDeparture(c, id);
     const saved = await c.query(`SELECT * FROM pledges WHERE id=$1`, [pledgeId]);
     return { departure, booking: mapPledge(saved.rows[0]) };
@@ -2373,7 +2423,10 @@ app.post("/api/public/departure-requests", writeLimiter, bookingAttemptLimiter, 
   await requireTurnstile(req);
   const input = parse(publicDepartureRequestSchema, req.body);
   input.customerPhone = verifiedPhoneFor(input);
-  const result = await createDateRequest(input, req);
+  delete input.turnstileToken;
+  delete input.phoneToken;
+  const hold = await holdForConfirmation(pool) && await dateRequestHoldAvailable(pool);
+  const result = await createDateRequest(input, req, {}, { hold });
 
   if (result.exactDay) {
     // The same tour already runs that day: book on it, never beside it.
@@ -2391,10 +2444,27 @@ app.post("/api/public/departure-requests", writeLimiter, bookingAttemptLimiter, 
       nearMatches: result.nearMatches,
     });
   }
+  if (result.held) {
+    // Held until the traveler confirms their email (060): not a request yet.
+    const code = result.held.row.booking_code;
+    sendEmailInBackground(Promise.resolve(confirmBookingEmail({
+      to: input.customerEmail, customerName: input.customerName, route: result.product.title,
+      dateLabel: input.date, seats: input.seats, bookingCode: code, url: confirmBookingUrl(result.held.token), dateRequest: true,
+    })));
+    await logAudit(req, { action: "departure_request.hold", entity: "booking", entityId: code,
+      detail: { tourProductId: input.tourProductId, date: input.date, seats: input.seats, source: "public", joins: result.held.row.departure_id ?? null } });
+    return res.status(202).json({ confirmationRequired: true, booking: { bookingCode: code, seats: input.seats, customers: input.customerName, status: "unconfirmed" } });
+  }
+  await announceDateRequest(req, input, result);
+  res.status(201).json({ departure: presentDeparture(result.departure, req.user), booking: result.booking });
+}));
 
+// A traveler's request is made (at once, or from its confirmation link): the
+// audit line, the traveler's "request received" email, and ops.
+async function announceDateRequest(req, input, result, { confirmedEmail = false } = {}) {
   await logAudit(req, {
     action: result.joinedRequest ? "departure_request.join" : "departure_request.create", entity: "departure", entityId: String(result.departure.id),
-    detail: { tourProductId: input.tourProductId, date: input.date, seats: input.seats, source: "public", joinedExisting: !!result.joinedRequest },
+    detail: { tourProductId: input.tourProductId, date: input.date, seats: input.seats, source: "public", joinedExisting: !!result.joinedRequest, ...(confirmedEmail ? { confirmedEmail: true } : {}) },
   });
   const d = result.departure;
   sendEmailInBackground(departureRequestReceivedEmail({
@@ -2403,8 +2473,7 @@ app.post("/api/public/departure-requests", writeLimiter, bookingAttemptLimiter, 
     seats: input.seats, bookingCode: result.booking.bookingCode,
   }));
   notifyOps(d, result.booking, input, { isRequest: true });
-  res.status(201).json({ departure: presentDeparture(result.departure, req.user), booking: result.booking });
-}));
+}
 
 // An operator requests a new date from their dashboard. Until 24 Sep 2026 an
 // operator could only join dates Sawa had already published; a tour with none

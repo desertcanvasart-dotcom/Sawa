@@ -53,7 +53,12 @@ test("both public routes that create demand notify ops", () => {
   assert.match(route('app.post("/api/public/departures/:id/bookings"'), /placePublicBooking\(req/);
   const place = app.slice(app.indexOf("async function placePublicBooking("), app.indexOf("\n}\n", app.indexOf("async function placePublicBooking(")));
   assert.match(place, /notifyOps\([^)]*isRequest: false/);
-  assert.match(route('app.post("/api/public/departure-requests"'), /notifyOps\([^)]*isRequest: true/);
+  // A date request is announced (audit, email, ops) by announceDateRequest,
+  // whether it is made at once or from its confirmation link (060).
+  assert.match(route('app.post("/api/public/departure-requests"'), /announceDateRequest\(req, input, result\)/);
+  const announce = app.slice(app.indexOf("async function announceDateRequest("), app.indexOf("\n}\n", app.indexOf("async function announceDateRequest(")));
+  assert.match(announce, /notifyOps\([^)]*isRequest: true/);
+  assert.match(app, /announceDateRequest\(req, input, result, \{ confirmedEmail: true \}\)/);
 });
 
 test("approving refuses a date that has already started, and never tells a withdrawn traveller it is live", () => {

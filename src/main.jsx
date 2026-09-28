@@ -1771,7 +1771,8 @@ function TourDetailV2({ isSaving, navigate, phoneVerification = false, onBookPub
         return;
       }
       if (!response.ok) throw new Error(data.error || "Could not request this date.");
-      setReqDone({ code: data.booking?.bookingCode, date: reqDate });
+      // Held until the traveler confirms their email (202): not a request yet.
+      setReqDone({ code: data.booking?.bookingCode, date: reqDate, unconfirmed: !!data.confirmationRequired });
       setReqMode(false);
     } catch (error) {
       setReqErr(error.message);
@@ -2043,7 +2044,9 @@ function TourDetailV2({ isSaving, navigate, phoneVerification = false, onBookPub
                       {/* Traveler-initiated date request (Phase A) */}
                       {reqDone ? (
                         <div className="bk-ok" style={{ marginTop: 8 }}>
-                          Date request received for {formatDate(reqDone.date, { alwaysYear: true })}{reqDone.code ? ` — code ${reqDone.code}` : ""}. Our team reviews it and emails you shortly. Nothing is charged now.
+                          {reqDone.unconfirmed
+                            ? <>Check your email to confirm your date request for {formatDate(reqDone.date, { alwaysYear: true })}{reqDone.code ? ` (code ${reqDone.code})` : ""}. We send it to our team when you click the link; it lapses if it isn't confirmed within 24 hours. Nothing is charged now.</>
+                            : <>Date request received for {formatDate(reqDone.date, { alwaysYear: true })}{reqDone.code ? ` — code ${reqDone.code}` : ""}. Our team reviews it and emails you shortly. Nothing is charged now.</>}
                         </div>
                       ) : catalogueV2() ? (
                         !tour.dates.length && <div className="note" style={{ marginTop: 8 }}>No dates are open for booking right now. New dates are added to the calendar regularly.</div>
@@ -3176,7 +3179,7 @@ function EmbedBookTour({ product, refCode, phoneVerification }) {
     // Join-first: open dates close by are offered before a new one is made.
     if (r.status === 409 && j.code === "near_matches") { setMatches(Object.assign(j.nearMatches || [], { exactDay: !!j.exactDay })); return; }
     if (!r.ok) throw new Error(j.error || "Could not request this date.");
-    setDone({ kind: "requested", booking: j.booking || {}, date: reqDate });
+    setDone({ kind: j.confirmationRequired ? "request_unconfirmed" : "requested", booking: j.booking || {}, date: reqDate });
   }
 
   async function submit(e, opts) {
@@ -3194,12 +3197,14 @@ function EmbedBookTour({ product, refCode, phoneVerification }) {
     return (
       <div className="eb-panel eb-done" role="status">
         <span className="eb-done-mark"><Check size={22} /></span>
-        <strong className="eb-title">{done.kind === "requested" ? "Your date is requested" : done.kind === "unconfirmed" ? "Check your email to confirm your booking" : "Your seats are held"}</strong>
+        <strong className="eb-title">{done.kind === "requested" ? "Your date is requested" : done.kind === "unconfirmed" ? "Check your email to confirm your booking" : done.kind === "request_unconfirmed" ? "Check your email to confirm your date request" : "Your seats are held"}</strong>
         <p>{n} seat{n === 1 ? "" : "s"} on <b>{product.title}</b>, {formatDate(done.date, { alwaysYear: true })}.</p>
         {b.bookingCode && <p className="eb-code">Booking code <b>{b.bookingCode}</b></p>}
         <p className="eb-muted">
           {done.kind === "unconfirmed"
             ? `We've emailed a link to ${email || "you"}. Your booking is made when you click it, and lapses if it isn't confirmed within 24 hours. Nothing is charged now.`
+            : done.kind === "request_unconfirmed"
+            ? `We've emailed a link to ${email || "you"}. Your request goes to Sawa when you click it, and lapses if it isn't confirmed within 24 hours. Nothing is charged now.`
             : done.kind === "requested"
             ? `Nothing is charged now. Sawa reviews the date and emails ${email || "you"} once it opens for other travelers to join.`
             : `Nothing is charged now. We've emailed the details to ${email || "you"}; the deposit link follows once this date reaches GoAhead.`}

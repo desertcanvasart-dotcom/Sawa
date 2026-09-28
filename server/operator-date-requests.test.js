@@ -47,7 +47,10 @@ test("one implementation of a date request, for both callers", () => {
   for (const rule of ["unavailableDates()", "minLeadDaysFor(product)", "maxHorizonDaysFor(product)", "operatingDayError(product, input.date)", "ignoreMatches"]) {
     assert.ok(fn.includes(rule), `the shared request path lost: ${rule}`);
   }
-  assert.match(route('app.post("/api/public/departure-requests"'), /createDateRequest\(input, req\)/);
+  // 060: a traveler's request is held for email confirmation, then replayed
+  // through the same function by the confirmation link.
+  assert.match(route('app.post("/api/public/departure-requests"'), /createDateRequest\(input, req, \{\}, \{ hold \}\)/);
+  assert.match(app, /createDateRequest\(input, req, \{\}, \{ confirmation: held \}\)/);
 });
 
 test("an operator sees only their own requests", () => {
