@@ -1,5 +1,8 @@
 # Payments readiness: what traveler charging needs (investigation only)
 
+> **Superseded in part on 29 Sep 2026 (phase 6).** A departure holds at most 8 travelers (not 4–12); "full departures (12 seats)" is 8. When one is full a new departure opens for the same tour and day: `docs/phase6/REPORT.md`.
+
+
 For the conversations with the Egyptian lawyer and the payment provider, before traveler charging (mode A or B) is built. **No code was written for this.**
 
 > **Legal structure decided 27 Sep 2026.** The operator assigned at GoAhead is the **seller** of each departure. **Online Era** (Commercial Registration 148500), which holds a licence to collect payments as an agent, is its commercial and payment-collection agent and the **merchant** on the payment account. **Capital Travel Service is not involved in Sawa.** The questions below are updated accordingly; `docs/legal/terms-catalogue-draft.md` (v2) has the lawyer questions for this structure.

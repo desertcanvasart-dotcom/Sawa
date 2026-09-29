@@ -7,6 +7,7 @@
 // Operator routes: operator logins only, and only with catalogue_v2 on; with
 // it off they answer 404, so nothing new is reachable. Emails go out only with
 // the flag on.
+import { setOperatorFeeOverride } from "./operator-fee.js";
 import { z } from "zod";
 import { pool } from "./db/index.js";
 import { CatalogueError, isMissingCatalogueTables, todayIn } from "./catalogue.js";
@@ -329,6 +330,20 @@ export function registerOperatorRoutes(app, { requireAuth, requireRole, h, logAu
 
   app.get("/api/admin/catalogue/departures/:id/manifest", ...staff, route(async (req, res) => {
     res.json(await manifestFor(pool, { departureId: id(req.params.id) }));
+  }));
+
+  // The operator fee for this departure alone (29 Sep 2026): a percentage and a
+  // reason, editable until the operator acknowledges the offer.
+  app.post("/api/admin/catalogue/departures/:id/operator-fee", ...staff, route(async (req, res) => {
+    const out = await setOperatorFeeOverride(pool, {
+      departureId: Number(req.params.id), pct: req.body?.pct ?? null, reason: req.body?.reason, by: req.user.email || req.user.id,
+    });
+    await logAudit(req, {
+      action: "catalogue.departure.operator_fee", entity: "catalogue_departure", entityId: Number(req.params.id),
+      detail: { from: out.from, to: out.to, reason: out.reason, departureNo: out.departureNo, by: req.user.email || req.user.id },
+    });
+    invalidatePublic();
+    res.json({ ok: true, ...out });
   }));
 
   app.get("/api/admin/catalogue/departures/:id/expected", ...staff, route(async (req, res) => {

@@ -1,7 +1,9 @@
-# DRAFT: Terms for catalog bookings: reservation, sale and payment (v3)
+# DRAFT: Terms for catalog bookings: reservation, sale and payment (v4)
 
 **Status: draft for the lawyer. Not published, not linked from the site, and not in force.**
 Version 3, 28 Sep 2026. Version 2 (27 Sep 2026) set the legal structure; version 3 adds the final business model (docs/phase5/REPORT.md): the operator is normally **one of the agencies with travelers on the departure**, the price **falls as the group grows**, and the difference is **refunded** if the departure reaches a cheaper tier. Changes from v2 are in C1.2, C3.2, C4.1, C4.6 and the new C4a, and questions 24–26.
+
+**Version 4, 29 Sep 2026 (phase 6, docs/phase6/REPORT.md)** changes the group and the price: the **maximum group is 8 travelers**; when a departure is full **a new, independent departure opens for the same tour and day** (C3a); there is **one price per person** (C4a, replacing the group-size tiers and the refund for a cheaper tier, which stays in the system for a tour that has tiers); and **groups of more than 8 are a special arrangement, not bookable online** (C3b). Changes from v3 are in the header, C3a, C3b, C4a and C8, and questions 27–29.
 
 - **The operator assigned at GoAhead is the seller** of each departure.
 - **Online Era** (Commercial Registration 148500), trading as Sawa Tours, holds a license to collect payments as an agent: **General Sales Agent license no. 32241** (supplied 27 Sep 2026). It is the operator's **commercial and payment-collection agent**. It operates the platform, and it is not the seller of the tour.
@@ -45,12 +47,23 @@ Markers: **[LAWYER n]** is a point that needs the lawyer's confirmation. The que
 5. You receive a **receipt issued by Online Era on behalf of the operator**, and a **voucher** on your booking page naming the operator as seller.
 6. Agency billing: an agency that pays us directly pays **the same full price** by the same deadline, on the same terms.
 
-## C4a. The price: it falls as the group grows
+## C3a. A full departure: the next one opens
 
-1. A catalog tour has a price per person for each group size: **4 to 6, 7 to 9 and 10 to 12 travelers**. The tour page shows them, for example "€51 per person, €50 from 7 travelers, €47 from 10". **[LAWYER 25]**
+1. A departure holds **at most 8 travelers** (a tour's own maximum is shown on its page and is never more than 8 unless the tour page says otherwise for a cruise or multi-day tour). **[LAWYER 27]**
+2. When a departure is full, **a new departure opens for the same tour on the same day.** It is a departure of its own: its own GoAhead at **4 travelers**, its own booking cut-off, its own operator, its own payment requests, its own manifest. **If it doesn't reach 4 by its cut-off, it is canceled like any other departure**, whatever happens to the first.
+3. A booking always goes to the **lowest-numbered departure that has room for your whole party**. **A party is never split**: if it doesn't fit in the first, it goes together to the next, which is opened if needed. The tour page shows the date once, with the status of the departure your booking would join (for example "Going ahead" or "2 of 4 needed").
+4. A reservation you haven't yet confirmed by email doesn't hold a seat. It is placed when you confirm, on the departure that has room then.
+
+## C3b. Groups of more than 8
+
+Groups of more than 8 travelers **cannot be booked online.** The booking form asks for a **special arrangement** instead: your name, email, group size, date and tour. **Sending it books nothing and holds no seat**; we reply to arrange it. **[LAWYER 28]**
+
+## C4a. The price: one price per person
+
+1. A catalog tour has **one price per person** for a departure of 4 to 8 travelers. The tour page shows it, for example "€54 per person". *(v3 had a price for each of three group sizes; that structure remains in the system for a tour that needs it, and this clause would then say so on that tour's page.)* **[LAWYER 25]**
 2. Prices are set in Egyptian pounds and shown and charged in **euros at the published exchange rate** of the price list in force when you reserved. Your booking keeps that rate; your charges use it. A later change of the rate doesn't change your price. **[LAWYER 26]**
-3. You pay the price of the tier your departure is in when your payment request is sent (C4.1). A departure run below 4 travelers (C3.5) is priced at the 4-to-6 tier.
-4. **If by the booking cut-off your departure has grown into a cheaper tier, we refund the difference** to each traveler who has paid, to the card you paid with, as collecting agent (C7.5).
+3. You pay the price shown when your payment request is sent (C4.1). A departure run below 4 travelers (C3.5) is priced the same.
+4. *(Only for a tour that has group-size prices:)* **if by the booking cut-off your departure has grown into a cheaper tier, we refund the difference** to each traveler who has paid, to the card you paid with, as collecting agent (C7.5). With one price there is no difference to refund.
 5. **You are never charged more** if the group shrinks after you have paid.
 
 ## C5. If you don't pay by the deadline
@@ -79,7 +92,7 @@ Markers: **[LAWYER n]** is a point that needs the lawyer's confirmation. The que
 
 ## C8. The waitlist: a full refund if your seat is resold
 
-1. A full departure has a waitlist. A seat released or canceled before the cut-off is offered to the first waiting traveler whose party fits, held for a limited time (normally 12 hours, never past the cut-off).
+1. A full departure has a waitlist (a new departure opens for a full one: C3a, so the waitlist is for the seats of the full departure that you would rather have). A seat released or canceled before the cut-off is offered to the first waiting traveler whose party fits, held for a limited time (normally 12 hours, never past the cut-off).
 2. **If you cancel after GoAhead and a waitlisted traveler takes your seat before the cut-off, you get a full refund.** The percentage kept under C7 is returned, or its share if only some of your seats are resold. Seats resold on general sale don't count. **[LAWYER 20]**
 
 ---
@@ -114,3 +127,6 @@ Markers: **[LAWYER n]** is a point that needs the lawyer's confirmation. The que
 | 24 | ***New in v3.* An agency as operator and seller:** the operator is normally an agency with travelers on the departure. It then sells to the travelers it brought and to those other agencies or Sawa brought. Does an agency that sold places as a sub-agent (Agency Sales Agreement) need anything more to be the seller to all of them? Must the traveler be told, before reserving, that the operator may be any approved agency on the departure? |
 | 25 | ***New in v3.* Tiered prices:** is "the price of the tier the departure is in when the payment request is sent, with the difference refunded if it gets cheaper by the cut-off" a sufficiently certain price under the Consumer Protection Law (181/2018)? Must the page show all three tiers before reservation (it does)? |
 | 26 | ***New in v3.* Exchange rate:** the price list is in EGP and charged in EUR at a published rate fixed at reservation. Any rule on quoting or charging foreign travelers in EUR for an EGP-priced service? |
+| 27 | ***New in v4.* The maximum group:** the standard 14-seat vehicle carries at most 8 travelers, with spare seats kept for luggage. Is a fixed maximum of 8, with a cruise or multi-day tour allowed to show a higher one on its page, consistent with how the tour is described? |
+| 28 | ***New in v4.* Groups above 8:** is a "special arrangement" request (no booking, no seat held, we reply by email) enough, and what may we promise in that reply? |
+| 29 | ***New in v4.* A further departure:** does opening a new, independent departure for the same tour and day when one is full (each with its own GoAhead of 4, cut-off and operator, and canceled on its own if it doesn't reach 4) need to be stated before reservation, and is C3a enough? |

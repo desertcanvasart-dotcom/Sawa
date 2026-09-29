@@ -1,5 +1,8 @@
 # 01 · How Sawa works today (as built)
 
+> **Maximum group is 8 since 29 Sep 2026** (`docs/model-audit/03-migration-plan.md` §4b). Where this document says 12, or the bands 4–6 / 7–9 / 10–12, read 8 and 4–8.
+
+
 Audit of branch `claude/wizardly-keller-z7x7op` at `0f97967`, 26 Sep 2026. That is `main` plus two unmerged commits: copy/spelling fixes and a tours CSV export. Neither touches the model.
 
 This was read-only. Nothing was run against a database, a payment provider or a mail service. "Not found" means searched for and not found. Paths are relative to the repo root.

@@ -171,7 +171,7 @@ test("a booking's group link: made once, the same link after; it shows the lead'
   const made = await post(on, `/api/public/bookings/${lead.code}/party`);
   assert.equal(made.status, 200, JSON.stringify(made.body));
   assert.match(made.body.group.url, /\/join\/[A-Za-z0-9_-]{16}$/);
-  assert.equal(made.body.group.seatsLeft, 10);
+  assert.equal(made.body.group.seatsLeft, 6);
   const again = await post(on, `/api/public/bookings/${lead.code}/party`);
   assert.equal(again.body.group.url, made.body.group.url, "the same link every time, so a link already shared keeps working");
   s.token = decodeURIComponent(made.body.group.url.split("/join/")[1]);
@@ -181,10 +181,10 @@ test("a booking's group link: made once, the same link after; it shows the lead'
   const view = await get(on, `/api/public/parties/${s.token}`);
   assert.equal(view.status, 200);
   assert.deepEqual([view.body.group.leadFirstName, view.body.group.seats, view.body.seatsLeft, view.body.bookable, view.body.departure.id],
-    ["Ana", 2, 10, true, deps.a.legacy]);
+    ["Ana", 2, 6, true, deps.a.legacy]);
   assert.match(view.body.departure.path, /^\/tour\//);
   const pageAfter = await get(on, `/api/public/bookings/${lead.code}`);
-  assert.deepEqual(pageAfter.body.booking.group, { url: made.body.group.url, bookings: 1, seats: 2, seatsLeft: 10 });
+  assert.deepEqual(pageAfter.body.booking.group, { url: made.body.group.url, bookings: 1, seats: 2, seatsLeft: 6 });
   const audit = await one("SELECT * FROM audit_log WHERE action = 'party.create'");
   assert.ok(audit, "the party's creation is audited");
   assert.equal((await get(on, "/api/public/parties/not-a-token")).status, 404);
@@ -202,11 +202,14 @@ test("booking through the link joins the same date and party; refused past the f
   assert.equal((await one("SELECT party_id FROM pledges WHERE id = $1", [s.other.id])).party_id, null);
   const joined = await one("SELECT detail FROM audit_log WHERE action = 'booking.create' AND entity_id = $1", [member.id]);
   assert.equal(Number(joined.detail.partyId), party);
-  assert.equal((await get(on, `/api/public/parties/${s.token}`)).body.seatsLeft, 6);
+  assert.equal((await get(on, `/api/public/parties/${s.token}`)).body.seatsLeft, 2);
 
-  const tooMany = await bookPublic(on, deps.a, 7, { partyToken: s.token });
+  // The party holds 5 (2 + 3) and the date has 2 left. 4 more would make a party of 9, more
+  // than a departure holds: refused, and the party is not split. (A joiner that fits on the
+  // next departure moves the whole party there: see phase6.integration.test.js.)
+  const tooMany = await bookPublic(on, deps.a, 4, { partyToken: s.token });
   assert.equal(tooMany.status, 409);
-  assert.match(tooMany.body.error, /Only 6 seats are left on this date/);
+  assert.match(tooMany.body.error, /Only 2 seats are left on this date/);
   const otherDate = await bookPublic(on, deps.b, 1, { partyToken: s.token });
   assert.equal(otherDate.status, 409);
   assert.match(otherDate.body.error, /different date/);

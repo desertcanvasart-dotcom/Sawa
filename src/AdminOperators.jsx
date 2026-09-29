@@ -587,7 +587,7 @@ export function RatesSection({ flash }) {
 // or per traveler with an amount per tier; the collecting agent's commission; the
 // published EUR rate. The table below it is the same calculation the
 // statements use, live, for 2 to 12 travelers.
-const blankTiers = () => DEFAULT_POOL_TIERS.map((t) => ({ ...t, priceEgp: "", operatorFeePct: String(t.operatorFeePct) }));
+const blankTiers = () => DEFAULT_POOL_TIERS.map((t) => ({ ...t, priceEgp: "", operatorFeePct: t.operatorFeePct == null ? "" : String(t.operatorFeePct) }));
 const toForm = (v) => ({
   tiers: (v?.tiers?.length ? v.tiers : null)?.map((t) => ({ from: String(t.from), to: String(t.to), priceEgp: t.priceEgp ?? "", operatorFeePct: t.operatorFeePct ?? "" })) || blankTiers(),
   costLines: (v?.costLines || []).map((l) => ({ name: l.name, basis: l.basis, amounts: (l.amounts || []).map((a) => a ?? "") })),
@@ -651,9 +651,10 @@ function RateEditor({ product, flash, onClose }) {
       {err && <div className="auth-error">{err}</div>}
       <form className="dash-card" style={{ marginBottom: 12 }} onSubmit={save}>
         <h2>{draft ? `Draft v${draft.version}` : "New draft"}</h2>
-        <h3>Tiers</h3>
+        <h3>Price</h3>
+        <p className="field-hint" style={{ marginTop: 0 }}>One selling price per traveler for 4–8 travelers. The operator fee is required: it is set case by case for each product, and a rate card can't be published without it. Add a tier only if the price should change with the group size.</p>
         <div className="table-wrap"><table className="dash-table">
-          <thead><tr><th>From</th><th>To</th><th>Selling price per traveler (EGP)</th><th>Operator fee (% of operating cost)</th><th>Travelers see</th><th /></tr></thead>
+          <thead><tr><th>From</th><th>To</th><th>Selling price per traveler (EGP)</th><th>Operator fee (% of operating cost), required</th><th>Travelers see</th><th /></tr></thead>
           <tbody>{form.tiers.map((t, i) => (
             <tr key={i}>
               <td><input type="number" min="1" step="1" value={t.from} onChange={(e) => setTier(i, "from", e.target.value)} style={{ width: 70 }} /></td>
@@ -665,7 +666,7 @@ function RateEditor({ product, flash, onClose }) {
             </tr>
           ))}</tbody>
         </table></div>
-        <div className="cat-actions" style={{ justifyContent: "flex-start" }}><button type="button" className="btn-ghost sm" onClick={addTier}>Add a tier</button></div>
+        <div className="cat-actions" style={{ justifyContent: "flex-start" }}><button type="button" className="btn-ghost sm" onClick={addTier}>Add a tier (optional)</button></div>
         <h3>Cost lines</h3>
         <div className="table-wrap"><table className="dash-table">
           <thead><tr><th>Name</th><th>Basis</th>{form.tiers.map((t, i) => <th key={i}>{t.from}–{t.to} (EGP)</th>)}<th /></tr></thead>
@@ -750,6 +751,47 @@ function RateEditor({ product, flash, onClose }) {
 // ============================================================ Calendar panel
 // The operator side of one calendar departure: who holds it, reassign,
 // manifest and expected amount.
+// The operator fee for this departure alone: a percentage and a reason, logged
+// with who changed it. Editable until the operator acknowledges the offer, then locked.
+function OperatorFeeForm({ departure, expected, locked, flash, onChange }) {
+  const override = departure.operatorFeeOverride;
+  const [pct, setPct] = useState(override ? String(override.pct) : "");
+  const [reason, setReason] = useState("");
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { setPct(override ? String(override.pct) : ""); setReason(""); setErr(""); }, [departure.id, override?.pct]);
+
+  async function save(next) {
+    setBusy(true); setErr("");
+    try {
+      await call(`/admin/catalogue/departures/${departure.id}/operator-fee`, "POST", { pct: next, reason });
+      flash(next == null ? "Back to the rate card's operator fee." : "Operator fee saved for this departure.");
+      setReason("");
+      onChange();
+    } catch (e) { setErr(e.message); } finally { setBusy(false); }
+  }
+
+  return (
+    <div className="op-fee" style={{ margin: "12px 0" }}>
+      <strong>Operator fee for this departure</strong>
+      <p className="field-hint" style={{ margin: "4px 0" }}>
+        {expected?.operatorFeePct != null ? `Applies now: ${expected.operatorFeePct}% of operating cost${expected.feeOverride ? " (set for this departure)" : " (from the rate card)"}.` : "The rate card's fee applies."}
+        {override && <> Set by {override.by} on {String(override.at).slice(0, 10)}: “{override.reason}”.</>}
+      </p>
+      {locked ? (
+        <p className="field-hint">The operator has acknowledged the offer, so the fee is locked for this departure.</p>
+      ) : (
+        <form className="cat-actions" style={{ justifyContent: "flex-start", gap: 8, flexWrap: "wrap" }} onSubmit={(e) => { e.preventDefault(); save(pct === "" ? null : Number(pct)); }}>
+          <input type="number" min="0" max="100" step="0.1" value={pct} onChange={(e) => setPct(e.target.value)} placeholder="% of operating cost" aria-label="Operator fee percentage" style={{ width: 150 }} />
+          <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Reason (required)" aria-label="Reason" required style={{ minWidth: 220 }} />
+          <button className="btn-ghost sm" disabled={busy}>{pct === "" ? "Use the rate card's fee" : "Save fee"}</button>
+        </form>
+      )}
+      {err && <div className="auth-error">{err}</div>}
+    </div>
+  );
+}
+
 export function DepartureOperatorPanel({ departure, operators, flash, onChange, onClose }) {
   const [manifest, setManifest] = useState(null);
   const [expected, setExpected] = useState(null);
@@ -806,6 +848,7 @@ export function DepartureOperatorPanel({ departure, operators, flash, onChange, 
         Rostered: {departure.rostered ? `${departure.rostered.name}${departure.rostered.published ? "" : " (roster not published)"}` : "nobody"}.{" "}
         {a ? <>Assigned to <b>{a.name}</b>: {ASSIGN_LABEL[a.state]}{a.state === "offered" && <> (due {stamp(a.ackDueAt)})</>}.</> : "Not assigned."}
       </p>
+      <OperatorFeeForm departure={departure} expected={expected} locked={a?.state === "acknowledged"} flash={flash} onChange={onChange} />
       {departure.status === "go_ahead" && (
         <form onSubmit={assign} className="cat-actions">
           <select value={operatorId} onChange={(e) => setOperatorId(e.target.value)} required aria-label="Operator">

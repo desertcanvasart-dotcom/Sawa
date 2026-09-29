@@ -1,5 +1,8 @@
 # 02 · Gap analysis: current build against the target model
 
+> **Maximum group is 8 since 29 Sep 2026** (`docs/model-audit/03-migration-plan.md` §4b). Where this document says 12, or the bands 4–6 / 7–9 / 10–12, read 8 and 4–8.
+
+
 > **Superseded on the seller (27 Sep 2026).** The operator assigned at GoAhead is the seller of each departure; **Online Era** (Commercial Registration 148500), licensed to collect payments as an agent, is its commercial and payment-collection agent and holds the merchant account. **Capital Travel Service is not involved in Sawa.** Where this document says CTS is the seller of record, the merchant or the invoicing party, read the operator as seller and Online Era as collecting agent. See `docs/legal/terms-catalogue-draft.md` (v2) and `docs/phase4/REPORT.md`.
 
 Each area has one table. File references point to the as-built evidence in [`01-current-state.md`](01-current-state.md).

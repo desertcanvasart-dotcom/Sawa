@@ -189,8 +189,8 @@ function CatalogueEditor({ id, listings, products, flash, onClose }) {
               <em className="field-hint">Its old page redirects (301) to the product it was merged into.</em>
             </label>
           )}
-          <label className="field"><span>GoAhead minimum</span><input type="number" min="1" max="12" value={form.goaheadMin ?? ""} onChange={set("goaheadMin")} /></label>
-          <label className="field"><span>Maximum group</span><input type="number" min="1" max="12" value={form.maxGroup ?? ""} onChange={set("maxGroup")} /></label>
+          <label className="field"><span>GoAhead minimum</span><input type="number" min="1" max="8" value={form.goaheadMin ?? ""} onChange={set("goaheadMin")} /></label>
+          <label className="field"><span>Maximum group</span><input type="number" min="1" max={form.type === "cruise" || form.type === "multi_day" ? 12 : 8} value={form.maxGroup ?? ""} onChange={set("maxGroup")} /><em className="field-hint">8 for every product. Only a cruise or multi-day product can be set higher (up to 12).</em></label>
           <label className="field"><span>Cut-off (hours before departure)</span><input type="number" min="0" value={form.cutoffHours ?? ""} onChange={set("cutoffHours")} /></label>
           {usesDeadline(form.type) && (
             <label className="field"><span>GoAhead deadline (days before departure)</span>
@@ -534,6 +534,16 @@ export function CalendarSection({ flash }) {
   // The product filter is a convenience: if it can't load, say so and keep the calendar.
   useEffect(() => { call("/admin/catalogue").then((j) => setProducts(j.products)).catch((e) => setErr(e.message)); }, []);
 
+  // Numbered departures: open departure N+1 of the date (the system does it when
+  // the last one is full; an admin can too). It is a departure of its own.
+  async function openAnother(id) {
+    try {
+      const r = await call(`/admin/catalogue/departures/${id}/open-another`, "POST", {});
+      flash(`Departure ${r.departure.number} opened.`);
+      await load();
+    } catch (e) { setErr(e.message); }
+  }
+
   async function generate() {
     setBusy(true);
     try {
@@ -605,7 +615,11 @@ export function CalendarSection({ flash }) {
                 <tr key={d.id}>
                   <td>{i === 0 ? <strong>{dayLabel(date)}</strong> : ""}</td>
                   <td>{d.code} {d.title}
+                    {(d.departureNo > 1 || deps.some((x) => x.productId === d.productId && x.departureNo > 1)) && <span className="tag" style={{ marginLeft: 6 }}>Departure {d.departureNo}</span>}
                     <div className="field-hint">{d.origin === "adopted" ? "existing date, old rules" : d.legacyDepartureId ? "bookable" : "not bookable yet"}</div>
+                    {d.legacyDepartureId && d.status !== "cancelled_below_minimum" && d.status !== "completed" && (
+                      <button type="button" className="btn-mini" style={{ marginTop: 4 }} onClick={() => openAnother(d.id)}>Open another departure</button>
+                    )}
                   </td>
                   <td className="tnum">{d.seatsSold} / {d.maxGroup}<div className="field-hint">{d.label}</div>
                     {d.goaheadSeats !== undefined && d.goaheadSeats !== d.seatsSold && <div className="field-hint">{d.goaheadSeats} count towards GoAhead</div>}

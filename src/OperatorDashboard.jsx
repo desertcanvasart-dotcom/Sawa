@@ -121,7 +121,7 @@ function Assignments({ assignments, reload, flash }) {
                   <td>{a.code} {a.title}</td>
                   <td>v{a.specVersion ?? "—"}</td>
                   <td className="tnum">{a.seatsSold}</td>
-                  <td className="tnum">{a.expected ? egp(a.expected.total) : "—"}{a.expected && !a.expected.frozen && <div className="field-hint">until the cut-off</div>}</td>
+                  <td className="tnum">{a.expected ? egp(a.expected.total) : "—"}{a.expected?.operatorFeePct != null && <div className="field-hint">operator fee {a.expected.operatorFeePct}% of operating cost{a.expected.feeOverride ? " (set for this departure)" : ""}</div>}{a.expected && !a.expected.frozen && <div className="field-hint">until the cut-off</div>}</td>
                   <td>
                     {a.state === "offered" && <>Due by {stamp(a.ackDueAt)}</>}
                     {a.state === "offered" && a.source === "agency" && a.candidate && <div className="field-hint">Offered to you because your agency has {a.candidate.travelers} traveler{a.candidate.travelers === 1 ? "" : "s"} on it.</div>}
