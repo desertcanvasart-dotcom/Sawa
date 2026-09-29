@@ -57,3 +57,10 @@ test("a party above 8 gets the special-arrangement form, not a booking, on the t
   assert.match(form, /Groups of more than \$\{MAX_GROUP_SIZE\}: request a special arrangement/);
   for (const field of ["Your name", "Email", "Group size", "Date", "Tour"]) assert.ok(form.includes(field), field);
 });
+
+test("the tour editor opens a tour still stored above 8 at 8, and drops price rows above it", () => {
+  const editor = read("src", "AdminDashboard.jsx");
+  assert.match(editor, /maxSeats: Math\.min\(existing\?\.maxSeats \|\| MAX_GROUP_SIZE, MAX_GROUP_SIZE\)/);
+  assert.match(editor, /useState\(\(existing\?\.priceTiers \|\| \[\]\)\.filter\(\(t\) => Number\(t\.seats\) <= MAX_GROUP_SIZE\)\)/);
+  assert.match(editor, /Stored as \$\{existing\.maxSeats\}\. The maximum group is/, "the admin is told why it changed");
+});
