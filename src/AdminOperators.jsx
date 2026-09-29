@@ -649,30 +649,31 @@ function RateEditor({ product, flash, onClose }) {
       <Head title={`#${product.catalogue_no} ${product.title}`} sub={`${TYPE_LABELS[product.type] || product.type} · all amounts in EGP; travelers see and pay EUR at the published rate`}
         action={<button className="btn-ghost" onClick={onClose}><ArrowLeft size={16} />Rate card</button>} />
       {err && <div className="auth-error">{err}</div>}
-      <form className="dash-card" style={{ marginBottom: 12 }} onSubmit={save}>
+      <form className="dash-card rate-editor" style={{ marginBottom: 12 }} onSubmit={save}>
         <h2>{draft ? `Draft v${draft.version}` : "New draft"}</h2>
-        <h3>Price</h3>
+        <p className="re-lead">Set the price, list what the tour costs, then check the result by group size below before publishing.</p>
+        <h3><span className="re-step">1</span>Price</h3>
         <p className="field-hint" style={{ marginTop: 0 }}>One selling price per traveler for 4–8 travelers. The operator fee is required: it is set case by case for each product, and a rate card can't be published without it. Add a tier only if the price should change with the group size.</p>
         <div className="table-wrap"><table className="dash-table">
           <thead><tr><th>From</th><th>To</th><th>Selling price per traveler (EGP)</th><th>Operator fee (% of operating cost), required</th><th>Travelers see</th><th /></tr></thead>
           <tbody>{form.tiers.map((t, i) => (
             <tr key={i}>
-              <td><input type="number" min="1" step="1" value={t.from} onChange={(e) => setTier(i, "from", e.target.value)} style={{ width: 70 }} /></td>
-              <td><input type="number" min="1" step="1" value={t.to} onChange={(e) => setTier(i, "to", e.target.value)} style={{ width: 70 }} /></td>
-              <td><input type="number" min="0" step="0.01" value={t.priceEgp} onChange={(e) => setTier(i, "priceEgp", e.target.value)} /></td>
-              <td><input type="number" min="0" max="100" step="0.1" value={t.operatorFeePct} onChange={(e) => setTier(i, "operatorFeePct", e.target.value)} style={{ width: 90 }} /></td>
+              <td><input className="re-num" type="number" min="1" step="1" value={t.from} onChange={(e) => setTier(i, "from", e.target.value)} style={{ width: 70 }} /></td>
+              <td><input className="re-num" type="number" min="1" step="1" value={t.to} onChange={(e) => setTier(i, "to", e.target.value)} style={{ width: 70 }} /></td>
+              <td><input className="re-num" type="number" min="0" step="0.01" value={t.priceEgp} onChange={(e) => setTier(i, "priceEgp", e.target.value)} /></td>
+              <td><input className="re-num" type="number" min="0" max="100" step="0.1" value={t.operatorFeePct} onChange={(e) => setTier(i, "operatorFeePct", e.target.value)} style={{ width: 90 }} /></td>
               <td className="tnum">{tierPriceEur(numOrNull(t.priceEgp), numOrNull(form.eurRate)) == null ? "—" : `€${tierPriceEur(numOrNull(t.priceEgp), numOrNull(form.eurRate))}`}</td>
               <td>{form.tiers.length > 1 && <button type="button" className="btn-mini" onClick={() => removeTier(i)}>Remove</button>}</td>
             </tr>
           ))}</tbody>
         </table></div>
         <div className="cat-actions" style={{ justifyContent: "flex-start" }}><button type="button" className="btn-ghost sm" onClick={addTier}>Add a tier (optional)</button></div>
-        <h3>Cost lines</h3>
+        <h3><span className="re-step">2</span>Cost lines</h3>
         <div className="table-wrap"><table className="dash-table">
           <thead><tr><th>Name</th><th>Basis</th>{form.tiers.map((t, i) => <th key={i}>{t.from}–{t.to} (EGP)</th>)}<th /></tr></thead>
           <tbody>{form.costLines.map((l, i) => (
             <tr key={i}>
-              <td><input value={l.name} maxLength={80} placeholder="e.g. Transport" onChange={(e) => setLine(i, { name: e.target.value })} /></td>
+              <td><input value={l.name} maxLength={80} placeholder="e.g. Transport" className="re-wide" onChange={(e) => setLine(i, { name: e.target.value })} /></td>
               <td><select value={l.basis} onChange={(e) => setLine(i, { basis: e.target.value })}>
                 {COST_BASES.map((b) => <option key={b} value={b}>{COST_BASIS_LABELS[b]}</option>)}
               </select></td>
@@ -684,7 +685,8 @@ function RateEditor({ product, flash, onClose }) {
           ))}</tbody>
         </table></div>
         <div className="cat-actions" style={{ justifyContent: "flex-start" }}><button type="button" className="btn-ghost sm" onClick={addLine}>Add a cost line</button></div>
-        <div className="form-grid">
+        <h3><span className="re-step">3</span>Commission, rate &amp; date</h3>
+        <div className="form-grid re-grid3">
           <label className="field"><span>Collecting agent's commission (% of the selling price)</span>
             <input type="number" min="0" max="99.99" step="0.1" value={form.commissionPct} onChange={(e) => setForm({ ...form, commissionPct: e.target.value })} /></label>
           <label className="field"><span>Published EUR rate (EGP per EUR)</span>
@@ -695,10 +697,10 @@ function RateEditor({ product, flash, onClose }) {
         {tierPriceLine(model.tiers, model.eurRate) && <p className="field-hint">Tour page: {tierPriceLine(model.tiers, model.eurRate)}</p>}
         {problem && <div className="auth-error">{problem}</div>}
 
-        <h3>By group size</h3>
+        <h3><span className="re-step">4</span>By group size</h3>
         {table ? (
           <>
-            {table.warnings.length > 0 && <ul>{table.warnings.map((w, i) => <li key={i}><span className="tag tag-warn">{w.kind === "negative_pool" ? "Guarantee needed" : "Pool shrinks"}</span> {w.text}</li>)}</ul>}
+            {table.warnings.length > 0 && <ul className="re-warnings">{table.warnings.map((w, i) => <li key={i}><span className="tag tag-warn">{w.kind === "negative_pool" ? "Guarantee needed" : "Pool shrinks"}</span> <span>{w.text}</span></li>)}</ul>}
             <div className="table-wrap"><table className="dash-table">
               <thead><tr><th>Travelers</th><th>Tier</th><th>Revenue</th><th>Operating cost</th><th>Operator fee</th><th>Entitlement</th><th>Agent</th><th>Pool</th><th>Pool / traveler</th><th>vs one fewer</th></tr></thead>
               <tbody>{table.rows.map((r) => (
@@ -715,25 +717,27 @@ function RateEditor({ product, flash, onClose }) {
             </table></div>
           </>
         ) : <p className="field-hint">Fix the rate card above to see the table.</p>}
-        <div className="cat-actions">
+        <div className="cat-actions re-actions">
           <button className="btn-ghost" disabled={busy || !!problem}>Save draft</button>
           <button type="button" className="btn-primary" disabled={busy || !!problem} onClick={publish}>Publish</button>
         </div>
       </form>
-      <div className="dash-card">
+      <div className="dash-card rate-editor">
         <h2>Versions</h2>
         {versions.length ? (
           <div className="table-wrap">
             <table className="dash-table">
-              <thead><tr><th>Version</th><th>State</th><th>From</th><th>Prices (EGP)</th><th>Operator fee</th><th>Cost lines</th><th>Commission</th><th>EUR rate</th></tr></thead>
+              <thead><tr><th>Version</th><th>From</th><th>Tiers (EGP per traveler · operator fee)</th><th>Cost lines</th><th>Commission</th><th>EUR rate</th></tr></thead>
               <tbody>
                 {versions.map((v) => (
                   <tr key={v.id}>
-                    <td>v{v.version}</td><td>{v.state}{v.publishedBy && <div className="field-hint">{v.publishedBy}</div>}</td>
+                    <td className="re-ver"><b>v{v.version}</b> <span className={`tag ${v.state === "published" ? "tag-on" : v.state === "draft" ? "tag-ready" : "tag-off"}`}>{v.state}</span>
+                      {v.publishedBy && <div className="field-hint">{v.publishedBy}</div>}</td>
                     <td>{v.effectiveFrom ? dayLabel(v.effectiveFrom) : "—"}</td>
-                    <td className="tnum">{(v.tiers || []).map((t) => egpFmt(t.priceEgp)).join(" / ")}</td>
-                    <td className="tnum">{(v.tiers || []).map((t) => (t.operatorFeePct == null ? "—" : `${t.operatorFeePct}%`)).join(" / ")}</td>
-                    <td>{(v.costLines || []).map((l) => `${l.name} (${COST_BASIS_LABELS[l.basis] || l.basis})`).join(", ") || "—"}
+                    <td><ul className="re-list">{(v.tiers || []).map((t, i) => (
+                      <li key={i}><span className="re-range">{t.from}–{t.to}</span> <span className="tnum">{egpFmt(t.priceEgp)}</span> <span className="re-muted">· {t.operatorFeePct == null ? "—" : `${t.operatorFeePct}%`}</span></li>
+                    ))}</ul></td>
+                    <td>{(v.costLines || []).length ? <ul className="re-list">{v.costLines.map((l, i) => <li key={i}>{l.name} <span className="re-muted">{COST_BASIS_LABELS[l.basis] || l.basis}</span></li>)}</ul> : "—"}
                       {v.source?.migration061 && <div className="field-hint">Converted by migration 061: {(v.source.migration061.notes || []).join("; ")}</div>}</td>
                     <td className="tnum">{v.commissionPct}%</td>
                     <td className="tnum">{v.eurRate ?? "—"}</td>

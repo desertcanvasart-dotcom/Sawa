@@ -7081,6 +7081,38 @@ button:disabled {
 .dash-table.sub-table { background: #fff; border: 1px solid #ece5d8; border-radius: 10px; }
 .dash-table.sub-table th { font-size: 11px; }
 
+/* Rate editor (admin > Rate card): real input styling, numbered steps, warnings and a sticky action bar */
+.rate-editor h2 { margin-bottom: 4px; }
+.rate-editor .re-lead { margin: 0 0 8px; color: var(--ink-soft); font-size: 13px; }
+.rate-editor h3 { display: flex; align-items: center; gap: 10px; margin: 28px 0 12px; font-size: 16px; }
+.re-step { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--sand-50); border: 1px solid var(--line); color: var(--ink-soft); font-size: 12px; font-weight: 700; }
+.rate-editor .table-wrap { border: 1px solid var(--line); border-radius: 12px; overflow-x: auto; }
+.rate-editor .dash-table td { vertical-align: middle; padding: 10px 14px; }
+.rate-editor .dash-table th { white-space: nowrap; }
+.rate-editor .dash-table input, .rate-editor .dash-table select {
+  border: 1px solid #ccd8dc; border-radius: 8px; padding: 8px 10px; font-size: 14px; font-family: var(--font-body); background: #fff; min-width: 0; width: 100%; box-sizing: border-box;
+}
+.rate-editor .dash-table input.re-num { text-align: right; font-variant-numeric: tabular-nums; min-width: 72px; }
+.rate-editor .dash-table input.re-wide { min-width: 150px; }
+.rate-editor .dash-table input:focus, .rate-editor .dash-table select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(31,95,122,0.14); }
+.rate-editor .dash-table tbody tr:hover { background: transparent; }
+.rate-editor .cat-actions .btn-ghost.sm { margin-top: 10px; }
+.rate-editor .re-grid3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.rate-editor .re-warnings { list-style: none; margin: 0 0 12px; padding: 12px 14px; display: grid; gap: 8px; background: #fdf7ea; border: 1px solid #f1dfb5; border-radius: 12px; font-size: 13px; }
+.rate-editor .re-warnings li { display: flex; gap: 10px; align-items: baseline; }
+.rate-editor .re-warnings .tag { flex: 0 0 auto; }
+.rate-editor tr.row-warn td { background: #fdf7ea; }
+.rate-editor tr.row-warn td:first-child { box-shadow: inset 3px 0 0 #d9a13b; }
+.rate-editor .dash-table td.tnum, .rate-editor .dash-table th:nth-child(n+3) { font-variant-numeric: tabular-nums; }
+.rate-editor .re-actions { position: sticky; bottom: 0; margin: 24px -20px -20px; padding: 14px 20px; background: rgba(255,255,255,.94); backdrop-filter: blur(6px); border-top: 1px solid var(--line); border-radius: 0 0 16px 16px; z-index: 2; }
+@media (max-width: 800px) { .rate-editor .re-grid3 { grid-template-columns: 1fr; } }
+
+.re-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.re-range { display: inline-block; min-width: 46px; font-weight: 700; color: var(--ink-soft); }
+.re-muted { color: var(--ink-faint); font-size: 12px; }
+.re-ver { white-space: nowrap; }
+.rate-editor .dash-table .re-ver .field-hint { margin-top: 4px; white-space: normal; }
+
 /* Edit day tour, catalogue products: the read-only pricing block */
 .cat-owned { display: grid; gap: 8px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--sand-50); }
 .cat-owned p { margin: 0; }
