@@ -709,7 +709,9 @@ export function ProductEditor({ type: typeProp, existing, destinations = [], dep
     guide: existing?.guide || "Licensed Egyptologist",
     vehicle: existing?.vehicle || (pkg ? "Private van + flights" : "Van, 12 seats"),
     minSeats: existing?.minSeats || 4,
-    maxSeats: existing?.maxSeats || MAX_GROUP_SIZE,
+    // The maximum group is 8 (29 Sep 2026). A tour still stored at 12 (migration 062 not yet
+    // applied) opens at 8, so saving it lowers it.
+    maxSeats: Math.min(existing?.maxSeats || MAX_GROUP_SIZE, MAX_GROUP_SIZE),
     publishedRate: existing?.publishedRate || "",
     breakPrice: existing?.breakPrice || "",
     // From the authority, not a literal. This read `pkg ? 20 : 10` and was
@@ -816,7 +818,8 @@ export function ProductEditor({ type: typeProp, existing, destinations = [], dep
   // Off unless the listing already has a table. The two anchors handle most
   // tours; this is for the ones whose costs step rather than slide.
   const [useTiers, setUseTiers] = useState(Boolean(existing?.priceTiers?.length));
-  const [priceTiers, setPriceTiers] = useState(existing?.priceTiers || []);
+  // Rows for a group larger than the maximum are not shown, and are dropped when the tour is saved.
+  const [priceTiers, setPriceTiers] = useState((existing?.priceTiers || []).filter((t) => Number(t.seats) <= MAX_GROUP_SIZE));
   const [itinerary, setItinerary] = useState(
     existing?.itinerary?.length ? existing.itinerary
       : pkg ? [{ day: 1, city: "Cairo", title: "", description: "", meals: "Breakfast" }] : []
@@ -1007,7 +1010,7 @@ export function ProductEditor({ type: typeProp, existing, destinations = [], dep
                 </Field>
               ) : (<>
               <Field label="Min seats (GoAhead)"><input type="number" min="4" max={MAX_GROUP_SIZE} value={f.minSeats} onChange={set("minSeats")} /></Field>
-              <Field label="Max seats (cap)"><input type="number" min="1" max={MAX_GROUP_SIZE} value={f.maxSeats} onChange={set("maxSeats")} /></Field>
+              <Field label="Max seats (cap)" hint={Number(existing?.maxSeats) > MAX_GROUP_SIZE ? `Stored as ${existing.maxSeats}. The maximum group is ${MAX_GROUP_SIZE}: saving lowers it, and drops price rows above it.` : undefined}><input type="number" min="1" max={MAX_GROUP_SIZE} value={f.maxSeats} onChange={set("maxSeats")} /></Field>
               <Field label={pkg ? "GoAhead price /person" : "GoAhead price"}><input type="number" min="1" value={f.publishedRate} onChange={set("publishedRate")} /></Field>
               <Field label="Break price (full group)"><input type="number" min="1" value={f.breakPrice} onChange={set("breakPrice")} placeholder="auto = 80%" /></Field>
               <PriceTierEditor
