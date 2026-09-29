@@ -230,7 +230,7 @@ async function writePoolStatement(c, { agencyId, period, existing, lines, now })
     return {
       departureId: id, date: mine[0].date, product: mine[0].product, stage: r?.stage || null, headcount: r ? Number(r.headcount) : null,
       calculation: e.complete ? {
-        tier: e.tier, revenue: e.revenue, operatingCost: e.operatingCost, operatorFeePct: e.operatorFeePct, operatorFee: e.operatorFee,
+        tier: e.tier, revenue: e.revenue, operatingCost: e.operatingCost, operatorFeePct: e.operatorFeePct, operatorFeeOverride: e.feeOverride != null, operatorFee: e.operatorFee,
         entitlement: e.entitlement, commissionPct: e.commissionPct, commission: e.commission, pool: e.pool, poolPerTraveller: e.poolPerTraveller,
       } : null,
       places: mine.reduce((n, l) => n + l.seats, 0),

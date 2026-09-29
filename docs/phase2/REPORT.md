@@ -1,5 +1,8 @@
 # Phase 2 report: operators, roster, rate card and assignment
 
+> **Superseded in part on 29 Sep 2026 (phase 6, `docs/phase6/REPORT.md`).** The maximum group is 8, not 12; the departure fee for "4–6, 7–9 and 10–12" travelers is now a per-departure cost line and a per-product operator fee; a product can have several numbered departures on one date.
+
+
 Branch `feat/operators-roster-ratecard`. Built to the phase 2 brief and the decisions recorded in `docs/model-audit/03-migration-plan.md` (phase 2 block, 27 Sep 2026).
 
 **Nothing here charges, refunds or pays anyone, and nothing calculates commission.** The expected operator amount is shown for reference only.

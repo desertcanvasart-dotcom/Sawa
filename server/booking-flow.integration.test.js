@@ -40,11 +40,11 @@ before(async () => {
   // One day tour: GoAhead at 4, 12 seats, 24-hour cutoff; a second listing
   // with a 72-hour cutoff for a date that is therefore already closed.
   await db.query(`INSERT INTO tour_products (id, type, title, city, min_seats, max_seats, published_rate, break_price, status, active, booking_cutoff_hours)
-                  VALUES ($1,'day_tour','Integration Tour','Cairo',4,12,80,64,'approved',true,24),
-                         ($1||'_late','day_tour','Late Tour','Cairo',4,12,80,64,'approved',true,72)`, [TOUR]);
+                  VALUES ($1,'day_tour','Integration Tour','Cairo',4,8,80,64,'approved',true,24),
+                         ($1||'_late','day_tour','Late Tour','Cairo',4,8,80,64,'approved',true,72)`, [TOUR]);
   const dep = (id, product, day) => db.query(
     `INSERT INTO departures (id, type, tour_product_id, route, date, time, city, min_seats, max_seats, published_rate, break_price, status)
-     VALUES ($1,'day_tour',$2,'Integration Tour',$3,'08:00','Cairo',4,12,80,64,'open')`, [id, product, day]);
+     VALUES ($1,'day_tour',$2,'Integration Tour',$3,'08:00','Cairo',4,8,80,64,'open')`, [id, product, day]);
   await dep(DEP.open, TOUR, cairoDay(10));
   await dep(DEP.race, TOUR, cairoDay(11));
   await dep(DEP.closed, `${TOUR}_late`, cairoDay(2));
@@ -101,12 +101,12 @@ test("a traveller books; the public catalogue shows the seats but no booking han
   assert.ok(Date.parse(d.bookingClosesAt) > Date.now(), "F05: the cutoff is published");
 });
 
-test("thirteen travellers race for twelve seats: exactly twelve get one", { skip }, async () => {
-  const results = await Promise.all(Array.from({ length: 13 }, (_, i) => book(DEP.race, 1, `race${i}`)));
+test("nine travellers race for eight seats: exactly eight get one", { skip }, async () => {
+  const results = await Promise.all(Array.from({ length: 9 }, (_, i) => book(DEP.race, 1, `race${i}`)));
   const codes = results.map((r) => r.status).sort();
-  assert.equal(codes.filter((c) => c === 201).length, 12, `statuses: ${codes}`);
+  assert.equal(codes.filter((c) => c === 201).length, 8, `statuses: ${codes}`);
   assert.equal(codes.filter((c) => c === 409).length, 1);
-  assert.equal(await liveSeats(DEP.race), 12, "never over capacity");
+  assert.equal(await liveSeats(DEP.race), 8, "never over capacity");
 });
 
 test("a date past its cutoff refuses bookings", { skip }, async () => {
@@ -150,10 +150,10 @@ test("a date that reached GoAhead stays confirmed after dropping below it", { sk
 
 test("a date request can't be bigger than the tour", { skip }, async () => {
   const r = await post("/public/departure-requests", {
-    tourProductId: TOUR, date: cairoDay(20), customerName: "Big Group", customerEmail: "big@example.com", seats: 13, ignoreMatches: true,
+    tourProductId: TOUR, date: cairoDay(20), customerName: "Big Group", customerEmail: "big@example.com", seats: 9, ignoreMatches: true,
   });
   assert.equal(r.status, 422);
-  assert.match(r.body.error, /up to 12/);
+  assert.match(r.body.error, /up to 8/);
   const n = Number((await db.query("SELECT count(*) AS n FROM departures WHERE tour_product_id=$1 AND status='pending_review'", [TOUR])).rows[0].n);
   assert.equal(n, 0, "F02: nothing half-created");
 });
@@ -172,7 +172,7 @@ test("the operator named in the emails comes from the live bookings", { skip }, 
   await db.query(`UPDATE tour_products SET agency_id='ag_it_list' WHERE id=$1`, [TOUR]);
   await db.query(
     `INSERT INTO departures (id, type, tour_product_id, route, date, time, city, min_seats, max_seats, published_rate, break_price, status)
-     VALUES ($1,'day_tour',$2,'Integration Tour',$3,'08:00','Cairo',4,12,80,64,'open')`, [dep, TOUR, cairoDay(14)]);
+     VALUES ($1,'day_tour',$2,'Integration Tour',$3,'08:00','Cairo',4,8,80,64,'open')`, [dep, TOUR, cairoDay(14)]);
   assert.equal((await operatorFor(dep, db))?.name, "Listing Agency", "no bookings: the listing agency");
   assert.equal((await book(dep, 2, "direct")).status, 201);
   const op = await operatorFor(dep, db);

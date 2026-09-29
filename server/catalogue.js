@@ -109,10 +109,17 @@ export function mapCatalogueDeparture(r) {
     productId: Number(r.product_id),
     date: ymd(r.date),
     specVersionId: r.spec_version_id == null ? null : Number(r.spec_version_id),
+    // Numbered departures (migration 063): 1 for the departure the calendar makes.
+    departureNo: r.departure_no == null ? 1 : Number(r.departure_no),
     status: r.status,
     origin: r.origin,
     legacyDepartureId: r.legacy_departure_id,
     seatsSold: Number(r.seats_sold || 0),
+    // The operator fee for this departure alone, until the operator acknowledges.
+    ...(r.operator_fee_pct_override != null ? {
+      operatorFeeOverride: { pct: Number(r.operator_fee_pct_override), reason: r.operator_fee_override_reason,
+        by: r.operator_fee_override_by, at: r.operator_fee_override_at },
+    } : {}),
     // Migration 057: the seats that count towards GoAhead (catalogue_v2).
     ...(r.goahead_seats != null ? { goaheadSeats: Number(r.goahead_seats) } : {}),
     runBelowMinimum: r.run_below_minimum,
@@ -177,7 +184,7 @@ export async function listDepartures(db = pool, { from, to, productId } = {}) {
        JOIN catalogue_departure_seats s ON s.catalogue_departure_id = cd.id
        ${g.join}
       ${where.length ? `WHERE ${where.join(" AND ")}` : ""}
-      ORDER BY cd.date, cd.product_id`,
+      ORDER BY cd.date, cd.product_id, cd.departure_no`,
     args
   );
   return r.rows.map(mapCatalogueDeparture);
@@ -224,8 +231,9 @@ function timingFor(world, product, specVersionId) {
 //
 // Creates departures from the calendar rules for each active product, over a
 // rolling window (90 days for day and one-way tours, 365 for cruises and
-// multi-day). Idempotent: UNIQUE (product, date) plus ON CONFLICT DO NOTHING
-// means a second run creates nothing, and a concurrent run can't double up.
+// multi-day). Idempotent: UNIQUE (product, date, departure number) plus ON CONFLICT
+// DO NOTHING means a second run creates nothing. The generator makes departure 1
+// of a date only; a further one is opened on demand (server/catalogue-departures.js), and a concurrent run can't double up.
 //
 // Before generating, existing future departures of the linked listing are
 // ADOPTED: linked as they are, bookings untouched, so a date that already has
@@ -261,7 +269,7 @@ export async function generateDepartures({ db = pool, now = Date.now(), material
                   ORDER BY d.date,
                            (SELECT COALESCE(SUM(p.seats), 0) FROM pledges p WHERE p.departure_id = d.id AND p.status <> 'cancelled') DESC,
                            d.id) d
-          WHERE cd.product_id = $1 AND cd.date = d.date AND cd.legacy_departure_id IS NULL AND cd.status = 'open'`,
+          WHERE cd.product_id = $1 AND cd.date = d.date AND cd.departure_no = 1 AND cd.legacy_departure_id IS NULL AND cd.status = 'open'`,
         [product.id, product.legacyProductId, today]
       );
       out.adopted += linked.rowCount;
@@ -278,7 +286,7 @@ export async function generateDepartures({ db = pool, now = Date.now(), material
           ORDER BY d.date,
                    (SELECT COALESCE(SUM(p.seats), 0) FROM pledges p WHERE p.departure_id = d.id AND p.status <> 'cancelled') DESC,
                    d.id
-         ON CONFLICT (product_id, date) DO NOTHING`,
+         ON CONFLICT (product_id, date, departure_no) DO NOTHING`,
         [product.id, spec?.id ?? null, product.legacyProductId, today]
       );
       out.adopted += adopted.rowCount;
@@ -295,7 +303,7 @@ export async function generateDepartures({ db = pool, now = Date.now(), material
       const created = await db.query(
         `INSERT INTO catalogue_departures (product_id, date, spec_version_id, origin)
          SELECT $1, d::date, $2, 'generated' FROM unnest($3::date[]) AS d
-         ON CONFLICT (product_id, date) DO NOTHING`,
+         ON CONFLICT (product_id, date, departure_no) DO NOTHING`,
         [product.id, spec?.id ?? null, dates]
       );
       out.created += created.rowCount;
@@ -307,6 +315,31 @@ export async function generateDepartures({ db = pool, now = Date.now(), material
     log(`catalog: ${out.created} departure(s) created, ${out.adopted} adopted, ${out.materialised} made bookable`);
   }
   return out;
+}
+
+// The ordinary departures row a catalogue departure is sold through: built the
+// way POST /api/admin/departures builds one, from the listing. Used by the
+// generator (departure 1 of a date) and when a further numbered departure is
+// opened because the ones before it are full.
+export async function makeBookable(client, row, product, t) {
+  const date = ymd(row.date);
+  const isPkg = t.type === "package";
+  const endDate = isPkg && t.nights ? shiftDate(date, Number(t.nights)) : null;
+  const id = (await client.query("SELECT nextval('departures_id_seq') AS id")).rows[0].id;
+  await client.query(
+    `INSERT INTO departures
+      (id, type, tour_product_id, route, date, start_date, end_date, nights, cities, time,
+       city, guide, vehicle, min_seats, max_seats, base_cost, published_rate, break_price,
+       quality, status, notes, deposit_percent)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,'open',NULL,$20)`,
+    [id, t.type, t.id, t.title, date, isPkg ? date : null, endDate, isPkg ? t.nights : null,
+      isPkg ? JSON.stringify(t.cities || []) : null, t.default_time,
+      t.city, t.guide, t.vehicle, product.goaheadMin, product.maxGroup,
+      t.base_cost ?? 0, t.published_rate, t.break_price ?? Math.round(t.published_rate * 0.8),
+      t.quality, t.deposit_percent]
+  );
+  await client.query("UPDATE catalogue_departures SET legacy_departure_id = $1 WHERE id = $2", [id, row.id]);
+  return id;
 }
 
 // The ordinary departures row a generated catalogue departure is sold through.
@@ -336,23 +369,7 @@ async function materialiseBookable({ db, today, world, log }) {
       const again = await client.query(
         "SELECT legacy_departure_id FROM catalogue_departures WHERE id = $1 FOR UPDATE", [row.id]);
       if (again.rows[0]?.legacy_departure_id == null) {
-        const date = ymd(row.date);
-        const isPkg = t.type === "package";
-        const endDate = isPkg && t.nights ? shiftDate(date, Number(t.nights)) : null;
-        const id = (await client.query("SELECT nextval('departures_id_seq') AS id")).rows[0].id;
-        await client.query(
-          `INSERT INTO departures
-            (id, type, tour_product_id, route, date, start_date, end_date, nights, cities, time,
-             city, guide, vehicle, min_seats, max_seats, base_cost, published_rate, break_price,
-             quality, status, notes, deposit_percent)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,'open',NULL,$20)`,
-          [id, t.type, t.id, t.title, date, isPkg ? date : null, endDate, isPkg ? t.nights : null,
-            isPkg ? JSON.stringify(t.cities || []) : null, t.default_time,
-            t.city, t.guide, t.vehicle, product.goaheadMin, product.maxGroup,
-            t.base_cost ?? 0, t.published_rate, t.break_price ?? Math.round(t.published_rate * 0.8),
-            t.quality, t.deposit_percent]
-        );
-        await client.query("UPDATE catalogue_departures SET legacy_departure_id = $1 WHERE id = $2", [id, row.id]);
+        await makeBookable(client, row, product, t);
         return 1;
       }
       return 0;
@@ -587,7 +604,7 @@ function constraintError(e) {
   const map = {
     catalogue_products_deadline_chk: "Cruises and multi-day tours need a GoAhead deadline; other types must not have one.",
     catalogue_products_end_city_chk: "A one-way road tour needs an end city.",
-    catalogue_products_group_chk: "The maximum group must be between the GoAhead minimum and 12.",
+    catalogue_products_group_chk: "The maximum group must be between the GoAhead minimum and 8 (up to 12 only for a cruise or multi-day product).",
     catalogue_products_merge_chk: "Only a retired product can be merged into another one.",
     catalogue_products_legacy_product_id_key: "That listing is already linked to another catalog product.",
     catalogue_products_legacy_product_id_fkey: "No listing has that id.",

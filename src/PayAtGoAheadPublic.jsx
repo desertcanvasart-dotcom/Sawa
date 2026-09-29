@@ -4,6 +4,7 @@
 // page behind a waitlist offer.
 import React, { useEffect, useState } from "react";
 import { API_BASE } from "./supabaseClient";
+import { MAX_GROUP_SIZE } from "../shared/group-size.js";
 import { TravelerDetailsFields, emptyTravelerDetails, travelerDetailsBody, travelerDetailsError } from "./TravelerDetails.jsx";
 
 const eur = (n) => `€${Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
@@ -127,7 +128,7 @@ export function WaitlistJoin({ dates }) {
         </select>
         <input aria-label="Your name" required placeholder="Your name" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />
         <input aria-label="Email" required type="email" placeholder="Email" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} />
-        <input aria-label="Seats" type="number" min={1} max={12} value={f.seats} onChange={(e) => setF({ ...f, seats: e.target.value })} />
+        <input aria-label="Seats" type="number" min={1} max={MAX_GROUP_SIZE} value={f.seats} onChange={(e) => setF({ ...f, seats: e.target.value })} />
         <button className="btn-pill">Join the waitlist</button>
         {err && <div className="form-error" role="alert">{err}</div>}
       </form>

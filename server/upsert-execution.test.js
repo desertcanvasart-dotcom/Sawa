@@ -55,7 +55,7 @@ function stubClient() {
 const BODY = {
   title: "Execution Fixture Tour", type: "day_tour", city: "Cairo",
   duration: "Full day · about 8 hours", publishedRate: 100,
-  minSeats: 4, maxSeats: 12,
+  minSeats: 4, maxSeats: 8,
   // Both window fields as the form sends them: one set, one cleared. The
   // cleared one is exactly what blankNum exists to turn into NULL.
   requestMinLeadDays: 3, requestMaxHorizonDays: "",

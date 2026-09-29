@@ -4,7 +4,7 @@ import { z } from "zod";
 import { pool, withTransaction, withDepartureWrites } from "./db/index.js";
 import { pendingGoAheads, alertPayload } from "./goahead-alert.js";
 import { refreshStatus } from "./departure-status.js";
-import { publicOperator, operatorForDeparture, directOperatorId, bookingClosesAtMs } from "./domain.js";
+import { publicOperator, operatorSelectable, operatorForDeparture, directOperatorId, bookingClosesAtMs } from "./domain.js";
 import { cspHeader, cspHeaderName, describeViolation, firstSighting } from "./csp.js";
 import {
   phoneVerificationEnabled, normalizePhone, issuePhoneToken, phoneTokenValid,
@@ -64,6 +64,8 @@ import {
 } from "./booking-confirmation.js";
 import { verifyTurnstile, turnstileSiteKey } from "./turnstile.js";
 import { catalogueV2Enabled } from "./features.js";
+import { loadCatalogueTourInfo } from "./catalogue-tour-pricing.js";
+import { routeBooking, ensureOpenDeparture } from "./catalogue-departures.js";
 import { publicCatalogue, overlayBootstrap, clearPublicCatalogue } from "./catalogue-public.js";
 import {
   sendEmail, sendEmailInBackground, emailMode,
@@ -71,7 +73,7 @@ import {
   listingApprovedEmail, listingRejectedEmail,
   departureRequestReceivedEmail, departureRequestApprovedEmail, departureRequestDeclinedEmail,
   operatorApplicationEmail, operatorApplicationReceiptEmail, operatorApplicationText,
-  opsNewBookingEmail, opsNewListingEmail, opsRecipient,
+  opsNewBookingEmail, opsNewListingEmail, opsGroupRequestEmail, opsRecipient,
   paymentLinkEmail, paymentReceivedEmail,
 } from "./email.js";
 import {
@@ -1058,7 +1060,7 @@ export async function upsertTourProduct(c, body, review) {
   // sell every seat at the interpolated price instead.
   const tierCheck = validatePriceTiers(body.priceTiers, {
     minSeats: Number(body.minSeats || 4),
-    maxSeats: Number(body.maxSeats || 12),
+    maxSeats: Number(body.maxSeats || MAX_GROUP_SIZE),
   });
   if (tierCheck.error) throw new AppError(422, tierCheck.error);
   const priceTiers = tierCheck.tiers ? JSON.stringify(tierCheck.tiers) : null;
@@ -1107,7 +1109,7 @@ export async function upsertTourProduct(c, body, review) {
       body.duration || (type === "package" ? `${Number(body.nights || 3) + 1} days · ${body.nights || 3} nights` : "Full day · about 4 hours"),
       body.defaultTime || "08:00", body.guide || "Licensed Egyptologist",
       body.vehicle || (type === "package" ? "Private van + flights" : "Van, 12 seats"),
-      Number(body.minSeats || 4), Number(body.maxSeats || 12),
+      Number(body.minSeats || 4), Number(body.maxSeats || MAX_GROUP_SIZE),
       Number(body.baseCost || 0), publishedRate,
       Number(body.breakPrice || Math.round(publishedRate * 0.8)), Number(body.quality || 4.7),
       Number(body.depositPercent || (type === "package" ? 20 : 10)), body.description || "",
@@ -1127,10 +1129,26 @@ export async function upsertTourProduct(c, body, review) {
   return loadProduct(c, id);
 }
 
+// The "Edit day tour" page: whether this tour is a catalogue product (flag on)
+// and, if so, its catalogue values and the published rate card's tiers.
+app.get("/api/admin/tour-products/:id/catalogue", requireAuth, requireRole("super_admin", "ops_staff"), h(async (req, res) => {
+  res.json(await loadCatalogueTourInfo(req.params.id));
+}));
+
 // Admin creates / updates a tour product (platform staff only). Admin edits are
 // auto-approved — a platform admin publishing a tour needs no second sign-off.
 app.post("/api/admin/tour-products", requireAuth, requireRole("super_admin", "ops_staff"), h(async (req, res) => {
   const body = req.body || {};
+  // Only an active, listed operator may be attached. Keeping the company a
+  // listing already has is allowed, so an unrelated edit never fails on it.
+  if (body.agencyId) {
+    const cur = body.id ? (await pool.query(`SELECT agency_id FROM tour_products WHERE id=$1`, [body.id])).rows[0] : null;
+    if (cur?.agency_id !== body.agencyId) {
+      const a = (await pool.query(`SELECT * FROM agencies WHERE id=$1`, [body.agencyId])).rows[0];
+      const o = (await pool.query(`SELECT status FROM operators WHERE agency_id=$1`, [body.agencyId])).rows[0];
+      if (!operatorSelectable(a && mapAgency(a), o)) throw new AppError(422, "That company can't be the operating company: it must be an active, publicly listed operator.");
+    }
+  }
   const product = await withTransaction((c) =>
     upsertTourProduct(c, body, {
       status: "approved", submittedBy: req.user.id, reviewedBy: req.user.id,
@@ -1328,7 +1346,11 @@ app.post("/api/departures/:id/pledges", requireAuth, requireRole("agency_owner",
   const manifest = manifestFields(req.body);
   let agencyName = null;
   const departure = await withTransaction(async (c) => {
-    const dep = await loadDeparture(c, Number(req.params.id), { forUpdate: true });
+    // Numbered departures (catalogue_v2): the booking goes to the lowest-numbered
+    // departure of the date with room for the whole party; a further one is
+    // opened if none has room.
+    const target = catalogueV2Enabled() ? (await routeBooking(c, { departureId: Number(req.params.id), seats: input.seats })).departureId : Number(req.params.id);
+    const dep = await loadDeparture(c, target, { forUpdate: true });
     if (!dep) throw new AppError(404, "Departure not found.");
     if (dep.status === "cancelled") throw new AppError(409, "This departure has been canceled.");
     if (dep.mergedIntoId) throw Object.assign(new AppError(409, "This date was joined with another listing of the same tour and day. Book on that one."), { mergedIntoId: dep.mergedIntoId });
@@ -1369,6 +1391,7 @@ app.post("/api/departures/:id/pledges", requireAuth, requireRole("agency_owner",
       // locked now; an agency on billing is invoiced now.
       await recordAgencyBooking(c, { pledgeId, agency, catalogueDepartureId: catalogueCtx.departureId });
       await payNowIfGoingAhead(c, pledgeId, catalogueCtx.departureId);
+      await ensureOpenDeparture(c, dep.id);
     }
     return loadDeparture(c, dep.id);
   });
@@ -1457,6 +1480,72 @@ app.post("/api/public/phone-verifications/check", writeLimiter, h(async (req, re
 // booking_confirmations and the traveler gets a "Confirm my booking" link.
 // The link calls placePublicBooking again with the held booking, which runs
 // the same checks and makes it. Answer 202 while held, 201 once made.
+// Parties larger than 8 are not bookable online (29 Sep 2026). The booking form
+// stops and offers this instead: a short request that becomes an admin lead.
+// No booking is made and no seat is held.
+const groupRequestSchema = z.object({
+  name: z.string().trim().min(2, "Enter your name.").max(120),
+  email: z.string().trim().email("Enter a valid email.").max(200),
+  groupSize: z.coerce.number().int().min(MAX_GROUP_SIZE + 1, `A group request is for more than ${MAX_GROUP_SIZE} travelers.`).max(200),
+  date: z.string().trim().max(40).optional().nullable(),
+  productId: z.string().trim().max(120).optional().nullable(),
+  productTitle: z.string().trim().max(200).optional().nullable(),
+  note: z.string().trim().max(1000).optional().nullable(),
+  website: z.string().max(200).optional(), // honeypot: real people leave it empty
+});
+app.post("/api/public/group-requests", writeLimiter, h(async (req, res) => {
+  const input = groupRequestSchema.parse(req.body || {});
+  if (input.website) return res.status(202).json({ ok: true }); // a bot: answer as if it worked
+  const wanted = /^\d{4}-\d{2}-\d{2}$/.test(input.date || "") ? input.date : null;
+  const product = input.productId
+    ? (await pool.query(`SELECT id, title FROM tour_products WHERE id=$1`, [input.productId])).rows[0]
+    : null;
+  const title = product?.title || input.productTitle || null;
+  let stored = true;
+  try {
+    await pool.query(
+      `INSERT INTO group_requests (name, email, group_size, wanted_date, product_id, product_title, note)
+       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+      [input.name, input.email, input.groupSize, wanted, product?.id || null, title, input.note || null]);
+  } catch (e) {
+    // Migration 062 is applied by hand: before it, the lead still reaches the
+    // operations inbox, which is where it is acted on.
+    if (e?.code !== "42P01") throw e;
+    stored = false;
+  }
+  await logAudit(req, { action: "group_request.create", entity: "group_request", entityId: null, detail: { groupSize: input.groupSize, product: title, stored } });
+  sendEmailInBackground(opsGroupRequestEmail({
+    to: opsRecipient(), name: input.name, email: input.email, groupSize: input.groupSize,
+    date: wanted || input.date || null, product: title, note: input.note || null, portalLink: portalLink(),
+  }));
+  res.status(201).json({ ok: true, stored });
+}));
+
+app.get("/api/admin/group-requests", requireAuth, requireRole("super_admin", "ops_staff"), h(async (_req, res) => {
+  let rows = [];
+  try {
+    rows = (await pool.query(`SELECT * FROM group_requests ORDER BY (status = 'new') DESC, created_at DESC LIMIT 200`)).rows;
+  } catch (e) {
+    if (e?.code !== "42P01") throw e;
+  }
+  res.json({ requests: rows.map((r) => ({
+    id: Number(r.id), name: r.name, email: r.email, groupSize: r.group_size,
+    wantedDate: r.wanted_date instanceof Date ? r.wanted_date.toISOString().slice(0, 10) : r.wanted_date,
+    productId: r.product_id, productTitle: r.product_title, note: r.note, status: r.status,
+    createdAt: r.created_at, handledBy: r.handled_by, handledAt: r.handled_at,
+  })) });
+}));
+
+app.patch("/api/admin/group-requests/:id", requireAuth, requireRole("super_admin", "ops_staff"), h(async (req, res) => {
+  const { status } = z.object({ status: z.enum(["new", "contacted", "closed"]) }).parse(req.body || {});
+  const row = (await pool.query(
+    `UPDATE group_requests SET status=$1, handled_by=$2, handled_at=now() WHERE id=$3 RETURNING id`,
+    [status, req.user.id, Number(req.params.id)])).rows[0];
+  if (!row) throw new AppError(404, "Request not found.");
+  await logAudit(req, { action: "group_request.update", entity: "group_request", entityId: String(row.id), detail: { status } });
+  res.json({ ok: true });
+}));
+
 app.post("/api/public/departures/:id/bookings", writeLimiter, bookingAttemptLimiter, h(async (req, res) => {
   await requireTurnstile(req);
   const out = await placePublicBooking(req, { departureId: Number(req.params.id), body: req.body });
@@ -1479,7 +1568,11 @@ async function placePublicBooking(req, { departureId, body, confirmation = null 
   delete input.deviceHint;
   const hold = !confirmation && await holdForConfirmation(pool);
   const result = await withTransaction(async (c) => {
-    const dep = await loadDeparture(c, departureId, { forUpdate: true });
+    // Numbered departures (catalogue_v2): the whole party goes to the
+    // lowest-numbered departure of the date that has room for it, and a further
+    // departure is opened when none has. A "Join my group" party moves together.
+    const routed = catalogueV2Enabled() ? await routeBooking(c, { departureId, seats: input.seats, partyToken: input.partyToken }) : null;
+    const dep = await loadDeparture(c, routed ? routed.departureId : departureId, { forUpdate: true });
     if (!dep) throw new AppError(404, "Departure not found.");
     // Two clicks on the same link must make one booking: the held booking is
     // locked after the date, and made only while still unconfirmed.
@@ -1560,9 +1653,12 @@ async function placePublicBooking(req, { departureId, body, confirmation = null 
       await recordSignals(c, { pledgeId, departureId: dep.id, seats: input.seats, signals, at: confirmation?.created_at || null });
       flag = await detectCluster(c, { pledgeId });
     }
+    // The last seat of the last open departure of the date: open the next.
+    if (catalogueCtx && catalogueV2Enabled()) await ensureOpenDeparture(c, dep.id);
     const departure = await loadDeparture(c, dep.id);
     const saved = await c.query(`SELECT * FROM pledges WHERE id=$1`, [pledgeId]);
-    return { departure, booking: mapPledge(saved.rows[0]), payAtGoAhead: !!catalogueCtx, partyId: party?.id ?? null, flagId: flag?.id ?? null };
+    return { departure, booking: mapPledge(saved.rows[0]), payAtGoAhead: !!catalogueCtx, partyId: party?.id ?? null, flagId: flag?.id ?? null,
+      routedTo: routed && routed.routed !== false ? { departureId: dep.id, no: routed.no ?? null, opened: !!routed.opened } : null };
   });
   if (result.held) {
     const d = result.departure;
@@ -1578,7 +1674,7 @@ async function placePublicBooking(req, { departureId, body, confirmation = null 
     } };
   }
   const audit = { action: "booking.create", entity: "pledge", entityId: result.booking.id,
-    detail: { departureId, seats: input.seats, source: "public", ...(result.partyId ? { partyId: result.partyId } : {}),
+    detail: { departureId: result.departure.id, ...(result.routedTo && result.routedTo.departureId !== departureId ? { requestedDepartureId: departureId, departureNo: result.routedTo.no, opened: result.routedTo.opened } : {}), seats: input.seats, source: "public", ...(result.partyId ? { partyId: result.partyId } : {}),
       ...(confirmation ? { confirmedEmail: true } : {}), ...(result.flagId ? { flagId: result.flagId } : {}) } };
   const flagAudit = result.flagId ? { action: "booking_flag.raise", entity: "booking_flag", entityId: result.flagId, detail: { pledgeId: result.booking.id } } : null;
   if (input.customerEmail && result.payAtGoAhead) {
@@ -1603,7 +1699,8 @@ async function placePublicBooking(req, { departureId, body, confirmation = null 
   notifyOps(result.departure, result.booking, input, { isRequest: false });
   // The direct traveller gets their own booking receipt back in full.
   emitDepartureSync(result.departure.id);
-  return { status: 201, audit, flagAudit, json: { departure: presentDeparture(result.departure, req.user), booking: result.booking } };
+  return { status: 201, audit, flagAudit, json: { departure: presentDeparture(result.departure, req.user), booking: result.booking,
+    ...(result.routedTo ? { departureNo: result.routedTo.no } : {}) } };
 }
 
 // Platform staff remove a pledge outright. Agencies no longer come through
@@ -2010,7 +2107,7 @@ const waitlistSchema = z.object({
   name: z.string().trim().min(1, "Your name is required.").max(160),
   email: z.string().trim().email("A valid email is required.").max(200),
   phone: z.string().trim().max(40).optional().or(z.literal("")),
-  seats: z.coerce.number().int().min(1).max(12),
+  seats: z.coerce.number().int().min(1).max(MAX_GROUP_SIZE),
 });
 app.post("/api/public/departures/:id/waitlist", writeLimiter, h(async (req, res) => {
   if (!catalogueV2Enabled()) throw new AppError(404, "Not found.");
@@ -3119,11 +3216,14 @@ app.get("/api/admin/agencies", requireAuth, requireAdmin(), h(async (_req, res) 
        FROM app_users WHERE agency_id IS NOT NULL GROUP BY agency_id`
   )).rows;
   const byAgency = new Map(users.map((u) => [u.agency_id, u]));
+  const ops = new Map((await pool.query(`SELECT agency_id, status FROM operators WHERE agency_id IS NOT NULL`)).rows.map((o) => [o.agency_id, o]));
   res.json({
     agencies: agencies.map((a) => ({
       ...a,
       staffCount: byAgency.get(a.id)?.staff_count || 0,
       ownerCount: byAgency.get(a.id)?.owner_count || 0,
+      // The "Operating company" dropdown offers only these.
+      operatorSelectable: operatorSelectable(a, ops.get(a.id)),
     })),
   });
 }));
@@ -3418,6 +3518,13 @@ app.get("/api/admin/stats", requireAuth, requireRole("super_admin", "ops_staff")
     pool.query(`SELECT id FROM agencies WHERE status='active'`),
   ]);
   const pendingListings = products.rows.filter((p) => p.status === "pending").length;
+  // Requests for a group larger than the online maximum, not yet answered (0 before migration 062).
+  let pendingGroupRequests = 0;
+  try {
+    pendingGroupRequests = Number((await pool.query(`SELECT COUNT(*)::int AS n FROM group_requests WHERE status = 'new'`)).rows[0]?.n) || 0;
+  } catch (e) {
+    if (e?.code !== "42P01") throw e;
+  }
 
   const livePledges = pledges.rows.filter((p) => p.status !== "cancelled");
   const seatsByDep = new Map();
@@ -3455,6 +3562,7 @@ app.get("/api/admin/stats", requireAuth, requireRole("super_admin", "ops_staff")
       depositsDue: totalDeposits,
     },
     pendingListings,
+    pendingGroupRequests,
     departureStatus: { forming, awaiting, readyToConfirm, confirmed, atRisk, departed },
   });
 }));

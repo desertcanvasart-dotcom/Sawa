@@ -306,7 +306,7 @@ async function poolDistribution(c, departureId, operatorId) {
   const lines = [
     { key: "revenue", label: `Revenue: ${money.headcount} × EGP ${l.priceEgp} (tier ${l.tier})`, amountEgp: l.revenue },
     { key: "operating_cost", label: "Operating cost", amountEgp: l.operatingCost },
-    { key: "operator_fee", label: `Operator fee, ${l.operatorFeePct}%`, amountEgp: l.operatorFee },
+    { key: "operator_fee", label: `Operator fee, ${l.operatorFeePct}%${l.operatorFeeOverride ? " (override for this departure)" : ""}`, amountEgp: l.operatorFee },
     { key: "operator_entitlement", label: "Operator entitlement", amountEgp: l.entitlement },
     { key: "online_era_commission", label: `${BRAND.legalName} commission, ${l.commissionPct}%`, amountEgp: l.commission },
     { key: "pool", label: "Pool", amountEgp: l.pool },

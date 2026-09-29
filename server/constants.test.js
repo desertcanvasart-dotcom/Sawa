@@ -55,7 +55,7 @@ test("it fires — a GoAhead threshold in prose that domain.js does not hold", (
 test("it fires — a ceiling in prose that domain.js does not hold", () => {
   const found = proseDrift("<p>No Sawa group ever goes above 15.</p>");
   assert.equal(found.length, 1);
-  assert.equal(found[0].expected, "twelve");
+  assert.equal(found[0].expected, "eight");
 });
 
 test("it fires — a group range written with the word 'to' rather than a dash", () => {
@@ -65,18 +65,18 @@ test("it fires — a group range written with the word 'to' rather than a dash",
   // spelled "4 to 8" was invisible. The ceiling was understated by four
   // travellers in the copy and nothing could see it.
   for (const live of [
-    "<p>Departures are capped at a small size — usually 4 to 8 — and your price never changes.</p>",
-    "<p>A small mix of travelers — typically 4 to 8 — with one licensed guide.</p>",
+    "<p>Departures are capped at a small size — usually 4 to 10 — and your price never changes.</p>",
+    "<p>A small mix of travelers — typically 4 to 10 — with one licensed guide.</p>",
   ]) {
     const found = proseDrift(live);
     assert.equal(found.length, 1, `went undetected: ${live}`);
-    assert.equal(found[0].found, "8");
-    assert.equal(found[0].expected, "twelve");
+    assert.equal(found[0].found, "10");
+    assert.equal(found[0].expected, "eight");
   }
 
   // The corrected copy is CHECKED, not merely unmatched — the rule accepts
-  // words as well as numerals, so "four to twelve" is read and found correct.
-  assert.deepEqual(proseDrift("<p>A small mix of travelers — four to twelve — with one guide.</p>"), []);
+  // words as well as numerals, so "four to eight" is read and found correct.
+  assert.deepEqual(proseDrift("<p>A small mix of travelers — four to eight — with one guide.</p>"), []);
 });
 
 test("the 'to' range rule does not report a gap as a ceiling", () => {
@@ -108,7 +108,7 @@ test("it fires on digits and words alike, and reports the line the drift is on",
 test("it stops — the correct numbers, in either form, are left alone", () => {
   assert.deepEqual(proseDrift("<p>The date confirms once four travelers have joined.</p>"), []);
   assert.deepEqual(proseDrift("<p>a date confirms when 4 travelers join the same date</p>"), []);
-  assert.deepEqual(proseDrift("<p>No Sawa group ever goes above twelve.</p>"), []);
+  assert.deepEqual(proseDrift("<p>No Sawa group ever goes above eight.</p>"), []);
 });
 
 // The two halves of this check cover DIFFERENT phrasings on purpose, and the
@@ -157,7 +157,7 @@ test("the rewrite rules fire on the markup the pages actually use", () => {
   // `never` in the replacement, this rule lowercased it on both pages the
   // moment the line was added — the rule corrupting the copy it maintains.
   assert.equal(at("Never more than twelve. Ever."), "Never more than fourteen. Ever.");
-  assert.equal(applyConstants("Never more than twelve. Ever."), "Never more than twelve. Ever.",
+  assert.equal(applyConstants("Never more than eight. Ever."), "Never more than eight. Ever.",
     "and at the live constants it is left exactly alone");
 });
 
@@ -292,14 +292,14 @@ test("a group-size range is corrected in every phrasing the site uses", () => {
   // The range rule was written as `(\d+)–(\d+) travellers`, requiring that noun
   // immediately after the numbers, so it never saw this phrasing at all. It is
   // now anchored on the group word BEFORE the range as well as the noun after.
-  assert.equal(applyConstants("Travel in a group of 4–8 with one guide"),
-    "Travel in a group of 4–12 with one guide", "the bug this test exists for");
+  assert.equal(applyConstants("Travel in a group of 4–6 with one guide"),
+    "Travel in a group of 4–8 with one guide", "the bug this test exists for");
 
   assert.equal(applyConstants("shared departure for 4–12 travellers", 4, 14),
     "shared departure for 4–14 travellers", "noun-after phrasing");
-  assert.equal(applyConstants("a group of 4–8 travelers"), "a group of 4–12 travelers",
+  assert.equal(applyConstants("a group of 4–6 travelers"), "a group of 4–8 travelers",
     "US spelling of the noun");
-  assert.equal(applyConstants("party of 4-8"), "party of 4-12", "hyphen as well as en-dash");
+  assert.equal(applyConstants("party of 4-6"), "party of 4-8", "hyphen as well as en-dash");
 });
 
 test("the range rule does not touch numbers that are not group sizes", () => {
@@ -316,9 +316,9 @@ test("the constants are what the booking conditions say", () => {
   // starts checking the new number, so this is the one place the old contract
   // is written down.
   assert.equal(DEFAULT_GO_AHEAD, 4);
-  assert.equal(MAX_GROUP_SIZE, 12);
+  assert.equal(MAX_GROUP_SIZE, 8);
   assert.equal(word(DEFAULT_GO_AHEAD), "four");
-  assert.equal(word(MAX_GROUP_SIZE), "twelve");
+  assert.equal(word(MAX_GROUP_SIZE), "eight");
 });
 
 // ---- interim copy (shared/site-copy.js) ------------------------------------

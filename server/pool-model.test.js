@@ -57,7 +57,7 @@ test("8 travelers, Agency A operating (3 places), Agency B (2), 3 direct: A 2,81
 test("9 travelers: pool 9,014.7. 10: pool 7,710, and the editor warns that the 10th shrinks the pool", () => {
   assert.equal(departureEconomics(MODEL_RATE, 9).pool, 9014.7);
   assert.equal(departureEconomics(MODEL_RATE, 10).pool, 7710);
-  const t = poolRateTable(MODEL_RATE);
+  const t = poolRateTable(MODEL_RATE, { from: 2, to: 12 });   // a product that still has three tiers
   const ten = t.rows.find((r) => r.headcount === 10);
   assert.equal(ten.poolChange, -1304.7);
   assert.equal(ten.poolShrinks, true);
@@ -73,7 +73,7 @@ test("2 travelers (guaranteed, first tier): pool −1,308; the collecting agent 
   assert.equal(s.onlineEra.total, 508 - 1308, "its commission less the guarantee it pays");
   const t = poolRateTable(MODEL_RATE);
   assert.ok(t.warnings.some((w) => w.kind === "negative_pool" && w.headcount === 2));
-  assert.equal(t.rows.length, 11, "2 to 12 travelers");
+  assert.equal(t.rows.length, 7, "2 to 8 travelers: the table stops at the maximum group");
 });
 
 test("a late cancellation where a fee is kept earns the agency half the pool per traveler", () => {
@@ -100,8 +100,9 @@ test("tiers: below the first uses the first, above the last the last", () => {
 test("travelers see whole euros at the published rate", () => {
   assert.equal(tierPriceEur(2540, 50), 51);
   assert.equal(tierPriceEur(2487, 50), 50);
-  assert.equal(tierPriceEur(2360, 50), 47);
-  assert.equal(tierPriceLine(MODEL_RATE.tiers, 50), "€51 per person, €50 from 7 travelers, €47 from 10");
+  assert.equal(tierPriceEur(2360, 50), 48, "rounded up (29 Sep 2026), it was 47");
+  assert.equal(tierPriceEur(2500, 50), 50, "an exact division does not tip up");
+  assert.equal(tierPriceLine(MODEL_RATE.tiers, 50), "€51 per person, €50 from 7 travelers, €48 from 10");
   assert.equal(tierPriceLine(MODEL_RATE.tiers, null), null, "no rate, no price line");
   assert.deepEqual(bookingChargeEur({ rate: MODEL_RATE, headcount: 8, seats: 2, eurRate: 50 }), { eachEur: 50, totalEur: 100, tier: "7–9" });
 });
@@ -109,7 +110,7 @@ test("travelers see whole euros at the published rate", () => {
 test("tier drop: 7–9 to 10–12 after payment refunds the EUR difference; a fall never charges more", () => {
   const paid = bookingChargeEur({ rate: MODEL_RATE, headcount: 8, seats: 2, eurRate: 50 }).totalEur;
   const final = bookingChargeEur({ rate: MODEL_RATE, headcount: 10, seats: 2, eurRate: 50 });
-  assert.equal(tierDifferenceEur({ paidEur: paid, seats: 2, finalEachEur: final.eachEur }), 6);
+  assert.equal(tierDifferenceEur({ paidEur: paid, seats: 2, finalEachEur: final.eachEur }), 4, "\u20ac50 each paid, \u20ac48 each at the final tier");
   const dearer = bookingChargeEur({ rate: MODEL_RATE, headcount: 5, seats: 2, eurRate: 50 });
   assert.equal(tierDifferenceEur({ paidEur: paid, seats: 2, finalEachEur: dearer.eachEur }), 0);
 });
@@ -136,7 +137,8 @@ test("agency statement: EGP pool shares to EUR at the statement-date rate", () =
 test("an incomplete rate card gives no numbers, and says what is missing", () => {
   const e = departureEconomics({ ...MODEL_RATE, tiers: DEFAULT_POOL_TIERS }, 8);
   assert.equal(e.complete, false);
-  assert.ok(e.missing.includes("price 4–6"));
+  assert.ok(e.missing.includes("price 4–8"));
+  assert.ok(e.missing.includes("operator fee 4–8"), "the operator fee has no default: it must be entered");
   assert.deepEqual(poolRateGaps(MODEL_RATE), []);
   assert.equal(poolShares(e, []).problem, "rate card incomplete");
 });

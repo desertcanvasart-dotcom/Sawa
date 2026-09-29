@@ -29,6 +29,7 @@ import {
 import "./styles.css";
 import "./redesign.css";
 import { apiFetch, API_BASE } from "./supabaseClient";
+import { GroupRequestForm, GROUP_REQUEST_TITLE, tooManyTravelers } from "./GroupRequest.jsx";
 import { warnOnce } from "./warn-once.js";
 import { tourSlug } from "../server/slug.js";
 import { toDate } from "./dates.js";
@@ -1656,6 +1657,7 @@ function TourDetailV2({ isSaving, navigate, phoneVerification = false, onBookPub
     if (!dep) return setErr("Pick a departure date.");
     if (name.trim().length < 2) return setErr("Enter the lead traveler's name.");
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return setErr("Enter a valid email.");
+    if (tooManyTravelers(seats)) return setErr(GROUP_REQUEST_TITLE);
     if (Number(seats) > remaining) return setErr(`Only ${remaining} seat${remaining === 1 ? "" : "s"} left on this date.`);
     if (!phoneConfirmed) return setErr("Confirm your phone number with the code we send you first.");
     if (manifestForm) {
@@ -1745,6 +1747,7 @@ function TourDetailV2({ isSaving, navigate, phoneVerification = false, onBookPub
     // F07 — the same limit the server applies (the tour's own capacity), and
     // the browser's number-field limit is not enforced on a type="button".
     if (!Number.isInteger(Number(seats)) || Number(seats) < 1) return setReqErr("Enter how many travelers are coming.");
+    if (tooManyTravelers(seats)) return setReqErr(GROUP_REQUEST_TITLE);
     if (Number(seats) > requestCapacity) return setReqErr(`${tour.title} takes up to ${requestCapacity} travelers per date.`);
     setReqBusy(true);
     try {
@@ -1991,7 +1994,9 @@ function TourDetailV2({ isSaving, navigate, phoneVerification = false, onBookPub
                     <div className="book-price">
                       <b className="tnum">{CURRENCY_SYMBOL}{pp}</b><span>{CURRENCY} / person</span>
                       {/* Phase 5: the rate card's tier prices, and the refund promise. */}
-                      {tour.catalogue?.priceLine && <span className="book-threshold">{tour.catalogue.priceLine}. You pay the price of the group size your date has when payment is asked for; if it grows into a cheaper tier by the cut-off, the difference is refunded.</span>}
+                      {(tour.catalogue?.priceSummary || tour.catalogue?.priceLine) && (
+                        <span className="book-threshold">{tour.catalogue.priceSummary || tour.catalogue.priceLine}.{(tour.catalogue.priceTierCount || 0) > 1 ? " You pay the price of the group size your date has when payment is asked for; if it grows into a cheaper tier by the cut-off, the difference is refunded." : ""}</span>
+                      )}
                       <span className="book-promise">Never more than {GROUP_MAX_WORD}. Ever.</span>
                       <span className="book-threshold">This date confirms at {numberWord(goAhead)} traveler{goAhead === 1 ? "" : "s"}.</span>
                     </div>
@@ -2165,8 +2170,9 @@ function TourDetailV2({ isSaving, navigate, phoneVerification = false, onBookPub
                       )}
                       <label className="bk-field">
                         <span>Seats</span>
-                        <input type="number" min="1" max={reqMode ? requestCapacity : Math.max(1, remaining)} value={seats} onChange={(e) => setSeats(e.target.value)} required aria-required="true" />
+                        <input type="number" min="1" value={seats} onChange={(e) => setSeats(e.target.value)} required aria-required="true" />
                       </label>
+                      {tooManyTravelers(seats) && <GroupRequestForm size={Number(seats)} product={tour} date={dep?.date} />}
                     </div>
                     {/* The glyph is carried by the code as well as the symbol in
                         the booking summary — the one place a visitor commits to
@@ -2898,7 +2904,9 @@ function EmbedWidget({ type, product }) {
         <div className="embed-price">
           <span>from</span><b>{CURRENCY_SYMBOL}{livePrice.toLocaleString()}</b><span>{CURRENCY} / person</span>
         </div>
-        <p className="embed-hook">Shared price — it drops as the group grows, down to {CURRENCY_SYMBOL}{breakPrice.toLocaleString()} {CURRENCY}/person.</p>
+        {product.catalogue?.priceSummary
+          ? <p className="embed-hook">{product.catalogue.priceSummary}</p>
+          : <p className="embed-hook">Shared price — it drops as the group grows, down to {CURRENCY_SYMBOL}{breakPrice.toLocaleString()} {CURRENCY}/person.</p>}
         <span className="embed-cta">View &amp; book<ArrowRight size={16} /></span>
         <span className="embed-brand">Powered by <b>Sawa&nbsp;Tours</b></span>
       </div>
@@ -3158,6 +3166,7 @@ function EmbedBookTour({ product, refCode, phoneVerification }) {
 
   async function book() {
     if (!dep) return setErr("Pick a date.");
+    if (tooManyTravelers(nSeats)) return setErr(GROUP_REQUEST_TITLE);
     if (nSeats > remaining) return setErr(`Only ${remaining} seat${remaining === 1 ? "" : "s"} left on this date.`);
     const problem = checkTraveller();
     if (problem) return setErr(problem);
@@ -3172,6 +3181,7 @@ function EmbedBookTour({ product, refCode, phoneVerification }) {
     if (!reqDate) return setErr("Pick the date you'd like.");
     if (reqDate < minReq || reqDate > maxReq) return setErr(`Pick a date between ${formatDate(minReq, { alwaysYear: true })} and ${formatDate(maxReq, { alwaysYear: true })}.`);
     if (opDays.length && !opDays.includes(new Date(`${reqDate}T12:00:00`).getDay())) return setErr(`This tour runs on ${operatingDaysLabel(opDays)} only.`);
+    if (tooManyTravelers(nSeats)) return setErr(GROUP_REQUEST_TITLE);
     if (nSeats > capacity) return setErr(`This tour takes up to ${capacity} travelers per date.`);
     const problem = checkTraveller();
     if (problem) return setErr(problem);
@@ -3222,6 +3232,7 @@ function EmbedBookTour({ product, refCode, phoneVerification }) {
       <div className="eb-head">
         <strong className="eb-title">{product.title}</strong>
         <span className="eb-facts">{pkg ? (product.cities || [product.city]).join(" → ") : product.city}{product.duration ? ` · ${product.duration}` : ""}</span>
+        {product.catalogue?.priceSummary && <p className="eb-desc"><b>{product.catalogue.priceSummary}</b></p>}
         {product.description && <p className="eb-desc">{product.description}</p>}
         <a className="eb-link" href={sawaUrl} target="_blank" rel="noopener noreferrer">Full itinerary &amp; what's included <ArrowRight size={14} /></a>
       </div>
@@ -3297,12 +3308,13 @@ function EmbedBookTour({ product, refCode, phoneVerification }) {
 
         <div className="eb-row">
           <label>Travelers
-            <input type="number" min="1" max={dep ? Math.max(1, remaining) : capacity} value={seats} onChange={(e) => setSeats(e.target.value)} />
+            <input type="number" min="1" value={seats} onChange={(e) => setSeats(e.target.value)} />
           </label>
           <label>Lead traveler
             <input value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" placeholder="Full name" />
           </label>
         </div>
+        {tooManyTravelers(nSeats) && <GroupRequestForm size={nSeats} product={product} date={dep?.date} />}
         <div className="eb-row">
           <label>Email
             <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" placeholder="you@email.com" />
@@ -4638,7 +4650,7 @@ function AgencyDesk(props) {
           </div>
           <form className="create-form" onSubmit={createDeparture}>
             <input value={newRoute} onChange={(event) => setNewRoute(event.target.value)} placeholder="Tour route, e.g. Cairo sunset visit" aria-label="New route" />
-            <input value={newSeats} min="2" max="12" type="number" onChange={(event) => setNewSeats(event.target.value)} aria-label="Minimum seats" />
+            <input value={newSeats} min="2" max={MAX_GROUP_SIZE} type="number" onChange={(event) => setNewSeats(event.target.value)} aria-label="Minimum seats" />
             <button className="primary" type="submit" disabled={isSaving}><Plus size={18} />{isSaving ? "Saving..." : "Publish"}</button>
           </form>
           <div className="supplier-strip">

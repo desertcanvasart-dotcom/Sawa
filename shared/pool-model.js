@@ -30,15 +30,23 @@
 
 export const COST_BASES = ["per_group", "per_traveller"];
 export const COST_BASIS_LABELS = { per_group: "per group", per_traveller: "per traveler" };
+// One selling price per product (29 Sep 2026): every product defaults to a
+// single tier, 4 to 8. Tier support stays in the code (poolTierIndex, the tier
+// refund) for a product that has several. The operator fee has NO default: it
+// is set case by case per product, and a rate card can't be published without it.
 export const DEFAULT_POOL_TIERS = [
-  { from: 4, to: 6, priceEgp: null, operatorFeePct: 5 },
-  { from: 7, to: 9, priceEgp: null, operatorFeePct: 6 },
-  { from: 10, to: 12, priceEgp: null, operatorFeePct: 10 },
+  { from: 4, to: 8, priceEgp: null, operatorFeePct: null },
+];
+// The phase 2 bands, kept only to convert a version that predates the pool model.
+const LEGACY_BAND_TIERS = [
+  { from: 4, to: 6, priceEgp: null, operatorFeePct: 0 },
+  { from: 7, to: 9, priceEgp: null, operatorFeePct: 0 },
+  { from: 10, to: 12, priceEgp: null, operatorFeePct: 0 },
 ];
 export const DEFAULT_COMMISSION_PCT = 10;
 export const LATE_CANCEL_POOL_SHARE = 0.5;
 export const RATE_TABLE_FROM = 2;
-export const RATE_TABLE_TO = 12;
+export const RATE_TABLE_TO = 8;
 
 const cents = (n) => Math.round(Number(n) * 100) / 100;
 const isNum = (v) => v != null && v !== "" && Number.isFinite(Number(v));
@@ -56,10 +64,40 @@ export function poolTierIndex(tiers, headcount) {
 
 export const tierLabel = (t) => `${t.from}–${t.to}`;
 
-// A tier's price in EUR, for travelers: EGP ÷ the published rate, to whole euros.
+// The operator fee for ONE departure (29 Sep 2026): a percentage an admin sets
+// for that departure alone, with a reason, until the operator acknowledges the
+// offer. It replaces the rate card's fee on every tier for that departure, and
+// nothing else: the price, the cost lines and every other departure keep the
+// rate card. `feeOverridePct` marks the rate as overridden, for the statements.
+export function withFeeOverride(rate, pct) {
+  if (!rate || pct == null || pct === "") return rate;
+  const p = Number(pct);
+  return { ...rate, feeOverridePct: p, tiers: (rate.tiers || []).map((t) => ({ ...t, operatorFeePct: p })) };
+}
+
+// A tier's price in EUR, for travelers: EGP ÷ the published rate, rounded UP to
+// a whole euro (29 Sep 2026; it was rounded to the nearest). The one place the
+// conversion happens: the rate card editor, the tour page, the widget and the
+// charge itself all read it, so what is shown is what is charged.
 export function tierPriceEur(priceEgp, eurRate) {
   if (!isNum(priceEgp) || !isNum(eurRate) || Number(eurRate) <= 0) return null;
-  return Math.round(Number(priceEgp) / Number(eurRate));
+  // The tiny epsilon keeps an exact division (4850 / 97 = 50) from tipping up on float noise.
+  return Math.ceil(Number(priceEgp) / Number(eurRate) - 1e-9);
+}
+
+// The tiers as travelers read them: [{ label: "4–6", eur }], one per tier.
+export function tierPriceRows(tiers, eurRate) {
+  return (tiers || []).map((t) => ({ label: `${t.from}–${t.to}`, from: Number(t.from), to: Number(t.to), eur: tierPriceEur(t.priceEgp, eurRate) }));
+}
+
+// "4–6 travelers €54 · 7–9 travelers €45 · 10–12 travelers €42". Null unless every
+// tier has a price and there is a rate: a half-filled card shows nothing.
+export function tierPriceSummary(tiers, eurRate, symbol = "€") {
+  const rows = tierPriceRows(tiers, eurRate);
+  if (!rows.length || rows.some((r) => r.eur == null)) return null;
+  // One price: "€54 per person". Several tiers keep the per-size wording.
+  if (rows.length === 1) return `${symbol}${rows[0].eur} per person`;
+  return rows.map((r) => `${r.label} travelers ${symbol}${r.eur}`).join(" · ");
 }
 
 // What the tour page says: "€X per person, €Y from 7 travelers, €Z from 10".
@@ -301,7 +339,7 @@ export function convertLegacyRate(old) {
   if (fees.some((f) => f == null)) notes.push("a band fee was blank");
   notes.push("selling prices to enter");
   return {
-    tiers: DEFAULT_POOL_TIERS.map((t) => ({ ...t, operatorFeePct: 0 })),
+    tiers: LEGACY_BAND_TIERS.map((t) => ({ ...t })),
     costLines,
     commissionPct: DEFAULT_COMMISSION_PCT,
     notes,

@@ -155,7 +155,7 @@ test("an admin can assign the operating company; an agency cannot choose one", (
     "an agency must not be able to submit a listing as another company");
 
   const ui = read("src/AdminDashboard.jsx");
-  assert.match(ui, /\{!agencyMode && \(\s*<Field label="Operating company" full>/,
+  assert.match(ui, /\{!agencyMode && !catalogueOwned && \(\s*<Field label="Operating company" full>/,
     "the picker must be hidden from an agency editing its own listing");
   assert.match(ui, /\.\.\.\(agencyMode \? \{\} : \{ agencyId: f\.agencyId \|\| null \}\)/,
     "an agency's save must not carry an agencyId field at all");

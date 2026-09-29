@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { MAX_GROUP_SIZE } from "../shared/group-size.js";
 import { priceFromTiers } from "../shared/pricing.js";
 import { depositPctFor, balanceDueDate } from "../shared/booking-policy.js";
 import { isGoAheadDeparture, isBookingOpen } from "../shared/departure-state.js";
@@ -860,7 +861,7 @@ function RequestDateForm({ product, reference, agencyName, canJoin, onJoin, onDo
       )}
       <div className="tb-field tb-seats">
         <label htmlFor="rq-seats">Seats</label>
-        <input id="rq-seats" type="number" min="1" max={product.maxSeats || 12} value={seats} onChange={(e) => setSeats(e.target.value)} />
+        <input id="rq-seats" type="number" min="1" max={product.maxSeats || MAX_GROUP_SIZE} value={seats} onChange={(e) => setSeats(e.target.value)} />
       </div>
 
       <div className="tb-divider"><span>Customer details</span></div>
@@ -1224,7 +1225,7 @@ function AgencyCommission() {
                     {(s.departures || []).map((d) => (
                       <div key={d.departureId} className="field-hint">
                         {fmtDate(d.date)} {d.product}: {d.calculation
-                          ? `revenue ${egp(d.calculation.revenue)} − entitlement ${egp(d.calculation.entitlement)} (operating cost ${egp(d.calculation.operatingCost)} + operator fee ${egp(d.calculation.operatorFee)}) − the collecting agent ${egp(d.calculation.commission)} = pool ${egp(d.calculation.pool)}, ${egp(d.calculation.poolPerTraveller)} per traveler × your ${d.places} = ${egp(d.shareEgp)}`
+                          ? `revenue ${egp(d.calculation.revenue)} − entitlement ${egp(d.calculation.entitlement)} (operating cost ${egp(d.calculation.operatingCost)} + operator fee ${d.calculation.operatorFeePct}% = ${egp(d.calculation.operatorFee)}${d.calculation.operatorFeeOverride ? ", set for this departure" : ""}) − the collecting agent ${egp(d.calculation.commission)} = pool ${egp(d.calculation.pool)}, ${egp(d.calculation.poolPerTraveller)} per traveler × your ${d.places} = ${egp(d.shareEgp)}`
                           : "calculation not complete"}
                         {d.operatorNote && <div>{d.operatorNote}</div>}
                       </div>

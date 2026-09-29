@@ -7112,3 +7112,17 @@ button:disabled {
 .re-muted { color: var(--ink-faint); font-size: 12px; }
 .re-ver { white-space: nowrap; }
 .rate-editor .dash-table .re-ver .field-hint { margin-top: 4px; white-space: normal; }
+
+/* Edit day tour, catalogue products: the read-only pricing block */
+.cat-owned { display: grid; gap: 8px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--sand-50); }
+.cat-owned p { margin: 0; }
+.cat-owned-tiers { font-size: 15px; font-weight: 700; }
+.cat-owned-facts { display: flex; flex-wrap: wrap; gap: 8px 28px; margin: 0; }
+.cat-owned-facts dt { font-size: 12px; font-weight: 700; color: var(--ink-soft); }
+.cat-owned-facts dd { margin: 2px 0 0; font-size: 14px; }
+
+/* Groups larger than the online maximum: the special-arrangement request */
+.group-request { display: grid; gap: 10px; padding: 14px 16px; margin: 12px 0; border: 1px solid var(--line); border-radius: 12px; background: var(--sand-50); position: relative; }
+.group-request p { margin: 0; font-size: 13px; color: var(--ink-soft); }
+.group-request label { display: grid; gap: 4px; font-size: 12px; font-weight: 700; color: var(--ink-soft); }
+.group-request input { border: 1px solid #ccd8dc; border-radius: 8px; padding: 9px 10px; font-size: 14px; font-family: var(--font-body); background: #fff; }

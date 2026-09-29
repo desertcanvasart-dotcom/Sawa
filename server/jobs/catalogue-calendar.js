@@ -27,7 +27,15 @@ async function guarded(fn, log) {
 }
 
 export function runCatalogueGenerate({ log = console.log, env = process.env, now } = {}) {
-  return guarded(() => generateDepartures({ log, now, materialise: catalogueV2Enabled(env) }), log);
+  return guarded(async () => {
+    const out = await generateDepartures({ log, now, materialise: catalogueV2Enabled(env) });
+    // Numbered departures: a date whose departures are all full gets the next one.
+    if (catalogueV2Enabled(env)) {
+      const { openNextForFullDates } = await import("../catalogue-departures.js");
+      out.opened = await openNextForFullDates({ now, log });
+    }
+    return out;
+  }, log);
 }
 
 // Statuses first, then the notices the cancellations owe (behind catalogue_v2),

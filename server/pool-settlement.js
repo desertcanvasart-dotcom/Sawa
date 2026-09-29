@@ -23,7 +23,7 @@ import { pool, withTransaction } from "./db/index.js";
 import { rateById, rateInForce, ratesFor, poolModelAvailable } from "./rates.js";
 import { todayIn } from "./catalogue.js";
 import {
-  departureEconomics, operatorEntitlement, poolShares, bookingChargeEur, tierDifferenceEur, poolTierIndex, tierPriceEur, fxResult,
+  departureEconomics, operatorEntitlement, poolShares, bookingChargeEur, tierDifferenceEur, poolTierIndex, tierPriceEur, fxResult, withFeeOverride,
 } from "../shared/pool-model.js";
 
 const inTx = (db, fn) => (db === pool ? withTransaction(fn) : fn(db));
@@ -36,15 +36,18 @@ export { poolModelAvailable };
 
 async function departureRow(c, departureId) {
   return (await c.query(
-    `SELECT cd.id, cd.status, cd.date, cd.legacy_departure_id, cd.rate_version_id, cd.product_id
+    `SELECT cd.id, cd.status, cd.date, cd.legacy_departure_id, cd.rate_version_id, cd.product_id, cd.operator_fee_pct_override
        FROM catalogue_departures cd WHERE cd.id = $1`, [departureId])).rows[0] || null;
 }
 
 // The rate a departure is priced under: the version it was locked to at its
 // first sale, else the one in force today.
 export async function rateForDeparture(c, dep, now = Date.now()) {
-  if (dep.rate_version_id != null) return rateById(c, Number(dep.rate_version_id));
-  return rateInForce(await ratesFor(c, Number(dep.product_id)), todayIn(now));
+  const rate = dep.rate_version_id != null
+    ? await rateById(c, Number(dep.rate_version_id))
+    : rateInForce(await ratesFor(c, Number(dep.product_id)), todayIn(now));
+  // An admin's operator fee for this departure alone replaces the rate card's.
+  return withFeeOverride(rate, dep.operator_fee_pct_override);
 }
 
 async function liveSeats(c, legacyDepartureId) {
@@ -85,7 +88,9 @@ export async function departurePool(c, departureId, { now = Date.now() } = {}) {
   if (!dep) return null;
   const rate = await rateForDeparture(c, dep, now);
   const { headcount, frozenAt } = await headcountFor(c, dep);
-  const economics = rate ? departureEconomics(rate, headcount) : { complete: false, missing: ["rate version"], headcount };
+  const economics = rate
+    ? { ...departureEconomics(rate, headcount), ...(rate.feeOverridePct != null ? { feeOverride: rate.feeOverridePct } : {}) }
+    : { complete: false, missing: ["rate version"], headcount };
   const entitlement = rate ? operatorEntitlement(rate, headcount) : { complete: false, missing: ["rate version"], entitlement: null };
   const places = await placesFor(c, dep, frozenAt);
   const shares = poolShares(economics, places);
@@ -155,8 +160,11 @@ export async function poolChargeFor(c, pledge, { now = Date.now() } = {}) {
 // ---------------------------------------------------------------- cut-off
 // The tier is fixed by the frozen headcount. Every paid request that paid for
 // a dearer tier than that is refunded the difference, once.
+// One price per product (29 Sep 2026): with a single tier nobody pays a dearer tier, so the
+// refund is not part of the active flow. The code and its tests stay for a product
+// that has several tiers.
 async function refundTierDifferences(c, calc, { env = process.env } = {}) {
-  if (!calc.rate?.tiers?.length) return 0;
+  if (!calc.rate?.tiers?.length || calc.rate.tiers.length < 2) return 0;
   const tier = calc.rate.tiers[poolTierIndex(calc.rate.tiers, calc.headcount)];
   const paid = (await c.query(
     `SELECT r.*, p.seats, p.published_eur_rate FROM payment_requests r JOIN pledges p ON p.id = r.pledge_id
@@ -323,7 +331,7 @@ export async function departureMoney(c, departureId, { now = Date.now() } = {}) 
     stage: calc.stage, headcount: calc.headcount, complete: !!e.complete, missing: e.missing || [],
     lines: e.complete ? {
       tier: e.tier, priceEgp: e.priceEgp, revenue: e.revenue, operatingCost: e.operatingCost, costLines: e.costLines,
-      operatorFeePct: e.operatorFeePct, operatorFee: e.operatorFee, entitlement: e.entitlement,
+      operatorFeePct: e.operatorFeePct, operatorFeeOverride: e.feeOverride != null, operatorFee: e.operatorFee, entitlement: e.entitlement,
       commissionPct: e.commissionPct, commission: e.commission, pool: e.pool, poolPerTraveller: e.poolPerTraveller, guarantee: e.guarantee,
     } : null,
     entitlement: e.entitlementOnly?.entitlement ?? e.entitlement ?? null,

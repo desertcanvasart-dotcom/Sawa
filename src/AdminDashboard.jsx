@@ -16,6 +16,7 @@ import { CatalogueSection, CalendarSection } from "./AdminCatalogue.jsx";
 import { OperatorsSection, RosterSection, RatesSection } from "./AdminOperators.jsx";
 import { FinanceSection } from "./AdminFinance.jsx";
 import { UnlinkedBanner } from "./AdminPayAtGoAhead.jsx";
+import { GroupRequestsSection } from "./AdminGroupRequests.jsx";
 // Date-only departure values need a local-noon anchor or they render a day
 // early west of UTC — see src/dates.js.
 import { fmtDate, fmtReceived } from "./dates.js";
@@ -34,7 +35,11 @@ const seatsOf = (d) => (d.pledges || []).reduce((s, p) => (p?.status === "cancel
 // lacked the server's `|| "post"` fallback, so an untitled post previewed an
 // empty slug and was stored at /blog/post.
 import { blogSlug } from "../shared/blog-slug.js";
+import { catalogueTourView, isCatalogueTour } from "../shared/catalogue-tour-editor.js";
+import { listingPrices } from "../shared/price-mode.js";
+import { pathForSection } from "./portal-section.js";
 import { CURRENCY, CURRENCY_SYMBOL } from "../shared/currency.js";
+import { MAX_GROUP_SIZE } from "../shared/group-size.js";
 import { depositPctFor, cutoffLabel, normalizeDuration, durationShapeError } from "../shared/booking-policy.js";
 import {
   requestWindowError, minLeadDaysFor, maxHorizonDaysFor,
@@ -60,6 +65,7 @@ const NAV_GROUPS = [
       { id: "archive", label: "Archive", icon: Archive },
       { id: "listings", label: "Listing requests", icon: Inbox, alert: (s) => s?.pendingListings || 0 },
       { id: "daterequests", label: "Date requests", icon: Clock3 },
+      { id: "grouprequests", label: "Group requests", icon: Users, alert: (s) => s?.pendingGroupRequests || 0 },
       { id: "destinations", label: "Destinations", icon: MapPin },
       { id: "blog", label: "Blog", icon: Newspaper },
       // Departures and bookings are one page (28 Sep 2026): the dates, each
@@ -149,6 +155,7 @@ export function AdminDashboard({ user, agency, signOut, navigate }) {
             {section === "archive" && <ArchiveSection data={data} reload={loadAll} flash={flash} />}
             {section === "listings" && <ListingRequestsSection data={data} reload={loadAll} flash={flash} />}
             {section === "daterequests" && <DateRequestsSection data={data} reload={loadAll} flash={flash} />}
+            {section === "grouprequests" && <GroupRequestsSection flash={flash} />}
             {section === "destinations" && <DestinationsSection destinations={destinations} reload={loadAll} flash={flash} />}
             {section === "blog" && <BlogSection posts={posts} reload={loadAll} flash={flash} />}
             {section === "departures" && <DeparturesSection data={data} reload={loadAll} flash={flash} tabs={<DepBookTabs tab="dates" onTab={setSection} />} />}
@@ -703,7 +710,9 @@ export function ProductEditor({ type: typeProp, existing, destinations = [], dep
     guide: existing?.guide || "Licensed Egyptologist",
     vehicle: existing?.vehicle || (pkg ? "Private van + flights" : "Van, 12 seats"),
     minSeats: existing?.minSeats || 4,
-    maxSeats: existing?.maxSeats || 12,
+    // The maximum group is 8 (29 Sep 2026). A tour still stored at 12 (migration 062 not yet
+    // applied) opens at 8, so saving it lowers it.
+    maxSeats: Math.min(existing?.maxSeats || MAX_GROUP_SIZE, MAX_GROUP_SIZE),
     publishedRate: existing?.publishedRate || "",
     breakPrice: existing?.breakPrice || "",
     // From the authority, not a literal. This read `pkg ? 20 : 10` and was
@@ -752,6 +761,28 @@ export function ProductEditor({ type: typeProp, existing, destinations = [], dep
     return () => { alive = false; };
   }, [agencyMode]);
 
+  // catalogue_v2: is this tour a catalogue product? If so the catalogue and the
+  // rate card own its price, deposit, cut-off and group size, and those fields
+  // are read-only here. Flag off, or a legacy tour: nothing changes.
+  const [catInfo, setCatInfo] = useState(null);
+  // A failure is shown, not swallowed: without the answer a catalogue product
+  // would look like a legacy tour, with editable prices the catalogue ignores.
+  const [catError, setCatError] = useState("");
+  useEffect(() => {
+    if (agencyMode || !existing?.id) return undefined;
+    let alive = true;
+    apiFetch(`/admin/tour-products/${encodeURIComponent(existing.id)}/catalogue`)
+      .then(async (r) => {
+        if (!r.ok) throw new Error(`the catalogue details did not load (${r.status})`);
+        return r.json();
+      })
+      .then((j) => { if (alive) { setCatInfo(j); setCatError(""); } })
+      .catch((e) => { if (alive) setCatError(e.message || "the catalogue details did not load"); });
+    return () => { alive = false; };
+  }, [agencyMode, existing?.id]);
+  const catView = catalogueTourView(catInfo);
+  const catalogueOwned = isCatalogueTour(catInfo);
+
   // Shown under the window fields: the error if the pair is unsavable, else what
   // the traveller will actually get, resolved through the same functions the
   // server and the calendar use.
@@ -788,7 +819,8 @@ export function ProductEditor({ type: typeProp, existing, destinations = [], dep
   // Off unless the listing already has a table. The two anchors handle most
   // tours; this is for the ones whose costs step rather than slide.
   const [useTiers, setUseTiers] = useState(Boolean(existing?.priceTiers?.length));
-  const [priceTiers, setPriceTiers] = useState(existing?.priceTiers || []);
+  // Rows for a group larger than the maximum are not shown, and are dropped when the tour is saved.
+  const [priceTiers, setPriceTiers] = useState((existing?.priceTiers || []).filter((t) => Number(t.seats) <= MAX_GROUP_SIZE));
   const [itinerary, setItinerary] = useState(
     existing?.itinerary?.length ? existing.itinerary
       : pkg ? [{ day: 1, city: "Cairo", title: "", description: "", meals: "Breakfast" }] : []
@@ -839,8 +871,10 @@ export function ProductEditor({ type: typeProp, existing, destinations = [], dep
   async function save() {
     setErr("");
     if (!f.title.trim()) { setStep(0); return setErr("Title is required."); }
-    if (!(Number(f.publishedRate) > 0)) { setStep(0); return setErr("GoAhead price must be a positive number."); }
-    if (f.breakPrice && Number(f.breakPrice) > Number(f.publishedRate)) { setStep(0); return setErr("Break price can't exceed the GoAhead price."); }
+    // A catalogue product's price is the rate card's: the fields below are not on the page, and the
+    // listing keeps the values it has. Otherwise sliding mode enters the two prices; grid mode derives them.
+    const prices = catalogueOwned ? null : listingPrices({ useTiers, rows: priceTiers, publishedRate: f.publishedRate, breakPrice: f.breakPrice });
+    if (prices?.error) { setStep(0); return setErr(prices.error); }
     // Date rows are validated BEFORE the product saves, so a half-filled row
     // can't leave the product written and the dates silently dropped.
     const wantDates = agencyMode ? [] : dates.filter((r) => r.date || r.name.trim() || r.email.trim() || r.phone.trim());
@@ -856,8 +890,8 @@ export function ProductEditor({ type: typeProp, existing, destinations = [], dep
         type, title: f.title.trim(), city: f.city.trim(),
         guide: f.guide, vehicle: f.vehicle,
         minSeats: Number(f.minSeats), maxSeats: Number(f.maxSeats),
-        publishedRate: Number(f.publishedRate),
-        breakPrice: Number(f.breakPrice || Math.round(Number(f.publishedRate) * 0.8)),
+        publishedRate: prices ? prices.publishedRate : Number(f.publishedRate),
+        breakPrice: prices ? prices.breakPrice : Number(f.breakPrice || Math.round(Number(f.publishedRate) * 0.8)),
         depositPercent: Number(f.depositPercent),
         description: f.description.trim(),
         duration: f.duration.trim() || undefined,
@@ -961,21 +995,43 @@ export function ProductEditor({ type: typeProp, existing, destinations = [], dep
               </Field>
               <Field label="Guide"><input value={f.guide} onChange={set("guide")} /></Field>
               <Field label="Vehicle"><input value={f.vehicle} onChange={set("vehicle")} /></Field>
-              <Field label="Min seats (GoAhead)"><input type="number" min="4" max="12" value={f.minSeats} onChange={set("minSeats")} /></Field>
-              <Field label="Max seats (cap)"><input type="number" min="1" max="12" value={f.maxSeats} onChange={set("maxSeats")} /></Field>
+              {catError && <small className="form-error">{catError}. If this tour is sold through the catalogue, its prices here are not the ones travelers pay: reopen the editor before changing them.</small>}
+              {catView ? (
+                <Field label="Pricing and group size" full asDiv>
+                  <div className="cat-owned" data-testid="catalogue-pricing">
+                    {catView.hasRate
+                      ? <p className="cat-owned-tiers">{catView.summary}{catView.howWorked && <span className="field-hint" style={{ fontWeight: 400 }}> ({catView.howWorked})</span>}</p>
+                      : <p className="auth-error" role="status">{catView.warning}</p>}
+                    <p className="field-hint">
+                      <a href={pathForSection(window.location.pathname, "rates", "overview")}>{catView.rateCardLabel}</a>
+                    </p>
+                    <dl className="cat-owned-facts">
+                      {catView.facts.map((x) => <div key={x.label}><dt>{x.label}</dt><dd>{x.value}</dd></div>)}
+                    </dl>
+                    <p className="field-hint">The catalogue and the rate card own the price, the deposit, the cut-off and the group size.</p>
+                  </div>
+                </Field>
+              ) : (<>
+              <Field label="Min seats (GoAhead)"><input type="number" min="4" max={MAX_GROUP_SIZE} value={f.minSeats} onChange={set("minSeats")} /></Field>
+              <Field label="Max seats (cap)" hint={Number(existing?.maxSeats) > MAX_GROUP_SIZE ? `Stored as ${existing.maxSeats}. The maximum group is ${MAX_GROUP_SIZE}: saving lowers it, and drops price rows above it.` : undefined}><input type="number" min="1" max={MAX_GROUP_SIZE} value={f.maxSeats} onChange={set("maxSeats")} /></Field>
+              {/* Sliding mode: the two prices. Grid mode: the grid below, and nothing else. */}
+              {!useTiers && (<>
               <Field label={pkg ? "GoAhead price /person" : "GoAhead price"}><input type="number" min="1" value={f.publishedRate} onChange={set("publishedRate")} /></Field>
               <Field label="Break price (full group)"><input type="number" min="1" value={f.breakPrice} onChange={set("breakPrice")} placeholder="auto = 80%" /></Field>
+              </>)}
               <PriceTierEditor
                 on={useTiers}
                 setOn={setUseTiers}
                 rows={priceTiers}
                 setRows={setPriceTiers}
                 minSeats={Number(f.minSeats) || 4}
-                maxSeats={Number(f.maxSeats) || 12}
+                maxSeats={Number(f.maxSeats) || MAX_GROUP_SIZE}
                 publishedRate={Number(f.publishedRate) || 0}
                 breakPrice={Number(f.breakPrice) || 0}
               />
               <Field label="Deposit %"><input type="number" min="0" max="100" value={f.depositPercent} onChange={set("depositPercent")} /></Field>
+              </>)}
+              {!catalogueOwned && (
               <Field label="Booking cutoff (before departure)">
                 <div style={{ display: "flex", gap: 6 }}>
                   <input type="number" min="0" value={f.bookingCutoffValue} onChange={set("bookingCutoffValue")} style={{ flex: "1 1 auto", minWidth: 0 }} aria-label="Booking cutoff" />
@@ -987,13 +1043,17 @@ export function ProductEditor({ type: typeProp, existing, destinations = [], dep
                   </select>
                 </div>
               </Field>
-              {!agencyMode && (
+              )}
+              {!agencyMode && !catalogueOwned && (
                 <Field label="Operating company" full>
                   <select value={f.agencyId} onChange={set("agencyId")}>
                     <option value="">Not assigned</option>
-                    {(agencies || []).map((a) => (
-                      <option key={a.id} value={a.id}>
-                        {a.name}{a.verificationState === "verified" ? " — verified" : ""}
+                    {/* Only active, publicly listed operators. A company already
+                        attached but no longer eligible stays visible, disabled,
+                        so the form doesn't silently show "Not assigned". */}
+                    {(agencies || []).filter((a) => a.operatorSelectable || String(a.id) === String(f.agencyId)).map((a) => (
+                      <option key={a.id} value={a.id} disabled={!a.operatorSelectable}>
+                        {a.name}{a.operatorSelectable ? (a.verificationState === "verified" ? " — verified" : "") : " — not eligible"}
                       </option>
                     ))}
                   </select>
