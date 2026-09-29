@@ -78,7 +78,7 @@ const product = {
   city: "Luxor", cities: ["Luxor", "Edfu", "Kom Ombo", "Aswan"], nights: 4,
   duration: "5 days · 4 nights", defaultTime: "09:00",
   guide: "Licensed Egyptologist", vehicle: "Five-star Nile cruiser & private transfers",
-  minSeats: 4, maxSeats: 12, baseCost: 540, publishedRate: 750, breakPrice: 675,
+  minSeats: 4, maxSeats: 8, baseCost: 540, publishedRate: 750, breakPrice: 675,
   quality: 4.9, depositPercent: 20,
   description: "A five-star Nile cruise from Luxor to Aswan — Karnak and Luxor Temple by night, the Valley of the Kings, Edfu, Kom Ombo, Philae and the High Dam, with full board and a licensed Egyptologist.",
   included: [

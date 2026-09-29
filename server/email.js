@@ -658,6 +658,20 @@ export function opsNewBookingEmail({ to, isRequest, route, dateLabel, seats, sea
     text.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</pre>`, kind: isRequest ? "ops_new_request" : "ops_new_booking" };
 }
 
+// A traveler asked for a group larger than 8, which is not bookable online.
+export function opsGroupRequestEmail({ to, name, email, groupSize, date, product, note, portalLink }) {
+  const subject = `Group request: ${groupSize} travelers${product ? ` — ${product}` : ""}`;
+  const text =
+    `A group larger than the online maximum asked for a special arrangement.\n\n`
+    + `Name: ${name}\nEmail: ${email}\nGroup size: ${groupSize}\n`
+    + `Product: ${product || "(not given)"}\nDate: ${date || "(not given)"}\n`
+    + (note ? `Note: ${note}\n` : "")
+    + `\nNo booking was made and no seats are held. Reply to the traveler to arrange it.\n`
+    + (portalLink ? `\n${portalLink}\n` : "");
+  return { to, subject, text, html: `<pre style="font:14px/1.5 ui-monospace,monospace">${
+    text.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</pre>`, kind: "ops_group_request" };
+}
+
 // An operator submitted (or resubmitted) a tour for review. "Nothing goes live
 // until you approve it" was true — and nobody was told there was anything to
 // approve.

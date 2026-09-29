@@ -398,16 +398,17 @@ test("computePledgePricing honours the table end to end", () => {
 // explains why in words an operator can act on.
 
 test("capacityError: accepts everything within the stated range", () => {
-  assert.equal(capacityError(4, 12), null);
+  assert.equal(capacityError(4, 8), null);
   assert.equal(capacityError(4, 4), null);
   assert.equal(capacityError(6, 8), null);  // more than four is allowed; fewer is not
-  assert.equal(MAX_GROUP_SIZE, 12);
+  assert.equal(MAX_GROUP_SIZE, 8);
 });
 test("capacityError: refuses a group larger than the contract allows", () => {
-  const e = capacityError(4, 13);
-  assert.match(e, /Maximum group size is 12/);
+  const e = capacityError(4, 9);
+  assert.match(e, /Maximum group size is 8/);
   assert.match(e, /booking conditions/);
-  assert.match(capacityError(4, 200), /Maximum group size is 12/);
+  assert.match(capacityError(4, 12), /Maximum group size is 8/, "the old maximum of 12 is refused now");
+  assert.match(capacityError(4, 200), /Maximum group size is 8/);
 });
 test("capacityError: refuses a maximum below the minimum", () => {
   assert.match(capacityError(8, 4), /cannot be below the minimum/);
@@ -426,20 +427,20 @@ test("capacityError: refuses non-integers and nonsense", () => {
 test("capacityError: refuses a date that would confirm below four", () => {
   assert.equal(MIN_GROUP_SIZE, 4);
   for (const min of [1, 2, 3]) {
-    assert.match(capacityError(min, 12), /Minimum group size is 4/, `min=${min}`);
+    assert.match(capacityError(min, 8), /Minimum group size is 4/, `min=${min}`);
   }
-  assert.match(capacityError(2, 12), /booking conditions/);
+  assert.match(capacityError(2, 8), /booking conditions/);
 });
 test("capacityError: a listing may require MORE than four", () => {
   // A nine-day cruise might not be viable at four, and nothing is hidden — the
   // card shows the real threshold, "2 of 6 joined".
-  assert.equal(capacityError(4, 12), null);
-  assert.equal(capacityError(6, 12), null);
-  assert.equal(capacityError(12, 12), null);
+  assert.equal(capacityError(4, 8), null);
+  assert.equal(capacityError(6, 8), null);
+  assert.equal(capacityError(8, 8), null);
 });
 test("capacityError: the floor and the cap are checked together", () => {
   assert.match(capacityError(2, 20), /Minimum group size is 4/);   // floor reported first
-  assert.match(capacityError(4, 20), /Maximum group size is 12/);
+  assert.match(capacityError(4, 20), /Maximum group size is 8/);
   assert.match(capacityError(10, 6), /cannot be below the minimum/);
 });
 

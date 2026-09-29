@@ -46,7 +46,7 @@ test("it fires — a floor below the GoAhead threshold", () => {
 
 test("the number is read, not the phrasing — word forms count too", () => {
   assert.ok(groupSizeProblems("never more than twenty").length, "spelled-out ceilings must be read");
-  assert.deepEqual(groupSizeProblems("never more than twelve"), [],
+  assert.deepEqual(groupSizeProblems("never more than eight"), [],
     "the correct ceiling in words must not be flagged");
 });
 

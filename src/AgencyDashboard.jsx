@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { MAX_GROUP_SIZE } from "../shared/group-size.js";
 import { priceFromTiers } from "../shared/pricing.js";
 import { depositPctFor, balanceDueDate } from "../shared/booking-policy.js";
 import { isGoAheadDeparture, isBookingOpen } from "../shared/departure-state.js";
@@ -860,7 +861,7 @@ function RequestDateForm({ product, reference, agencyName, canJoin, onJoin, onDo
       )}
       <div className="tb-field tb-seats">
         <label htmlFor="rq-seats">Seats</label>
-        <input id="rq-seats" type="number" min="1" max={product.maxSeats || 12} value={seats} onChange={(e) => setSeats(e.target.value)} />
+        <input id="rq-seats" type="number" min="1" max={product.maxSeats || MAX_GROUP_SIZE} value={seats} onChange={(e) => setSeats(e.target.value)} />
       </div>
 
       <div className="tb-divider"><span>Customer details</span></div>

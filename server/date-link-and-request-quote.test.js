@@ -59,7 +59,9 @@ test("F07: the new-date quote is the price the server records for the request", 
 });
 
 test("F07: the seat limit is the tour's capacity, checked on submit; the summary stays", () => {
-  assert.match(main, /max=\{reqMode \? requestCapacity : Math\.max\(1, remaining\)\}/);
+  // 29 Sep 2026: the input no longer stops at the maximum: a party above 8 is shown the
+  // special-arrangement request instead of a browser tooltip.
+  assert.match(main, /tooManyTravelers\(seats\) && <GroupRequestForm/);
   const submit = main.slice(main.indexOf("async function submitDateRequest("), main.indexOf("setReqBusy(true);", main.indexOf("async function submitDateRequest(")));
   assert.match(submit, /Number\(seats\) > requestCapacity/);
   assert.doesNotMatch(main, /\{!reqMode && <div className="bk-sum">/, "the price summary is shown in request mode too");
