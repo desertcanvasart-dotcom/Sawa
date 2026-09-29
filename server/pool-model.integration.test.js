@@ -228,9 +228,9 @@ test("the rate card: published, the tour page shows each tier in whole euros at 
   assert.deepEqual([before.catalogue.priceLine, before.publishedRate], [null, 95]);
   // The traveler rate, set by hand in Finance (the admin route: a write, so
   // the public caches drop).
-  const set = await fetch(`${on}/api/admin/finance/traveller-rate/override`, {
-    method: "POST", headers: { Authorization: "Bearer ops-token", "Content-Type": "application/json" },
-    body: JSON.stringify({ egpPerEur: 50, reason: "test: the agreed rate" }) });
+  const set = await fetch(`${on}/api/admin/finance/exchange-rate`, {
+    method: "PUT", headers: { Authorization: "Bearer ops-token", "Content-Type": "application/json" },
+    body: JSON.stringify({ mode: "manual", egpPerEur: 50, reason: "test: the agreed rate" }) });
   assert.equal(set.status, 200, await set.text());
   // Published through the admin screen, which drops the public caches.
   const v = await rates.saveRateDraft(db, productId, MODEL, { by: "it" });
@@ -260,7 +260,7 @@ test("a booking keeps the traveler rate in force when made and is quoted its tie
   // The traveler rate changes after the booking (a weaker pound): later
   // bookings take the new one; this one keeps 50.
   const fx = await import("./fx.js");
-  await fx.overrideTravellerRate(db, { egpPerEur: 45, reason: "test: a later rate", by: "it" });
+  await fx.setExchangeRateMode(db, { mode: "manual", egpPerEur: 45, reason: "test: a later rate", by: "it" });
   // Six more: GoAhead at 8, in the 7–9 tier.
   const later = [];
   for (let i = 0; i < 3; i++) later.push(await book(deps.a, 2));
@@ -272,7 +272,7 @@ test("a booking keeps the traveler rate in force when made and is quoted its tie
   assert.equal(Number((await one("SELECT booking_total FROM pledges WHERE id = $1", [p.id])).booking_total), 100);
   assert.equal(Number((await one("SELECT published_eur_rate FROM pledges WHERE id = $1", [p.id])).published_eur_rate), 50, "still the locked rate");
   assert.equal(Number((await reqOf(later[0])).amount_eur), 112, "a later booking: 2 × €56 (2,487 ÷ 45 = 55.3, rounded up)");
-  await fx.overrideTravellerRate(db, { egpPerEur: 50, reason: "test: back to the agreed rate", by: "it" });
+  await fx.setExchangeRateMode(db, { mode: "manual", egpPerEur: 50, reason: "test: back to the agreed rate", by: "it" });
 });
 
 // ---------------------------------------------------------------- the worked example
@@ -486,8 +486,8 @@ test("no traveler rate: the page says so and shows no euro price, no payment req
   assert.equal(await reqOf(held[0]), undefined, "no payment request without a traveler rate");
   assert.equal((await one("SELECT count(*)::int n FROM payment_requests WHERE departure_id = $1", [dep.id])).n, 0);
   // An admin sets the rate, with a reason: the held requests go out at it.
-  const set = await fetch(`${on}/api/admin/finance/traveller-rate/override`, {
-    method: "POST", headers: admin, body: JSON.stringify({ egpPerEur: 50, reason: "test: first rate" }) });
+  const set = await fetch(`${on}/api/admin/finance/exchange-rate`, {
+    method: "PUT", headers: admin, body: JSON.stringify({ mode: "manual", egpPerEur: 50, reason: "test: first rate" }) });
   assert.equal(set.status, 200, await set.text());
   for (const id of held) {
     const req = await reqOf(id);
@@ -495,4 +495,55 @@ test("no traveler rate: the page says so and shows no euro price, no payment req
     assert.equal(Number((await one("SELECT published_eur_rate FROM pledges WHERE id = $1", [id])).published_eur_rate), 50);
     assert.equal(Number(req.amount_eur), 102, "2 × €51: four travelers is the 4–6 tier, 2,540 ÷ 50 = 50.8 rounded up");
   }
+});
+
+// ---------------------------------------------------------------- phase 7: the price in EUR
+test("a EUR price: travelers pay €97 exactly; each booking keeps its rate across a mode change; revenue is €97 × each booking's rate", { skip }, async () => {
+  const fx = await import("./fx.js");
+  const r7 = (await db.query(
+    `SELECT id, date, legacy_departure_id FROM catalogue_departures
+      WHERE product_id = $1 AND legacy_departure_id IS NOT NULL AND status = 'open' AND date >= $2::date + 20
+      ORDER BY date OFFSET 6 LIMIT 1`, [productId, today()])).rows[0];
+  const dep = { id: Number(r7.id), date: ymd(r7.date), legacy: Number(r7.legacy_departure_id) };
+  // Manual: 59, used exactly.
+  await fx.setExchangeRateMode(db, { mode: "manual", egpPerEur: 59, reason: "test: the bank's rate", by: "it" });
+  const v = await rates.saveRateDraft(db, productId, {
+    tiers: [{ from: 4, to: 8, priceEur: 97, operatorFeePct: 5 }],
+    costLines: [
+      { name: "Transport", basis: "per_group", amounts: [2650] }, { name: "Guide", basis: "per_group", amounts: [2000] },
+      { name: "Entrance fees", basis: "per_traveller", amounts: [2250] }, { name: "Lunch", basis: "per_traveller", amounts: [400] },
+    ],
+    commissionPct: 10,
+  }, { by: "it" });
+  assert.deepEqual(v.tiers, [{ from: 4, to: 8, priceEur: 97, priceEgp: null, operatorFeePct: 5 }]);
+  // A lone tier that doesn't reach the GoAhead minimum can't be published (the Giza draft).
+  const bad = await rates.saveRateDraft(db, productId, { tiers: [{ from: 10, to: 12, priceEur: 97, operatorFeePct: 5 }], costLines: [] }, { by: "it" });
+  await assert.rejects(rates.publishRate({ productId, versionId: bad.id, by: "it" }), /starts at 10/);
+  await rates.saveRateDraft(db, productId, { tiers: v.tiers, costLines: v.costLines, commissionPct: 10 }, { by: "it" });
+  await rates.publishRate({ productId, versionId: v.id, by: "it" });
+
+  const a = await book(dep, 2);
+  assert.deepEqual(Object.values(await one("SELECT published_eur_rate, price_per_person, booking_total FROM pledges WHERE id = $1", [a])).map(Number), [59, 97, 194]);
+  // Back to automatic: the market 59 less 3% = 57.23. A later booking locks that.
+  // (Dated after every rate the earlier tests entered, so it is the latest.)
+  await db.query("INSERT INTO fx_rates (day, egp_per_eur, status, source) SELECT COALESCE(MAX(day), CURRENT_DATE) + 1, 59, 'approved', 'manual' FROM fx_rates");
+  const auto = await fx.setExchangeRateMode(db, { mode: "automatic", by: "it" });
+  assert.equal(auto.rate.egpPerEur, 57.23);
+  const b = await book(dep, 2);
+  assert.deepEqual(Object.values(await one("SELECT published_eur_rate, price_per_person FROM pledges WHERE id = $1", [b])).map(Number), [57.23, 97]);
+  assert.equal(Number((await one("SELECT published_eur_rate FROM pledges WHERE id = $1", [a])).published_eur_rate), 59, "the first booking keeps 59");
+
+  // The tour page: exactly €97, no conversion.
+  await fetch(`${on}/api/admin/finance/traveller-rate/buffer`, { method: "PUT", headers: { Authorization: "Bearer ops-token", "Content-Type": "application/json" }, body: JSON.stringify({ bufferPct: 3 }) });
+  const giza = (await (await fetch(`${on}/api/bootstrap`)).json()).tourProducts.find((p) => p.id === GIZA);
+  assert.equal(giza.catalogue.priceSummary, "€97 per person");
+
+  // Revenue: 2 × 97 × 59 + 2 × 97 × 57.23 = 22,548.62. Everything after it in EGP.
+  const calc = await poolS.departurePool(db, dep.id);
+  assert.deepEqual([calc.economics.revenue, calc.economics.entitlement, calc.economics.commission, calc.economics.pool], [22548.62, 16012.5, 2254.86, 4281.26]);
+  assert.deepEqual(calc.economics.revenueRates.map((r) => r.egpPerEur), [59, 57.23]);
+  // The payment requests: €97 a seat, whatever the rate.
+  await cat.runStatusJob({});
+  await assignX(dep);
+  assert.deepEqual([Number((await reqOf(a)).amount_eur), Number((await reqOf(b)).amount_eur)], [194, 194]);
 });

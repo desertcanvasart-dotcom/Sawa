@@ -24,7 +24,8 @@ import { rateById, rateInForce, ratesFor, poolModelAvailable } from "./rates.js"
 import { todayIn } from "./catalogue.js";
 import { currentTravellerRate } from "./fx.js";
 import {
-  departureEconomics, operatorEntitlement, poolShares, bookingChargeEur, tierDifferenceEur, poolTierIndex, tierPriceEur, fxResult, withFeeOverride,
+  departureEconomics, operatorEntitlement, poolShares, bookingChargeEur, tierDifferenceEur, poolTierIndex, fxResult, withFeeOverride,
+  tierEur, tierPriced, isEurPriced,
 } from "../shared/pool-model.js";
 
 const inTx = (db, fn) => (db === pool ? withTransaction(fn) : fn(db));
@@ -68,7 +69,7 @@ export async function headcountFor(c, dep) {
 // refund that retained something, less whatever a resale returned); or none.
 async function placesFor(c, dep, frozenAt) {
   const rows = (await c.query(
-    `SELECT p.id, p.agency_id, p.seats, p.status, p.cancelled_at,
+    `SELECT p.id, p.agency_id, p.seats, p.status, p.cancelled_at, p.published_eur_rate,
             (SELECT COALESCE(SUM(CASE WHEN f.kind = 'cancellation' THEN f.fee_retained_eur WHEN f.kind = 'resale' THEN -f.amount_eur ELSE 0 END), 0)
                FROM payment_refunds f WHERE f.pledge_id = p.id AND f.state <> 'cancelled') AS fee_kept
        FROM pledges p
@@ -79,6 +80,7 @@ async function placesFor(c, dep, frozenAt) {
     pledgeId: p.id,
     agencyId: p.agency_id && p.agency_id !== DIRECT ? p.agency_id : null,
     count: Number(p.seats) || 0,
+    eurRate: p.published_eur_rate != null ? Number(p.published_eur_rate) : null,
     outcome: p.status !== "cancelled" ? "travelled" : Number(p.fee_kept) > 0 ? "late_fee_kept" : "none",
   }));
 }
@@ -89,13 +91,44 @@ export async function departurePool(c, departureId, { now = Date.now() } = {}) {
   if (!dep) return null;
   const rate = await rateForDeparture(c, dep, now);
   const { headcount, frozenAt } = await headcountFor(c, dep);
+  const places = await placesFor(c, dep, frozenAt);
+  const revenue = rate ? await eurRevenue(c, rate, headcount, places) : {};
   const economics = rate
-    ? { ...departureEconomics(rate, headcount), ...(rate.feeOverridePct != null ? { feeOverride: rate.feeOverridePct } : {}) }
+    ? { ...departureEconomics(rate, headcount, revenue), ...(revenue.revenueEgp != null ? { revenueRates: revenue.rates } : {}),
+        ...(rate.feeOverridePct != null ? { feeOverride: rate.feeOverridePct } : {}) }
     : { complete: false, missing: ["rate version"], headcount };
   const entitlement = rate ? operatorEntitlement(rate, headcount) : { complete: false, missing: ["rate version"], entitlement: null };
-  const places = await placesFor(c, dep, frozenAt);
   const shares = poolShares(economics, places);
   return { departure: dep, rate, headcount, frozen: !!frozenAt, economics, entitlement, places, shares };
+}
+
+// Phase 7: a rate card priced in EUR earns, in EGP, each booking's seats at
+// the tier's EUR price × the rate locked on that booking. A place with no
+// locked rate (a booking from before the model) counts at the current
+// site-wide rate. The rates used are kept with the calculation.
+async function eurRevenue(c, rate, headcount, places) {
+  if (!isEurPriced(rate)) return {};
+  const tier = rate.tiers[poolTierIndex(rate.tiers, headcount)];
+  const priceEur = Number(tier.priceEur);
+  const current = (await currentTravellerRate(c))?.egpPerEur ?? null;
+  let seats = 0;
+  let egp = 0;
+  const rates = [];
+  for (const p of places) {
+    const r = p.eurRate ?? current;
+    if (r == null) return { eurRate: null };
+    egp += p.count * priceEur * r;
+    seats += p.count;
+    rates.push({ pledgeId: p.pledgeId, seats: p.count, egpPerEur: r, locked: p.eurRate != null });
+  }
+  // Seats on the frozen manifest with no booking row left: the current rate.
+  const rest = Math.max(0, Number(headcount) - seats);
+  if (rest) {
+    if (current == null) return { eurRate: null };
+    egp += rest * priceEur * current;
+    rates.push({ pledgeId: null, seats: rest, egpPerEur: current, locked: false });
+  }
+  return { revenueEgp: Math.round(egp * 100) / 100, eurRate: current, rates };
 }
 
 async function record(c, calc, stage) {
@@ -136,7 +169,7 @@ export async function stampBookingPrice(c, { pledgeId, now = Date.now() }) {
     // 064: priced by the rate card, but no traveler rate is set yet. The
     // booking is marked as waiting for one: no payment request goes out
     // until a rate exists (exchangeRateGate).
-    if (rate.tiers?.some((t) => t.priceEgp != null) && (await exchangeRateHoldAvailable(c))) {
+    if (rate.tiers?.some(tierPriced) && (await exchangeRateHoldAvailable(c))) {
       await c.query("UPDATE pledges SET awaiting_exchange_rate = true WHERE id = $1", [pledgeId]);
       return { eurRate: null, quote: null, awaitingExchangeRate: true };
     }
@@ -205,7 +238,7 @@ async function refundTierDifferences(c, calc, { env = process.env } = {}) {
   const { mapRefund, mapPayRequest } = await import("./pay-at-goahead.js");
   let made = 0;
   for (const r of paid) {
-    const finalEach = tierPriceEur(tier.priceEgp, Number(r.published_eur_rate));
+    const finalEach = tierEur(tier, Number(r.published_eur_rate));
     const amount = tierDifferenceEur({ paidEur: Number(r.amount_eur), seats: Number(r.seats), finalEachEur: finalEach });
     if (!(amount > 0)) continue;
     const ins = (await c.query(
@@ -359,7 +392,7 @@ export async function departureMoney(c, departureId, { now = Date.now() } = {}) 
   return {
     stage: calc.stage, headcount: calc.headcount, complete: !!e.complete, missing: e.missing || [],
     lines: e.complete ? {
-      tier: e.tier, priceEgp: e.priceEgp, revenue: e.revenue, operatingCost: e.operatingCost, costLines: e.costLines,
+      tier: e.tier, priceEgp: e.priceEgp, priceEur: e.priceEur ?? null, revenueRates: e.revenueRates || null, revenue: e.revenue, operatingCost: e.operatingCost, costLines: e.costLines,
       operatorFeePct: e.operatorFeePct, operatorFeeOverride: e.feeOverride != null, operatorFee: e.operatorFee, entitlement: e.entitlement,
       commissionPct: e.commissionPct, commission: e.commission, pool: e.pool, poolPerTraveller: e.poolPerTraveller, guarantee: e.guarantee,
     } : null,

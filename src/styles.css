@@ -7126,3 +7126,6 @@ button:disabled {
 .group-request p { margin: 0; font-size: 13px; color: var(--ink-soft); }
 .group-request label { display: grid; gap: 4px; font-size: 12px; font-weight: 700; color: var(--ink-soft); }
 .group-request input { border: 1px solid #ccd8dc; border-radius: 8px; padding: 9px 10px; font-size: 14px; font-family: var(--font-body); background: #fff; }
+.fx-control .fx-edit { display: grid; gap: 8px; margin-top: 8px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--sand-50); }
+.fx-control .fx-edit label { display: flex; gap: 8px; align-items: center; font-size: 13px; }
+.fx-control .fx-edit input:not([type=radio]) { border: 1px solid #ccd8dc; border-radius: 8px; padding: 8px 10px; font-size: 14px; }

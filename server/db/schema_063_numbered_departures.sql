@@ -70,6 +70,8 @@ DECLARE
   new_tiers JSONB;
   new_lines JSONB;
   note JSONB;
+  gmin INT;
+  gmax INT;
 BEGIN
   FOR v IN
     SELECT DISTINCT ON (product_id) *
@@ -79,8 +81,12 @@ BEGIN
   LOOP
     CONTINUE WHEN jsonb_array_length(v.tiers) < 2;
     t0 := v.tiers -> 0;
+    -- Fixed 29 Sep 2026 (phase 7): the range is the product's own, from its
+    -- GoAhead minimum to its maximum group, not a fixed 4–8. The per-version
+    -- EUR rate is no longer copied (064 drops it), so 063 also runs after 064.
+    SELECT goahead_min, max_group INTO gmin, gmax FROM catalogue_products WHERE id = v.product_id;
     new_tiers := jsonb_build_array(jsonb_build_object(
-      'from', 4, 'to', 8, 'priceEgp', t0 -> 'priceEgp', 'operatorFeePct', t0 -> 'operatorFeePct'));
+      'from', COALESCE(gmin, 4), 'to', COALESCE(gmax, 8), 'priceEgp', t0 -> 'priceEgp', 'operatorFeePct', t0 -> 'operatorFeePct'));
     new_lines := COALESCE((SELECT jsonb_agg(jsonb_set(l, '{amounts}', jsonb_build_array(l -> 'amounts' -> 0)) ORDER BY ord)
                              FROM jsonb_array_elements(COALESCE(v.cost_lines, '[]'::jsonb)) WITH ORDINALITY AS x(l, ord)), '[]'::jsonb);
     note := jsonb_build_object('migration063', jsonb_build_object(
@@ -91,10 +97,10 @@ BEGIN
     ELSE
       INSERT INTO catalogue_rate_versions
         (product_id, version, state, currency, per_traveler, fee_4_6, fee_7_9, fee_10_12, land_per_traveler, room_twin, room_single,
-         commission_per_seat, source, created_by, tiers, cost_lines, commission_pct, eur_rate)
+         commission_per_seat, source, created_by, tiers, cost_lines, commission_pct)
       SELECT v.product_id, (SELECT MAX(version) + 1 FROM catalogue_rate_versions WHERE product_id = v.product_id), 'draft', v.currency,
              v.per_traveler, v.fee_4_6, v.fee_7_9, v.fee_10_12, v.land_per_traveler, v.room_twin, v.room_single,
-             v.commission_per_seat, note, 'migration 063', new_tiers, new_lines, v.commission_pct, v.eur_rate
+             v.commission_per_seat, note, 'migration 063', new_tiers, new_lines, v.commission_pct
        WHERE NOT EXISTS (SELECT 1 FROM catalogue_rate_versions d WHERE d.product_id = v.product_id AND d.state = 'draft');
     END IF;
   END LOOP;

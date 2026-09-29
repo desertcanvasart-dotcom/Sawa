@@ -258,7 +258,7 @@ export function registerOperatorRoutes(app, { requireAuth, requireRole, h, logAu
   // ============================================================== rate card
   app.get("/api/admin/rates", ...staff, route(async (_req, res) => {
     const [products, versions] = await Promise.all([
-      pool.query("SELECT id, catalogue_no, code, title, type, status FROM catalogue_products ORDER BY catalogue_no"),
+      pool.query("SELECT id, catalogue_no, code, title, type, status, goahead_min, max_group FROM catalogue_products ORDER BY catalogue_no"),
       pool.query("SELECT * FROM catalogue_rate_versions ORDER BY product_id, version"),
     ]);
     const by = new Map();

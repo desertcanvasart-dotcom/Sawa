@@ -84,7 +84,7 @@ A rate entered by hand is `approved` / `manual`, and replaces a fetched rate for
 - Payment requests and tier-difference refunds use that stored rate.
 - The pool-model integration test books at 50, changes the rate to 45, and shows the earlier booking still charged at 50 while a later booking pays at 45.
 
-**Manual override:**
+**Manual override** (replaced in phase 7 by the Manual exchange rate mode, which stays until changed: `docs/phase7/REPORT.md`):
 - Finance → Traveler rate → Override, with a reason that is required both by the API and by a database check.
 - Each override is recorded in the rate's history (who, when, why) and in the audit log (`finance.traveller_rate.override`).
 - An override stands until the next weekly or early renewal.

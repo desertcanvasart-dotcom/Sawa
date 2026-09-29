@@ -11,7 +11,7 @@ import { readXlsx } from "./xlsx.js";
 import { todayIn, getProduct, CatalogueError } from "./catalogue.js";
 import { rateFieldsFor } from "../shared/operators.js";
 import {
-  poolRateError, poolRateGaps, convertLegacyRate, DEFAULT_POOL_TIERS, DEFAULT_COMMISSION_PCT, poolRateTable,
+  poolRateError, poolRateGaps, convertLegacyRate, DEFAULT_POOL_TIERS, DEFAULT_COMMISSION_PCT, poolRateTable, tierPriced,
 } from "../shared/pool-model.js";
 
 const inTx = (db, fn) => (db === pool ? withTransaction(fn) : fn(db));
@@ -34,7 +34,11 @@ export function mapRate(r) {
   // Migration 061. Before it, a version reads as its conversion, so the
   // calculation has one shape to work on either way.
   const legacy = r.tiers === undefined ? convertLegacyRate(out) : null;
-  out.tiers = (r.tiers ?? legacy?.tiers ?? null)?.map((t) => ({ from: Number(t.from), to: Number(t.to), priceEgp: num(t.priceEgp), operatorFeePct: num(t.operatorFeePct) })) || null;
+  // Phase 7: a tier priced in EUR carries priceEur (priceEgp null).
+  out.tiers = (r.tiers ?? legacy?.tiers ?? null)?.map((t) => ({
+    from: Number(t.from), to: Number(t.to), ...(t.priceEur != null ? { priceEur: num(t.priceEur) } : {}),
+    priceEgp: num(t.priceEgp), operatorFeePct: num(t.operatorFeePct),
+  })) || null;
   out.costLines = (r.cost_lines ?? legacy?.costLines ?? []).map((l) => ({ name: l.name, basis: l.basis, amounts: (l.amounts || []).map(num) }));
   out.commissionPct = r.commission_pct != null ? Number(r.commission_pct) : DEFAULT_COMMISSION_PCT;
   // No EUR rate on a version since 064: travelers are priced at the
@@ -107,15 +111,20 @@ const amount = (v) => (v === null || v === "" || v === undefined ? null : Math.r
 function cleanModel(values = {}, base = {}) {
   const has = (k) => Object.prototype.hasOwnProperty.call(values, k);
   const model = {
-    tiers: has("tiers") ? (values.tiers || []).map((t) => ({
-      from: Number(t?.from), to: Number(t?.to), priceEgp: amount(t?.priceEgp), operatorFeePct: amount(t?.operatorFeePct),
-    })) : base.tiers,
+    // Phase 7: the price is entered in EUR. A tier sent with priceEur keeps
+    // no EGP price; one sent with priceEgp only (an old client) stays in EGP.
+    tiers: has("tiers") ? (values.tiers || []).map((t) => {
+      const eur = amount(t?.priceEur);
+      return t && "priceEur" in t
+        ? { from: Number(t?.from), to: Number(t?.to), priceEur: eur, priceEgp: null, operatorFeePct: amount(t?.operatorFeePct) }
+        : { from: Number(t?.from), to: Number(t?.to), priceEgp: amount(t?.priceEgp), operatorFeePct: amount(t?.operatorFeePct) };
+    }) : base.tiers,
     costLines: has("costLines") ? (values.costLines || []).map((l) => ({
       name: String(l?.name || "").trim().slice(0, 80), basis: l?.basis, amounts: (l?.amounts || []).map(amount),
     })) : base.costLines,
     commissionPct: has("commissionPct") ? amount(values.commissionPct) : base.commissionPct,
   };
-  if (model.tiers?.some((t) => [t.priceEgp, t.operatorFeePct].some((x) => x != null && !Number.isFinite(x)))
+  if (model.tiers?.some((t) => [t.priceEur, t.priceEgp, t.operatorFeePct].some((x) => x != null && !Number.isFinite(x)))
     || model.costLines?.some((l) => l.amounts.some((x) => x != null && !Number.isFinite(x)))) {
     throw new CatalogueError(422, "Rates must be numbers.");
   }
@@ -181,7 +190,7 @@ export async function saveRateDraft(db, productId, values, { by = null, source =
 // Publishing fixes a version for good. It applies to departures that haven't
 // sold a seat yet; a departure that has keeps the version it was locked to.
 export async function publishRate({ db = pool, productId, versionId, effectiveFrom, by, now = Date.now() }) {
-  await getProduct(db, productId);
+  const product = await getProduct(db, productId);
   const today = todayIn(now);
   const from = ymd(effectiveFrom) || today;
   if (from < today) throw new CatalogueError(422, "A rate version can't take effect in the past.");
@@ -195,17 +204,35 @@ export async function publishRate({ db = pool, productId, versionId, effectiveFr
     // version without prices pays the operator; the product keeps its
     // listing price and its pool waits for a version with prices. The EUR
     // prices come from the site-wide traveler rate (064), not the version.
-    const priced = (v.tiers || []).filter((t) => t.priceEgp != null).length;
+    const priced = (v.tiers || []).filter(tierPriced).length;
     const missing = [
       ...poolRateGaps(v).filter((g) => !g.startsWith("price ")),
       ...(priced && priced < v.tiers.length ? poolRateGaps(v).filter((g) => g.startsWith("price ")) : []),
     ];
     if (missing.length) throw new CatalogueError(422, `Fill in the rate card before publishing (missing: ${missing.join(", ")}).`);
+    // Phase 7: the tiers must cover the tour's group sizes, from its GoAhead
+    // minimum to its maximum group (a lone 10–12 tier on a tour of 4 to 8
+    // would price every departure at the 10–12 price).
+    const coverage = tierCoverageError(v.tiers, product);
+    if (coverage) throw new CatalogueError(422, coverage);
     const pub = await c.query(
       `UPDATE catalogue_rate_versions SET state = 'published', effective_from = $2, published_by = $3, published_at = now()
         WHERE id = $1 RETURNING *`, [versionId, from, by]);
     return mapRate(pub.rows[0]);
   });
+}
+
+export function tierCoverageError(tiers, product) {
+  if (!tiers?.length || !product) return null;
+  const first = Number(tiers[0].from);
+  const last = Number(tiers[tiers.length - 1].to);
+  if (Number.isFinite(product.goaheadMin) && first > product.goaheadMin) {
+    return `The first tier starts at ${first}, but this tour goes ahead from ${product.goaheadMin} travelers: start it at ${product.goaheadMin}.`;
+  }
+  if (Number.isFinite(product.maxGroup) && last < product.maxGroup) {
+    return `The last tier ends at ${last}, but this tour takes up to ${product.maxGroup} travelers: end it at ${product.maxGroup}.`;
+  }
+  return null;
 }
 
 // The status job's fallback for departures with seats sold but no locked rate

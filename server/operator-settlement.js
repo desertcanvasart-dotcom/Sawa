@@ -304,7 +304,10 @@ async function poolDistribution(c, departureId, operatorId) {
   const ownAgency = operatorId != null ? (await c.query("SELECT agency_id FROM operators WHERE id = $1", [operatorId])).rows[0]?.agency_id || null : null;
   const own = (money.shares?.agencies || []).find((a) => a.agencyId === ownAgency) || null;
   const lines = [
-    { key: "revenue", label: `Revenue: ${money.headcount} × EGP ${l.priceEgp} (tier ${l.tier})`, amountEgp: l.revenue },
+    // Phase 7: a EUR price is converted at each booking's locked rate.
+    { key: "revenue", label: l.priceEur != null
+      ? `Revenue: ${money.headcount} × €${l.priceEur} at each booking's exchange rate (tier ${l.tier})`
+      : `Revenue: ${money.headcount} × EGP ${l.priceEgp} (tier ${l.tier})`, amountEgp: l.revenue },
     { key: "operating_cost", label: "Operating cost", amountEgp: l.operatingCost },
     { key: "operator_fee", label: `Operator fee, ${l.operatorFeePct}%${l.operatorFeeOverride ? " (override for this departure)" : ""}`, amountEgp: l.operatorFee },
     { key: "operator_entitlement", label: "Operator entitlement", amountEgp: l.entitlement },

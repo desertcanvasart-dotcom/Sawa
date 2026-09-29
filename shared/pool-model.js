@@ -7,18 +7,22 @@
 //
 // A rate version, per product:
 //
-//   tiers        [{ from, to, priceEgp, operatorFeePct }]   defaults 4–6, 7–9, 10–12
+//   tiers        [{ from, to, priceEur, operatorFeePct }]   default one tier, 4–8
+//                (phase 7: the price is entered in EUR, what travelers pay;
+//                a version from before carries priceEgp instead)
 //   costLines    [{ name, basis: "per_group" | "per_traveller", amounts: [one per tier] }]
 //   commissionPct   the collecting agent's commission, % of the selling price (default 10)
 //
-// Travelers see and pay EUR at the site-wide traveler rate (064,
-// server/fx.js), not a rate on the version: `eurRate` below is always that
-// rate, passed in. Nothing in the pool calculation is converted with it.
+// Travelers pay the EUR price exactly. The site-wide exchange rate (064,
+// phase 7: automatic or manual, server/fx.js) converts it into EGP for the
+// operator and agency calculations: revenue = EUR price × the rate locked on
+// each booking. `eurRate` below is always that rate, passed in.
 //
 // Per departure, from the manifest at the cut-off:
 //
 //   tier            by headcount (a guaranteed departure below 4 uses the first)
-//   revenue         headcount × the tier's EGP price (nominal, never the EUR collected)
+//   revenue         the places × the tier's EUR price × each booking's locked rate
+//                   (an EGP-priced version: headcount × its EGP price)
 //   operating cost  the per-group lines + headcount × the per-traveller lines
 //   entitlement     operating cost × (1 + operator fee %): the operator's, in EGP
 //   commission      revenue × commission %: the collecting agent's (payment costs come out of it)
@@ -79,17 +83,36 @@ export function withFeeOverride(rate, pct) {
   return { ...rate, feeOverridePct: p, tiers: (rate.tiers || []).map((t) => ({ ...t, operatorFeePct: p })) };
 }
 
-// A tier's price in EUR, for travelers: EGP ÷ the site-wide traveler rate (064), rounded UP to
-// a whole euro (29 Sep 2026; it was rounded to the nearest). The one place the
-// conversion happens: the rate card editor, the tour page, the widget and the
-// charge itself all read it, so what is shown is what is charged.
+// An EGP price in EUR, for travelers: EGP ÷ the site-wide rate (064), rounded
+// UP to a whole euro. Only a version still priced in EGP needs it.
 export function tierPriceEur(priceEgp, eurRate) {
   return eurFromEgp(priceEgp, eurRate);
 }
 
+// Phase 7: a tier is priced in EUR (`priceEur`, what travelers pay, exactly)
+// or, on a version from before, in EGP (`priceEgp`, converted at the rate).
+export const tierPriced = (t) => isNum(t?.priceEur) || isNum(t?.priceEgp);
+export const isEurPriced = (rate) => (rate?.tiers || []).some((t) => isNum(t.priceEur));
+
+// What travelers pay for a tier, in EUR: the EUR price as entered (no
+// conversion, no rounding), else the EGP price converted. The one place this
+// is decided: the rate card editor, the tour page, the widget and the charge
+// all read it, so what is shown is what is charged.
+export function tierEur(tier, eurRate) {
+  if (isNum(tier?.priceEur)) return Number(tier.priceEur);
+  return tierPriceEur(tier?.priceEgp, eurRate);
+}
+
+// A tier's price in EGP, for the operator and agency calculations: EUR price ×
+// the rate (null without one), else the EGP price as entered.
+export function tierEgp(tier, eurRate) {
+  if (isNum(tier?.priceEur)) return isNum(eurRate) && Number(eurRate) > 0 ? cents(Number(tier.priceEur) * Number(eurRate)) : null;
+  return isNum(tier?.priceEgp) ? Number(tier.priceEgp) : null;
+}
+
 // The tiers as travelers read them: [{ label: "4–6", eur }], one per tier.
 export function tierPriceRows(tiers, eurRate) {
-  return (tiers || []).map((t) => ({ label: `${t.from}–${t.to}`, from: Number(t.from), to: Number(t.to), eur: tierPriceEur(t.priceEgp, eurRate) }));
+  return (tiers || []).map((t) => ({ label: `${t.from}–${t.to}`, from: Number(t.from), to: Number(t.to), eur: tierEur(t, eurRate) }));
 }
 
 // "4–6 travelers €54 · 7–9 travelers €45 · 10–12 travelers €42". Null unless every
@@ -104,7 +127,7 @@ export function tierPriceSummary(tiers, eurRate, symbol = "€") {
 
 // What the tour page says: "€X per person, €Y from 7 travelers, €Z from 10".
 export function tierPriceLine(tiers, eurRate, symbol = "€") {
-  const prices = (tiers || []).map((t) => ({ from: Number(t.from), eur: tierPriceEur(t.priceEgp, eurRate) }));
+  const prices = (tiers || []).map((t) => ({ from: Number(t.from), eur: tierEur(t, eurRate) }));
   if (!prices.length || prices.some((p) => p.eur == null)) return null;
   return prices.map((p, i) => (i === 0 ? `${symbol}${p.eur} per person`
     : i === 1 ? `${symbol}${p.eur} from ${p.from} travelers` : `${symbol}${p.eur} from ${p.from}`)).join(", ");
@@ -118,7 +141,7 @@ export function poolRateGaps(rate) {
   const tiers = rate.tiers || [];
   if (!tiers.length) gaps.push("tiers");
   tiers.forEach((t) => {
-    if (!isNum(t.priceEgp)) gaps.push(`price ${tierLabel(t)}`);
+    if (!tierPriced(t)) gaps.push(`price ${tierLabel(t)}`);
     if (!isNum(t.operatorFeePct)) gaps.push(`operator fee ${tierLabel(t)}`);
   });
   (rate.costLines || []).forEach((l) => {
@@ -168,14 +191,25 @@ export function operatorEntitlement(rate, headcount) {
 
 // The whole calculation for one departure. null amounts, with `missing`, while
 // the rate version is incomplete.
-export function departureEconomics(rate, headcount) {
+//
+// Phase 7: a EUR-priced tier's revenue in EGP is the EUR price × a rate:
+//   revenueEgp  given by the settlement: each booking's seats at the rate
+//               locked on that booking (pool-settlement.js)
+//   eurRate     otherwise, one rate for every place (the editor's table uses
+//               the current site-wide rate, and says so)
+// Everything after the revenue is EGP, exactly as before.
+export function departureEconomics(rate, headcount, { eurRate = null, revenueEgp = null } = {}) {
   const n = Math.max(0, Number(headcount) || 0);
   const missing = poolRateGaps(rate);
   if (missing.length) return { headcount: n, missing, complete: false };
   const idx = poolTierIndex(rate.tiers, n);
   const tier = rate.tiers[idx];
-  const priceEgp = Number(tier.priceEgp);
-  const revenue = cents(n * priceEgp);
+  const priceEur = isNum(tier.priceEur) ? Number(tier.priceEur) : null;
+  if (priceEur != null && !isNum(revenueEgp) && !(isNum(eurRate) && Number(eurRate) > 0)) {
+    return { headcount: n, missing: ["exchange rate"], complete: false };
+  }
+  const priceEgp = priceEur != null ? tierEgp(tier, eurRate) : Number(tier.priceEgp);
+  const revenue = isNum(revenueEgp) ? cents(Number(revenueEgp)) : cents(n * priceEgp);
   const cost = operatingCostFor(rate, idx, n);
   const operatorFeePct = Number(tier.operatorFeePct);
   const operatorFee = cents(cost.total * operatorFeePct / 100);
@@ -184,7 +218,7 @@ export function departureEconomics(rate, headcount) {
   const commission = cents(revenue * commissionPct / 100);
   const pool = cents(revenue - entitlement - commission);
   return {
-    complete: true, missing: [], headcount: n, tierIndex: idx, tier: tierLabel(tier), priceEgp,
+    complete: true, missing: [], headcount: n, tierIndex: idx, tier: tierLabel(tier), priceEgp, priceEur,
     revenue, operatingCost: cost.total, costLines: cost.lines, operatorFeePct, operatorFee, entitlement,
     commissionPct, commission, pool,
     poolPerTraveller: n > 0 ? cents(pool / n) : null,
@@ -235,11 +269,11 @@ export function poolShares(econ, places = []) {
 
 // ---------------------------------------------------------------- the editor
 // The live table: 2 to 12 travelers, with the two warnings.
-export function poolRateTable(rate, { from = RATE_TABLE_FROM, to = RATE_TABLE_TO } = {}) {
+export function poolRateTable(rate, { from = RATE_TABLE_FROM, to = RATE_TABLE_TO, eurRate = null } = {}) {
   const rows = [];
-  let prev = from > 0 ? departureEconomics(rate, from - 1) : null;
+  let prev = from > 0 ? departureEconomics(rate, from - 1, { eurRate }) : null;
   for (let n = from; n <= to; n++) {
-    const e = departureEconomics(rate, n);
+    const e = departureEconomics(rate, n, { eurRate });
     const poolChange = e.complete && prev?.complete ? cents(e.pool - prev.pool) : null;
     rows.push({
       ...e,
@@ -268,7 +302,7 @@ export function poolRateError(rate) {
       return `Tier ${i + 1}: "from" and "to" must be whole numbers, with "to" no smaller than "from".`;
     }
     if (i > 0 && Number(t.from) !== Number(tiers[i - 1].to) + 1) return `Tier ${i + 1} must start right after tier ${i} ends (${Number(tiers[i - 1].to) + 1}).`;
-    if (isNum(t.priceEgp) && Number(t.priceEgp) < 0) return `Tier ${tierLabel(t)}: the price can't be negative.`;
+    if ((isNum(t.priceEgp) && Number(t.priceEgp) < 0) || (isNum(t.priceEur) && Number(t.priceEur) < 0)) return `Tier ${tierLabel(t)}: the price can't be negative.`;
     if (isNum(t.operatorFeePct) && (Number(t.operatorFeePct) < 0 || Number(t.operatorFeePct) > 100)) return `Tier ${tierLabel(t)}: the operator fee is a percentage from 0 to 100.`;
   }
   for (const l of rate.costLines || []) {
@@ -287,7 +321,7 @@ export function poolRateError(rate) {
 export function bookingChargeEur({ rate, headcount, seats, eurRate }) {
   if (!rate?.tiers?.length) return null;
   const tier = rate.tiers[poolTierIndex(rate.tiers, headcount)];
-  const each = tierPriceEur(tier.priceEgp, eurRate);
+  const each = tierEur(tier, eurRate);
   return each == null ? null : { eachEur: each, totalEur: each * (Number(seats) || 0), tier: tierLabel(tier) };
 }
 
@@ -345,4 +379,50 @@ export function convertLegacyRate(old) {
     commissionPct: DEFAULT_COMMISSION_PCT,
     notes,
   };
+}
+
+// ---------------------------------------------------------------- phase 7
+// Removing a tier in the rate card editor. Its range is given to its
+// neighbour, so the tiers still cover the same group sizes: removing 4–6 from
+// 4–6 / 7–9 / 10–12 leaves 4–9 / 10–12, never a card that starts at 7. (It
+// used to drop the range: removing the first two tiers left one tier, 10–12,
+// with that tier's price and fee.) Cost-line amounts for the tier go with it.
+export function removeTierAt(model, i) {
+  const tiers = model.tiers || [];
+  if (tiers.length < 2 || i < 0 || i >= tiers.length) return model;
+  const gone = tiers[i];
+  const next = tiers.filter((_, j) => j !== i).map((t) => ({ ...t }));
+  if (i === 0) next[0].from = gone.from;
+  else next[i - 1].to = gone.to;
+  return {
+    ...model,
+    tiers: next,
+    costLines: (model.costLines || []).map((l) => ({ ...l, amounts: (l.amounts || []).filter((_, j) => j !== i) })),
+  };
+}
+
+// One price from a version with several tiers (the phase 6 single price, as
+// it should have been built): the FIRST tier's price, operator fee and cost
+// amounts, for group sizes from the product's GoAhead minimum to its maximum
+// group. Every cost line is kept.
+export function singlePriceFrom(version, { goaheadMin = 4, maxGroup = 8 } = {}) {
+  const t0 = (version.tiers || [])[0] || {};
+  return {
+    tiers: [{
+      from: Number(goaheadMin), to: Number(maxGroup),
+      ...(isNum(t0.priceEur) ? { priceEur: Number(t0.priceEur) } : { priceEgp: isNum(t0.priceEgp) ? Number(t0.priceEgp) : null }),
+      operatorFeePct: isNum(t0.operatorFeePct) ? Number(t0.operatorFeePct) : null,
+    }],
+    costLines: (version.costLines || []).map((l) => ({ name: l.name, basis: l.basis, amounts: [isNum(l.amounts?.[0]) ? Number(l.amounts[0]) : null] })),
+    commissionPct: version.commissionPct,
+  };
+}
+
+// A version's tiers priced in EUR: EGP ÷ the site-wide rate, rounded up to
+// the whole euro (tierPriceEur). A tier already in EUR is left as it is.
+export function eurTiersFrom(tiers, eurRate) {
+  return (tiers || []).map((t) => {
+    if (isNum(t.priceEur)) return { from: t.from, to: t.to, priceEur: Number(t.priceEur), operatorFeePct: t.operatorFeePct ?? null };
+    return { from: t.from, to: t.to, priceEur: isNum(t.priceEgp) ? tierPriceEur(t.priceEgp, eurRate) : null, operatorFeePct: t.operatorFeePct ?? null };
+  });
 }

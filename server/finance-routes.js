@@ -23,7 +23,7 @@ import { mapCommission, mapStatement, buildCommissionStatement } from "./commiss
 import { bookingDetailsByToken, saveBookingDetailsByToken } from "./booking-details.js";
 import { statementPdf } from "./pdf.js";
 import {
-  fxOverview, runFxDaily, releaseHeldPayments, decideFxRate, afterManualRate, setTravellerBuffer, overrideTravellerRate,
+  fxOverview, runFxDaily, releaseHeldPayments, decideFxRate, afterManualRate, setTravellerBuffer, setExchangeRateMode, exchangeRateSummary,
 } from "./fx.js";
 import { mapReceivable } from "./receivables.js";
 
@@ -140,13 +140,18 @@ export function registerFinanceRoutes(app, { requireAuth, requireRole, h, logAud
     await logAudit(req, { action: "finance.traveller_rate.buffer", entity: "finance_settings", entityId: "traveller_rate", detail: out });
     res.json(out);
   }));
-  // A manual traveler rate, with the reason: recorded in the rate's own
-  // history and in the audit log.
-  app.post("/api/admin/finance/traveller-rate/override", ...staff, route(async (req, res) => {
-    const out = await fxRoute(() => overrideTravellerRate(pool, { egpPerEur: req.body?.egpPerEur, reason: req.body?.reason, by: by(req) }));
+  // Phase 7: the exchange-rate mode (automatic or manual), one site-wide
+  // setting, from Finance or any rate card. Recorded in the rate's history and
+  // the audit log, with the reason.
+  app.get("/api/admin/finance/exchange-rate", ...staff, route(async (_req, res) => {
+    res.json(await fxRoute(() => exchangeRateSummary(pool)));
+  }));
+  app.put("/api/admin/finance/exchange-rate", ...staff, writeLimiter, route(async (req, res) => {
+    const out = await fxRoute(() => setExchangeRateMode(pool, {
+      mode: req.body?.mode, egpPerEur: req.body?.egpPerEur, reason: req.body?.reason, by: by(req) }));
+    await logAudit(req, { action: `finance.exchange_rate.${out.mode}`, entity: "fx_traveller_rate", entityId: out.rate.id, detail: { ...out, reason: req.body?.reason || null } });
     await releaseHeldPayments({ send: sendEmail });
-    await logAudit(req, { action: "finance.traveller_rate.override", entity: "fx_traveller_rate", entityId: out.id, detail: out });
-    res.json(out);
+    res.json({ ...out, summary: await exchangeRateSummary(pool) });
   }));
   app.delete("/api/admin/finance/fx-rates/:day", ...staff, route(async (req, res) => {
     await deleteFxRate(pool, ymdSchema.parse(req.params.day));

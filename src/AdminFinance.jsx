@@ -7,6 +7,7 @@
 import React, { useEffect, useState } from "react";
 import { AlertTriangle } from "lucide-react";
 import { apiFetch } from "./supabaseClient";
+import { ExchangeRateControl } from "./ExchangeRateControl.jsx";
 import { PayAtGoAhead, CancellationTiers, LossWarnings, UnlinkedBanner, TermsVersions } from "./AdminPayAtGoAhead";
 
 const money = (currency, n) => (n == null ? "—" : `${currency} ${Number(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
@@ -314,13 +315,12 @@ function Margin() {
 
 // 064 — the automatic rate: alerts, rates waiting for approval, and the
 // site-wide traveler rate (buffer, override, history).
-const TRAVELLER_REASON = { initial: "first rate", weekly: "weekly update", market_move: "market moved more than 3%", override: "set by hand" };
+const TRAVELLER_REASON = { initial: "first rate", weekly: "weekly update", market_move: "market moved more than 3%", override: "set by hand", manual: "manual rate", automatic: "back to automatic" };
 function FxPanel({ flash, onChange }) {
   const [fx, setFx] = useState(null);
   const [err, setErr] = useState("");
   const [catalogueOn, setCatalogueOn] = useState(false);
   const [buffer, setBuffer] = useState("");
-  const [override, setOverride] = useState({ rate: "", reason: "" });
   const [busy, setBusy] = useState(false);
   async function load() {
     try {
@@ -364,14 +364,15 @@ function FxPanel({ flash, onChange }) {
         </div>
       )}
       <div className="dash-card" style={{ marginBottom: 12 }}>
-        <h2>Traveler rate (EGP per 1 EUR)</h2>
+        <h2>Exchange rate (EGP per 1 EUR)</h2>
         <p className="field-hint">
-          One rate for the whole site: every EUR price is the EGP price ÷ this rate, rounded up, and a booking keeps the rate in force when it was made.
-          It is the latest approved market rate less the buffer, renewed weekly, or at once when the market moves more than 3% from the rate it was worked out from.
+          One rate for every tour. Travelers pay each tour's EUR price exactly; the rate converts it into EGP for the operator and agency calculations, and a booking keeps the rate in force when it was made.
+          Automatic: the latest approved market rate less the buffer, renewed weekly, or at once when the market moves more than 3%. Manual: the rate you enter, used exactly, until you change it.
           {!catalogueOn && " The public catalog is off, so travelers don't see it yet and it isn't renewed automatically."}
         </p>
+        <ExchangeRateControl summary={fx.exchangeRate} onChanged={() => { load(); onChange?.(); }} flash={flash} />
         <div className="bk-summary">
-          <div className="bk-kpi"><span>In force</span><strong>{t ? t.egpPerEur : "—"}</strong><i>{t ? `${TRAVELLER_REASON[t.reason] || t.reason} · ${dayLabel(t.effectiveAt?.slice(0, 10))}` : "none yet"}</i></div>
+          <div className="bk-kpi"><span>In force ({fx.exchangeRate?.mode || "automatic"})</span><strong>{t ? t.egpPerEur : "—"}</strong><i>{t ? `${TRAVELLER_REASON[t.reason] || t.reason} · ${dayLabel(t.effectiveAt?.slice(0, 10))}` : "none yet"}</i></div>
           <div className="bk-kpi"><span>Market rate</span><strong>{fx.market ? fx.market.egpPerEur : "—"}</strong><i>{fx.market ? `${dayLabel(fx.market.day)} · ${fx.market.source === "manual" ? "entered by hand" : fx.market.source}` : "none yet"}</i></div>
           <div className="bk-kpi"><span>Market less buffer</span><strong>{fx.suggested ?? "—"}</strong><i>{fx.due ? `update due: ${TRAVELLER_REASON[fx.due] || fx.due}` : "no update due"}</i></div>
         </div>
@@ -380,17 +381,12 @@ function FxPanel({ flash, onChange }) {
           <button className="btn-ghost sm" disabled={busy}>Save buffer</button>
           <button type="button" className="btn-ghost sm" disabled={busy} onClick={() => run(() => call("/admin/finance/fx/fetch", "POST"), "Fetch done.")}>Fetch today's rate now</button>
         </form>
-        <form className="cat-actions" style={{ justifyContent: "flex-start" }} onSubmit={(e) => { e.preventDefault(); run(() => call("/admin/finance/traveller-rate/override", "POST", { egpPerEur: Number(override.rate), reason: override.reason }).then(() => setOverride({ rate: "", reason: "" })), "Traveler rate set. It is logged with your reason."); }}>
-          <input type="number" step="0.0001" min="0" placeholder="Set by hand, e.g. 52.40" value={override.rate} onChange={(e) => setOverride({ ...override, rate: e.target.value })} required />
-          <input placeholder="Reason (required, logged)" value={override.reason} onChange={(e) => setOverride({ ...override, reason: e.target.value })} required style={{ minWidth: 260 }} />
-          <button className="btn-primary sm" disabled={busy}>Override</button>
-        </form>
-        <p className="field-hint">An override stands until the next weekly or early update.</p>
+        <p className="field-hint">The market rate is fetched every day in both modes.</p>
         {fx.history.length > 0 && (
           <table className="dash-table"><thead><tr><th>From</th><th>Rate</th><th>Why</th><th>Market</th><th>By</th></tr></thead><tbody>{fx.history.map((h) => (
             <tr key={h.id}><td>{new Date(h.effectiveAt).toLocaleString("en-GB", { timeZone: "Africa/Cairo", dateStyle: "medium", timeStyle: "short" })}</td>
               <td className="tnum">{h.egpPerEur}</td><td>{TRAVELLER_REASON[h.reason] || h.reason}{h.note && <div className="field-hint">{h.note}</div>}</td>
-              <td className="tnum">{h.marketEgpPerEur ?? "—"}{h.bufferPct != null && h.reason !== "override" ? <div className="field-hint">less {h.bufferPct}%</div> : null}</td>
+              <td className="tnum">{h.marketEgpPerEur ?? "—"}{h.bufferPct != null && !["override", "manual"].includes(h.reason) ? <div className="field-hint">less {h.bufferPct}%</div> : null}</td>
               <td className="field-hint">{h.setBy}</td></tr>
           ))}</tbody></table>
         )}
