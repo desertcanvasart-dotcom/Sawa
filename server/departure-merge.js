@@ -42,6 +42,7 @@ import { directOperatorId } from "./domain.js";
 import { DIRECT_BOOKINGS_OPERATOR } from "./brand.js";
 import { operatorOf, loadOperatorInputs } from "./operator-lookup.js";
 import { catalogueV2Enabled } from "./features.js";
+import { MAX_GROUP_SIZE } from "../shared/group-size.js";
 
 export const REVERT_WINDOW_HOURS = 24;
 const LIVE_STATES = ["pending_review", "open", "minimum_reached", "supplier_confirmed"];
@@ -121,7 +122,10 @@ function problemsOf({ keptId, duplicateIds, data }) {
     out.push("Keep a date that is open (or going ahead): this one is still awaiting review, and some duplicates are already open.");
   }
   const seats = all.reduce((n, id) => n + liveSeats(data.pledges, id), 0);
-  const max = Number(kept.max_seats) || 0;
+  // The total must fit within the maximum group (8): a catalog date's own maximum
+  // (its product's), otherwise the kept date's, never above the universal 8.
+  const own = Number(kept.max_seats) || 0;
+  const max = data.catalogue.has(keptId) ? own : Math.min(own || MAX_GROUP_SIZE, MAX_GROUP_SIZE);
   if (max && seats > max) out.push(`Together they hold ${seats} travelers; the kept date takes at most ${max}.`);
   return out;
 }

@@ -1,5 +1,8 @@
 # Phase 5 report: the final business model
 
+> **Superseded in part on 29 Sep 2026 (phase 6, `docs/phase6/REPORT.md`).** One price per product (4–8 travelers) replaces the three group-size tiers as the default, the tier-drop refund is not in the active flow for one tier, the operator fee is a required per-product percentage with no default (and can be overridden for one departure), euro tier prices round **up**, and the maximum group is 8. The pricing code keeps tier support.
+
+
 28 Sep 2026. Built to the final model brief ("The Sawa business model is now final"), which wins over older documents where they disagree. Everything in parts 1 and 2 is behind `catalogue_v2` and applies to **catalog departures only**. The items marked LIVE in part 0 are not behind the flag.
 
 **Nothing here moves money.** It records what is owed, asks travelers to pay, and produces statements. Finance pays by bank transfer and records each payment. Tab is used by hand: every refund is an ops task. No migration was run against production.

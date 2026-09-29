@@ -23,6 +23,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import { pool, withTransaction } from "./db/index.js";
 import { BRAND } from "./brand.js";
+import { MAX_GROUP_SIZE } from "../shared/group-size.js";
 import { CatalogueError, todayIn, departureInstants, mapCatalogueProduct } from "./catalogue.js";
 import { refreshStatus } from "./departure-status.js";
 import { cleanLinkUrl } from "./payments.js";
@@ -104,7 +105,7 @@ export async function departureFor(c, { id = null, legacyDepartureId = null }) {
   const instants = departureInstants({ date }, product, { startTime: r.default_time, nights: r.nights });
   return {
     id: Number(r.dep_id), date, status: r.dep_status, legacyDepartureId: r.legacy_departure_id,
-    seatsSold: Number(r.seats_sold) || 0, maxGroup: Number(product.maxGroup) || 12, product, ...instants,
+    seatsSold: Number(r.seats_sold) || 0, maxGroup: Number(product.maxGroup) || MAX_GROUP_SIZE, product, ...instants,
   };
 }
 

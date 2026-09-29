@@ -274,7 +274,7 @@ function Margin() {
                 <td>{r.departure.label}<div className="field-hint">{dayLabel(r.departure.date)} · {r.departure.status} · {r.headcount} travelers{r.lines ? ` · tier ${r.lines.tier}` : ""} · {r.stage}</div><LossWarnings warnings={r.lossWarnings} /></td>
                 {r.lines ? (<>
                   <td className="tnum">{money("EGP", r.lines.revenue)}</td>
-                  <td className="tnum">{money("EGP", r.lines.entitlement)}</td>
+                  <td className="tnum">{money("EGP", r.lines.entitlement)}<div className="field-hint">fee {r.lines.operatorFeePct}%{r.lines.operatorFeeOverride ? " · override" : ""}</div></td>
                   <td className="tnum">{money("EGP", r.lines.commission)}</td>
                   <td className="tnum">{money("EGP", r.lines.pool)}<div className="field-hint">{money("EGP", r.lines.poolPerTraveller)} each</div></td>
                   <td className="tnum">{money("EGP", (r.shares?.agencies || []).reduce((n, a) => n + a.amount, 0))}</td>

@@ -177,13 +177,15 @@ test("flag off: the public site and booking behave exactly as before, whatever t
 });
 
 // ---------------------------------------------------------------- data model
-test("a product can have only one departure per date", { skip }, async () => {
+test("a product's departures are numbered per date: the same number twice is refused, the next number is allowed", { skip }, async () => {
   const pid = await productId(4);
   const date = shiftDate(today(), 200);
   await db.query("INSERT INTO catalogue_departures (product_id, date) VALUES ($1, $2)", [pid, date]);
   await assert.rejects(
     db.query("INSERT INTO catalogue_departures (product_id, date) VALUES ($1, $2)", [pid, date]),
-    (e) => e.code === "23505" && e.constraint === "uq_catalogue_departures_product_date");
+    (e) => e.code === "23505" && e.constraint === "uq_catalogue_departures_product_date_no");
+  // Phase 6 (migration 063): a second, numbered departure on the same date is allowed.
+  await db.query("INSERT INTO catalogue_departures (product_id, date, departure_no) VALUES ($1, $2, 2)", [pid, date]);
   await db.query("DELETE FROM catalogue_departures WHERE product_id = $1 AND date = $2", [pid, date]);
 });
 

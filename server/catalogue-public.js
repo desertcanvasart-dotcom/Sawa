@@ -58,8 +58,9 @@ async function build(now) {
     pool.query("SELECT * FROM catalogue_spec_versions WHERE state = 'published'"),
     pool.query(`SELECT id, title, city, type, default_time, nights, status, active FROM tour_products
                  WHERE id IN (SELECT legacy_product_id FROM catalogue_products WHERE legacy_product_id IS NOT NULL)`),
-    goaheadColumns(pool).then((g) => pool.query(`SELECT cd.*, s.seats_sold${g.select} FROM catalogue_departures cd
-                  JOIN catalogue_departure_seats s ON s.catalogue_departure_id = cd.id ${g.join}
+    goaheadColumns(pool).then((g) => pool.query(`SELECT cd.*, s.seats_sold, d.max_seats AS legacy_max${g.select} FROM catalogue_departures cd
+                  JOIN catalogue_departure_seats s ON s.catalogue_departure_id = cd.id
+                  JOIN departures d ON d.id = cd.legacy_departure_id ${g.join}
                  WHERE cd.status IN ('open', 'go_ahead') AND cd.legacy_departure_id IS NOT NULL AND cd.date >= $1`, [today])),
   ]);
   const listingBy = new Map(listings.rows.map((t) => [t.id, t]));
@@ -125,7 +126,18 @@ async function build(now) {
   // Bookable dates by the ordinary departure id each is sold through.
   const dates = new Map();
   const datesByProduct = new Map();
+  // A date with several numbered departures is shown ONCE, with the status of
+  // the departure a new booking would join: the lowest-numbered one with a free
+  // seat. A full departure is never shown as bookable.
+  const shown = new Map();
   for (const row of departures.rows) {
+    const free = Number(row.legacy_max) - Number(row.seats_sold || 0);
+    if (!(free > 0)) continue;
+    const key = `${row.product_id}:${String(row.date instanceof Date ? row.date.toISOString() : row.date).slice(0, 10)}`;
+    const cur = shown.get(key);
+    if (!cur || Number(row.departure_no) < Number(cur.departure_no)) shown.set(key, row);
+  }
+  for (const row of shown.values()) {
     const e = byCatalogueId.get(Number(row.product_id));
     if (!e?.visible) continue;
     const dep = { date: String(row.date instanceof Date ? row.date.toISOString() : row.date).slice(0, 10) };
@@ -170,6 +182,8 @@ function publicSpec(entry) {
     priceLine: entry.pricing?.line || null,
     // "4–6 travelers €54 · 7–9 travelers €45 · 10–12 travelers €42": the tour page and the widget show this.
     priceSummary: entry.pricing?.summary || null,
+    // 1 = one price per person; more = tiers by group size (the refund promise applies).
+    priceTierCount: entry.pricing?.tiers?.length || 0,
     priceTiersEur: entry.pricing?.tiers || null,
     guideLanguages: specList(c.guideLanguages),
     meals: c.meals || null,

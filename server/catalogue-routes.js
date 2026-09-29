@@ -4,7 +4,8 @@
 // other /api/admin route. Until migration 047 is applied every route answers
 // 503 "not switched on yet", like the payments screens.
 import { z } from "zod";
-import { pool } from "./db/index.js";
+import { pool, withTransaction } from "./db/index.js";
+import { openAnother } from "./catalogue-departures.js";
 import {
   CatalogueError, isMissingCatalogueTables, listProducts, productDetail, updateProduct,
   createDraft, saveDraft, publishDraft, addRule, deleteRule, listDepartures, runBelowMinimum,
@@ -28,7 +29,7 @@ const productPatch = z.object({
   endCity: z.string().trim().max(60).nullable().optional(),
   status: z.enum(PRODUCT_STATUSES).optional(),
   mergedIntoId: z.number().int().positive().nullable().optional(),
-  goaheadMin: z.number().int().min(1).max(12).optional(),
+  goaheadMin: z.number().int().min(1).max(8).optional(),
   maxGroup: z.number().int().min(1).max(12).optional(),
   cutoffHours: z.number().int().min(0).max(2160).optional(),
   goaheadDeadlineDays: z.number().int().min(1).max(365).nullable().optional(),
@@ -191,7 +192,8 @@ export function registerCatalogueRoutes(app, { requireAuth, requireRole, h, logA
           deadlineAt: Number.isFinite(at.deadlineAt) ? new Date(at.deadlineAt).toISOString() : null,
           startsAt: Number.isFinite(at.startsAt) ? new Date(at.startsAt).toISOString() : null,
           ...(ops ? {
-            rostered: ops.rostered.get(`${d.productId}:${d.date}`) || null,
+            // The roster is per product and day: it names the operator of departure 1 only.
+            rostered: (d.departureNo || 1) === 1 ? ops.rostered.get(`${d.productId}:${d.date}`) || null : null,
             unrostered: ops.unrostered.has(d.id),
             assignment: ops.assignments.get(d.id) || null,
             alerts: ops.alerts.get(d.id) || [],
@@ -252,6 +254,26 @@ export function registerCatalogueRoutes(app, { requireAuth, requireRole, h, logA
     });
     invalidatePublic();
     res.json({ departure });
+  }));
+
+  // Numbered departures (29 Sep 2026): the system opens the next departure of a
+  // date when a party fits in none; an admin can open one on demand too. It is a
+  // departure of its own: its own GoAhead at 4, cut-off, operator and settlement.
+  app.post("/api/admin/catalogue/departures/:id/open-another", ...staff, route(async (req, res) => {
+    if (!catalogueV2Enabled()) throw new CatalogueError(404, "Not found.");
+    const opened = await withTransaction(async (c) => {
+      const cd = (await c.query("SELECT legacy_departure_id FROM catalogue_departures WHERE id = $1", [id(req.params.id)])).rows[0];
+      if (!cd) throw new CatalogueError(404, "Departure not found.");
+      if (cd.legacy_departure_id == null) throw new CatalogueError(409, "This date isn't bookable yet, so it can't take another departure.");
+      return openAnother(c, Number(cd.legacy_departure_id));
+    });
+    if (!opened) throw new CatalogueError(409, "Another departure could not be opened for this date.");
+    await logAudit(req, {
+      action: "catalogue.departure.open_another", entity: "catalogue_departure", entityId: opened.cdId,
+      detail: { number: opened.no, from: id(req.params.id), by: by(req) },
+    });
+    invalidatePublic();
+    res.status(201).json({ departure: { id: opened.cdId, number: opened.no, legacyDepartureId: opened.id } });
   }));
 
   // Reservation integrity: staff decide a cluster flag. "confirmed_group"

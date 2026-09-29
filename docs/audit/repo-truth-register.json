@@ -188,6 +188,13 @@
    "verdict": "AGREES",
    "contradicts": null,
    "note": "A draft for the lawyer, not published. It matches the build: cancelPayAtGoAheadBooking refunds nothing and claims nothing when no payment was made (refundPaid returns null without a paid request); tested in pay-at-goahead.integration.test.js (\"refunds…\")."
+  },
+  "c883a2517fdf": {
+   "where": "docs/model-audit/03-migration-plan.md:563",
+   "text": "Unconfirmed reservations** (email not yet confirmed) are `booking_confirmations` rows, not seats: capacity is checked, and the departure chosen, when the traveler confirms (the 24-hour expiry is unchanged). See phase 6 report, \"Where the brief and the code differ\".",
+   "verdict": "AGREES",
+   "contradicts": null,
+   "note": "Verified in server/booking-confirmation.js: holdBooking writes a booking_confirmations row and nothing to pledges, so an unconfirmed reservation counts toward no seat count, GoAhead or capacity; placePublicBooking re-runs the capacity checks (and, under catalogue_v2, the choice of numbered departure) when the traveler confirms. CONFIRM_HOURS = 24."
   }
  }
 }

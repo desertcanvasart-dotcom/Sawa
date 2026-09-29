@@ -65,6 +65,7 @@ import {
 import { verifyTurnstile, turnstileSiteKey } from "./turnstile.js";
 import { catalogueV2Enabled } from "./features.js";
 import { loadCatalogueTourInfo } from "./catalogue-tour-pricing.js";
+import { routeBooking, ensureOpenDeparture } from "./catalogue-departures.js";
 import { publicCatalogue, overlayBootstrap, clearPublicCatalogue } from "./catalogue-public.js";
 import {
   sendEmail, sendEmailInBackground, emailMode,
@@ -1345,7 +1346,11 @@ app.post("/api/departures/:id/pledges", requireAuth, requireRole("agency_owner",
   const manifest = manifestFields(req.body);
   let agencyName = null;
   const departure = await withTransaction(async (c) => {
-    const dep = await loadDeparture(c, Number(req.params.id), { forUpdate: true });
+    // Numbered departures (catalogue_v2): the booking goes to the lowest-numbered
+    // departure of the date with room for the whole party; a further one is
+    // opened if none has room.
+    const target = catalogueV2Enabled() ? (await routeBooking(c, { departureId: Number(req.params.id), seats: input.seats })).departureId : Number(req.params.id);
+    const dep = await loadDeparture(c, target, { forUpdate: true });
     if (!dep) throw new AppError(404, "Departure not found.");
     if (dep.status === "cancelled") throw new AppError(409, "This departure has been canceled.");
     if (dep.mergedIntoId) throw Object.assign(new AppError(409, "This date was joined with another listing of the same tour and day. Book on that one."), { mergedIntoId: dep.mergedIntoId });
@@ -1386,6 +1391,7 @@ app.post("/api/departures/:id/pledges", requireAuth, requireRole("agency_owner",
       // locked now; an agency on billing is invoiced now.
       await recordAgencyBooking(c, { pledgeId, agency, catalogueDepartureId: catalogueCtx.departureId });
       await payNowIfGoingAhead(c, pledgeId, catalogueCtx.departureId);
+      await ensureOpenDeparture(c, dep.id);
     }
     return loadDeparture(c, dep.id);
   });
@@ -1562,7 +1568,11 @@ async function placePublicBooking(req, { departureId, body, confirmation = null 
   delete input.deviceHint;
   const hold = !confirmation && await holdForConfirmation(pool);
   const result = await withTransaction(async (c) => {
-    const dep = await loadDeparture(c, departureId, { forUpdate: true });
+    // Numbered departures (catalogue_v2): the whole party goes to the
+    // lowest-numbered departure of the date that has room for it, and a further
+    // departure is opened when none has. A "Join my group" party moves together.
+    const routed = catalogueV2Enabled() ? await routeBooking(c, { departureId, seats: input.seats, partyToken: input.partyToken }) : null;
+    const dep = await loadDeparture(c, routed ? routed.departureId : departureId, { forUpdate: true });
     if (!dep) throw new AppError(404, "Departure not found.");
     // Two clicks on the same link must make one booking: the held booking is
     // locked after the date, and made only while still unconfirmed.
@@ -1643,9 +1653,12 @@ async function placePublicBooking(req, { departureId, body, confirmation = null 
       await recordSignals(c, { pledgeId, departureId: dep.id, seats: input.seats, signals, at: confirmation?.created_at || null });
       flag = await detectCluster(c, { pledgeId });
     }
+    // The last seat of the last open departure of the date: open the next.
+    if (catalogueCtx && catalogueV2Enabled()) await ensureOpenDeparture(c, dep.id);
     const departure = await loadDeparture(c, dep.id);
     const saved = await c.query(`SELECT * FROM pledges WHERE id=$1`, [pledgeId]);
-    return { departure, booking: mapPledge(saved.rows[0]), payAtGoAhead: !!catalogueCtx, partyId: party?.id ?? null, flagId: flag?.id ?? null };
+    return { departure, booking: mapPledge(saved.rows[0]), payAtGoAhead: !!catalogueCtx, partyId: party?.id ?? null, flagId: flag?.id ?? null,
+      routedTo: routed && routed.routed !== false ? { departureId: dep.id, no: routed.no ?? null, opened: !!routed.opened } : null };
   });
   if (result.held) {
     const d = result.departure;
@@ -1661,7 +1674,7 @@ async function placePublicBooking(req, { departureId, body, confirmation = null 
     } };
   }
   const audit = { action: "booking.create", entity: "pledge", entityId: result.booking.id,
-    detail: { departureId, seats: input.seats, source: "public", ...(result.partyId ? { partyId: result.partyId } : {}),
+    detail: { departureId: result.departure.id, ...(result.routedTo && result.routedTo.departureId !== departureId ? { requestedDepartureId: departureId, departureNo: result.routedTo.no, opened: result.routedTo.opened } : {}), seats: input.seats, source: "public", ...(result.partyId ? { partyId: result.partyId } : {}),
       ...(confirmation ? { confirmedEmail: true } : {}), ...(result.flagId ? { flagId: result.flagId } : {}) } };
   const flagAudit = result.flagId ? { action: "booking_flag.raise", entity: "booking_flag", entityId: result.flagId, detail: { pledgeId: result.booking.id } } : null;
   if (input.customerEmail && result.payAtGoAhead) {
@@ -1686,7 +1699,8 @@ async function placePublicBooking(req, { departureId, body, confirmation = null 
   notifyOps(result.departure, result.booking, input, { isRequest: false });
   // The direct traveller gets their own booking receipt back in full.
   emitDepartureSync(result.departure.id);
-  return { status: 201, audit, flagAudit, json: { departure: presentDeparture(result.departure, req.user), booking: result.booking } };
+  return { status: 201, audit, flagAudit, json: { departure: presentDeparture(result.departure, req.user), booking: result.booking,
+    ...(result.routedTo ? { departureNo: result.routedTo.no } : {}) } };
 }
 
 // Platform staff remove a pledge outright. Agencies no longer come through
@@ -2093,7 +2107,7 @@ const waitlistSchema = z.object({
   name: z.string().trim().min(1, "Your name is required.").max(160),
   email: z.string().trim().email("A valid email is required.").max(200),
   phone: z.string().trim().max(40).optional().or(z.literal("")),
-  seats: z.coerce.number().int().min(1).max(12),
+  seats: z.coerce.number().int().min(1).max(MAX_GROUP_SIZE),
 });
 app.post("/api/public/departures/:id/waitlist", writeLimiter, h(async (req, res) => {
   if (!catalogueV2Enabled()) throw new AppError(404, "Not found.");

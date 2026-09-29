@@ -576,7 +576,7 @@ test("the waitlist: offers in order, expiry passes the seats on, a waitlisted bo
   await tiers.saveTierDraft(db, { versionId: d4.id, rows: rows4, by: "it" });
   await tiers.publishTierDraft(db, { versionId: d4.id, effectiveFrom: today(), by: "it" });
   const bookings = [];
-  for (let n = 0; n < 6; n++) bookings.push(await book(g, 2));
+  for (let n = 0; n < 4; n++) bookings.push(await book(g, 2)); // 8 seats: the date is full (the maximum group is 8)
   await goAhead();
   const join = (body) => fetch(`${on}/api/public/departures/${g.legacy}/waitlist`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   const w1 = await join({ name: "First", email: "w1@example.test", seats: 2 });
@@ -603,7 +603,13 @@ test("the waitlist: offers in order, expiry passes the seats on, a waitlisted bo
   const res = await fetch(`${on}/api/public/departures/${g.legacy}/bookings`, { method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ customerName: "Walk In", customerEmail: "walk@example.test", customerPhone: "+201001119999", seats: 1,
       travelerNames: ["Walk In"], pickupPoint: "Mena House", nationality: "Brazilian", safetyNone: true }) });
-  assert.equal(res.status, 409);
+  // Numbered departures (phase 6): the held seats are not on sale on THIS departure, so the walk-in
+  // is placed on the next one, opened for it. It does not take a held seat.
+  const walk = await res.json();
+  assert.equal(res.status, 201, JSON.stringify(walk));
+  assert.equal(walk.departureNo, 2, "it went to departure 2");
+  assert.equal(Number((await one("SELECT COALESCE(SUM(seats), 0) AS n FROM pledges WHERE departure_id = $1 AND status <> 'cancelled'", [g.legacy])).n), 6, "the held seats on departure 1 are untouched");
+  await db.query("DELETE FROM pledges WHERE booking_code = $1", [walk.booking.bookingCode]);
 
   // The first doesn't take it: it expires and passes to the second.
   sent.length = 0;

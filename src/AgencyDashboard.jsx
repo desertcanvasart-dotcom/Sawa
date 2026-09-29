@@ -1225,7 +1225,7 @@ function AgencyCommission() {
                     {(s.departures || []).map((d) => (
                       <div key={d.departureId} className="field-hint">
                         {fmtDate(d.date)} {d.product}: {d.calculation
-                          ? `revenue ${egp(d.calculation.revenue)} − entitlement ${egp(d.calculation.entitlement)} (operating cost ${egp(d.calculation.operatingCost)} + operator fee ${egp(d.calculation.operatorFee)}) − the collecting agent ${egp(d.calculation.commission)} = pool ${egp(d.calculation.pool)}, ${egp(d.calculation.poolPerTraveller)} per traveler × your ${d.places} = ${egp(d.shareEgp)}`
+                          ? `revenue ${egp(d.calculation.revenue)} − entitlement ${egp(d.calculation.entitlement)} (operating cost ${egp(d.calculation.operatingCost)} + operator fee ${d.calculation.operatorFeePct}% = ${egp(d.calculation.operatorFee)}${d.calculation.operatorFeeOverride ? ", set for this departure" : ""}) − the collecting agent ${egp(d.calculation.commission)} = pool ${egp(d.calculation.pool)}, ${egp(d.calculation.poolPerTraveller)} per traveler × your ${d.places} = ${egp(d.shareEgp)}`
                           : "calculation not complete"}
                         {d.operatorNote && <div>{d.operatorNote}</div>}
                       </div>

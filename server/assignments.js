@@ -19,7 +19,7 @@ import { rosteredOperator } from "./roster.js";
 import { rosterEligibility, addStrike, notifyOperator, operatorRecipients, documentGaps } from "./operators.js";
 import { rateById, lockRatesForSoldDepartures } from "./rates.js";
 import { ACK_HOURS, MANIFEST_ACCESS_DAYS, roomsFor } from "../shared/operators.js";
-import { operatorEntitlement } from "../shared/pool-model.js";
+import { operatorEntitlement, withFeeOverride } from "../shared/pool-model.js";
 import { shiftDate } from "../shared/catalogue.js";
 import { groupParties, partiesAvailable } from "./booking-parties.js";
 
@@ -61,6 +61,10 @@ async function departureContext(c, departureId) {
   return {
     id: Number(row.dep_id), date: ymd(row.date), status: row.dep_status, seatsSold: Number(row.seats_sold) || 0,
     legacyDepartureId: row.legacy_departure_id, rateVersionId: row.rate_version_id == null ? null : Number(row.rate_version_id),
+    // Numbered departures: 1, 2, … on the same date. Each has its own offer.
+    departureNo: row.departure_no == null ? 1 : Number(row.departure_no),
+    // The operator fee for this departure alone (an admin's override), until acknowledged.
+    feeOverridePct: row.operator_fee_pct_override == null ? null : Number(row.operator_fee_pct_override),
     runBelowMinimum: row.run_below_minimum, specVersion: row.spec_version, startTime: row.default_time, nights: row.nights || 0,
     product,
   };
@@ -173,7 +177,10 @@ export async function offerNext(c, { departure, now = Date.now(), send = null })
     const a = await offer(c, { departure, operatorId: cand.operatorId, source: "agency", by: "selection", now, send, candidate });
     return { assignment: a, source: "agency" };
   }
-  const rostered = await rosteredOperator(c, departure.product.id, departure.date);
+  // The roster is per product and day, and rosters the one operator who runs that
+  // day's departure. A further numbered departure is a second vehicle: it is not
+  // the rostered operator's by default, so it goes to selection or an admin.
+  const rostered = (departure.departureNo || 1) === 1 ? await rosteredOperator(c, departure.product.id, departure.date) : null;
   if (rostered && !tried.has(rostered.operatorId)) {
     const ok = await rosterEligibility(c, rostered.operatorId, departure.product.id);
     if (ok.ok) {
@@ -499,7 +506,7 @@ export async function revokeExpiredManifestAccess({ db = pool, now = Date.now() 
 // set-off rules that read this are unchanged.
 export async function expectedAmountFor(db, departureId) {
   const d = await departureContext(db, departureId);
-  const rate = await rateById(db, d.rateVersionId);
+  const rate = withFeeOverride(await rateById(db, d.rateVersionId), d.feeOverridePct);
   const frozen = (await db.query("SELECT seat_count FROM catalogue_manifests WHERE departure_id = $1", [departureId])).rows[0];
   const count = frozen
     ? Number(frozen.seat_count)
@@ -510,9 +517,10 @@ export async function expectedAmountFor(db, departureId) {
   if (!e.complete) return { ...base, total: null, lines: [], missing: e.missing, band: null };
   const lines = [
     ...e.costLines.map((l) => ({ label: `${l.name}${l.basis === "per_traveller" ? " per traveler" : ", per group"}`, qty: l.qty, unit: l.unit, amount: l.amount })),
-    ...(e.operatorFee ? [{ label: `Operator fee, ${e.operatorFeePct}% of operating cost`, qty: 1, unit: e.operatorFee, amount: e.operatorFee }] : []),
+    ...(e.operatorFee ? [{ label: `Operator fee, ${e.operatorFeePct}% of operating cost${rate.feeOverridePct != null ? " (set for this departure)" : ""}`, qty: 1, unit: e.operatorFee, amount: e.operatorFee }] : []),
   ];
-  return { ...base, total: e.entitlement, lines, missing: [], band: e.tier, operatingCost: e.operatingCost, operatorFeePct: e.operatorFeePct, operatorFee: e.operatorFee };
+  return { ...base, total: e.entitlement, lines, missing: [], band: e.tier, operatingCost: e.operatingCost, operatorFeePct: e.operatorFeePct, operatorFee: e.operatorFee,
+    feeOverride: rate.feeOverridePct != null };
 }
 
 // ---------------------------------------------------------------- the tick

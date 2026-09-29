@@ -23,10 +23,10 @@ products                      (evolves tour_products; keep table name to limit c
   id, catalogue_no 1–21 UNIQUE, title, slug
   product_type        day_tour | one_way | cruise | multi_day      ← replaces day_tour|package
   retail_price_minor, currency                                      ← flat price per seat
-  min_seats (4), max_seats (12), cutoff_hours (48 default)
+  min_seats (4), max_seats (8; was 12 until 29 Sep 2026, see §4b), cutoff_hours (48 default)
   goahead_deadline_days  NULL for day/one-way (see D6)
   itinerary, default_time, duration, nights, cities
-  vehicle_by_band  jsonb [{band:'4-6', class}, {band:'7-9',…}, {band:'10-12',…}]
+  vehicle_by_band  jsonb [{band:'4-6', class}, {band:'7-9',…}, {band:'10-12',…}]   ← with a maximum of 8 only 4-6 and 7-8 occur (§4b)
   guide_languages  text[]
   meals            jsonb
   pickup_area      jsonb (zone, hotels/areas served, meeting point fallback)
@@ -543,6 +543,28 @@ CONFIRM   New bookings under the flag require: every traveller's name, a phone n
 ```
 
 These settle the payouts questions phase 2's report left open: operators are owed EGP with no conversion, agency commission is EUR, and conversion appears only in margin reporting and in Egyptian agencies' commission statements.
+
+## 4b. Decisions of 29 Sep 2026 (phase 6)
+
+These **replace older decisions wherever they conflict** (the maximum group of 12 and its bands 4–6 / 7–9 / 10–12, one departure per product per date, the operator fee by tier with defaults 5% / 6% / 10%, and the group-size price tiers). Built in phase 6: `docs/phase6/REPORT.md`. Catalogue parts are behind `catalogue_v2`; the live (legacy) flow follows the same maximum and copy (LIVE, its own PR).
+
+```
+SETTLED   Maximum group per departure: 8 travelers (the standard 14-seat vehicle, with spare seats kept for luggage). A per-product override is kept (cruise and multi-day only, up to 12)
+SETTLED   When a departure is full, a new departure opens for the same product on the same day. It is independent: its own GoAhead at 4, cut-off, operator selection, payment requests, manifest and settlement. If it doesn't reach 4 by cut-off, it is cancelled like any other
+SETTLED   Groups larger than 8 are a special arrangement, not bookable online
+SETTLED   Operator fee is set case by case: a percentage of operating cost entered for each product in its rate card (a required field, no fixed default). Admin can override it for a single departure, with a reason, until the operator's offer is acknowledged. After that it is locked for that departure
+CONFIRM   One selling price per product (no group-size tiers). Tier support stays in the code; every product defaults to one tier, 4–8
+```
+
+What this changes in the plan above:
+
+- **§1.2 sketch:** `max_seats (12)` is `8`; `vehicle_by_band` keeps its three bands as data but only 4–6 and 7–8 can occur; `retail_price_minor` is the one price. `departures` gains a **number** (1, 2, …) per product and date: `catalogue_departures.departure_no`, unique with (product, date). The calendar generates number 1 only.
+- **Numbered departures:** "full" means 8 seats reserved. A booking goes to the lowest-numbered departure with room for the whole party; a party is never split; the system opens the next one when a party fits in none (and when the last open one fills). The merge tool merges same product and day only if the total fits within 8. Each departure keeps its own GoAhead, operator offer and acknowledgement, payment requests, releases, cut-off, manifest, pool and statements (all keyed on the departure id already). The roster names the operator of departure 1 only.
+- **Unconfirmed reservations** (email not yet confirmed) are `booking_confirmations` rows, not seats: capacity is checked, and the departure chosen, when the traveler confirms (the 24-hour expiry is unchanged). See phase 6 report, "Where the brief and the code differ".
+- **Rate card:** one tier 4–8 by default; the operator fee is required per product (per tier if there are tiers) and a version can't be published while it is empty; the rate card table runs 2–8 travelers. Existing multi-tier versions get a new **draft** from the first tier (never published) for review (`scripts/phase6-report.js`).
+- **Per-departure operator fee:** `catalogue_departures.operator_fee_pct_override` with a reason, who and when; editable until the operator acknowledges the departure's offer, then locked. The operator's offer, the settlement statement, the agency statements and the margin report show the percentage used and mark an override.
+- **Tier-drop refund:** not part of the active flow for a one-tier product; the code and tests stay for a product with tiers.
+- **Groups above 8:** the booking form stops and shows "Groups of more than 8: request a special arrangement": a short request that becomes an admin lead (`group_requests`), no booking.
 
 ## 4a. Decisions needed from you (as first written; superseded where §4 answers them)
 
