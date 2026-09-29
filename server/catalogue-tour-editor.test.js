@@ -47,8 +47,8 @@ test("one price: \"€X per person\", how it is worked out, and a link to the Ra
   const one = info({ rateRows: [rateRow({ tiers: [{ from: 4, to: 8, priceEgp: 5192, operatorFeePct: 5 }] })] });
   const view = catalogueTourView(one);
   assert.equal(view.summary, "€54 per person");
-  assert.deepEqual(view.single, { eur: 54, egp: 5192, eurRate: 97 });
-  assert.equal(view.howWorked, "EGP 5,192 ÷ traveler rate 97, rounded up");
+  assert.deepEqual(view.single, { eur: 54, egp: 5192, eurRate: 97, eurPriced: false });
+  assert.equal(view.howWorked, "EGP 5,192 ÷ exchange rate 97, rounded up");
   assert.equal(view.rateCardLabel, "Edit price in Rate card");
   assert.equal(tierPriceEurCheck(4851, 97), 51, "rounded up, not to the nearest");
   const none = catalogueTourView(info({ rateRows: [] }));

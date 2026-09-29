@@ -26,7 +26,7 @@ import {
   mapCatalogueProduct, mapSpec, todayIn, departureInstants, isMissingCatalogueTables, goaheadColumns,
 } from "./catalogue.js";
 import { mapRate, rateInForce } from "./rates.js";
-import { tierPriceEur, tierPriceLine, tierPriceSummary } from "../shared/pool-model.js";
+import { tierEur, tierPriced, tierPriceLine, tierPriceSummary } from "../shared/pool-model.js";
 import { currentTravellerRate } from "./fx.js";
 
 const TTL_MS = 30_000;
@@ -79,9 +79,12 @@ async function build(now) {
   }
   const pricingFor = (productId) => {
     const rate = rateInForce(ratesByProduct.get(productId) || [], today);
-    const line = rate ? tierPriceLine(rate.tiers, eurRate) : null;
+    // No site-wide rate: no euro price at all, EUR-priced cards included
+    // ("Exchange rate not set"; no payment request goes out either).
+    const line = rate && eurRate != null ? tierPriceLine(rate.tiers, eurRate) : null;
     if (!line) return null;
-    const tiers = rate.tiers.map((t) => ({ from: t.from, to: t.to, eur: tierPriceEur(t.priceEgp, eurRate) }));
+    // Phase 7: a EUR price is shown exactly as entered; an EGP one converted.
+    const tiers = rate.tiers.map((t) => ({ from: t.from, to: t.to, eur: tierEur(t, eurRate) }));
     return { line, summary: tierPriceSummary(rate.tiers, eurRate), tiers, rateVersion: rate.version };
   };
   // A rate card with prices but no site-wide traveler rate yet: no euro price
@@ -89,7 +92,7 @@ async function build(now) {
   const rateNotSet = (productId) => {
     if (eurRate != null) return false;
     const rate = rateInForce(ratesByProduct.get(productId) || [], today);
-    return !!rate?.tiers?.length && rate.tiers.every((t) => t.priceEgp != null);
+    return !!rate?.tiers?.length && rate.tiers.every(tierPriced);
   };
   const specsBy = new Map();
   for (const s of specs.rows.map(mapSpec)) {

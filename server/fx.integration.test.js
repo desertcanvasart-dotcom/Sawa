@@ -9,7 +9,7 @@
 //   > 3% move       renews it early
 //   locked rate     a booking keeps its rate (pool-model.integration.test.js
 //                   books and charges at it; here, the stamp itself)
-//   override        needs a reason; recorded in the history and the audit log
+//   manual mode     (phase 7) the admin's rate, exactly; a reason, logged; the market still fetched
 //
 // No network: every fetch is a stub. Skips without TEST_DATABASE_URL.
 import { test, before, after } from "node:test";
@@ -233,9 +233,9 @@ test("with catalogue_v2 off the market rate is still fetched, and the traveler r
 
 test("a booking stores the traveler rate in force when it is made, and keeps it when the rate changes", { skip }, async () => {
   // The stamp reads the current rate; pool-model.integration.test.js books
-  // and charges end to end at it.
+  // and charges end to end at it, across a mode change.
   const locked = (await fx.currentTravellerRate(db)).egpPerEur;
-  await fx.overrideTravellerRate(db, { egpPerEur: 60, reason: "test: later", by: "it" });
+  await fx.setExchangeRateMode(db, { mode: "manual", egpPerEur: 60, reason: "test: later", by: "it" });
   assert.equal((await fx.currentTravellerRate(db)).egpPerEur, 60);
   assert.notEqual(locked, 60);
   const { readFileSync } = await import("node:fs");
@@ -244,23 +244,69 @@ test("a booking stores the traveler rate in force when it is made, and keeps it 
   assert.match(src, /eurRate: Number\(pledge\.published_eur_rate\)/, "charged at the booking's own rate");
 });
 
-test("a manual override needs a reason and is logged: in the rate's history and the audit log", { skip }, async () => {
-  const post = (body) => fetch(`${base}/api/admin/finance/traveller-rate/override`, {
-    method: "POST", headers: { Authorization: "Bearer ops-token", "Content-Type": "application/json" }, body: JSON.stringify(body) });
-  const noReason = await post({ egpPerEur: 52.4 });
-  assert.equal(noReason.status, 422);
-  assert.match((await noReason.json()).error, /Say why/);
-  const r = await post({ egpPerEur: 52.4, reason: "CBE auction moved the market this morning" });
+// ---------------------------------------------------------------- phase 7: automatic or manual
+const auth = { Authorization: "Bearer ops-token", "Content-Type": "application/json" };
+const putRate = (body) => fetch(`${base}/api/admin/finance/exchange-rate`, { method: "PUT", headers: auth, body: JSON.stringify(body) });
+
+test("automatic mode: a market rate of 59 with a 3% buffer gives an exchange rate of 57.23", { skip }, async () => {
+  await db.query("INSERT INTO fx_rates (day, egp_per_eur, status, source) VALUES ('2026-10-06', 59, 'approved', 'manual')");
+  const r = await putRate({ mode: "automatic" });
   const body = await r.json();
   assert.equal(r.status, 200, JSON.stringify(body));
-  assert.deepEqual([body.egpPerEur, body.reason, body.note, body.setBy], [52.4, "override", "CBE auction moved the market this morning", "finance@sawa.test"]);
-  const audit = await one("SELECT * FROM audit_log WHERE action = 'finance.traveller_rate.override' ORDER BY created_at DESC LIMIT 1");
-  assert.equal(audit.actor_email, "finance@sawa.test");
-  assert.equal(Number(audit.detail.egpPerEur), 52.4);
-  assert.equal(audit.detail.note, "CBE auction moved the market this morning");
-  // The Finance screen shows it in force, with the history.
-  const overview = await (await fetch(`${base}/api/admin/finance/fx`, { headers: { Authorization: "Bearer ops-token" } })).json();
-  assert.deepEqual([overview.traveller.egpPerEur, overview.traveller.reason, overview.history[0].note], [52.4, "override", "CBE auction moved the market this morning"]);
-  // The database refuses an override without a reason even past the API.
+  assert.deepEqual([body.mode, body.rate.egpPerEur, body.rate.marketEgpPerEur, body.rate.bufferPct, body.rate.reason], ["automatic", 57.23, 59, 3, "automatic"]);
+  assert.equal((await fx.currentTravellerRate(db)).egpPerEur, 57.23);
+});
+
+test("manual mode: 58.0 is used exactly; switching to it and every change need a reason and are logged with who and when", { skip }, async () => {
+  const noReason = await putRate({ mode: "manual", egpPerEur: 58 });
+  assert.equal(noReason.status, 422);
+  assert.match((await noReason.json()).error, /reason/);
+  const r = await putRate({ mode: "manual", egpPerEur: 58, reason: "CBE rate lags the bank rate this week" });
+  const body = await r.json();
+  assert.equal(r.status, 200, JSON.stringify(body));
+  assert.deepEqual([body.mode, body.previousMode, body.rate.egpPerEur, body.rate.bufferPct, body.rate.reason, body.rate.setBy],
+    ["manual", "automatic", 58, null, "manual", "finance@sawa.test"], "no buffer: exactly as entered");
+  assert.equal((await fx.currentTravellerRate(db)).egpPerEur, 58);
+  assert.ok(body.rate.effectiveAt, "when");
+  let audit = await one("SELECT * FROM audit_log WHERE action = 'finance.exchange_rate.manual' ORDER BY created_at DESC LIMIT 1");
+  assert.deepEqual([audit.actor_email, audit.detail.reason, Number(audit.detail.rate.egpPerEur)], ["finance@sawa.test", "CBE rate lags the bank rate this week", 58]);
+  // Market today 59, using 58: 1.7% apart, no warning.
+  assert.deepEqual([body.summary.market.egpPerEur, body.summary.rate, body.summary.gapPct, body.summary.gapWarning], [59, 58, 1.69, false]);
+  // A change of the manual rate: a reason again, a row of its own, logged.
+  const r2 = await (await putRate({ mode: "manual", egpPerEur: 55.5, reason: "matching the bank's rate" })).json();
+  assert.equal(r2.rate.egpPerEur, 55.5);
+  assert.deepEqual([r2.summary.gapPct, r2.summary.gapWarning], [5.93, true], "more than 5% from the market: warned");
+  audit = await one("SELECT * FROM audit_log WHERE action = 'finance.exchange_rate.manual' ORDER BY created_at DESC LIMIT 1");
+  assert.equal(audit.detail.reason, "matching the bank's rate");
+  const history = await fx.travellerRateHistory(db);
+  assert.deepEqual(history.slice(0, 2).map((h) => [h.reason, h.egpPerEur, h.note]), [["manual", 55.5, "matching the bank's rate"], ["manual", 58, "CBE rate lags the bank rate this week"]]);
+  // The Finance screen and the rate card read the same summary.
+  const overview = await (await fetch(`${base}/api/admin/finance/fx`, { headers: auth })).json();
+  assert.deepEqual([overview.exchangeRate.mode, overview.exchangeRate.rate, overview.exchangeRate.gapWarning, overview.due], ["manual", 55.5, true, null]);
+  // The database refuses a manual rate without a reason even past the API.
+  await assert.rejects(db.query("INSERT INTO fx_traveller_rates (egp_per_eur, reason) VALUES (50, 'manual')"), /fx_traveller_override_reason/);
   await assert.rejects(db.query("INSERT INTO fx_traveller_rates (egp_per_eur, reason) VALUES (50, 'override')"), /fx_traveller_override_reason/);
+});
+
+test("manual mode: the daily fetch still runs and is shown beside the manual rate, which it doesn't change", { skip }, async () => {
+  const out = await fx.runFxDaily({ db, now: at("2026-10-07"), fetchImpl: fetcher({ rate: 59.5, date: "2026-10-07" }), send, env: ON });
+  assert.equal(out.market.status, "approved");
+  assert.deepEqual([out.traveller.mode, out.traveller.kept], ["manual", 55.5]);
+  const s = await fx.exchangeRateSummary(db);
+  assert.deepEqual([s.market.egpPerEur, s.rate, s.mode], [59.5, 55.5, "manual"]);
+  // A week later, and a market move: still the manual rate.
+  assert.equal((await fx.updateTravellerRate(db, { now: Date.now() + 30 * DAY })).kept, 55.5);
+});
+
+test("switching back to automatic uses the latest approved market rate less the buffer", { skip }, async () => {
+  const r = await (await putRate({ mode: "automatic", reason: "bank and CBE agree again" })).json();
+  assert.deepEqual([r.mode, r.previousMode, r.rate.egpPerEur, r.rate.marketEgpPerEur, r.rate.reason], ["automatic", "manual", 57.71, 59.5, "automatic"], "59.5 × 0.97 = 57.715, down");
+  assert.equal((await fx.currentTravellerRate(db)).egpPerEur, 57.71);
+  const audit = await one("SELECT * FROM audit_log WHERE action = 'finance.exchange_rate.automatic' ORDER BY created_at DESC LIMIT 1");
+  assert.equal(audit.actor_email, "finance@sawa.test");
+  // Automatic with no approved market rate has nothing to work from: refused.
+  const client = await import("./db/index.js");
+  const approved = (await db.query("UPDATE fx_rates SET status = 'rejected' WHERE status = 'approved' RETURNING day")).rows.map((r) => r.day);
+  await assert.rejects(fx.setExchangeRateMode(client.pool, { mode: "automatic", by: "it" }), /no approved market rate/);
+  await db.query("UPDATE fx_rates SET status = 'approved' WHERE day = ANY($1::date[])", [approved]);
 });

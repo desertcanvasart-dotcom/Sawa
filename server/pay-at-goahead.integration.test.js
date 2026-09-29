@@ -158,7 +158,7 @@ before(async () => {
   await rates.publishRate({ productId, versionId: rd.id, by: "it" });
   // The site-wide traveler rate (064): 50 EGP per EUR.
   const fx = await import("./fx.js");
-  await fx.overrideTravellerRate(db, { egpPerEur: 50, reason: "test: the agreed rate", by: "it" });
+  await fx.setExchangeRateMode(db, { mode: "manual", egpPerEur: 50, reason: "test: the agreed rate", by: "it" });
 
   X = (await ops.createOperator(db, { legalName: "Nile Tours S.A.E.", email: "dispatch@nile-tours.test" }, "it")).id;
   for (const kind of ["tourism_license", "etaa_membership", "liability_insurance", "vehicle_insurance"]) {

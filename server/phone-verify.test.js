@@ -39,7 +39,10 @@ test("a token proves one number, for a limited time, and can't be forged", () =>
   const [body, mac] = t.split(".");
   const other = Buffer.from("+201099999999." + (now + PHONE_TOKEN_TTL_MS)).toString("base64url");
   assert.equal(phoneTokenValid(`${other}.${mac}`, "+201099999999", now), false, "body swapped under the old signature");
-  assert.equal(phoneTokenValid(`${body}.x${mac.slice(1)}`, "+201012345678", now), false, "signature altered");
+  // A different first character (the key is random per run: one signature in
+  // 64 already starts with "x", which made a fixed "x" change nothing).
+  const altered = `${mac[0] === "x" ? "y" : "x"}${mac.slice(1)}`;
+  assert.equal(phoneTokenValid(`${body}.${altered}`, "+201012345678", now), false, "signature altered");
   const junks = [undefined, "", "abc", "a.b.c"];
   assert.ok(junks.length > 0);
   for (const junk of junks) assert.equal(phoneTokenValid(junk, "+201012345678", now), false);

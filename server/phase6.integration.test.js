@@ -414,7 +414,8 @@ test("migration 063: a version with several tiers gets a NEW DRAFT from its firs
   assert.equal(versions[0].tiers.length, 3, "the published version still has its three tiers");
   assert.deepEqual(versions[1].tiers, [{ from: 4, to: 8, priceEgp: 2540, operatorFeePct: 5 }], "the first tier's price and fee, as one tier 4–8");
   assert.deepEqual(versions[1].cost_lines.map((l) => [l.name, l.amounts]), [["Transport", [2200]], ["Entry", [700]]], "the first tier's cost amounts");
-  assert.deepEqual([Number(versions[1].commission_pct), Number(versions[1].eur_rate)], [10, 50]);
+  assert.equal(Number(versions[1].commission_pct), 10);
+  assert.equal(versions[1].eur_rate, null, "the per-version EUR rate is not copied (064 drops it; phase 7)");
   assert.match(versions[1].source.migration063.from, /version 1 \(published\)/);
   await db.query(sql);
   assert.equal((await db.query("SELECT 1 FROM catalogue_rate_versions WHERE product_id = $1", [p2])).rowCount, 2, "a second run makes no second draft");

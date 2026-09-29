@@ -78,3 +78,24 @@ export function eurFromEgp(priceEgp, rate) {
   if (!isNum(priceEgp) || !isNum(rate) || Number(rate) <= 0) return null;
   return Math.ceil(Number(priceEgp) / Number(rate) - 1e-9);
 }
+
+// ---------------------------------------------------------------- mode (phase 7)
+// The exchange rate is either AUTOMATIC (the market rate less the buffer, as
+// above) or MANUAL (the rate an admin enters, used exactly, no buffer). One
+// site-wide setting: never a rate per tour.
+export const RATE_MODES = ["automatic", "manual"];
+// A manual rate this far from the latest market rate is flagged.
+export const MANUAL_GAP_WARN_PCT = 5;
+
+// "Market today: 59.2 · You're using: 58.0", and whether the gap is worth a
+// warning. Null without both rates.
+export function manualMarketGap(manualRate, marketRate, limitPct = MANUAL_GAP_WARN_PCT) {
+  const pct = changePct(marketRate, manualRate);
+  if (pct == null) return null;
+  return { pct: Math.round(pct * 100) / 100, warn: pct > limitPct };
+}
+
+export function manualRateError(rate) {
+  if (!isNum(rate) || Number(rate) <= 0 || Number(rate) > 10000) return "Enter the exchange rate as EGP per 1 EUR, e.g. 58.00.";
+  return null;
+}

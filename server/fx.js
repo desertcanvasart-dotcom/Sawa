@@ -20,6 +20,7 @@ import { CatalogueError, todayIn } from "./catalogue.js";
 import { catalogueV2Enabled } from "./features.js";
 import {
   DEFAULT_BUFFER_PCT, APPROVAL_JUMP_PCT, needsApproval, changePct, travellerRateFrom, travellerUpdateDue, bufferError,
+  RATE_MODES, manualMarketGap, manualRateError,
 } from "../shared/fx-rules.js";
 
 const inTx = (db, fn) => (db === pool ? withTransaction(fn) : fn(db));
@@ -255,21 +256,33 @@ const mapTraveller = (x) => x && ({
   bufferPct: num(x.buffer_pct), reason: x.reason, note: x.note, setBy: x.set_by, effectiveAt: iso(x.effective_at),
 });
 
-export async function travellerBuffer(db = pool) {
+// The site-wide rate settings (finance_settings 'traveller_rate'): the buffer,
+// and the mode (phase 7): "automatic" (market less buffer) or "manual" (the
+// admin's rate, used exactly). Missing keys read as the defaults.
+export async function rateSettings(db = pool) {
   const r = (await db.query("SELECT value FROM finance_settings WHERE key = 'traveller_rate'")).rows[0];
   const b = Number(r?.value?.bufferPct);
-  return Number.isFinite(b) ? b : DEFAULT_BUFFER_PCT;
+  return { bufferPct: Number.isFinite(b) ? b : DEFAULT_BUFFER_PCT, mode: RATE_MODES.includes(r?.value?.mode) ? r.value.mode : "automatic" };
 }
 
-export async function setTravellerBuffer(db, { bufferPct, by }) {
-  const err = bufferError(bufferPct);
-  if (err) throw new CatalogueError(422, err);
-  const value = { bufferPct: Math.round(Number(bufferPct) * 100) / 100 };
+export async function travellerBuffer(db = pool) {
+  return (await rateSettings(db)).bufferPct;
+}
+
+async function saveRateSettings(db, patch, by) {
+  const value = { ...(await rateSettings(db)), ...patch };
   await db.query(
     `INSERT INTO finance_settings (key, value, updated_by) VALUES ('traveller_rate', $1, $2)
      ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_by = EXCLUDED.updated_by, updated_at = now()`,
     [JSON.stringify(value), by]);
   return value;
+}
+
+export async function setTravellerBuffer(db, { bufferPct, by }) {
+  const err = bufferError(bufferPct);
+  if (err) throw new CatalogueError(422, err);
+  const saved = await saveRateSettings(db, { bufferPct: Math.round(Number(bufferPct) * 100) / 100 }, by);
+  return { bufferPct: saved.bufferPct };
 }
 
 // The traveler rate in force: the latest change. Null before there is one.
@@ -290,7 +303,9 @@ export async function travellerRateHistory(db = pool, { limit = 100 } = {}) {
 // old, or the market 3% from its base). A renewal that would give the same
 // rate records nothing. Returns what was done.
 export async function updateTravellerRate(db = pool, { now = Date.now() } = {}) {
-  const [current, market, bufferPct] = await Promise.all([currentTravellerRate(db), latestApprovedFx(db), travellerBuffer(db)]);
+  const [current, market, { bufferPct, mode }] = await Promise.all([currentTravellerRate(db), latestApprovedFx(db), rateSettings(db)]);
+  // Manual mode: the admin's rate stands; the market is still fetched and shown.
+  if (mode === "manual") return { kept: current?.egpPerEur ?? null, mode };
   const reason = travellerUpdateDue({ current, market: market?.egpPerEur, bufferPct, now });
   if (!reason) return { kept: current?.egpPerEur ?? null };
   const next = travellerRateFrom(market.egpPerEur, bufferPct);
@@ -303,21 +318,54 @@ export async function updateTravellerRate(db = pool, { now = Date.now() } = {}) 
   return { changed: mapTraveller(r.rows[0]), from: current?.egpPerEur ?? null };
 }
 
-// A manual traveler rate, with the reason. Stands until the next weekly or
-// early renewal (which works from the market rate at the time of the
-// override). The route also writes the audit log.
-export async function overrideTravellerRate(db, { egpPerEur, reason, by, now = Date.now() }) {
-  const rate = Number(egpPerEur);
-  if (!Number.isFinite(rate) || rate <= 0 || rate > 10000) throw new CatalogueError(422, "Enter EGP per 1 EUR, e.g. 52.40.");
-  const note = String(reason || "").trim();
-  if (!note) throw new CatalogueError(422, "Say why the traveler rate is being set by hand.");
-  const [market, bufferPct] = await Promise.all([latestApprovedFx(db), travellerBuffer(db)]);
-  const r = await db.query(
-    `INSERT INTO fx_traveller_rates (egp_per_eur, market_egp_per_eur, market_day, buffer_pct, reason, note, set_by, effective_at)
-     VALUES ($1, $2, $3, $4, 'override', $5, $6, $7) RETURNING *`,
-    [Math.round(rate * 10000) / 10000, market?.egpPerEur ?? null, market?.day ?? null, bufferPct, note.slice(0, 500), by, new Date(now)]);
-  announceChange();
-  return mapTraveller(r.rows[0]);
+// Phase 7: the exchange-rate mode, one site-wide setting, from Finance or any
+// rate card.
+//   manual     the admin's rate (EGP per 1 EUR), used exactly as entered, no
+//              buffer. Switching to it, and every change of the rate, needs a
+//              reason, and is recorded with who and when. Stays until changed.
+//   automatic  back to the latest approved market rate less the buffer, at
+//              once; then the weekly / early renewals as before. Needs an
+//              approved market rate to work from.
+// Each change is a row in fx_traveller_rates (the rate's history); the route
+// also writes the audit log. Bookings keep the rate they were made at.
+export async function setExchangeRateMode(db, { mode, egpPerEur = null, reason = "", by, now = Date.now() }) {
+  if (!RATE_MODES.includes(mode)) throw new CatalogueError(422, 'The mode is "automatic" or "manual".');
+  const note = String(reason || "").trim().slice(0, 500);
+  return inTx(db, async (c) => {
+    const [market, settings, current] = await Promise.all([latestApprovedFx(c), rateSettings(c), currentTravellerRate(c)]);
+    let row;
+    if (mode === "manual") {
+      const err = manualRateError(egpPerEur);
+      if (err) throw new CatalogueError(422, err);
+      if (!note) throw new CatalogueError(422, "Give a reason: switching to a manual exchange rate, or changing it, is logged with the reason.");
+      row = (await c.query(
+        `INSERT INTO fx_traveller_rates (egp_per_eur, market_egp_per_eur, market_day, buffer_pct, reason, note, set_by, effective_at)
+         VALUES ($1, $2, $3, NULL, 'manual', $4, $5, $6) RETURNING *`,
+        [Math.round(Number(egpPerEur) * 10000) / 10000, market?.egpPerEur ?? null, market?.day ?? null, note, by, new Date(now)])).rows[0];
+    } else {
+      if (!market) throw new CatalogueError(409, "There is no approved market rate yet, so automatic mode has nothing to work from. Keep the manual rate until the first fetched rate is approved.");
+      row = (await c.query(
+        `INSERT INTO fx_traveller_rates (egp_per_eur, market_egp_per_eur, market_day, buffer_pct, reason, note, set_by, effective_at)
+         VALUES ($1, $2, $3, $4, 'automatic', $5, $6, $7) RETURNING *`,
+        [travellerRateFrom(market.egpPerEur, settings.bufferPct), market.egpPerEur, market.day, settings.bufferPct, note || null, by, new Date(now)])).rows[0];
+    }
+    await saveRateSettings(c, { mode }, by);
+    announceChange();
+    return { mode, previousMode: settings.mode, rate: mapTraveller(row), from: current?.egpPerEur ?? null };
+  });
+}
+
+// The rate as the rate card editor and Finance show it: the rate in force,
+// the mode, the market beside it, and whether they are more than 5% apart.
+export async function exchangeRateSummary(db = pool) {
+  const [current, market, settings] = await Promise.all([currentTravellerRate(db), latestApprovedFx(db), rateSettings(db)]);
+  const gap = settings.mode === "manual" && current ? manualMarketGap(current.egpPerEur, market?.egpPerEur) : null;
+  return {
+    mode: settings.mode, bufferPct: settings.bufferPct,
+    rate: current?.egpPerEur ?? null, since: current?.effectiveAt ?? null,
+    market: market ? { egpPerEur: market.egpPerEur, day: market.day, source: market.source } : null,
+    gapPct: gap?.pct ?? null, gapWarning: !!gap?.warn,
+  };
 }
 
 // Everything the Finance screen shows about the rate.
@@ -328,8 +376,9 @@ export async function fxOverview(db = pool, { now = Date.now() } = {}) {
   ]);
   return {
     market, traveller: current, bufferPct, history, alerts, pending,
+    exchangeRate: await exchangeRateSummary(db),
     suggested: market ? travellerRateFrom(market.egpPerEur, bufferPct) : null,
-    due: travellerUpdateDue({ current, market: market?.egpPerEur, bufferPct, now }),
+    due: (await rateSettings(db)).mode === "manual" ? null : travellerUpdateDue({ current, market: market?.egpPerEur, bufferPct, now }),
     providers: providerOrder().map((k) => ({ key: k, label: PROVIDERS[k].label })),
   };
 }

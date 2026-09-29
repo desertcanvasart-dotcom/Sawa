@@ -11,9 +11,10 @@ import {
   DOCUMENT_KINDS, DOCUMENT_LABELS, STRIKE_KINDS, STRIKE_LABELS, STRIKE_FLAG_AT, ACK_HOURS,
 } from "../shared/operators.js";
 import {
-  DEFAULT_POOL_TIERS, DEFAULT_COMMISSION_PCT, COST_BASES, COST_BASIS_LABELS, poolRateError, poolRateTable, tierPriceEur, tierPriceLine,
+  DEFAULT_POOL_TIERS, DEFAULT_COMMISSION_PCT, COST_BASES, COST_BASIS_LABELS, poolRateError, poolRateTable, tierPriceLine, tierEgp, removeTierAt,
 } from "../shared/pool-model.js";
 import { TYPE_LABELS } from "../shared/catalogue.js";
+import { ExchangeRateControl, rateTag } from "./ExchangeRateControl.jsx";
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const STATUS_TONE = { pending: "tag-warn", active: "tag-on", suspended: "tag-off", removed: "tag-off" };
@@ -529,7 +530,7 @@ export function RatesSection({ flash }) {
   return (
     <>
       <Head title="Rate card"
-        sub="Per product, in EGP: the selling price and operator fee per tier, the cost lines and the collecting agent's commission. Euro prices use the one site-wide traveler rate, set in Finance. The operator is paid its entitlement; agencies share the pool. A departure keeps the version in force when its first seat sold."
+        sub="Per product: the tour price in EUR (what travelers pay) and the operator fee, the cost lines in EGP, and the collecting agent's commission. One site-wide exchange rate converts the price into EGP for the operator and agency calculations. The operator is paid its entitlement; agencies share the pool. A departure keeps the version in force when its first seat sold."
         action={<label className="btn-ghost" style={{ cursor: "pointer" }}><Upload size={16} />Import spreadsheet
           <input type="file" accept=".xlsx" hidden disabled={busy} onChange={(e) => importFile(e.target.files?.[0])} /></label>} />
       {err && <div className="auth-error">{err}</div>}
@@ -583,20 +584,23 @@ export function RatesSection({ flash }) {
 }
 
 // Phase 5 (28 Sep 2026): the pricing and money model (shared/pool-model.js).
-// Tiers with an EGP selling price and an operator fee; cost lines per group
-// or per traveler with an amount per tier; the collecting agent's commission.
-// EUR prices come from the site-wide traveler rate (064, Finance), shown here
-// but not set here. The table below it is the same calculation the
-// statements use, live, for 2 to 12 travelers.
-const blankTiers = () => DEFAULT_POOL_TIERS.map((t) => ({ ...t, priceEgp: "", operatorFeePct: t.operatorFeePct == null ? "" : String(t.operatorFeePct) }));
+// Tiers with a EUR selling price (what travelers pay, phase 7) and an operator
+// fee; cost lines per group or per traveler with an EGP amount per tier; the
+// collecting agent's commission. The EGP equivalent of the price comes from
+// the site-wide exchange rate (automatic or manual), shown and changed in
+// section 3 for every tour at once. The table below is the same calculation
+// the statements use, live, for 2 to 8 travelers, at the current rate.
+const blankTiers = () => DEFAULT_POOL_TIERS.map((t) => ({ from: String(t.from), to: String(t.to), priceEur: "", operatorFeePct: t.operatorFeePct == null ? "" : String(t.operatorFeePct) }));
 const toForm = (v) => ({
-  tiers: (v?.tiers?.length ? v.tiers : null)?.map((t) => ({ from: String(t.from), to: String(t.to), priceEgp: t.priceEgp ?? "", operatorFeePct: t.operatorFeePct ?? "" })) || blankTiers(),
+  // A tier from before phase 7 carries an EGP price: its EUR price is left to
+  // enter (the EGP is shown beside it).
+  tiers: (v?.tiers?.length ? v.tiers : null)?.map((t) => ({ from: String(t.from), to: String(t.to), priceEur: t.priceEur ?? "", oldEgp: t.priceEur == null ? t.priceEgp ?? null : null, operatorFeePct: t.operatorFeePct ?? "" })) || blankTiers(),
   costLines: (v?.costLines || []).map((l) => ({ name: l.name, basis: l.basis, amounts: (l.amounts || []).map((a) => a ?? "") })),
   commissionPct: v?.commissionPct ?? DEFAULT_COMMISSION_PCT,
 });
 const numOrNull = (x) => (x === "" || x == null ? null : Number(x));
 const fromForm = (f) => ({
-  tiers: f.tiers.map((t) => ({ from: Number(t.from), to: Number(t.to), priceEgp: numOrNull(t.priceEgp), operatorFeePct: numOrNull(t.operatorFeePct) })),
+  tiers: f.tiers.map((t) => ({ from: Number(t.from), to: Number(t.to), priceEur: numOrNull(t.priceEur), operatorFeePct: numOrNull(t.operatorFeePct) })),
   costLines: f.costLines.map((l) => ({ name: l.name, basis: l.basis, amounts: l.amounts.map(numOrNull) })),
   commissionPct: numOrNull(f.commissionPct),
 });
@@ -610,13 +614,15 @@ function RateEditor({ product, flash, onClose }) {
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const model = fromForm(form);
-  // The site-wide traveler rate (Finance): what the EUR column and the tour
-  // page line use. Null before 064 or before there is a rate.
-  const [traveller, setTraveller] = useState(undefined);
-  useEffect(() => { call("/admin/finance/fx").then((j) => setTraveller(j.traveller || null)).catch(() => setTraveller(null)); }, []);
-  const eurRate = traveller?.egpPerEur ?? null;
+  // The site-wide exchange rate (phase 7: automatic or manual). Null before
+  // there is one; undefined while loading.
+  const [fx, setFx] = useState(undefined);
+  useEffect(() => { call("/admin/finance/exchange-rate").then(setFx).catch(() => setFx(null)); }, []);
+  const eurRate = fx?.rate ?? null;
+  const at = rateTag(fx);
   const problem = poolRateError(model);
-  const table = problem ? null : poolRateTable(model);
+  const table = problem ? null : poolRateTable(model, { eurRate });
+  const review = draft?.source?.phase7?.needsReview ? draft.source.phase7 : null;
 
   async function reload() {
     const j = await call("/admin/rates");
@@ -645,28 +651,33 @@ function RateEditor({ product, flash, onClose }) {
     const from = last ? Number(last.to) + 1 : 4;
     setForm({ tiers: [...form.tiers, { from: String(from), to: String(from + 2), priceEgp: "", operatorFeePct: "" }], costLines: form.costLines.map((l) => ({ ...l, amounts: [...l.amounts, ""] })), commissionPct: form.commissionPct });
   };
-  const removeTier = (i) => setForm({ ...form, tiers: form.tiers.filter((_, j) => j !== i), costLines: form.costLines.map((l) => ({ ...l, amounts: l.amounts.filter((_, j) => j !== i) })) });
+  // Its range goes to the neighbouring tier (removing 4–6 and 7–9 leaves
+  // 4–12, never a lone 10–12).
+  const removeTier = (i) => setForm(removeTierAt(form, i));
   const addLine = () => setForm({ ...form, costLines: [...form.costLines, { name: "", basis: "per_group", amounts: form.tiers.map(() => "") }] });
 
   return (
     <>
-      <Head title={`#${product.catalogue_no} ${product.title}`} sub={`${TYPE_LABELS[product.type] || product.type} · all amounts in EGP; travelers see and pay EUR at the site-wide traveler rate`}
+      <Head title={`#${product.catalogue_no} ${product.title}`} sub={`${TYPE_LABELS[product.type] || product.type} · the tour price is in EUR, what travelers pay; costs and the calculation are in EGP`}
         action={<button className="btn-ghost" onClick={onClose}><ArrowLeft size={16} />Rate card</button>} />
       {err && <div className="auth-error">{err}</div>}
       <form className="dash-card rate-editor" style={{ marginBottom: 12 }} onSubmit={save}>
         <h2>{draft ? `Draft v${draft.version}` : "New draft"}</h2>
+        {review && <p className="auth-error" role="status">Converted to a EUR price for your review ({review.from}, at {review.eurRate} EGP per 1 EUR, {review.mode}){review.notes?.length ? `: ${review.notes.join("; ")}` : ""}. Check it before publishing.</p>}
         <p className="re-lead">Set the price, list what the tour costs, then check the result by group size below before publishing.</p>
         <h3><span className="re-step">1</span>Price</h3>
-        <p className="field-hint" style={{ marginTop: 0 }}>One selling price per traveler for 4–8 travelers. The operator fee is required: it is set case by case for each product, and a rate card can't be published without it. Add a tier only if the price should change with the group size.</p>
+        <p className="field-hint" style={{ marginTop: 0 }}>One price per traveler, in EUR, for {product.goahead_min ?? 4}–{product.max_group ?? 8} travelers: travelers see and pay exactly this. The operator fee is required: it is set case by case for each product, and a rate card can't be published without it. Add a tier only if the price should change with the group size.</p>
         <div className="table-wrap"><table className="dash-table">
-          <thead><tr><th>From</th><th>To</th><th>Selling price per traveler (EGP)</th><th>Operator fee (% of operating cost), required</th><th>Travelers see</th><th /></tr></thead>
+          <thead><tr><th>From</th><th>To</th><th>Tour price per traveller (EUR), what travellers pay</th><th>Operator fee (% of operating cost), required</th><th /></tr></thead>
           <tbody>{form.tiers.map((t, i) => (
             <tr key={i}>
               <td><input className="re-num" type="number" min="1" step="1" value={t.from} onChange={(e) => setTier(i, "from", e.target.value)} style={{ width: 70 }} /></td>
               <td><input className="re-num" type="number" min="1" step="1" value={t.to} onChange={(e) => setTier(i, "to", e.target.value)} style={{ width: 70 }} /></td>
-              <td><input className="re-num" type="number" min="0" step="0.01" value={t.priceEgp} onChange={(e) => setTier(i, "priceEgp", e.target.value)} /></td>
+              <td><input className="re-num" type="number" min="0" step="0.01" value={t.priceEur} aria-label="Tour price per traveller (EUR)" onChange={(e) => setTier(i, "priceEur", e.target.value)} />
+                <div className="field-hint tnum">{numOrNull(t.priceEur) == null ? (t.oldEgp != null ? `Was EGP ${egpFmt(t.oldEgp)}: enter the EUR price.` : "")
+                  : eurRate == null ? "EGP: exchange rate not set"
+                  : `≈ ${egpFmt(tierEgp({ priceEur: numOrNull(t.priceEur) }, eurRate))} EGP at the current rate (${at})`}</div></td>
               <td><input className="re-num" type="number" min="0" max="100" step="0.1" value={t.operatorFeePct} onChange={(e) => setTier(i, "operatorFeePct", e.target.value)} style={{ width: 90 }} /></td>
-              <td className="tnum">{eurRate == null ? (traveller === undefined ? "…" : "Exchange rate not set") : tierPriceEur(numOrNull(t.priceEgp), eurRate) == null ? "—" : `€${tierPriceEur(numOrNull(t.priceEgp), eurRate)}`}</td>
               <td>{form.tiers.length > 1 && <button type="button" className="btn-mini" onClick={() => removeTier(i)}>Remove</button>}</td>
             </tr>
           ))}</tbody>
@@ -689,21 +700,20 @@ function RateEditor({ product, flash, onClose }) {
           ))}</tbody>
         </table></div>
         <div className="cat-actions" style={{ justifyContent: "flex-start" }}><button type="button" className="btn-ghost sm" onClick={addLine}>Add a cost line</button></div>
-        <h3><span className="re-step">3</span>Commission, rate &amp; date</h3>
+        <h3><span className="re-step">3</span>Commission, exchange rate &amp; date</h3>
         <div className="form-grid re-grid3">
           <label className="field"><span>Collecting agent's commission (% of the selling price)</span>
             <input type="number" min="0" max="99.99" step="0.1" value={form.commissionPct} onChange={(e) => setForm({ ...form, commissionPct: e.target.value })} /></label>
-          <div className="field"><span>Traveler rate (EGP per EUR, site-wide)</span>
-            <strong className="tnum">{traveller === undefined ? "…" : eurRate ?? "Exchange rate not set"}</strong>
-            <span className="field-hint">{traveller ? `In force since ${dayLabel(traveller.effectiveAt?.slice(0, 10))}. Set in Finance → Rates and settings.` : "Set in Finance → Rates and settings."}</span></div>
+          <ExchangeRateControl summary={fx} onChanged={setFx} fromRateCard flash={flash} />
           <label className="field"><span>Takes effect</span><input type="date" value={effectiveFrom} onChange={(e) => setEffectiveFrom(e.target.value)} /></label>
         </div>
-        <p className="field-hint">The traveler rate is used only to show and charge travelers in EUR (each tier price ÷ the rate, rounded up to the whole euro). It is one rate for the whole site, renewed from the market rate, and a booking keeps the rate in force when it was made. Everything below, and every statement, is in EGP. A published version applies to departures that haven't sold a seat yet; departures already sold keep the version they were locked to.</p>
-        {traveller !== undefined && eurRate == null && <p className="field-hint"><b>Exchange rate not set.</b> No euro prices are shown to travelers and no payment requests are sent until a rate is approved in Finance → Rates and settings.</p>}
-        {eurRate != null && tierPriceLine(model.tiers, eurRate) && <p className="field-hint">Tour page today: {tierPriceLine(model.tiers, eurRate)}</p>}
+        <p className="field-hint">The exchange rate is one rate for every tour. Each booking keeps the rate in force when it was made, and its revenue in EGP is its EUR price × that rate. Costs, fees, the commission and the pool are in EGP. A published version applies to departures that haven't sold a seat yet; departures already sold keep the version they were locked to.</p>
+        {fx !== undefined && eurRate == null && <p className="field-hint"><b>Exchange rate not set.</b> No euro prices are shown to travelers and no payment requests are sent until a rate is approved or a manual rate is set.</p>}
+        {eurRate != null && tierPriceLine(model.tiers, eurRate) && <p className="field-hint">Tour page preview: Travelers pay {tierPriceLine(model.tiers, eurRate)}</p>}
         {problem && <div className="auth-error">{problem}</div>}
 
         <h3><span className="re-step">4</span>By group size</h3>
+        <p className="field-hint" style={{ marginTop: 0 }}>{eurRate == null ? "In EGP. Set the exchange rate to see the revenue." : `In EGP at the current exchange rate (${at}). Real departures use the rate locked on each booking.`}</p>
         {table ? (
           <>
             {table.warnings.length > 0 && <ul className="re-warnings">{table.warnings.map((w, i) => <li key={i}><span className="tag tag-warn">{w.kind === "negative_pool" ? "Guarantee needed" : "Pool shrinks"}</span> <span>{w.text}</span></li>)}</ul>}
@@ -733,7 +743,7 @@ function RateEditor({ product, flash, onClose }) {
         {versions.length ? (
           <div className="table-wrap">
             <table className="dash-table">
-              <thead><tr><th>Version</th><th>From</th><th>Tiers (EGP per traveler · operator fee)</th><th>Cost lines</th><th>Commission</th></tr></thead>
+              <thead><tr><th>Version</th><th>From</th><th>Tiers (price per traveler · operator fee)</th><th>Cost lines</th><th>Commission</th></tr></thead>
               <tbody>
                 {versions.map((v) => (
                   <tr key={v.id}>
@@ -741,11 +751,11 @@ function RateEditor({ product, flash, onClose }) {
                       {v.publishedBy && <div className="field-hint">{v.publishedBy}</div>}</td>
                     <td>{v.effectiveFrom ? dayLabel(v.effectiveFrom) : "—"}</td>
                     <td><ul className="re-list">{(v.tiers || []).map((t, i) => (
-                      <li key={i}><span className="re-range">{t.from}–{t.to}</span> <span className="tnum">{egpFmt(t.priceEgp)}</span> <span className="re-muted">· {t.operatorFeePct == null ? "—" : `${t.operatorFeePct}%`}</span></li>
+                      <li key={i}><span className="re-range">{t.from}–{t.to}</span> <span className="tnum">{t.priceEur != null ? `€${egpFmt(t.priceEur)}` : `EGP ${egpFmt(t.priceEgp)}`}</span> <span className="re-muted">· {t.operatorFeePct == null ? "—" : `${t.operatorFeePct}%`}</span></li>
                     ))}</ul></td>
                     <td>{(v.costLines || []).length ? <ul className="re-list">{v.costLines.map((l, i) => <li key={i}>{l.name} <span className="re-muted">{COST_BASIS_LABELS[l.basis] || l.basis}</span></li>)}</ul> : "—"}
                       {v.source?.migration061 && <div className="field-hint">Converted by migration 061: {(v.source.migration061.notes || []).join("; ")}</div>}
-                      {v.source?.migration064?.eurRate != null && <div className="field-hint">Had its own EUR rate ({v.source.migration064.eurRate}) until 064; travelers are now priced at the site-wide rate.</div>}</td>
+                      {v.source?.migration064?.eurRate != null && <div className="field-hint">Had its own exchange rate ({v.source.migration064.eurRate}) until 064. Not used: every tour uses the site-wide rate.</div>}</td>
                     <td className="tnum">{v.commissionPct}%</td>
                   </tr>
                 ))}
