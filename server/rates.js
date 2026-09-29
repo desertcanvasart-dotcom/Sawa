@@ -37,7 +37,8 @@ export function mapRate(r) {
   out.tiers = (r.tiers ?? legacy?.tiers ?? null)?.map((t) => ({ from: Number(t.from), to: Number(t.to), priceEgp: num(t.priceEgp), operatorFeePct: num(t.operatorFeePct) })) || null;
   out.costLines = (r.cost_lines ?? legacy?.costLines ?? []).map((l) => ({ name: l.name, basis: l.basis, amounts: (l.amounts || []).map(num) }));
   out.commissionPct = r.commission_pct != null ? Number(r.commission_pct) : DEFAULT_COMMISSION_PCT;
-  out.eurRate = num(r.eur_rate);
+  // No EUR rate on a version since 064: travelers are priced at the
+  // site-wide traveler rate (server/fx.js).
   return out;
 }
 
@@ -113,7 +114,6 @@ function cleanModel(values = {}, base = {}) {
       name: String(l?.name || "").trim().slice(0, 80), basis: l?.basis, amounts: (l?.amounts || []).map(amount),
     })) : base.costLines,
     commissionPct: has("commissionPct") ? amount(values.commissionPct) : base.commissionPct,
-    eurRate: has("eurRate") ? (values.eurRate === null || values.eurRate === "" ? null : Math.round(Number(values.eurRate) * 10000) / 10000) : base.eurRate,
   };
   if (model.tiers?.some((t) => [t.priceEgp, t.operatorFeePct].some((x) => x != null && !Number.isFinite(x)))
     || model.costLines?.some((l) => l.amounts.some((x) => x != null && !Number.isFinite(x)))) {
@@ -128,7 +128,7 @@ function cleanModel(values = {}, base = {}) {
 // A new draft, or the existing one, updated with `values`. A new draft starts
 // from the latest version's amounts.
 //
-// Phase 5 fields (tiers, costLines, commissionPct, eurRate) are saved with
+// Phase 5 fields (tiers, costLines, commissionPct) are saved with
 // migration 061. Phase 2 amounts alone (the spreadsheet import) are converted
 // into cost lines, keeping any selling prices, fees and rate already entered.
 export async function saveRateDraft(db, productId, values, { by = null, source = null } = {}) {
@@ -146,8 +146,8 @@ export async function saveRateDraft(db, productId, values, { by = null, source =
     let modelCols = [];
     let modelVals = [];
     if (withModel) {
-      const legacyOnly = Object.keys(clean).length > 0 && !["tiers", "costLines", "commissionPct", "eurRate"].some((k) => k in values);
-      const start = { tiers: base.tiers || DEFAULT_POOL_TIERS, costLines: base.costLines || [], commissionPct: base.commissionPct ?? DEFAULT_COMMISSION_PCT, eurRate: base.eurRate ?? null };
+      const legacyOnly = Object.keys(clean).length > 0 && !["tiers", "costLines", "commissionPct"].some((k) => k in values);
+      const start = { tiers: base.tiers || DEFAULT_POOL_TIERS, costLines: base.costLines || [], commissionPct: base.commissionPct ?? DEFAULT_COMMISSION_PCT };
       if (legacyOnly) {
         // The import: its amounts become the cost lines; prices and fees stay.
         const conv = convertLegacyRate(merged);
@@ -156,8 +156,8 @@ export async function saveRateDraft(db, productId, values, { by = null, source =
         start.costLines = conv.costLines;
       }
       const model = cleanModel(legacyOnly ? {} : values, start);
-      modelCols = ["tiers", "cost_lines", "commission_pct", "eur_rate"];
-      modelVals = [JSON.stringify(model.tiers), JSON.stringify(model.costLines), model.commissionPct, model.eurRate];
+      modelCols = ["tiers", "cost_lines", "commission_pct"];
+      modelVals = [JSON.stringify(model.tiers), JSON.stringify(model.costLines), model.commissionPct];
     }
     const allCols = [...cols, ...modelCols];
     const allVals = [...vals, ...modelVals];
@@ -191,15 +191,14 @@ export async function publishRate({ db = pool, productId, versionId, effectiveFr
     const v = mapRate(r.rows[0]);
     if (v.state !== "draft") throw new CatalogueError(409, "That version is already published.");
     // Phase 5: every tier's operator fee and every cost line's amounts (the
-    // operator's entitlement needs them). Selling prices are all or none, and
-    // prices need the published EUR rate (travelers are charged in EUR). A
+    // operator's entitlement needs them). Selling prices are all or none. A
     // version without prices pays the operator; the product keeps its
-    // listing price and its pool waits for a version with prices.
+    // listing price and its pool waits for a version with prices. The EUR
+    // prices come from the site-wide traveler rate (064), not the version.
     const priced = (v.tiers || []).filter((t) => t.priceEgp != null).length;
     const missing = [
       ...poolRateGaps(v).filter((g) => !g.startsWith("price ")),
       ...(priced && priced < v.tiers.length ? poolRateGaps(v).filter((g) => g.startsWith("price ")) : []),
-      ...(priced && v.eurRate == null ? ["published EUR rate"] : []),
     ];
     if (missing.length) throw new CatalogueError(422, `Fill in the rate card before publishing (missing: ${missing.join(", ")}).`);
     const pub = await c.query(

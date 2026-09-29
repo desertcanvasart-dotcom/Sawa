@@ -22,7 +22,7 @@ const ONE = {
     { name: "Entrance fees", basis: "per_traveller", amounts: [2250] },
     { name: "Lunch", basis: "per_traveller", amounts: [400] },
   ],
-  commissionPct: 10, eurRate: 97,
+  commissionPct: 10,
 };
 
 test("every product defaults to one tier, 4 to 8, with no default operator fee", () => {

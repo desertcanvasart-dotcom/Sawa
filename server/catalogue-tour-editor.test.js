@@ -9,7 +9,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { tierPriceEur, tierPriceSummary } from "../shared/pool-model.js";
 const tierPriceEurCheck = tierPriceEur;
-import { catalogueTourView, isCatalogueTour, NO_RATE_CARD } from "../shared/catalogue-tour-editor.js";
+import { catalogueTourView, isCatalogueTour, NO_RATE_CARD, NO_EXCHANGE_RATE } from "../shared/catalogue-tour-editor.js";
 
 // The module reaches the DB layer, which only builds a pool (no connection) and wants the URL set.
 process.env.DATABASE_URL ||= "postgres://unit:unit@127.0.0.1:1/unit";
@@ -22,8 +22,8 @@ const PRODUCT = { id: 1, catalogue_no: 1, code: "GIZA", slug: "giza", title: "Gi
   status: "active", goahead_min: 4, max_group: 12, cutoff_hours: 48, legacy_product_id: "t1" };
 const rateRow = (over = {}) => ({ id: 1, product_id: 1, version: 1, state: "published", effective_from: "2026-01-01", currency: "EGP",
   tiers: [{ from: 4, to: 6, priceEgp: 5192, operatorFeePct: 5 }, { from: 7, to: 9, priceEgp: 4307, operatorFeePct: 6 }, { from: 10, to: 12, priceEgp: 4071, operatorFeePct: 10 }],
-  cost_lines: [], commission_pct: 10, eur_rate: 97, ...over });
-const info = (over = {}) => catalogueTourInfo({ enabled: true, productRow: PRODUCT, rateRows: [rateRow()], today: "2026-09-29", ...over });
+  cost_lines: [], commission_pct: 10, ...over });
+const info = (over = {}) => catalogueTourInfo({ enabled: true, productRow: PRODUCT, rateRows: [rateRow()], today: "2026-09-29", eurRate: 97, ...over });
 
 test("EUR prices are the EGP price over the rate, rounded up", () => {
   assert.equal(tierPriceEur(5192, 97), 54);   // 53.53
@@ -57,6 +57,15 @@ test("one price: \"€X per person\", how it is worked out, and a link to the Ra
   assert.equal(none.rateCardLabel, "Edit price in Rate card", "the warning links to the rate card too");
 });
 
+test("no site-wide traveler rate: \"Exchange rate not set\", no euro prices", () => {
+  const view = catalogueTourView(info({ eurRate: null }));
+  assert.equal(view.hasRate, false);
+  assert.equal(view.warning, NO_EXCHANGE_RATE);
+  assert.equal(view.summary, null);
+  assert.deepEqual(view.rows, []);
+  assert.equal(view.single, null);
+});
+
 test("GoAhead minimum, maximum group and cut-off show read-only from the catalogue product", () => {
   const facts = Object.fromEntries(catalogueTourView(info()).facts.map((f) => [f.label, f.value]));
   assert.equal(facts["GoAhead minimum"], "4 travelers");
@@ -78,8 +87,8 @@ test("no published version: the warning, no tiers", () => {
 });
 
 test("the latest published version in force wins", () => {
-  const v2 = rateRow({ id: 2, version: 2, effective_from: "2026-09-01", eur_rate: 100 });
-  assert.equal(catalogueTourView(info({ rateRows: [rateRow(), v2] })).summary, "4–6 travelers €52 · 7–9 travelers €44 · 10–12 travelers €41");
+  const v2 = rateRow({ id: 2, version: 2, effective_from: "2026-09-01" });
+  assert.equal(catalogueTourView(info({ rateRows: [rateRow(), v2], eurRate: 100 })).summary, "4–6 travelers €52 · 7–9 travelers €44 · 10–12 travelers €41");
 });
 
 test("catalogue products hide the legacy fields; legacy tours and flag-off show them", () => {
@@ -108,7 +117,7 @@ test("catalogue products hide the legacy fields; legacy tours and flag-off show 
 });
 
 test("the public tour page and the widget read the same summary", () => {
-  assert.match(read("server", "catalogue-public.js"), /summary: tierPriceSummary\(rate\.tiers, rate\.eurRate\)/);
+  assert.match(read("server", "catalogue-public.js"), /summary: tierPriceSummary\(rate\.tiers, eurRate\)/);
   assert.match(read("server", "catalogue-public.js"), /priceSummary: entry\.pricing\?\.summary/);
   const main = read("src", "main.jsx");
   assert.equal((main.match(/catalogue\?\.priceSummary/g) || []).length >= 3, true, "tour page, widget card, widget booking panel");

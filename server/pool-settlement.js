@@ -22,6 +22,7 @@
 import { pool, withTransaction } from "./db/index.js";
 import { rateById, rateInForce, ratesFor, poolModelAvailable } from "./rates.js";
 import { todayIn } from "./catalogue.js";
+import { currentTravellerRate } from "./fx.js";
 import {
   departureEconomics, operatorEntitlement, poolShares, bookingChargeEur, tierDifferenceEur, poolTierIndex, tierPriceEur, fxResult, withFeeOverride,
 } from "../shared/pool-model.js";
@@ -118,7 +119,7 @@ export async function recordedEconomics(db, departureId) {
 // ---------------------------------------------------------------- booking
 // In the booking's own transaction, after the pledge exists (its insert
 // trigger has locked the departure's rate version): the booking keeps the
-// published EUR rate, and is quoted the EUR price of the tier the departure
+// site-wide traveler rate in force now (064), and is quoted the EUR price of the tier the departure
 // is in now, this booking included. A rate card without prices leaves the
 // listing's price as it was.
 export async function stampBookingPrice(c, { pledgeId, now = Date.now() }) {
@@ -129,16 +130,44 @@ export async function stampBookingPrice(c, { pledgeId, now = Date.now() }) {
     [p.departure_id])).rows[0] : null;
   if (!dep) return null;
   const rate = await rateForDeparture(c, dep, now);
-  if (!rate?.eurRate) return null;
-  const quote = bookingChargeEur({ rate, headcount: await liveSeats(c, dep.legacy_departure_id), seats: Number(p.seats), eurRate: rate.eurRate });
+  if (!rate) return null;
+  const eurRate = (await currentTravellerRate(c))?.egpPerEur;
+  if (!eurRate) {
+    // 064: priced by the rate card, but no traveler rate is set yet. The
+    // booking is marked as waiting for one: no payment request goes out
+    // until a rate exists (exchangeRateGate).
+    if (rate.tiers?.some((t) => t.priceEgp != null) && (await exchangeRateHoldAvailable(c))) {
+      await c.query("UPDATE pledges SET awaiting_exchange_rate = true WHERE id = $1", [pledgeId]);
+      return { eurRate: null, quote: null, awaitingExchangeRate: true };
+    }
+    return null;
+  }
+  if (await exchangeRateHoldAvailable(c)) await c.query("UPDATE pledges SET awaiting_exchange_rate = false WHERE id = $1 AND awaiting_exchange_rate", [pledgeId]);
+  const quote = bookingChargeEur({ rate, headcount: await liveSeats(c, dep.legacy_departure_id), seats: Number(p.seats), eurRate });
   if (!quote) {
-    await c.query("UPDATE pledges SET published_eur_rate = $2 WHERE id = $1", [pledgeId, rate.eurRate]);
-    return { eurRate: rate.eurRate, quote: null };
+    await c.query("UPDATE pledges SET published_eur_rate = $2 WHERE id = $1", [pledgeId, eurRate]);
+    return { eurRate, quote: null };
   }
   await c.query(
     "UPDATE pledges SET published_eur_rate = $2, price_per_person = $3, booking_total = $4 WHERE id = $1",
-    [pledgeId, rate.eurRate, quote.eachEur, quote.totalEur]);
-  return { eurRate: rate.eurRate, quote };
+    [pledgeId, eurRate, quote.eachEur, quote.totalEur]);
+  return { eurRate, quote };
+}
+
+// pledges.awaiting_exchange_rate (064): absent before the migration.
+async function exchangeRateHoldAvailable(c) {
+  return (await c.query(
+    "SELECT 1 FROM information_schema.columns WHERE table_name = 'pledges' AND column_name = 'awaiting_exchange_rate'")).rowCount > 0;
+}
+
+// Whether a booking may be asked for money yet (064). A booking made while no
+// traveler rate was set is marked awaiting_exchange_rate: it is stamped now if
+// a rate exists, and held (no payment request) if not. Every other booking,
+// those from before the model included, is not held.
+export async function exchangeRateGate(c, pledge, { now = Date.now() } = {}) {
+  if (!pledge.awaiting_exchange_rate) return { ok: true };
+  const stamped = await stampBookingPrice(c, { pledgeId: pledge.id, now });
+  return stamped?.eurRate ? { ok: true, stamped: true } : { ok: false, reason: "exchange_rate_not_set" };
 }
 
 // What a booking is charged when its payment request goes out: its seats at
@@ -289,7 +318,7 @@ export async function collectionsFor(c, departureId) {
   }
   const days = [...new Set(movements.map((m) => m.day))];
   const rates = new Map(days.length ? (await c.query(
-    "SELECT day, egp_per_eur FROM fx_rates WHERE day = ANY($1::date[])", [days])).rows.map((r) => [ymd(r.day), Number(r.egp_per_eur)]) : []);
+    "SELECT day, egp_per_eur FROM fx_rates WHERE day = ANY($1::date[]) AND status = 'approved'", [days])).rows.map((r) => [ymd(r.day), Number(r.egp_per_eur)]) : []);
   return { movements, rates };
 }
 

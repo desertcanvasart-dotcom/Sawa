@@ -5,9 +5,11 @@ import { pool } from "./db/index.js";
 import { catalogueV2Enabled } from "./features.js";
 import { mapCatalogueProduct, todayIn, isMissingCatalogueTables } from "./catalogue.js";
 import { mapRate, rateInForce } from "./rates.js";
+import { currentTravellerRate } from "./fx.js";
 
 // Pure: shapes the rows into what the editor reads.
-export function catalogueTourInfo({ enabled, productRow, rateRows = [], today }) {
+// `eurRate` is the site-wide traveler rate (064), null while none is set.
+export function catalogueTourInfo({ enabled, productRow, rateRows = [], today, eurRate = null }) {
   if (!enabled) return { enabled: false };
   if (!productRow) return { enabled: true, catalogue: null };
   const p = mapCatalogueProduct(productRow);
@@ -15,7 +17,7 @@ export function catalogueTourInfo({ enabled, productRow, rateRows = [], today })
   return {
     enabled: true,
     catalogue: { id: p.id, code: p.code, title: p.title, goaheadMin: p.goaheadMin, maxGroup: p.maxGroup, cutoffHours: p.cutoffHours },
-    rate: rate?.tiers?.length ? { version: rate.version, eurRate: rate.eurRate, tiers: rate.tiers } : null,
+    rate: rate?.tiers?.length ? { version: rate.version, eurRate, tiers: rate.tiers } : null,
   };
 }
 
@@ -26,7 +28,8 @@ export async function loadCatalogueTourInfo(tourProductId, { db = pool, now = Da
     const rateRows = productRow
       ? (await db.query("SELECT * FROM catalogue_rate_versions WHERE product_id = $1 AND state = 'published'", [productRow.id])).rows
       : [];
-    return catalogueTourInfo({ enabled: true, productRow, rateRows, today: todayIn(now) });
+    const eurRate = (await currentTravellerRate(db))?.egpPerEur ?? null;
+    return catalogueTourInfo({ enabled: true, productRow, rateRows, today: todayIn(now), eurRate });
   } catch (e) {
     if (isMissingCatalogueTables(e)) return { enabled: true, catalogue: null };
     throw e;

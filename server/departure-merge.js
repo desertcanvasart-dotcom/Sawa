@@ -247,7 +247,7 @@ export async function mergeDepartures({ keptId, duplicateIds, operatorAgencyId =
       ...(intoCatalogue ? { intoCatalogue: true, bookings: moved.map((p) => ({
         id: p.id, payment_mode: p.payment_mode ?? null, cancellation_tier_version_id: p.cancellation_tier_version_id ?? null,
         terms_fixed_at: p.terms_fixed_at ?? null, terms_fixed_by: p.terms_fixed_by ?? null, traveller_terms_accepted_at: p.traveller_terms_accepted_at ?? null,
-        terms_version_id: p.terms_version_id ?? null, published_eur_rate: p.published_eur_rate ?? null,
+        terms_version_id: p.terms_version_id ?? null, published_eur_rate: p.published_eur_rate ?? null, awaiting_exchange_rate: p.awaiting_exchange_rate ?? false,
         price_per_person: p.price_per_person ?? null, booking_total: p.booking_total ?? null,
       })) } : {}),
       costs: costs.map((r) => ({ id: Number(r.id), from: Number(r.departure_id) })),

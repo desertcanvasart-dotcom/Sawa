@@ -1008,6 +1008,27 @@ export function catalogueAdminAlertEmail({ to, kind, title, dateLabel, detail, p
   return { to, subject, html, text, kind: `catalogue_alert_${kind}` };
 }
 
+// 064 — the automatic exchange rate needs someone: every source failed (the
+// last good rate stays in use), or a fetched rate jumped more than 5% and
+// waits for approval. To ops only.
+export function fxAlertEmail({ to, kind, detail = {}, portalUrl }) {
+  const last = detail.lastGood ? `${detail.lastGood.egpPerEur} EGP per EUR from ${detail.lastGood.day}` : "no rate yet";
+  const subject = kind === "fetch_failed"
+    ? `Exchange rate not fetched for ${detail.day}: still using ${last}`
+    : `Exchange rate waiting for approval: ${detail.egpPerEur} EGP per EUR (${detail.changePct}% from ${detail.previous?.egpPerEur})`;
+  const what = kind === "fetch_failed"
+    ? `The daily EUR/EGP rate could not be fetched for ${detail.day}. Sawa keeps using ${last}. Errors: ${(detail.errors || []).join("; ")}. Enter today's rate by hand in Finance if the sources stay down.`
+    : `The rate fetched for ${detail.day} is ${detail.egpPerEur} EGP per EUR, ${detail.changePct}% from ${detail.previous?.egpPerEur} on ${detail.previous?.day}. It is not used until you approve it in Finance; reject it if it is wrong.`;
+  const text = `${what} ${portalUrl}`;
+  const html = shell(
+    kind === "fetch_failed" ? "Exchange rate not fetched" : "Exchange rate to approve",
+    `<p style="margin:0 0 20px">${esc(what)}</p>
+     ${button(portalUrl, "Open Finance")}`,
+    { eyebrow: "Exchange rate", preheader: subject }
+  );
+  return { to, subject, html, text, kind: `fx_alert_${kind}` };
+}
+
 export function cancellationEmail({ to, route, dateLabel }) {
   const subject = `Cancellation — ${route}`;
   const text = `This confirms your booking for ${route} on ${dateLabel} has been canceled.`;

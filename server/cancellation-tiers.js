@@ -161,7 +161,7 @@ export async function discardTierDraft(db, versionId) {
 // ---------------------------------------------------------------- loss check
 // The exchange rate the check compares at: the latest one finance entered.
 export async function latestFxRate(db) {
-  const r = (await db.query("SELECT day, egp_per_eur FROM fx_rates ORDER BY day DESC LIMIT 1")).rows[0];
+  const r = (await db.query("SELECT day, egp_per_eur FROM fx_rates WHERE status = 'approved' ORDER BY day DESC LIMIT 1")).rows[0];
   return r ? { day: ymd(r.day), egpPerEur: Number(r.egp_per_eur) } : null;
 }
 

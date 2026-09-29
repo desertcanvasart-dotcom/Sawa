@@ -396,6 +396,10 @@ test("operator fee: an override is refused once the operator acknowledges the of
 
 test("migration 063: a version with several tiers gets a NEW DRAFT from its first tier, never published", { skip }, async () => {
   const p2 = Number((await db.query("SELECT id FROM catalogue_products WHERE catalogue_no = 2")).rows[0].id);
+  // The runner re-runs every migration in order: 061 re-adds its (empty) EUR
+  // column before 063 reads it, and 064 drops it again. Here 063 runs alone,
+  // so the column is put back first and 064 takes it away at the end.
+  await db.query("ALTER TABLE catalogue_rate_versions ADD COLUMN IF NOT EXISTS eur_rate NUMERIC(12,4)");
   await db.query("ALTER TABLE catalogue_rate_versions DISABLE TRIGGER trg_catalogue_rate_immutable");
   await db.query(
     `INSERT INTO catalogue_rate_versions (product_id, version, state, effective_from, published_by, published_at, tiers, cost_lines, commission_pct, eur_rate, source, created_by)
@@ -414,4 +418,6 @@ test("migration 063: a version with several tiers gets a NEW DRAFT from its firs
   assert.match(versions[1].source.migration063.from, /version 1 \(published\)/);
   await db.query(sql);
   assert.equal((await db.query("SELECT 1 FROM catalogue_rate_versions WHERE product_id = $1", [p2])).rowCount, 2, "a second run makes no second draft");
+  await db.query(readFileSync(join(ROOT, "server", "db", "schema_064_automatic_fx.sql"), "utf8"));
+  assert.equal((await db.query("SELECT 1 FROM information_schema.columns WHERE table_name = 'catalogue_rate_versions' AND column_name = 'eur_rate'")).rowCount, 0, "064 after 063: the column is gone");
 });

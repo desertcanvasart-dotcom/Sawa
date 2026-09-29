@@ -2,6 +2,7 @@
 
 > **Superseded in part on 29 Sep 2026 (phase 6, `docs/phase6/REPORT.md`).** One price per product (4–8 travelers) replaces the three group-size tiers as the default, the tier-drop refund is not in the active flow for one tier, the operator fee is a required per-product percentage with no default (and can be overridden for one departure), euro tier prices round **up**, and the maximum group is 8. The pricing code keeps tier support.
 
+> **Superseded in part (064, 28 Sep 2026):** the per-version "published EUR rate" is gone. Travelers are priced at one site-wide traveler rate, renewed from the daily market rate, and EUR prices are rounded up. See docs/fx/REPORT.md.
 
 28 Sep 2026. Built to the final model brief ("The Sawa business model is now final"), which wins over older documents where they disagree. Everything in parts 1 and 2 is behind `catalogue_v2` and applies to **catalog departures only**. The items marked LIVE in part 0 are not behind the flag.
 

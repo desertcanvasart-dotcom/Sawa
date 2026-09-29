@@ -72,6 +72,7 @@ const MIGRATIONS = [
   { name: "061_pool_model", file: "schema_061_pool_model.sql" },
   { name: "062_groups_of_eight", file: "schema_062_groups_of_eight.sql" },
   { name: "063_numbered_departures", file: "schema_063_numbered_departures.sql" },
+  { name: "064_automatic_fx", file: "schema_064_automatic_fx.sql" },
 ];
 
 async function main() {

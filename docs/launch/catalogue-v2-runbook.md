@@ -264,7 +264,7 @@ SELECT c.catalogue_no, c.status, MAX(s.version) FILTER (WHERE s.state = 'publish
 
 ## 3. Enter and publish the rates
 
-> **Phase 6 (29 Sep 2026) changes the steps below.** The maximum group is **8**; every product defaults to **one price for 4–8 travelers** (no 4–6 / 7–9 / 10–12 tiers unless you add one); the **operator fee is a required percentage per product** with no default; a further numbered departure opens when a departure is full. Apply migrations **062 and 063**, run `node scripts/phase6-report.js` (read-only) and review each product's new draft before publishing. Full details: `docs/phase6/REPORT.md`, `docs/ops/live-groups-of-8.md`.
+> **Phase 6 (29 Sep 2026) changes the steps below.** The maximum group is **8**; every product defaults to **one price for 4–8 travelers** (no 4–6 / 7–9 / 10–12 tiers unless you add one); the **operator fee is a required percentage per product** with no default; a further numbered departure opens when a departure is full. Apply migrations **062 and 063** (then **064**, the exchange rate: `docs/fx/REPORT.md`), run `node scripts/phase6-report.js` (read-only) and review each product's new draft before publishing. Full details: `docs/phase6/REPORT.md`, `docs/ops/live-groups-of-8.md`.
 
 **Before the first seat sells:** a departure locks the rate version in force when its first seat is sold.
 
@@ -272,14 +272,14 @@ Phase 5 (migration 061, 28 Sep 2026) replaced the phase 2 card with the pricing 
 
 1. Apply migration 061 (`npm run db:migrate`). It converts every existing version: the band fees become a per-group cost line, the per-traveler amount a per-traveler line, a twin room half its rate per traveler, operator fee 0%. Check what it did: Admin → **Rate card** → **What the conversion changed**, or `node scripts/pool-migration-report.js` (read-only).
 2. The spreadsheet import (Admin → **Rate card** → **Import spreadsheet**) still reads the phase 2 columns and converts them the same way; it never sets selling prices.
-3. Open each product and, in a new draft, enter the **selling price per traveler in EGP** (one tier, 4–8; "Add a tier" is optional) and the **operator fee** (a percentage of operating cost, **required**, no default); the **cost lines** (per group, meaning per departure, or per traveler, an EGP amount); the **collecting agent's commission** (default 10%); and the **published EUR rate** (EGP per EUR, used only to show and charge travelers).
+3. Open each product and, in a new draft, enter the **selling price per traveler in EGP** (one tier, 4–8; "Add a tier" is optional) and the **operator fee** (a percentage of operating cost, **required**, no default); the **cost lines** (per group, meaning per departure, or per traveler, an EGP amount); the **collecting agent's commission** (default 10%). The EUR rate is not entered here: travelers are priced at the one site-wide **traveler rate** in Finance → Rates and settings (`docs/fx/REPORT.md`). Until that rate exists the editor and tour pages say "Exchange rate not set" and show no euro prices.
 4. Read the live table (2 to 8 travelers) and its warnings: a **negative pool** means the Minimum Departure Guarantee pays; **"pool shrinks"** means adding that traveler lowers the pool.
-5. **Publish** with an effective date of today or later. Publishing refuses missing cost amounts or fees, prices entered for only some tiers, and prices without the EUR rate. A version with no prices at all can be published: the operator is paid, but the tour page keeps the listing's price and the departure's pool waits (agency statements hold and say why), so enter prices before selling.
+5. **Publish** with an effective date of today or later. Publishing refuses missing cost amounts or fees, and prices entered for only some tiers. A version with no prices at all can be published: the operator is paid, but the tour page keeps the listing's price and the departure's pool waits (agency statements hold and say why), so enter prices before selling.
 
 ```sql
--- check: a published version in force for every active product, with prices and the EUR rate
+-- check: a published version in force for every active product, with prices (and, 064, a traveler rate in fx_traveller_rates)
 -- (one price per product now: prices_egp shows one number unless the product has tiers)
-SELECT c.catalogue_no, rv.version, rv.effective_from, rv.eur_rate, rv.commission_pct,
+SELECT c.catalogue_no, rv.version, rv.effective_from, rv.commission_pct,
        (SELECT string_agg(t->>'priceEgp', ' / ') FROM jsonb_array_elements(rv.tiers) t) AS prices_egp,
        jsonb_array_length(rv.cost_lines) AS cost_lines
   FROM catalogue_products c

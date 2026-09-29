@@ -27,6 +27,7 @@ import {
 } from "./catalogue.js";
 import { mapRate, rateInForce } from "./rates.js";
 import { tierPriceEur, tierPriceLine, tierPriceSummary } from "../shared/pool-model.js";
+import { currentTravellerRate } from "./fx.js";
 
 const TTL_MS = 30_000;
 let memo = { at: 0, value: undefined, pending: null };
@@ -66,6 +67,8 @@ async function build(now) {
   const listingBy = new Map(listings.rows.map((t) => [t.id, t]));
   // The rate card's prices, where they are complete (phase 5).
   const ratesByProduct = new Map();
+  // Every EUR price from the one site-wide traveler rate (064).
+  const eurRate = (await currentTravellerRate(pool))?.egpPerEur ?? null;
   try {
     for (const v of (await pool.query("SELECT * FROM catalogue_rate_versions WHERE state = 'published'")).rows.map(mapRate)) {
       if (!ratesByProduct.has(v.productId)) ratesByProduct.set(v.productId, []);
@@ -76,10 +79,17 @@ async function build(now) {
   }
   const pricingFor = (productId) => {
     const rate = rateInForce(ratesByProduct.get(productId) || [], today);
-    const line = rate ? tierPriceLine(rate.tiers, rate.eurRate) : null;
+    const line = rate ? tierPriceLine(rate.tiers, eurRate) : null;
     if (!line) return null;
-    const tiers = rate.tiers.map((t) => ({ from: t.from, to: t.to, eur: tierPriceEur(t.priceEgp, rate.eurRate) }));
-    return { line, summary: tierPriceSummary(rate.tiers, rate.eurRate), tiers, rateVersion: rate.version };
+    const tiers = rate.tiers.map((t) => ({ from: t.from, to: t.to, eur: tierPriceEur(t.priceEgp, eurRate) }));
+    return { line, summary: tierPriceSummary(rate.tiers, eurRate), tiers, rateVersion: rate.version };
+  };
+  // A rate card with prices but no site-wide traveler rate yet: no euro price
+  // can be shown ("Exchange rate not set") and no payment request goes out.
+  const rateNotSet = (productId) => {
+    if (eurRate != null) return false;
+    const rate = rateInForce(ratesByProduct.get(productId) || [], today);
+    return !!rate?.tiers?.length && rate.tiers.every((t) => t.priceEgp != null);
   };
   const specsBy = new Map();
   for (const s of specs.rows.map(mapSpec)) {
@@ -97,7 +107,7 @@ async function build(now) {
     // build links, so both sides agree on every URL.
     const path = listing ? tourPath({ title: product.title, city: listing.city, type: listing.type }) : null;
     const oldPath = listing ? tourPath(listing) : null;
-    return { product, listing, spec, visible, path, oldPath, pricing: pricingFor(product.id) };
+    return { product, listing, spec, visible, path, oldPath, pricing: pricingFor(product.id), rateNotSet: rateNotSet(product.id) };
   });
   const byCatalogueId = new Map(all.map((e) => [e.product.id, e]));
 
@@ -179,6 +189,7 @@ function publicSpec(entry) {
     endCity: entry.product.endCity,
     specVersion: entry.spec?.version ?? null,
     needsNationality: entry.product.needsNationality === true,
+    priceNotSet: entry.rateNotSet === true,
     priceLine: entry.pricing?.line || null,
     // "4–6 travelers €54 · 7–9 travelers €45 · 10–12 travelers €42": the tour page and the widget show this.
     priceSummary: entry.pricing?.summary || null,
