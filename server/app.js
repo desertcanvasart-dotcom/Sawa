@@ -44,6 +44,7 @@ import { registerCatalogueRoutes } from "./catalogue-routes.js";
 import { registerOperatorRoutes } from "./operator-routes.js";
 import { registerFinanceRoutes } from "./finance-routes.js";
 import { onTravellerRateChange } from "./fx.js";
+import { assertRateCardBookable } from "./rates.js";
 import { catalogueContextFor, assertBookingComplete } from "./booking-details.js";
 import { recordAgencyBooking } from "./commissions.js";
 import { fixBookingTerms } from "./cancellation-tiers.js";
@@ -442,6 +443,8 @@ async function requireCompleteBooking(c, departureId, manifest, seats, phone) {
   const ctx = await catalogueContextFor(c, departureId);
   if (!ctx) return null;
   assertBookingComplete({ ...manifest, phone }, seats, { needsNationality: ctx.needsNationality });
+  // 066: no rate card (or no price on it), or no site-wide exchange rate: not bookable.
+  await assertRateCardBookable(c, ctx.departureId);
   return ctx;
 }
 

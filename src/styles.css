@@ -7149,3 +7149,4 @@ button:disabled {
 .rate-editor .re-preview { margin: 0; font-size: 14px; }
 .rate-editor .dash-table td.re-empty { color: var(--ink-faint); font-size: 13px; padding: 16px 14px; white-space: normal; }
 .rate-editor .re-price-hint { margin-top: 6px; }
+.rate-editor .re-actions .re-delete { margin-right: auto; color: #9b2c2c; border-color: #e7c2c2; }

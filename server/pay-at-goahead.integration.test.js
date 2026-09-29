@@ -146,16 +146,15 @@ before(async () => {
   await cat.publishDraft({ productId, versionId: Number(draft), by: "it" });
   await cat.generateDepartures({ materialise: true });
 
-  // The rate card example: 2,200 EGP per traveler; fees 1,500 / 2,000 / 2,600
-  // (phase 5: a per-traveler and a per-group cost line, operator fee 0%). A
+  // The rate card example (066: one card, saved in place): 2,200 EGP per
+  // traveler; departure fees 1,500 (4–6) and 2,000 (7–8); operator fee 0%. A
   // selling price of 4,750 EGP in every tier, at 50 EGP per EUR, is the €95
   // the bookings below are charged; the collecting agent's commission 10%.
-  await rates.saveRateDraft(db, productId, { perTraveler: 2200, fee4_6: 1500, fee7_9: 2000, fee10_12: 2600, commissionPerSeat: 10 }, { by: "it" });
-  const drafted = (await rates.ratesFor(db, productId)).find((v) => v.state === "draft");
-  const rd = await rates.saveRateDraft(db, productId, {
-    tiers: drafted.tiers.map((t) => ({ ...t, priceEgp: 4750 })), costLines: drafted.costLines, commissionPct: 10,
+  await rates.saveRateCard(db, productId, {
+    tiers: [{ from: 4, to: 6, priceEgp: 4750, operatorFeePct: 0 }, { from: 7, to: 8, priceEgp: 4750, operatorFeePct: 0 }],
+    costLines: [{ name: "Departure fee", basis: "per_group", amounts: [1500, 2000] }, { name: "Per traveler", basis: "per_traveller", amounts: [2200, 2200] }],
+    commissionPct: 10,
   }, { by: "it" });
-  await rates.publishRate({ productId, versionId: rd.id, by: "it" });
   // The site-wide traveler rate (064): 50 EGP per EUR.
   const fx = await import("./fx.js");
   await fx.setExchangeRateMode(db, { mode: "manual", egpPerEur: 50, reason: "test: the agreed rate", by: "it" });

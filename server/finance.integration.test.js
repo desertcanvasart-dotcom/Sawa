@@ -17,6 +17,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import pg from "pg";
 import { freshDatabase, dropDatabase, testDbSkip } from "./test-db.js";
+import { makeToursBookable } from "./test-rate-cards.js";
 import { zonedDateTimeToUtc } from "./tz.js";
 import { shiftDate } from "../shared/catalogue.js";
 import { egyptBusinessDaysAfter } from "../shared/settlement-rules.js";
@@ -189,19 +190,23 @@ const cutoffOf = async (dep) => {
 const one = async (sql, args) => (await db.query(sql, args)).rows[0];
 
 // ---------------------------------------------------------------- A. rate card
-test("the rate card imports with commission in EUR and operator amounts in EGP, without the old USD warning", { skip }, async () => {
-  const out = await rates.importRateCard({ db, buffer: readFileSync(join(ROOT, "docs", "model", "sawa-rate-card.xlsx")), by: "it" });
-  assert.equal(out.imported.length, 21);
+test("the rate card workbook still reads (commission in EUR, operator amounts in EGP, no USD warning); the one rate card is saved in place, in EGP", { skip }, async () => {
+  const out = rates.parseRateCard(readFileSync(join(ROOT, "docs", "model", "sawa-rate-card.xlsx")));
+  assert.equal(out.rows.length, 21);
   assert.equal(out.skipped.filter((s) => s.reason === "EXAMPLE row").length, 2);
   assert.ok(!out.notes.some((n) => /USD/.test(n)), out.notes.join("\n"));
-  const draft = (await rates.ratesFor(db, productId)).find((v) => v.state === "draft");
-  assert.equal(draft.currency, "EGP");
-  assert.equal(draft.commissionCurrency, "EUR");
-  // The first catalog rates: 40 per traveler, fees 150/200/260 EGP, commission 12 EUR per seat.
-  await rates.saveRateDraft(db, productId, { perTraveler: 40, fee4_6: 150, fee7_9: 200, fee10_12: 260, commissionPerSeat: 12 }, { by: "it" });
-  const v1 = await rates.publishRate({ productId, versionId: draft.id, by: "it" });
-  assert.equal(v1.commissionPerSeat, 12);
-  await assert.rejects(db.query("UPDATE catalogue_rate_versions SET commission_currency = 'EGP' WHERE id = $1", [v1.id]));
+  // The first catalog rates (066: one card per product): 40 per traveler,
+  // departure fees 150 / 200 EGP, operator fee 0%, no selling prices yet.
+  const saved = await rates.saveRateCard(db, productId, {
+    tiers: [{ from: 4, to: 6, priceEgp: null, operatorFeePct: 0 }, { from: 7, to: 8, priceEgp: null, operatorFeePct: 0 }],
+    costLines: [{ name: "Departure fee", basis: "per_group", amounts: [150, 200] }, { name: "Per traveler", basis: "per_traveller", amounts: [40, 40] }],
+    commissionPct: 10,
+  }, { by: "it" });
+  assert.deepEqual([saved.card.currency, saved.before, saved.card.updatedBy], ["EGP", null, "it"]);
+  const again = await rates.saveRateCard(db, productId, { tiers: saved.card.tiers, costLines: saved.card.costLines, commissionPct: 10 }, { by: "it2" });
+  assert.deepEqual([again.before.updatedBy, again.card.updatedBy], ["it", "it2"], "saved in place");
+  assert.equal((await one("SELECT count(*)::int n FROM catalogue_rate_cards WHERE product_id = $1", [productId])).n, 1);
+  await makeToursBookable(db);
 });
 
 // ---------------------------------------------------------------- B. booking data
@@ -238,12 +243,12 @@ test("under the flag a catalog booking needs every traveler's details; commissio
   assert.equal(p.terms_fixed_by, "agency");
   assert.equal(Number((await one("SELECT seats_sold FROM catalogue_departure_seats WHERE catalogue_departure_id = $1", [deps.a.id])).seats_sold), 2);
 
-  // A later rate version doesn't touch a departure already locked.
-  const v2 = await rates.saveRateDraft(db, productId, { commissionPerSeat: 20 }, { by: "it" });
-  await rates.publishRate({ productId, versionId: v2.id, by: "it" });
-  const lockedA = Number((await one("SELECT rate_version_id FROM catalogue_departures WHERE id = $1", [deps.a.id])).rate_version_id);
-  assert.notEqual(lockedA, v2.id);
-  assert.equal(Number((await one("SELECT rate_version_id FROM agency_commissions WHERE pledge_id = $1", [p.id])).rate_version_id), lockedA);
+  // 066: departure A took a snapshot of the card at its first seat; a later
+  // change to the card doesn't touch it.
+  const snapA = (await one("SELECT rate_snapshot FROM catalogue_departures WHERE id = $1", [deps.a.id])).rate_snapshot;
+  assert.equal(Number(snapA.commissionPct), 10);
+  await rates.saveRateCard(db, productId, { tiers: (await rates.getRateCard(db, productId)).tiers, costLines: snapA.costLines, commissionPct: 12 }, { by: "it" });
+  assert.deepEqual((await one("SELECT rate_snapshot FROM catalogue_departures WHERE id = $1", [deps.a.id])).rate_snapshot, snapA, "A keeps its copy");
 
   // Agency B (no billing) books on departure B: commission, no invoice.
   const b = await fetch(`${on}/api/departures/${deps.b.legacy}/pledges`, { method: "POST", headers: auth("ag-b-token"), body: JSON.stringify({
@@ -253,7 +258,8 @@ test("under the flag a catalog booking needs every traveler's details; commissio
   const bp = await one("SELECT id FROM pledges WHERE departure_id = $1 AND agency_id = 'ag_b'", [deps.b.legacy]);
   deps.b.agencyPledge = bp.id;
   const bRow = await one("SELECT * FROM agency_commissions WHERE pledge_id = $1", [bp.id]);
-  assert.deepEqual([bRow.basis, Number(bRow.rate_version_id)], ["pool", v2.id], "the version in force at this booking");
+  assert.equal(bRow.basis, "pool");
+  assert.equal(Number((await one("SELECT rate_snapshot FROM catalogue_departures WHERE id = $1", [deps.b.id])).rate_snapshot.commissionPct), 12, "B's copy is the card at its first seat");
   assert.equal(await one("SELECT 1 FROM agency_invoices WHERE pledge_id = $1", [bp.id]), undefined);
 
   // With the flag off the same booking without details goes through as today.
@@ -371,11 +377,11 @@ test("adjustments: deductions are capped at the operator amount; penalties use t
   const snap = (await settle.statementFor(db, deps.b.id)).snapshot;
   assert.equal(snap.balance, 140);
   assert.equal(snap.adjustments.length, 4);
-  assert.equal(snap.band, "7–9");
+  assert.equal(snap.band, "7–8");
   assert.equal(snap.travelers.length, 8);
-  // Departure B's first seat sold after version 2 (a commission change) was
-  // published, so it is locked to version 2; the operator amounts are the same.
-  assert.equal(snap.rateVersion.version, 2);
+  // Departure B's first seat sold after the commission change: its copy has
+  // it; the operator amounts are the same.
+  assert.equal(snap.rateCard.source, "snapshot");
 });
 
 test("a statement is accepted automatically 30 days after sending; a dispute holds payment until it is resolved", { skip }, async () => {

@@ -262,7 +262,21 @@ SELECT c.catalogue_no, c.status, MAX(s.version) FILTER (WHERE s.state = 'publish
  GROUP BY c.catalogue_no, c.status ORDER BY 1;
 ```
 
-## 3. Enter and publish the rates
+## 3. Enter the rate cards
+
+> **066 (29 Sep 2026): one rate card per product, no versions.** This replaces the steps further down. Drafts, Publish and "Takes effect" are gone: **Save** updates the card and applies at once, and every change is in the audit log with the values before and after. A departure copies the card when it sells its first seat and keeps that copy. A catalogue tour can be booked only while it has a rate card and the site-wide exchange rate is set. Apply migration **066** (after 062–065) and read what it changed: Admin → **Rate card** → **What the move to one rate card changed**. The tiers must cover 4 to 8 with no gaps ("To" at most 8), the operator fee is required, and each cost line may carry a note the operator sees on the statement. Full details: `docs/rate-cards/REPORT.md`.
+>
+> ```sql
+> -- check: a rate card for every active product (and, 064, a traveler rate in fx_traveller_rates)
+> SELECT c.catalogue_no, c.title, rc.updated_by, rc.updated_at, rc.commission_pct,
+>        (SELECT string_agg((t->>'from') || '–' || (t->>'to') || ' ' || COALESCE('€' || (t->>'priceEur'), 'EGP ' || (t->>'priceEgp'), 'no price'), ' / ')
+>           FROM jsonb_array_elements(rc.tiers) t) AS prices,
+>        jsonb_array_length(rc.cost_lines) AS cost_lines
+>   FROM catalogue_products c LEFT JOIN catalogue_rate_cards rc ON rc.product_id = c.id
+>  WHERE c.status = 'active' ORDER BY 1;
+> ```
+>
+> The rest of this section is the history before 066.
 
 > **Phase 6 (29 Sep 2026) changes the steps below.** The maximum group is **8**; every product defaults to **one price for 4–8 travelers** (no 4–6 / 7–9 / 10–12 tiers unless you add one); the **operator fee is a required percentage per product** with no default; a further numbered departure opens when a departure is full. Apply migrations **062 and 063** (then **064**, the exchange rate: `docs/fx/REPORT.md`), run `node scripts/phase6-report.js` (read-only) and review each product's new draft before publishing. Full details: `docs/phase6/REPORT.md`, `docs/ops/live-groups-of-8.md`.
 
@@ -368,7 +382,7 @@ SELECT cd.id, c.code, cd.date FROM catalogue_departures cd JOIN catalogue_produc
 ## 8. Last look before the flag
 
 - [ ] Checks 0.5 and 0.6 still match your notes.
-- [ ] Every product that will sell has a published spec (step 2) and a rate version in force (step 3).
+- [ ] Every product that will sell has a published spec (step 2) and a rate card (step 3), and the site-wide exchange rate is set.
 - [ ] Launch operators are active, approved, with verified bank details and logins (step 4).
 - [ ] Today's CBE rate, the holidays, penalties and fees are set (step 5).
 - [ ] This month's and next month's rosters are published (step 6).

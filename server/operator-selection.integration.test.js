@@ -20,6 +20,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import pg from "pg";
 import { freshDatabase, dropDatabase, testDbSkip } from "./test-db.js";
+import { makeToursBookable } from "./test-rate-cards.js";
 import { shiftDate } from "../shared/catalogue.js";
 
 const skip = testDbSkip;
@@ -109,8 +110,14 @@ before(async () => {
   const draft = (await db.query("SELECT id FROM catalogue_spec_versions WHERE product_id = $1 AND state = 'draft'", [productId])).rows[0].id;
   await cat.publishDraft({ productId, versionId: Number(draft), by: "it" });
   await cat.generateDepartures({ materialise: true });
-  const rd = await rates.saveRateDraft(db, productId, { perTraveler: 2200, fee4_6: 1500, fee7_9: 2000, fee10_12: 2600, commissionPerSeat: 10 }, { by: "it" });
-  await rates.publishRate({ productId, versionId: rd.id, by: "it" });
+  // The rate card (066: one per product): 2,200 per traveler, departure fees
+  // 1,500 / 2,000, operator fee 0%, no selling prices; and a site-wide rate.
+  await rates.saveRateCard(db, productId, {
+    tiers: [{ from: 4, to: 6, priceEgp: null, operatorFeePct: 0 }, { from: 7, to: 8, priceEgp: null, operatorFeePct: 0 }],
+    costLines: [{ name: "Departure fee", basis: "per_group", amounts: [1500, 2000] }, { name: "Per traveler", basis: "per_traveller", amounts: [2200, 2200] }],
+    commissionPct: 10,
+  }, { by: "it" });
+  await makeToursBookable(db);
 
   // Three agencies that are also operators, and a rostered operator (X).
   // Agency C is an operator too, but its bank details aren't verified.

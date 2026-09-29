@@ -158,7 +158,7 @@ export function operatingCostFor(rate, tierIdx, headcount) {
     const unit = Number(l.amounts?.[tierIdx]);
     const qty = l.basis === "per_traveller" ? Number(headcount) || 0 : 1;
     const amount = cents(unit * qty);
-    lines.push({ name: l.name, basis: l.basis, unit, qty, amount });
+    lines.push({ name: l.name, basis: l.basis, unit, qty, amount, ...(l.note ? { note: l.note } : {}) });
     total += amount;
   }
   return { total: cents(total), lines };
@@ -425,4 +425,49 @@ export function eurTiersFrom(tiers, eurRate) {
     if (isNum(t.priceEur)) return { from: t.from, to: t.to, priceEur: Number(t.priceEur), operatorFeePct: t.operatorFeePct ?? null };
     return { from: t.from, to: t.to, priceEur: isNum(t.priceEgp) ? tierPriceEur(t.priceEgp, eurRate) : null, operatorFeePct: t.operatorFeePct ?? null };
   });
+}
+
+// ---------------------------------------------------------------- the rate card (066)
+// One rate card per product, saved in place (no versions). What a save must
+// satisfy, as one message, or null:
+//   - the tiers cover the tour's group sizes: the first starts at the GoAhead
+//     minimum or below, none ends above the maximum group (8; a cruise or
+//     multi-day may be up to 12), and the last ends at it; no gaps, no
+//     overlaps (poolRateError: each tier starts right after the one before)
+//   - every tier has its operator fee; every cost line an amount per tier
+//   - selling prices on every tier or on none (none: the tour isn't bookable)
+export function rateCardError(model, { goaheadMin = 4, maxGroup = 8 } = {}) {
+  const base = poolRateError(model);
+  if (base) return base;
+  const tiers = model.tiers;
+  const over = tiers.find((t) => Number(t.to) > Number(maxGroup));
+  if (over) return `Tier ${tierLabel(over)}: "To" can't be more than ${maxGroup}, the maximum group.`;
+  if (Number(tiers[0].from) > Number(goaheadMin)) return `The first tier starts at ${tiers[0].from}: start it at ${goaheadMin}, the GoAhead minimum.`;
+  if (Number(tiers[tiers.length - 1].to) < Number(maxGroup)) return `The last tier ends at ${tiers[tiers.length - 1].to}: end it at ${maxGroup}, the maximum group.`;
+  const noFee = tiers.find((t) => !isNum(t.operatorFeePct));
+  if (noFee) return `Tier ${tierLabel(noFee)}: the operator fee is required.`;
+  for (const l of model.costLines || []) {
+    const i = (l.amounts || []).findIndex((a) => !isNum(a));
+    if (i >= 0) return `Cost line "${l.name}": enter the amount for ${tierLabel(tiers[i])}.`;
+  }
+  const priced = tiers.filter(tierPriced).length;
+  if (priced && priced < tiers.length) return `Enter a price for every tier, or none (${tiers.filter((t) => !tierPriced(t)).map(tierLabel).join(", ")} ${priced === tiers.length - 1 ? "has" : "have"} none).`;
+  return null;
+}
+
+// Warnings that don't block a save: a EUR price that looks like an EGP amount
+// (more than the operating cost per traveler, in EGP, at the GoAhead minimum).
+export function rateCardWarnings(model, { goaheadMin = 4 } = {}) {
+  const tiers = model?.tiers || [];
+  if (!tiers.length) return [];
+  const n = Math.max(1, Number(goaheadMin) || 1);
+  const idx = poolTierIndex(tiers, n);
+  const lines = model.costLines || [];
+  if (lines.some((l) => !isNum(l.amounts?.[idx]))) return [];
+  const perTraveller = cents(operatingCostFor(model, idx, n).total / n);
+  if (!(perTraveller > 0)) return [];
+  return tiers.filter((t) => isNum(t.priceEur) && Number(t.priceEur) > perTraveller).map((t) => ({
+    kind: "price_looks_egp", tier: tierLabel(t),
+    text: `€${Number(t.priceEur).toLocaleString("en-US")} for ${tierLabel(t)} looks like an EGP amount: it is more than the operating cost per traveler at ${n} (${perTraveller.toLocaleString("en-US")} EGP). The price is in euros.`,
+  }));
 }

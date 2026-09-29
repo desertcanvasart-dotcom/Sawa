@@ -20,10 +20,11 @@ const read = (...p) => readFileSync(join(ROOT, ...p), "utf8");
 
 const PRODUCT = { id: 1, catalogue_no: 1, code: "GIZA", slug: "giza", title: "Giza", type: "day_tour", base_city: "Cairo",
   status: "active", goahead_min: 4, max_group: 12, cutoff_hours: 48, legacy_product_id: "t1" };
-const rateRow = (over = {}) => ({ id: 1, product_id: 1, version: 1, state: "published", effective_from: "2026-01-01", currency: "EGP",
+// A catalogue_rate_cards row (066: one card per product).
+const cardRow = (over = {}) => ({ product_id: 1, currency: "EGP",
   tiers: [{ from: 4, to: 6, priceEgp: 5192, operatorFeePct: 5 }, { from: 7, to: 9, priceEgp: 4307, operatorFeePct: 6 }, { from: 10, to: 12, priceEgp: 4071, operatorFeePct: 10 }],
   cost_lines: [], commission_pct: 10, ...over });
-const info = (over = {}) => catalogueTourInfo({ enabled: true, productRow: PRODUCT, rateRows: [rateRow()], today: "2026-09-29", eurRate: 97, ...over });
+const info = (over = {}) => catalogueTourInfo({ enabled: true, productRow: PRODUCT, cardRow: cardRow(), eurRate: 97, ...over });
 
 test("EUR prices are the EGP price over the rate, rounded up", () => {
   assert.equal(tierPriceEur(5192, 97), 54);   // 53.53
@@ -40,18 +41,18 @@ test("the three tiers render from the published rate card", () => {
   assert.deepEqual(view.rows.map((r) => [r.label, r.eur]), [["4–6", 54], ["7–9", 45], ["10–12", 42]]);
   assert.equal(view.rateCardLabel, "Edit prices in Rate card");
   assert.equal(view.warning, null);
-  assert.equal(tierPriceSummary(rateRow().tiers, 97), view.summary, "the public page reads the same function");
+  assert.equal(tierPriceSummary(cardRow().tiers, 97), view.summary, "the public page reads the same function");
 });
 
 test("one price: \"€X per person\", how it is worked out, and a link to the Rate card", () => {
-  const one = info({ rateRows: [rateRow({ tiers: [{ from: 4, to: 8, priceEgp: 5192, operatorFeePct: 5 }] })] });
+  const one = info({ cardRow: cardRow({ tiers: [{ from: 4, to: 8, priceEgp: 5192, operatorFeePct: 5 }] }) });
   const view = catalogueTourView(one);
   assert.equal(view.summary, "€54 per person");
   assert.deepEqual(view.single, { eur: 54, egp: 5192, eurRate: 97, eurPriced: false });
   assert.equal(view.howWorked, "EGP 5,192 ÷ exchange rate 97, rounded up");
   assert.equal(view.rateCardLabel, "Edit price in Rate card");
   assert.equal(tierPriceEurCheck(4851, 97), 51, "rounded up, not to the nearest");
-  const none = catalogueTourView(info({ rateRows: [] }));
+  const none = catalogueTourView(info({ cardRow: null }));
   assert.equal(none.single, null);
   assert.equal(none.warning, NO_RATE_CARD);
   assert.equal(none.rateCardLabel, "Edit price in Rate card", "the warning links to the rate card too");
@@ -73,22 +74,17 @@ test("GoAhead minimum, maximum group and cut-off show read-only from the catalog
   assert.match(facts["Booking cut-off"], /48/);
 });
 
-test("no published version: the warning, no tiers", () => {
-  for (const rateRows of [[], [rateRow({ state: "draft" })].filter(() => false)]) {
-    const view = catalogueTourView(info({ rateRows }));
-    assert.equal(view.hasRate, false);
-    assert.equal(view.warning, NO_RATE_CARD);
-    assert.equal(view.warning, "No published rate card: this tour can't be booked");
-    assert.deepEqual(view.rows, []);
-    assert.equal(view.rateCardLabel, "Edit price in Rate card", "still links to the rate card");
-  }
-  // Published but not yet in force reads as no card too.
-  assert.equal(catalogueTourView(info({ rateRows: [rateRow({ effective_from: "2026-12-01" })] })).warning, NO_RATE_CARD);
+test("no rate card: the warning, no tiers", () => {
+  const view = catalogueTourView(info({ cardRow: null }));
+  assert.equal(view.hasRate, false);
+  assert.equal(view.warning, NO_RATE_CARD);
+  assert.equal(view.warning, "No rate card: this tour can't be booked");
+  assert.deepEqual(view.rows, []);
+  assert.equal(view.rateCardLabel, "Edit price in Rate card", "still links to the rate card");
 });
 
-test("the latest published version in force wins", () => {
-  const v2 = rateRow({ id: 2, version: 2, effective_from: "2026-09-01" });
-  assert.equal(catalogueTourView(info({ rateRows: [rateRow(), v2], eurRate: 100 })).summary, "4–6 travelers €52 · 7–9 travelers €44 · 10–12 travelers €41");
+test("the one rate card is what shows, at the site-wide rate", () => {
+  assert.equal(catalogueTourView(info({ eurRate: 100 })).summary, "4–6 travelers €52 · 7–9 travelers €44 · 10–12 travelers €41");
 });
 
 test("catalogue products hide the legacy fields; legacy tours and flag-off show them", () => {
@@ -97,8 +93,8 @@ test("catalogue products hide the legacy fields; legacy tours and flag-off show 
   assert.equal(isCatalogueTour({ enabled: false }), false, "flag off");
   assert.equal(catalogueTourView({ enabled: false }), null);
   assert.equal(catalogueTourView({ enabled: true, catalogue: null }), null);
-  assert.deepEqual(catalogueTourInfo({ enabled: false, productRow: PRODUCT, today: "2026-09-29" }), { enabled: false });
-  assert.deepEqual(catalogueTourInfo({ enabled: true, productRow: undefined, today: "2026-09-29" }), { enabled: true, catalogue: null });
+  assert.deepEqual(catalogueTourInfo({ enabled: false, productRow: PRODUCT }), { enabled: false });
+  assert.deepEqual(catalogueTourInfo({ enabled: true, productRow: undefined }), { enabled: true, catalogue: null });
 
   // The editor: every legacy field sits behind the catalogue check, and the
   // legacy markup is otherwise the same as before.

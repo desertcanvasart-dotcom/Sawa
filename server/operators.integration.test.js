@@ -12,6 +12,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import pg from "pg";
 import { freshDatabase, dropDatabase, testDbSkip } from "./test-db.js";
+import { makeToursBookable } from "./test-rate-cards.js";
 import { zonedDateTimeToUtc } from "./tz.js";
 import { shiftDate } from "../shared/catalogue.js";
 import { ACK_HOURS } from "../shared/operators.js";
@@ -244,36 +245,37 @@ test("a month is planned by weekday, built, published; swaps need an admin; unro
 });
 
 // ---------------------------------------------------------------- rates
-test("the rate card imports as drafts without its EXAMPLE rows; a version locks at first seat; a new one leaves it alone", { skip }, async () => {
+test("one rate card per product, saved in place; a departure takes a copy at its first seat; later changes leave it alone", { skip }, async () => {
   const { readFileSync } = await import("node:fs");
-  const imported = await rates.importRateCard({ db, buffer: readFileSync(join(ROOT, "docs", "model", "sawa-rate-card.xlsx")), by: "it" });
-  assert.equal(imported.skipped.filter((s) => s.reason === "EXAMPLE row").length, 2);
-  assert.ok(imported.imported.some((r) => r.productId === productId));
-  assert.ok(imported.problems.every((p) => !/EXAMPLE/i.test(p)));
-  // The card's amounts are blank, so the draft can't be published as is.
-  const draft = (await rates.ratesFor(db, productId)).find((v) => v.state === "draft");
-  await assert.rejects(rates.publishRate({ productId, versionId: draft.id, by: "it" }), /Fill in the rate card/);
+  const parsed = rates.parseRateCard(readFileSync(join(ROOT, "docs", "model", "sawa-rate-card.xlsx")));
+  assert.equal(parsed.skipped.filter((s) => s.reason === "EXAMPLE row").length, 2, "the workbook still reads, EXAMPLE rows skipped");
 
-  await rates.saveRateDraft(db, productId, { perTraveler: 40, fee4_6: 150, fee7_9: 200, fee10_12: 260 }, { by: "it" });
-  const v1 = await rates.publishRate({ productId, versionId: draft.id, by: "it" });
+  const lines = (perTraveler) => [
+    { name: "Departure fee", basis: "per_group", amounts: [150, 200], note: "Higher for 7–8: bigger driver tip" },
+    { name: "Per traveler", basis: "per_traveller", amounts: [perTraveler, perTraveler] },
+  ];
+  const tiers = [{ from: 4, to: 6, priceEgp: null, operatorFeePct: 0 }, { from: 7, to: 8, priceEgp: null, operatorFeePct: 0 }];
+  // Blank amounts can't be saved.
+  await assert.rejects(rates.saveRateCard(db, productId, { tiers, costLines: [{ name: "Departure fee", basis: "per_group", amounts: [150, null] }] }, { by: "it" }), /enter the amount for 7–8/);
+  const v1 = (await rates.saveRateCard(db, productId, { tiers, costLines: lines(40), commissionPct: 10 }, { by: "it" })).card;
   assert.equal(v1.currency, "EGP");
-  await assert.rejects(db.query("UPDATE catalogue_rate_versions SET per_traveler = 1 WHERE id = $1", [v1.id]), /published/i);
+  assert.equal(v1.costLines[0].note, "Higher for 7–8: bigger driver tip");
+  await makeToursBookable(db);
 
   await pledge(deps.main.legacy, 2, { name: "Ana Lima", names: ["Ana Lima", "Bo Lima"], nationality: "Brazilian", safety: "nut allergy" });
-  const locked = (await db.query("SELECT rate_version_id, spec_version_id FROM catalogue_departures WHERE id = $1", [deps.main.id])).rows[0];
-  assert.equal(Number(locked.rate_version_id), v1.id, "locked at the first seat");
+  const locked = (await db.query("SELECT rate_snapshot, spec_version_id FROM catalogue_departures WHERE id = $1", [deps.main.id])).rows[0];
+  assert.deepEqual(locked.rate_snapshot.costLines.map((l) => l.amounts), [[150, 200], [40, 40]], "a copy at the first seat");
   assert.ok(locked.spec_version_id, "the spec in force is locked too");
 
-  const v2draft = await rates.saveRateDraft(db, productId, { perTraveler: 55 }, { by: "it" });
-  const v2 = await rates.publishRate({ productId, versionId: v2draft.id, by: "it" });
-  assert.equal(v2.version, v1.version + 1);
+  const v2 = (await rates.saveRateCard(db, productId, { tiers, costLines: lines(55), commissionPct: 10 }, { by: "it" })).card;
+  assert.equal(v2.costLines[1].amounts[0], 55, "saved in place");
   await pledge(deps.main.legacy, 2, { name: "Cy Ode" });
-  await rates.lockRatesForSoldDepartures(db, Date.now() + 5 * DAY);
-  assert.equal(Number((await db.query("SELECT rate_version_id FROM catalogue_departures WHERE id = $1", [deps.main.id])).rows[0].rate_version_id), v1.id,
-    "a new version doesn't touch a departure already sold");
+  await rates.lockRatesForSoldDepartures(db);
+  assert.deepEqual((await db.query("SELECT rate_snapshot FROM catalogue_departures WHERE id = $1", [deps.main.id])).rows[0].rate_snapshot.costLines[1].amounts, [40, 40],
+    "a change doesn't touch a departure already sold");
   await pledge(deps.later.legacy, 1);
-  assert.equal(Number((await db.query("SELECT rate_version_id FROM catalogue_departures WHERE id = $1", [deps.later.id])).rows[0].rate_version_id), v2.id,
-    "a departure first sold now takes the new version");
+  assert.deepEqual((await db.query("SELECT rate_snapshot FROM catalogue_departures WHERE id = $1", [deps.later.id])).rows[0].rate_snapshot.costLines[1].amounts, [55, 55],
+    "a departure first sold now takes the card as it is now");
 });
 
 // ---------------------------------------------------------------- assignment

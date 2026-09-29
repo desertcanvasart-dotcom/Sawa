@@ -12,6 +12,7 @@ import {
 } from "../shared/operators.js";
 import {
   DEFAULT_POOL_TIERS, DEFAULT_COMMISSION_PCT, COST_BASES, COST_BASIS_LABELS, poolRateError, poolRateTable, tierPriceLine, tierEgp, removeTierAt,
+  rateCardError, rateCardWarnings,
 } from "../shared/pool-model.js";
 import { TYPE_LABELS } from "../shared/catalogue.js";
 import { ExchangeRateControl, rateTag } from "./ExchangeRateControl.jsx";
@@ -499,11 +500,11 @@ export function RosterSection({ flash }) {
 }
 
 // ============================================================ Rate card
+// 066: one rate card per product, saved in place. Every change is in the
+// audit log; a departure that has sold a seat keeps its own copy.
 export function RatesSection({ flash }) {
   const [data, setData] = useState(null);
   const [err, setErr] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [report, setReport] = useState(null);
   const [migration, setMigration] = useState(null);
   const [editing, setEditing] = useState(null);
 
@@ -512,17 +513,6 @@ export function RatesSection({ flash }) {
   }
   useEffect(() => { load(); }, []);
 
-  async function importFile(file) {
-    if (!file) return;
-    setBusy(true); setErr("");
-    try {
-      const r = await call("/admin/rates/import", "POST", { dataUrl: await readFile(file), filename: file.name });
-      setReport(r);
-      flash(`Imported ${r.imported.length} products as drafts; ${r.skipped.length} rows skipped.`);
-      await load();
-    } catch (e) { setErr(e.message); } finally { setBusy(false); }
-  }
-
   if (editing) {
     return <RateEditor product={editing} flash={flash} onClose={() => { setEditing(null); load(); }} />;
   }
@@ -530,51 +520,32 @@ export function RatesSection({ flash }) {
   return (
     <>
       <Head title="Rate card"
-        sub="Per product: the tour price in EUR (what travelers pay) and the operator fee, the cost lines in EGP, and the collecting agent's commission. One site-wide exchange rate converts the price into EGP for the operator and agency calculations. The operator is paid its entitlement; agencies share the pool. A departure keeps the version in force when its first seat sold."
-        action={<label className="btn-ghost" style={{ cursor: "pointer" }}><Upload size={16} />Import spreadsheet
-          <input type="file" accept=".xlsx" hidden disabled={busy} onChange={(e) => importFile(e.target.files?.[0])} /></label>} />
+        sub="One rate card per product: the tour price in EUR (what travelers pay) and the operator fee, the cost lines in EGP, and the collecting agent's commission. Saving applies at once. A departure that has sold a seat keeps its own copy of the prices, so later changes never touch it." />
       {err && <div className="auth-error">{err}</div>}
-      {/* Phase 5: what migration 061 converted from the phase 2 rate card. */}
       <div className="cat-actions" style={{ justifyContent: "flex-start", marginBottom: 8 }}>
-        <button type="button" className="btn-ghost sm" onClick={() => call("/admin/rates/migration-report").then((j) => setMigration(j.lines)).catch((e) => setErr(e.message))}>What the conversion changed</button>
+        <button type="button" className="btn-ghost sm" onClick={() => call("/admin/rates/migration-report").then((j) => setMigration(j.lines)).catch((e) => setErr(e.message))}>What the move to one rate card changed</button>
       </div>
       {migration && (
         <div className="dash-card" style={{ marginBottom: 12 }}>
-          <h2>Converted to the pool model (migration 061)</h2>
+          <h2>From versions to one rate card (migration 066)</h2>
           <ul>{migration.map((l, i) => <li key={i} style={{ whiteSpace: "pre-wrap" }}>{l}</li>)}</ul>
           <div className="cat-actions"><button className="btn-ghost" onClick={() => setMigration(null)}>Close</button></div>
-        </div>
-      )}
-      {report && (
-        <div className="dash-card" style={{ marginBottom: 12 }}>
-          <h2>Import</h2>
-          <p>{report.imported.length} imported as drafts, {report.skipped.length} skipped.</p>
-          {report.notes.length > 0 && <><h3>Notes</h3><ul>{report.notes.map((n, i) => <li key={i}>{n}</li>)}</ul></>}
-          {report.problems.length > 0 && <><h3>Check these</h3><ul>{report.problems.map((n, i) => <li key={i}>{n}</li>)}</ul></>}
-          {report.skipped.length > 0 && <><h3>Skipped</h3><ul>{report.skipped.map((s, i) => <li key={i}>{s.sheet} row {s.row}: {s.reason}</li>)}</ul></>}
-          {report.imported.some((r) => r.blank.length) && <p className="field-hint">{report.imported.filter((r) => r.blank.length).length} drafts still have blank amounts; fill them in before publishing.</p>}
-          <div className="cat-actions"><button className="btn-ghost" onClick={() => setReport(null)}>Close</button></div>
         </div>
       )}
       {data && (
         <div className="table-wrap">
           <table className="dash-table">
-            <thead><tr><th>#</th><th>Product</th><th>Type</th><th>In force</th><th>Draft</th></tr></thead>
+            <thead><tr><th>#</th><th>Product</th><th>Type</th><th>Prices</th><th>Last updated</th></tr></thead>
             <tbody>
-              {data.products.map((p) => {
-                const published = p.versions.filter((v) => v.state === "published");
-                const latest = published[published.length - 1];
-                const draft = p.versions.find((v) => v.state === "draft");
-                return (
-                  <tr key={p.id} className="cat-row-link" tabIndex={0} onClick={() => setEditing(p)} onKeyDown={(e) => { if (e.key === "Enter") setEditing(p); }}>
-                    <td className="tnum">{p.catalogue_no}</td>
-                    <td><strong>{p.title}</strong></td>
-                    <td>{TYPE_LABELS[p.type] || p.type}</td>
-                    <td>{latest ? `v${latest.version} from ${dayLabel(latest.effectiveFrom)}` : <span className="tag tag-warn">None</span>}</td>
-                    <td>{draft ? `v${draft.version}` : "—"}</td>
-                  </tr>
-                );
-              })}
+              {data.products.map((p) => (
+                <tr key={p.id} className="cat-row-link" tabIndex={0} onClick={() => setEditing(p)} onKeyDown={(e) => { if (e.key === "Enter") setEditing(p); }}>
+                  <td className="tnum">{p.catalogue_no}</td>
+                  <td><strong>{p.title}</strong></td>
+                  <td>{TYPE_LABELS[p.type] || p.type}</td>
+                  <td>{p.card ? <span className="tnum">{tierPricesLabel(p.card.tiers)}</span> : <span className="tag tag-warn">No rate card: not bookable</span>}</td>
+                  <td className="field-hint">{p.card ? `${p.card.updatedBy || "—"} · ${dayLabel(p.card.updatedAt?.slice(0, 10))}` : "—"}</td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
@@ -583,78 +554,87 @@ export function RatesSection({ flash }) {
   );
 }
 
-// Phase 5 (28 Sep 2026): the pricing and money model (shared/pool-model.js).
-// Tiers with a EUR selling price (what travelers pay, phase 7) and an operator
-// fee; cost lines per group or per traveler with an EGP amount per tier; the
-// collecting agent's commission. The EGP equivalent of the price comes from
-// the site-wide exchange rate (automatic or manual), shown and changed in
-// section 3 for every tour at once. The table below is the same calculation
-// the statements use, live, for 2 to 8 travelers, at the current rate.
-const blankTiers = () => DEFAULT_POOL_TIERS.map((t) => ({ from: String(t.from), to: String(t.to), priceEur: "", operatorFeePct: t.operatorFeePct == null ? "" : String(t.operatorFeePct) }));
-const toForm = (v) => ({
+// "4–6 €43 · 7–8 €40" (an EGP price from before phase 7 says so).
+const tierPricesLabel = (tiers) => (tiers || []).map((t) => `${t.from}–${t.to} ${t.priceEur != null ? `€${t.priceEur}` : t.priceEgp != null ? `EGP ${t.priceEgp}` : "no price"}`).join(" · ");
+
+// The editor: tiers with a EUR selling price (what travelers pay) and an
+// operator fee; cost lines per group or per traveler with an EGP amount per
+// tier and an optional note; the collecting agent's commission. The EGP
+// equivalent of the price comes from the site-wide exchange rate, shown and
+// changed in section 3 for every tour at once. The table is the calculation
+// the statements use, live, at the current rate.
+const blankTiers = (p) => [{ from: String(p?.goahead_min ?? DEFAULT_POOL_TIERS[0].from), to: String(p?.max_group ?? DEFAULT_POOL_TIERS[0].to), priceEur: "", operatorFeePct: "" }];
+const toForm = (v, p) => ({
   // A tier from before phase 7 carries an EGP price: its EUR price is left to
   // enter (the EGP is shown beside it).
-  tiers: (v?.tiers?.length ? v.tiers : null)?.map((t) => ({ from: String(t.from), to: String(t.to), priceEur: t.priceEur ?? "", oldEgp: t.priceEur == null ? t.priceEgp ?? null : null, operatorFeePct: t.operatorFeePct ?? "" })) || blankTiers(),
-  costLines: (v?.costLines || []).map((l) => ({ name: l.name, basis: l.basis, amounts: (l.amounts || []).map((a) => a ?? "") })),
+  tiers: (v?.tiers?.length ? v.tiers : null)?.map((t) => ({ from: String(t.from), to: String(t.to), priceEur: t.priceEur ?? "", oldEgp: t.priceEur == null ? t.priceEgp ?? null : null, operatorFeePct: t.operatorFeePct ?? "" })) || blankTiers(p),
+  costLines: (v?.costLines || []).map((l) => ({ name: l.name, basis: l.basis, amounts: (l.amounts || []).map((a) => a ?? ""), note: l.note || "" })),
   commissionPct: v?.commissionPct ?? DEFAULT_COMMISSION_PCT,
 });
 const numOrNull = (x) => (x === "" || x == null ? null : Number(x));
 const fromForm = (f) => ({
   tiers: f.tiers.map((t) => ({ from: Number(t.from), to: Number(t.to), priceEur: numOrNull(t.priceEur), operatorFeePct: numOrNull(t.operatorFeePct) })),
-  costLines: f.costLines.map((l) => ({ name: l.name, basis: l.basis, amounts: l.amounts.map(numOrNull) })),
+  costLines: f.costLines.map((l) => ({ name: l.name, basis: l.basis, amounts: l.amounts.map(numOrNull), note: l.note || "" })),
   commissionPct: numOrNull(f.commissionPct),
 });
 const egpFmt = (n) => (n == null ? "—" : Number(n).toLocaleString("en-US", { maximumFractionDigits: 2 }));
+const whenLabel = (ts) => (ts ? new Date(ts).toLocaleString("en-GB", { timeZone: "Africa/Cairo", dateStyle: "medium", timeStyle: "short" }) : "—");
+export const DELETE_RATE_CARD_CONFIRM = "This tour can't be booked until a new rate card is saved. Departures that already sold seats keep their prices.";
 
 function RateEditor({ product, flash, onClose }) {
-  const [versions, setVersions] = useState(product.versions);
-  const draft = versions.find((v) => v.state === "draft");
-  const [form, setForm] = useState(() => toForm(draft || versions[versions.length - 1]));
-  const [effectiveFrom, setEffectiveFrom] = useState("");
+  const [card, setCard] = useState(product.card || null);
+  const [form, setForm] = useState(() => toForm(product.card, product));
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const model = fromForm(form);
-  // The site-wide exchange rate (phase 7: automatic or manual). Null before
-  // there is one; undefined while loading.
+  const limits = { goaheadMin: product.goahead_min ?? 4, maxGroup: product.max_group ?? 8 };
+  // The site-wide exchange rate (automatic or manual). Null before there is
+  // one; undefined while loading.
   const [fx, setFx] = useState(undefined);
   useEffect(() => { call("/admin/finance/exchange-rate").then(setFx).catch(() => setFx(null)); }, []);
   const eurRate = fx?.rate ?? null;
   const at = rateTag(fx);
-  const problem = poolRateError(model);
-  const table = problem ? null : poolRateTable(model, { eurRate });
-  const review = draft?.source?.phase7?.needsReview ? draft.source.phase7 : null;
+  const problem = rateCardError(model, limits);
+  const warnings = rateCardWarnings(model, limits);
+  const table = poolRateError(model) ? null : poolRateTable(model, { eurRate });
 
-  async function reload() {
-    const j = await call("/admin/rates");
-    setVersions(j.products.find((p) => p.id === product.id)?.versions || []);
-  }
   async function save(e) {
     e?.preventDefault();
     setBusy(true); setErr("");
     try {
-      await call(`/admin/rates/${product.id}/draft`, "PUT", { values: model });
-      flash("Draft saved."); await reload();
+      const out = await call(`/admin/rates/${product.id}`, "PUT", { values: model });
+      setCard(out.card); setForm(toForm(out.card, product));
+      flash(out.warnings?.length ? "Rate card saved, with a warning: check the price." : "Rate card saved. It applies straight away.");
     } catch (e2) { setErr(e2.message); } finally { setBusy(false); }
   }
-  async function publish() {
+  async function remove() {
+    if (!window.confirm(DELETE_RATE_CARD_CONFIRM)) return;
     setBusy(true); setErr("");
     try {
-      const { version } = await call(`/admin/rates/${product.id}/draft`, "PUT", { values: model });
-      await call(`/admin/rates/${product.id}/versions/${version.id}/publish`, "POST", { effectiveFrom: effectiveFrom || undefined });
-      flash(`Version ${version.version} published.`); await reload();
+      await call(`/admin/rates/${product.id}`, "DELETE");
+      setCard(null); setForm(toForm(null, product));
+      flash("Rate card deleted. The tour can't be booked until a new one is saved.");
     } catch (e2) { setErr(e2.message); } finally { setBusy(false); }
   }
   const setTier = (i, k, v) => setForm({ ...form, tiers: form.tiers.map((t, j) => (j === i ? { ...t, [k]: v } : t)) });
   const setLine = (i, patch) => setForm({ ...form, costLines: form.costLines.map((l, j) => (j === i ? { ...l, ...patch } : l)) });
+  // A new tier splits the last one (4–8 → 4–6 and 7–8), so the tiers still
+  // cover the tour's group sizes; the cost amounts are copied to it.
+  const lastSplittable = (() => { const t = form.tiers[form.tiers.length - 1]; return t && Number(t.to) > Number(t.from); })();
   const addTier = () => {
-    const last = form.tiers[form.tiers.length - 1];
-    const from = last ? Number(last.to) + 1 : 4;
-    setForm({ tiers: [...form.tiers, { from: String(from), to: String(from + 2), priceEgp: "", operatorFeePct: "" }], costLines: form.costLines.map((l) => ({ ...l, amounts: [...l.amounts, ""] })), commissionPct: form.commissionPct });
+    const i = form.tiers.length - 1;
+    const last = form.tiers[i];
+    const from = Number(last.from), to = Number(last.to);
+    const mid = Math.floor((from + to) / 2);
+    setForm({
+      ...form,
+      tiers: [...form.tiers.slice(0, i), { ...last, to: String(mid) }, { from: String(mid + 1), to: String(to), priceEur: "", operatorFeePct: last.operatorFeePct }],
+      costLines: form.costLines.map((l) => ({ ...l, amounts: [...l.amounts, l.amounts[i] ?? ""] })),
+    });
   };
-  // Its range goes to the neighbouring tier (removing 4–6 and 7–9 leaves
-  // 4–12, never a lone 10–12).
+  // Its range goes to the neighbouring tier (removing 4–6 leaves 4–8).
   const removeTier = (i) => setForm(removeTierAt(form, i));
-  const addLine = () => setForm({ ...form, costLines: [...form.costLines, { name: "", basis: "per_group", amounts: form.tiers.map(() => "") }] });
+  const addLine = () => setForm({ ...form, costLines: [...form.costLines, { name: "", basis: "per_group", amounts: form.tiers.map(() => ""), note: "" }] });
 
   return (
     <>
@@ -662,17 +642,18 @@ function RateEditor({ product, flash, onClose }) {
         action={<button className="btn-ghost" onClick={onClose}><ArrowLeft size={16} />Rate card</button>} />
       {err && <div className="auth-error">{err}</div>}
       <form className="dash-card rate-editor" style={{ marginBottom: 12 }} onSubmit={save}>
-        <h2>{draft ? `Draft v${draft.version}` : "New draft"}</h2>
-        {review && <p className="auth-error" role="status">Converted to a EUR price for your review ({review.from}, at {review.eurRate} EGP per 1 EUR, {review.mode}){review.notes?.length ? `: ${review.notes.join("; ")}` : ""}. Check it before publishing.</p>}
-        <p className="re-lead">Set the price, list what the tour costs, then check the result by group size below before publishing.</p>
+        <h2>Rate card</h2>
+        <p className="re-lead">{card
+          ? <>Last updated by <b>{card.updatedBy || "—"}</b> on {whenLabel(card.updatedAt)}. Saving applies straight away; departures that have sold a seat keep their own copy.</>
+          : <><b>No rate card:</b> this tour can't be booked until one is saved.</>}</p>
         <h3><span className="re-step">1</span>Price</h3>
-        <p className="field-hint" style={{ marginTop: 0 }}>One price per traveler, in EUR, for {product.goahead_min ?? 4}–{product.max_group ?? 8} travelers: travelers see and pay exactly this. The operator fee is required: it is set case by case for each product, and a rate card can't be published without it. Add a tier only if the price should change with the group size.</p>
+        <p className="field-hint" style={{ marginTop: 0 }}>One price per traveler, in EUR, for {limits.goaheadMin}–{limits.maxGroup} travelers: travelers see and pay exactly this. The tiers must cover {limits.goaheadMin} to {limits.maxGroup} with no gaps. The operator fee is required. Add a tier only if the price should change with the group size.</p>
         <div className="table-wrap"><table className="dash-table">
           <thead><tr><th>From</th><th>To</th><th>Tour price per traveller (EUR), what travellers pay</th><th>Operator fee (% of operating cost), required</th><th /></tr></thead>
           <tbody>{form.tiers.map((t, i) => (
             <tr key={i}>
-              <td><input className="re-num" type="number" min="1" step="1" value={t.from} onChange={(e) => setTier(i, "from", e.target.value)} style={{ width: 70 }} /></td>
-              <td><input className="re-num" type="number" min="1" step="1" value={t.to} onChange={(e) => setTier(i, "to", e.target.value)} style={{ width: 70 }} /></td>
+              <td><input className="re-num" type="number" min="1" max={limits.maxGroup} step="1" value={t.from} onChange={(e) => setTier(i, "from", e.target.value)} style={{ width: 70 }} /></td>
+              <td><input className="re-num" type="number" min="1" max={limits.maxGroup} step="1" value={t.to} onChange={(e) => setTier(i, "to", e.target.value)} style={{ width: 70 }} /></td>
               <td><input className="re-num" type="number" min="0" step="0.01" value={t.priceEur} aria-label="Tour price per traveller (EUR)" onChange={(e) => setTier(i, "priceEur", e.target.value)} />
                 <div className="field-hint tnum re-price-hint">{numOrNull(t.priceEur) == null ? (t.oldEgp != null ? `Was EGP ${egpFmt(t.oldEgp)}: enter the EUR price.` : "")
                   : eurRate == null ? "EGP: exchange rate not set"
@@ -682,12 +663,13 @@ function RateEditor({ product, flash, onClose }) {
             </tr>
           ))}</tbody>
         </table></div>
-        <div className="cat-actions" style={{ justifyContent: "flex-start" }}><button type="button" className="btn-ghost sm" onClick={addTier}>Add a tier (optional)</button></div>
+        {warnings.length > 0 && <ul className="re-warnings">{warnings.map((w, i) => <li key={i}><span className="tag tag-warn">Check the price</span> <span>{w.text}</span></li>)}</ul>}
+        <div className="cat-actions" style={{ justifyContent: "flex-start" }}><button type="button" className="btn-ghost sm" onClick={addTier} disabled={!lastSplittable}>Add a tier (optional)</button></div>
         <h3><span className="re-step">2</span>Cost lines</h3>
         <div className="table-wrap"><table className="dash-table">
-          <thead><tr><th>Name</th><th>Basis</th>{form.tiers.map((t, i) => <th key={i}>{t.from}–{t.to} (EGP)</th>)}<th /></tr></thead>
+          <thead><tr><th>Name</th><th>Basis</th>{form.tiers.map((t, i) => <th key={i}>{t.from}–{t.to} (EGP)</th>)}<th>Note (optional)</th><th /></tr></thead>
           <tbody>{!form.costLines.length && (
-            <tr><td colSpan={form.tiers.length + 3} className="re-empty">No cost lines yet. Add what the tour costs the operator: transport, guide, entrance fees, meals.</td></tr>
+            <tr><td colSpan={form.tiers.length + 4} className="re-empty">No cost lines yet. Add what the tour costs the operator: transport, guide, entrance fees, meals.</td></tr>
           )}{form.costLines.map((l, i) => (
             <tr key={i}>
               <td><input value={l.name} maxLength={80} placeholder="e.g. Transport" className="re-wide" onChange={(e) => setLine(i, { name: e.target.value })} /></td>
@@ -695,25 +677,26 @@ function RateEditor({ product, flash, onClose }) {
                 {COST_BASES.map((b) => <option key={b} value={b}>{COST_BASIS_LABELS[b]}</option>)}
               </select></td>
               {form.tiers.map((_, j) => (
-                <td key={j}><input type="number" min="0" step="0.01" value={l.amounts[j] ?? ""} onChange={(e) => setLine(i, { amounts: l.amounts.map((a, k) => (k === j ? e.target.value : a)) })} style={{ width: 100 }} /></td>
+                <td key={j}><input className="re-num" type="number" min="0" step="0.01" value={l.amounts[j] ?? ""} onChange={(e) => setLine(i, { amounts: l.amounts.map((a, k) => (k === j ? e.target.value : a)) })} style={{ width: 100 }} /></td>
               ))}
+              <td><input value={l.note} maxLength={160} placeholder="e.g. Higher for 7–8: bigger driver tip" className="re-wide" aria-label={`Note on ${l.name || "this cost line"}`} onChange={(e) => setLine(i, { note: e.target.value })} /></td>
               <td><button type="button" className="btn-mini" onClick={() => setForm({ ...form, costLines: form.costLines.filter((_, j) => j !== i) })}>Remove</button></td>
             </tr>
           ))}</tbody>
         </table></div>
+        <p className="field-hint">Notes are shown on the operator's statement beside the line.</p>
         <div className="cat-actions" style={{ justifyContent: "flex-start" }}><button type="button" className="btn-ghost sm" onClick={addLine}>Add a cost line</button></div>
-        <h3><span className="re-step">3</span>Commission, exchange rate &amp; date</h3>
+        <h3><span className="re-step">3</span>Commission &amp; exchange rate</h3>
         <div className="form-grid re-grid3">
           <label className="field"><span>Collecting agent's commission (% of the selling price)</span>
             <input type="number" min="0" max="99.99" step="0.1" value={form.commissionPct} onChange={(e) => setForm({ ...form, commissionPct: e.target.value })} /></label>
           <ExchangeRateControl summary={fx} onChanged={setFx} fromRateCard flash={flash} />
-          <label className="field"><span>Takes effect</span><input type="date" value={effectiveFrom} onChange={(e) => setEffectiveFrom(e.target.value)} /></label>
         </div>
         <div className="re-notes">
-          {fx !== undefined && eurRate == null && <p className="re-callout" role="status"><b>Exchange rate not set.</b> No euro prices are shown to travelers and no payment requests are sent until a rate is approved or a manual rate is set.</p>}
+          {fx !== undefined && eurRate == null && <p className="re-callout" role="status"><b>Exchange rate not set.</b> The rate card can be saved, but the tour can't be booked until the site-wide exchange rate is set.</p>}
           {eurRate != null && tierPriceLine(model.tiers, eurRate) && <p className="re-preview">Tour page preview: <b>Travelers pay {tierPriceLine(model.tiers, eurRate)}</b></p>}
           <p className="field-hint">The exchange rate is one rate for every tour. Each booking keeps the rate in force when it was made, and its revenue in EGP is its EUR price × that rate. Costs, fees, the commission and the pool are in EGP.</p>
-          <p className="field-hint">A published version applies to departures that haven't sold a seat yet; departures already sold keep the version they were locked to.</p>
+          <p className="field-hint">Saving changes the prices at once for departures that haven't sold a seat. A departure that has sold one keeps the copy it took then: its payment requests, statements and pool use that copy.</p>
         </div>
         {problem && <div className="auth-error">{problem}</div>}
 
@@ -741,36 +724,10 @@ function RateEditor({ product, flash, onClose }) {
           </>
         ) : <p className="field-hint">Fix the rate card above to see the table.</p>}
         <div className="cat-actions re-actions">
-          <button className="btn-ghost" disabled={busy || !!problem}>Save draft</button>
-          <button type="button" className="btn-primary" disabled={busy || !!problem} onClick={publish}>Publish</button>
+          {card && <button type="button" className="btn-ghost re-delete" disabled={busy} onClick={remove}>Delete rate card</button>}
+          <button className="btn-primary" disabled={busy || !!problem}>Save</button>
         </div>
       </form>
-      <div className="dash-card rate-editor">
-        <h2>Versions</h2>
-        {versions.length ? (
-          <div className="table-wrap">
-            <table className="dash-table">
-              <thead><tr><th>Version</th><th>From</th><th>Tiers (price per traveler · operator fee)</th><th>Cost lines</th><th>Commission</th></tr></thead>
-              <tbody>
-                {versions.map((v) => (
-                  <tr key={v.id}>
-                    <td className="re-ver"><b>v{v.version}</b> <span className={`tag ${v.state === "published" ? "tag-on" : v.state === "draft" ? "tag-ready" : "tag-off"}`}>{v.state}</span>
-                      {v.publishedBy && <div className="field-hint">{v.publishedBy}</div>}</td>
-                    <td>{v.effectiveFrom ? dayLabel(v.effectiveFrom) : "—"}</td>
-                    <td><ul className="re-list">{(v.tiers || []).map((t, i) => (
-                      <li key={i}><span className="re-range">{t.from}–{t.to}</span> <span className="tnum">{t.priceEur != null ? `€${egpFmt(t.priceEur)}` : `EGP ${egpFmt(t.priceEgp)}`}</span> <span className="re-muted">· {t.operatorFeePct == null ? "—" : `${t.operatorFeePct}%`}</span></li>
-                    ))}</ul></td>
-                    <td>{(v.costLines || []).length ? <ul className="re-list">{v.costLines.map((l, i) => <li key={i}>{l.name} <span className="re-muted">{COST_BASIS_LABELS[l.basis] || l.basis}</span></li>)}</ul> : "—"}
-                      {v.source?.migration061 && <div className="field-hint">Converted by migration 061: {(v.source.migration061.notes || []).join("; ")}</div>}
-                      {v.source?.migration064?.eurRate != null && <div className="field-hint">Had its own exchange rate ({v.source.migration064.eurRate}) until 064. Not used: every tour uses the site-wide rate.</div>}</td>
-                    <td className="tnum">{v.commissionPct}%</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : <p className="field-hint">No versions yet.</p>}
-      </div>
     </>
   );
 }
@@ -922,7 +879,7 @@ export function DepartureOperatorPanel({ departure, operators, flash, onChange, 
       {expected && (
         <>
           <h3>Expected operator amount {expected.frozen ? "(manifest frozen)" : "(live)"}</h3>
-          <p className="field-hint">Rate version {expected.rateVersion ?? "none"} · {expected.travelers} travelers{expected.band ? ` · band ${expected.band.replace("-", "–")}` : ""}. Reference only; nothing is paid from here.</p>
+          <p className="field-hint">Priced from the {expected.rateSource ?? "rate card (none yet)"} · {expected.travelers} travelers{expected.band ? ` · band ${expected.band.replace("-", "–")}` : ""}. Reference only; nothing is paid from here.</p>
           {expected.lines.length > 0 && (
             <table className="dash-table">
               <tbody>

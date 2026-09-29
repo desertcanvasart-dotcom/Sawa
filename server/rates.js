@@ -1,253 +1,184 @@
-// The rate card: versions per product, in EGP, the import from
-// sawa-rate-card.xlsx, and locking at first seat.
+// The rate card (066, catalogue_v2): ONE per product, saved in place, and a
+// frozen copy on every departure that has sold a seat.
 //
-// Phase 5 (28 Sep 2026, migration 061): a version is the pricing and money
-// model of shared/pool-model.js: tiers with a selling price and an operator
-// fee, cost lines per group or per traveler, the collecting agent's commission and the
-// published EUR rate. The phase 2 columns (per-traveler amount, band fees,
-// rooms, per-seat commission) are kept for the import, which converts them.
+//   the card      tiers (from, to, the EUR price travelers pay, the operator
+//                 fee), cost lines in EGP (per group or per traveler, one
+//                 amount per tier, an optional note), the collecting agent's
+//                 commission. Saving updates it at once; every change is in the
+//                 audit log (the routes write before and after). Deleting it
+//                 makes the tour unbookable until a new one is saved.
+//   the snapshot  catalogue_departures.rate_snapshot: the card as it was when
+//                 the departure sold its first seat (migration 066's trigger).
+//                 Payment requests, statements, the pool and settlement read
+//                 it; later edits and deletes never touch it. A departure with
+//                 no seat sold uses the card as it is now (rateForDeparture).
+//
+// The money model is shared/pool-model.js. The spreadsheet parser below is kept
+// for reading the old workbook; importing it is retired (it wrote drafts).
 import { pool, withTransaction } from "./db/index.js";
 import { readXlsx } from "./xlsx.js";
-import { todayIn, getProduct, CatalogueError } from "./catalogue.js";
-import { rateFieldsFor } from "../shared/operators.js";
+import { getProduct, CatalogueError } from "./catalogue.js";
 import {
-  poolRateError, poolRateGaps, convertLegacyRate, DEFAULT_POOL_TIERS, DEFAULT_COMMISSION_PCT, poolRateTable, tierPriced,
+  poolRateError, DEFAULT_COMMISSION_PCT, poolRateTable, tierPriced, rateCardError, rateCardWarnings,
 } from "../shared/pool-model.js";
 
 const inTx = (db, fn) => (db === pool ? withTransaction(fn) : fn(db));
-const ymd = (v) => (v instanceof Date ? v.toISOString().slice(0, 10) : v ? String(v).slice(0, 10) : null);
-const num = (v) => (v == null ? null : Number(v));
-
-export const RATE_FIELDS = {
-  perTraveler: "per_traveler", fee4_6: "fee_4_6", fee7_9: "fee_7_9", fee10_12: "fee_10_12",
-  landPerTraveler: "land_per_traveler", roomTwin: "room_twin", roomSingle: "room_single",
-  commissionPerSeat: "commission_per_seat",
-};
-
-export function mapRate(r) {
-  const out = {
-    id: Number(r.id), productId: Number(r.product_id), version: r.version, state: r.state,
-    effectiveFrom: ymd(r.effective_from), currency: r.currency, commissionCurrency: r.commission_currency || "EUR", source: r.source || {},
-    createdBy: r.created_by, createdAt: r.created_at, publishedBy: r.published_by, publishedAt: r.published_at,
-  };
-  for (const [k, col] of Object.entries(RATE_FIELDS)) out[k] = num(r[col]);
-  // Migration 061. Before it, a version reads as its conversion, so the
-  // calculation has one shape to work on either way.
-  const legacy = r.tiers === undefined ? convertLegacyRate(out) : null;
-  // Phase 7: a tier priced in EUR carries priceEur (priceEgp null).
-  out.tiers = (r.tiers ?? legacy?.tiers ?? null)?.map((t) => ({
-    from: Number(t.from), to: Number(t.to), ...(t.priceEur != null ? { priceEur: num(t.priceEur) } : {}),
-    priceEgp: num(t.priceEgp), operatorFeePct: num(t.operatorFeePct),
-  })) || null;
-  out.costLines = (r.cost_lines ?? legacy?.costLines ?? []).map((l) => ({ name: l.name, basis: l.basis, amounts: (l.amounts || []).map(num) }));
-  out.commissionPct = r.commission_pct != null ? Number(r.commission_pct) : DEFAULT_COMMISSION_PCT;
-  // No EUR rate on a version since 064: travelers are priced at the
-  // site-wide traveler rate (server/fx.js).
-  return out;
-}
-
-// Whether migration 061 is applied (the new columns exist).
-export async function poolModelAvailable(db = pool) {
-  return (await db.query(
-    "SELECT 1 FROM information_schema.columns WHERE table_name = 'catalogue_rate_versions' AND column_name = 'tiers'")).rowCount > 0;
-}
-
-// What migration 061 converted (scripts/pool-migration-report.js and the
-// rate card screen): each version, its cost lines and the conversion's notes.
-export function migrationReportLines(rows) {
-  if (!rows.length) return ["No rate versions: nothing was converted."];
-  const out = [];
-  for (const r of rows) {
-    const m = r.source?.migration061;
-    const lines = (r.cost_lines || []).map((l) => `${l.name} (${l.basis === "per_group" ? "per group" : "per traveler"}) ${(l.amounts || []).map((a) => a ?? "—").join(" / ")}`);
-    out.push(`#${r.catalogue_no} ${r.code} v${r.version} (${r.state}): ${m ? "converted" : "entered after 061"}`);
-    out.push(`    cost lines: ${lines.join("; ") || "none"}`);
-    if (m) out.push(`    notes: ${(m.notes || []).join("; ")}`);
-  }
-  const converted = rows.filter((r) => r.source?.migration061).length;
-  out.push(`${converted} of ${rows.length} version${rows.length === 1 ? "" : "s"} converted by 061. Operator fee 0% on each; selling prices and the EUR rate are entered in a new version.`);
-  return out;
-}
-
-// The editor's live table for a version: 2 to 12 travelers and the warnings.
-export const rateTableFor = (rate) => poolRateTable(rate);
-
-// The version in force on a date: published, latest effective date on or
-// before it, then highest version.
-export function rateInForce(versions, day) {
-  return versions
-    .filter((v) => v.state === "published" && v.effectiveFrom && v.effectiveFrom <= day)
-    .sort((a, b) => (a.effectiveFrom === b.effectiveFrom ? a.version - b.version : a.effectiveFrom < b.effectiveFrom ? -1 : 1))
-    .pop() || null;
-}
-
-export async function ratesFor(db, productId) {
-  const r = await db.query("SELECT * FROM catalogue_rate_versions WHERE product_id = $1 ORDER BY version", [productId]);
-  return r.rows.map(mapRate);
-}
-
-export async function rateById(db, id) {
-  if (id == null) return null;
-  const r = await db.query("SELECT * FROM catalogue_rate_versions WHERE id = $1", [id]);
-  return r.rows[0] ? mapRate(r.rows[0]) : null;
-}
-
-function cleanValues(values = {}) {
-  const out = {};
-  for (const k of Object.keys(RATE_FIELDS)) {
-    if (!(k in values)) continue;
-    const v = values[k];
-    if (v === null || v === "") { out[k] = null; continue; }
-    const n = Number(v);
-    if (!Number.isFinite(n) || n < 0) throw new CatalogueError(422, "Rates must be amounts of zero or more.");
-    out[k] = Math.round(n * 100) / 100;
-  }
-  return out;
-}
-
+const num = (v) => (v == null || v === "" ? null : Number(v));
+const iso = (v) => (v == null ? null : new Date(v).toISOString());
 const amount = (v) => (v === null || v === "" || v === undefined ? null : Math.round(Number(v) * 100) / 100);
 
-// The phase 5 fields of a draft, cleaned and checked (poolRateError).
-function cleanModel(values = {}, base = {}) {
-  const has = (k) => Object.prototype.hasOwnProperty.call(values, k);
-  const model = {
-    // Phase 7: the price is entered in EUR. A tier sent with priceEur keeps
-    // no EGP price; one sent with priceEgp only (an old client) stays in EGP.
-    tiers: has("tiers") ? (values.tiers || []).map((t) => {
-      const eur = amount(t?.priceEur);
-      return t && "priceEur" in t
-        ? { from: Number(t?.from), to: Number(t?.to), priceEur: eur, priceEgp: null, operatorFeePct: amount(t?.operatorFeePct) }
-        : { from: Number(t?.from), to: Number(t?.to), priceEgp: amount(t?.priceEgp), operatorFeePct: amount(t?.operatorFeePct) };
-    }) : base.tiers,
-    costLines: has("costLines") ? (values.costLines || []).map((l) => ({
-      name: String(l?.name || "").trim().slice(0, 80), basis: l?.basis, amounts: (l?.amounts || []).map(amount),
-    })) : base.costLines,
-    commissionPct: has("commissionPct") ? amount(values.commissionPct) : base.commissionPct,
+// ---------------------------------------------------------------- shape
+// A tier priced in EUR carries priceEur (priceEgp null); one from before the
+// EUR prices (phase 7) carries priceEgp.
+const mapTiers = (tiers) => (tiers || []).map((t) => ({
+  from: Number(t.from), to: Number(t.to), ...(t.priceEur != null ? { priceEur: num(t.priceEur) } : {}),
+  priceEgp: num(t.priceEgp), operatorFeePct: num(t.operatorFeePct),
+}));
+const mapLines = (lines) => (lines || []).map((l) => ({
+  name: l.name, basis: l.basis, amounts: (l.amounts || []).map(num), ...(l.note ? { note: String(l.note) } : {}),
+}));
+
+export function mapRateCard(r) {
+  if (!r) return null;
+  return {
+    productId: Number(r.product_id), currency: r.currency || "EGP",
+    tiers: mapTiers(r.tiers), costLines: mapLines(r.cost_lines),
+    commissionPct: r.commission_pct != null ? Number(r.commission_pct) : DEFAULT_COMMISSION_PCT,
+    source: r.source || {}, createdBy: r.created_by, createdAt: iso(r.created_at), updatedBy: r.updated_by, updatedAt: iso(r.updated_at),
   };
-  if (model.tiers?.some((t) => [t.priceEur, t.priceEgp, t.operatorFeePct].some((x) => x != null && !Number.isFinite(x)))
-    || model.costLines?.some((l) => l.amounts.some((x) => x != null && !Number.isFinite(x)))) {
+}
+
+// A departure's snapshot, in the same shape as a card (what pool-model reads).
+export function mapSnapshot(s) {
+  if (!s || !Array.isArray(s.tiers)) return null;
+  return {
+    snapshot: true, currency: s.currency || "EGP",
+    tiers: mapTiers(s.tiers), costLines: mapLines(s.costLines),
+    commissionPct: s.commissionPct != null ? Number(s.commissionPct) : DEFAULT_COMMISSION_PCT,
+    takenAt: s.takenAt || null, from: s.from || null,
+  };
+}
+
+export const snapshotOf = (card) => card && ({
+  tiers: card.tiers, costLines: card.costLines, commissionPct: card.commissionPct, currency: card.currency,
+  takenAt: new Date().toISOString(), cardUpdatedAt: card.updatedAt, cardUpdatedBy: card.updatedBy,
+});
+
+// Whether 066 is applied (the pool model needs the rate cards).
+export async function rateCardsAvailable(db = pool) {
+  return (await db.query("SELECT 1 FROM information_schema.tables WHERE table_name = 'catalogue_rate_cards'")).rowCount > 0;
+}
+export const poolModelAvailable = rateCardsAvailable;
+
+export async function getRateCard(db, productId) {
+  return mapRateCard((await db.query("SELECT * FROM catalogue_rate_cards WHERE product_id = $1", [productId])).rows[0]);
+}
+
+export async function listRateCards(db = pool) {
+  return (await db.query("SELECT * FROM catalogue_rate_cards")).rows.map(mapRateCard);
+}
+
+// The rate a departure is priced under: its snapshot once it has sold a seat,
+// the product's card as it is now before that. Null without either.
+export async function departureRate(db, dep) {
+  const snap = mapSnapshot(dep.rate_snapshot);
+  if (snap) return snap;
+  return getRateCard(db, Number(dep.product_id));
+}
+
+// The editor's live table for a card.
+export const rateTableFor = (rate, opts) => poolRateTable(rate, opts);
+
+// ---------------------------------------------------------------- save
+// The card as sent by the editor, cleaned (numbers rounded, a note per line).
+function cleanCard(values = {}) {
+  const tiers = (values.tiers || []).map((t) => (t && "priceEur" in t
+    ? { from: Number(t.from), to: Number(t.to), priceEur: amount(t.priceEur), priceEgp: null, operatorFeePct: amount(t.operatorFeePct) }
+    : { from: Number(t?.from), to: Number(t?.to), priceEgp: amount(t?.priceEgp), operatorFeePct: amount(t?.operatorFeePct) }));
+  const costLines = (values.costLines || []).map((l) => {
+    const note = String(l?.note || "").trim().slice(0, 160);
+    return { name: String(l?.name || "").trim().slice(0, 80), basis: l?.basis, amounts: (l?.amounts || []).map(amount), ...(note ? { note } : {}) };
+  });
+  const commissionPct = values.commissionPct == null || values.commissionPct === "" ? DEFAULT_COMMISSION_PCT : amount(values.commissionPct);
+  if (tiers.some((t) => [t.priceEur, t.priceEgp, t.operatorFeePct].some((x) => x != null && !Number.isFinite(x)))
+    || costLines.some((l) => l.amounts.some((x) => x != null && !Number.isFinite(x))) || !Number.isFinite(commissionPct)) {
     throw new CatalogueError(422, "Rates must be numbers.");
   }
-  if (model.commissionPct == null) model.commissionPct = DEFAULT_COMMISSION_PCT;
-  const err = poolRateError(model);
-  if (err) throw new CatalogueError(422, err);
-  return model;
+  return { tiers, costLines, commissionPct };
 }
 
-// A new draft, or the existing one, updated with `values`. A new draft starts
-// from the latest version's amounts.
-//
-// Phase 5 fields (tiers, costLines, commissionPct) are saved with
-// migration 061. Phase 2 amounts alone (the spreadsheet import) are converted
-// into cost lines, keeping any selling prices, fees and rate already entered.
-export async function saveRateDraft(db, productId, values, { by = null, source = null } = {}) {
-  await getProduct(db, productId);
-  const clean = cleanValues(values);
-  const withModel = await poolModelAvailable(db);
-  return inTx(db, async (c) => {
-    const versions = (await c.query("SELECT * FROM catalogue_rate_versions WHERE product_id = $1 ORDER BY version FOR UPDATE", [productId])).rows.map(mapRate);
-    const draft = versions.find((v) => v.state === "draft");
-    const base = draft || versions[versions.length - 1] || {};
-    const merged = {};
-    for (const k of Object.keys(RATE_FIELDS)) merged[k] = k in clean ? clean[k] : (base[k] ?? null);
-    const cols = Object.values(RATE_FIELDS);
-    const vals = Object.keys(RATE_FIELDS).map((k) => merged[k]);
-    let modelCols = [];
-    let modelVals = [];
-    if (withModel) {
-      const legacyOnly = Object.keys(clean).length > 0 && !["tiers", "costLines", "commissionPct"].some((k) => k in values);
-      const start = { tiers: base.tiers || DEFAULT_POOL_TIERS, costLines: base.costLines || [], commissionPct: base.commissionPct ?? DEFAULT_COMMISSION_PCT };
-      if (legacyOnly) {
-        // The import: its amounts become the cost lines; prices and fees stay.
-        const conv = convertLegacyRate(merged);
-        const kept = (base.tiers || []).length === conv.tiers.length ? base.tiers : conv.tiers;
-        start.tiers = kept.map((t, i) => ({ ...conv.tiers[i], priceEgp: t.priceEgp ?? null, operatorFeePct: base.tiers ? t.operatorFeePct : conv.tiers[i].operatorFeePct }));
-        start.costLines = conv.costLines;
-      }
-      const model = cleanModel(legacyOnly ? {} : values, start);
-      modelCols = ["tiers", "cost_lines", "commission_pct"];
-      modelVals = [JSON.stringify(model.tiers), JSON.stringify(model.costLines), model.commissionPct];
-    }
-    const allCols = [...cols, ...modelCols];
-    const allVals = [...vals, ...modelVals];
-    if (draft) {
-      const r = await c.query(
-        `UPDATE catalogue_rate_versions SET ${allCols.map((col, i) => `${col} = $${i + 2}`).join(", ")}
-           ${source ? `, source = $${allCols.length + 2}` : ""}
-         WHERE id = $1 RETURNING *`,
-        [draft.id, ...allVals, ...(source ? [JSON.stringify(source)] : [])]);
-      return mapRate(r.rows[0]);
-    }
-    const version = (versions[versions.length - 1]?.version || 0) + 1;
-    const r = await c.query(
-      `INSERT INTO catalogue_rate_versions (product_id, version, ${allCols.join(", ")}, source, created_by)
-       VALUES ($1, $2, ${allCols.map((_, i) => `$${i + 3}`).join(", ")}, $${allCols.length + 3}, $${allCols.length + 4}) RETURNING *`,
-      [productId, version, ...allVals, JSON.stringify(source || (versions.length ? { copiedFrom: `version ${versions.length}` } : {})), by]);
-    return mapRate(r.rows[0]);
-  });
-}
-
-// Publishing fixes a version for good. It applies to departures that haven't
-// sold a seat yet; a departure that has keeps the version it was locked to.
-export async function publishRate({ db = pool, productId, versionId, effectiveFrom, by, now = Date.now() }) {
+// Save the product's card, in place. Checked by rateCardError (the tiers
+// cover the GoAhead minimum to the maximum group, fees required, …); a EUR
+// price that looks like an EGP amount is a warning, returned, not a refusal.
+// A card saves without an exchange rate: the tour just isn't bookable until
+// the site-wide rate is set. Returns { card, before, warnings }.
+export async function saveRateCard(db, productId, values, { by = null } = {}) {
   const product = await getProduct(db, productId);
-  const today = todayIn(now);
-  const from = ymd(effectiveFrom) || today;
-  if (from < today) throw new CatalogueError(422, "A rate version can't take effect in the past.");
+  const model = cleanCard(values);
+  const err = rateCardError(model, product);
+  if (err) throw new CatalogueError(422, err);
   return inTx(db, async (c) => {
-    const r = await c.query("SELECT * FROM catalogue_rate_versions WHERE id = $1 AND product_id = $2 FOR UPDATE", [versionId, productId]);
-    if (!r.rows.length) throw new CatalogueError(404, "Rate version not found.");
-    const v = mapRate(r.rows[0]);
-    if (v.state !== "draft") throw new CatalogueError(409, "That version is already published.");
-    // Phase 5: every tier's operator fee and every cost line's amounts (the
-    // operator's entitlement needs them). Selling prices are all or none. A
-    // version without prices pays the operator; the product keeps its
-    // listing price and its pool waits for a version with prices. The EUR
-    // prices come from the site-wide traveler rate (064), not the version.
-    const priced = (v.tiers || []).filter(tierPriced).length;
-    const missing = [
-      ...poolRateGaps(v).filter((g) => !g.startsWith("price ")),
-      ...(priced && priced < v.tiers.length ? poolRateGaps(v).filter((g) => g.startsWith("price ")) : []),
-    ];
-    if (missing.length) throw new CatalogueError(422, `Fill in the rate card before publishing (missing: ${missing.join(", ")}).`);
-    // Phase 7: the tiers must cover the tour's group sizes, from its GoAhead
-    // minimum to its maximum group (a lone 10–12 tier on a tour of 4 to 8
-    // would price every departure at the 10–12 price).
-    const coverage = tierCoverageError(v.tiers, product);
-    if (coverage) throw new CatalogueError(422, coverage);
-    const pub = await c.query(
-      `UPDATE catalogue_rate_versions SET state = 'published', effective_from = $2, published_by = $3, published_at = now()
-        WHERE id = $1 RETURNING *`, [versionId, from, by]);
-    return mapRate(pub.rows[0]);
+    const before = mapRateCard((await c.query("SELECT * FROM catalogue_rate_cards WHERE product_id = $1 FOR UPDATE", [productId])).rows[0]);
+    const r = await c.query(
+      `INSERT INTO catalogue_rate_cards (product_id, tiers, cost_lines, commission_pct, created_by, updated_by)
+       VALUES ($1, $2, $3, $4, $5, $5)
+       ON CONFLICT (product_id) DO UPDATE SET tiers = EXCLUDED.tiers, cost_lines = EXCLUDED.cost_lines,
+         commission_pct = EXCLUDED.commission_pct, updated_by = EXCLUDED.updated_by, updated_at = now()
+       RETURNING *`,
+      [productId, JSON.stringify(model.tiers), JSON.stringify(model.costLines), model.commissionPct, by]);
+    return { card: mapRateCard(r.rows[0]), before, warnings: rateCardWarnings(model, product) };
   });
 }
 
-export function tierCoverageError(tiers, product) {
-  if (!tiers?.length || !product) return null;
-  const first = Number(tiers[0].from);
-  const last = Number(tiers[tiers.length - 1].to);
-  if (Number.isFinite(product.goaheadMin) && first > product.goaheadMin) {
-    return `The first tier starts at ${first}, but this tour goes ahead from ${product.goaheadMin} travelers: start it at ${product.goaheadMin}.`;
-  }
-  if (Number.isFinite(product.maxGroup) && last < product.maxGroup) {
-    return `The last tier ends at ${last}, but this tour takes up to ${product.maxGroup} travelers: end it at ${product.maxGroup}.`;
-  }
-  return null;
+// Delete the product's card: the tour can't be booked until a new one is
+// saved. Departures that sold seats keep their snapshots.
+export async function deleteRateCard(db, productId) {
+  await getProduct(db, productId);
+  const r = await db.query("DELETE FROM catalogue_rate_cards WHERE product_id = $1 RETURNING *", [productId]);
+  if (!r.rowCount) throw new CatalogueError(404, "This tour has no rate card.");
+  return mapRateCard(r.rows[0]);
 }
 
-// The status job's fallback for departures with seats sold but no locked rate
-// (a booking made before any version was published, or a trigger warning).
-export async function lockRatesForSoldDepartures(db = pool, now = Date.now()) {
-  const today = todayIn(now);
+// A tour can be booked while it has a rate card and the site-wide exchange
+// rate is set (the snapshot is taken at the first seat). A card saved without
+// selling prices books at the listing's price, as before 066, and its pool
+// waits for prices.
+export function rateCardBookable(card, eurRate) {
+  if (!card?.tiers?.length) return { ok: false, reason: "no_rate_card" };
+  if (!(Number(eurRate) > 0)) return { ok: false, reason: "no_exchange_rate" };
+  return { ok: true };
+}
+
+// The status job's fallback: a departure with seats sold and no snapshot (a
+// booking before its product had a card, or a trigger warning) takes one now.
+export async function lockRatesForSoldDepartures(db = pool) {
+  if (!(await rateCardsAvailable(db))) return 0;
   const r = await db.query(
-    `UPDATE catalogue_departures cd SET rate_version_id = rv.id, rate_locked_at = now()
-       FROM catalogue_departure_seats s,
-            (SELECT DISTINCT ON (product_id) id, product_id FROM catalogue_rate_versions
-              WHERE state = 'published' AND effective_from <= $1
-              ORDER BY product_id, effective_from DESC, version DESC) rv
-      WHERE s.catalogue_departure_id = cd.id AND s.seats_sold > 0 AND cd.rate_version_id IS NULL AND rv.product_id = cd.product_id`,
-    [today]);
+    `UPDATE catalogue_departures cd
+        SET rate_snapshot = jsonb_build_object(
+              'tiers', rc.tiers, 'costLines', rc.cost_lines, 'commissionPct', rc.commission_pct, 'currency', rc.currency,
+              'takenAt', now(), 'cardUpdatedAt', rc.updated_at, 'cardUpdatedBy', rc.updated_by),
+            rate_locked_at = now()
+       FROM catalogue_departure_seats s, catalogue_rate_cards rc
+      WHERE s.catalogue_departure_id = cd.id AND s.seats_sold > 0 AND cd.rate_snapshot IS NULL AND rc.product_id = cd.product_id`);
   return r.rowCount;
+}
+
+// What 066 did, for review (scripts/rate-card-migration-report.js).
+export function migrationReportLines(rows) {
+  if (!rows.length) return ["Migration 066 recorded nothing: there were no rate versions."];
+  const out = [];
+  const label = (r) => `#${r.catalogue_no} ${r.title}`;
+  for (const r of rows) {
+    const d = r.detail || {};
+    if (r.kind === "card") out.push(`${label(r)}: rate card from published v${d.fromVersion} (${(d.tiers || []).map((t) => `${t.from}–${t.to}`).join(", ")}; ${d.costLines} cost lines)`);
+    if (r.kind === "clamped") out.push(`${label(r)}: tier ${d.was} → ${d.now} (v${d.fromVersion})`);
+    if (r.kind === "dropped_tier") out.push(`${label(r)}: tier ${d.tier} dropped (above the maximum group of ${d.maxGroup})`);
+    if (r.kind === "newer_draft") out.push(`${label(r)}: newer draft v${d.draftVersion} (by ${d.createdBy || "—"}) NOT used; the published v${d.keptVersion} was kept. Draft tiers: ${(d.tiers || []).map((t) => `${t.from}–${t.to} ${t.priceEur != null ? `€${t.priceEur}` : `EGP ${t.priceEgp ?? "—"}`}`).join(", ")}`);
+    if (r.kind === "no_published") out.push(`${label(r)}: only a draft (v${d.draftVersion}); no rate card was made. Enter one in Admin → Rate card.`);
+    if (r.kind === "snapshot") out.push(`${label(r)}: departure ${String(d.date).slice(0, 10)} keeps v${d.version} as its snapshot`);
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------- import
@@ -341,27 +272,19 @@ export function parseRateCard(buffer) {
   return out;
 }
 
-// Import a parsed card into draft versions. Rows match products by catalog
-// number. Blank amounts are imported as blank and listed, so an admin sees
-// what the card still leaves to fill in.
-export async function importRateCard({ db = pool, buffer, filename = "sawa-rate-card.xlsx", by = null }) {
-  const parsed = parseRateCard(buffer);
-  const products = new Map((await db.query("SELECT id, catalogue_no, title, type FROM catalogue_products")).rows
-    .map((p) => [Number(p.catalogue_no), p]));
-  const imported = [];
-  const problems = [];
-  for (const row of parsed.rows) {
-    const p = products.get(row.catalogueNo);
-    if (!p) { problems.push(`${row.sheet} row ${row.row}: no catalog product #${row.catalogueNo}.`); continue; }
-    if (row.bad.length) problems.push(`${row.sheet} row ${row.row} (#${row.catalogueNo}): not a number, left blank — ${row.bad.join(", ")}.`);
-    const needed = rateFieldsFor(p.type);
-    const blank = needed.filter((k) => row.values[k] == null);
-    const sheetFits = /cruise|multi/i.test(row.sheet) === ["cruise", "multi_day"].includes(p.type);
-    if (!sheetFits) problems.push(`${row.sheet} row ${row.row}: #${row.catalogueNo} is a ${p.type} in the catalog but sits on this sheet; its columns may not fit.`);
-    const version = await saveRateDraft(db, Number(p.id), row.values, {
-      by, source: { file: filename, sheet: row.sheet, row: row.row, importedAt: new Date().toISOString() },
-    });
-    imported.push({ catalogueNo: row.catalogueNo, productId: Number(p.id), version: version.version, blank });
-  }
-  return { imported, skipped: parsed.skipped, notes: parsed.notes, problems };
+// The booking gate (066): a catalogue departure can be booked only while its
+// product has a rate card and the site-wide exchange rate is set. Throws a
+// 409 saying which. Nothing before 066.
+export const NOT_BOOKABLE = {
+  no_rate_card: "This tour can't be booked right now: it has no rate card. Please try again later.",
+  no_exchange_rate: "This tour can't be booked right now: the exchange rate isn't set. Please try again later.",
+};
+export async function assertRateCardBookable(db, catalogueDepartureId) {
+  if (!(await rateCardsAvailable(db))) return;
+  const row = (await db.query("SELECT product_id FROM catalogue_departures WHERE id = $1", [catalogueDepartureId])).rows[0];
+  if (!row) return;
+  const { currentTravellerRate } = await import("./fx.js");
+  const [card, rate] = await Promise.all([getRateCard(db, Number(row.product_id)), currentTravellerRate(db)]);
+  const check = rateCardBookable(card, rate?.egpPerEur);
+  if (!check.ok) throw Object.assign(new CatalogueError(409, NOT_BOOKABLE[check.reason]), { reason: check.reason, expose: true });
 }

@@ -11,7 +11,7 @@
 //   8 travelers   Agency A operates (3 places), Agency B has 2, 3 direct:
 //                 A 10,388 as operator + 2,819.4 as agency; B 1,879.6; the
 //                 agent 4,809; statements separate, EUR at the statement date
-//   tier drop     7–9 to 10–12 after payment: the EUR difference refunded
+//   tier drop     4–6 to 7–8 after payment: the EUR difference refunded
 //   2 travelers   pool −1,308: the agent pays the guarantee; no agency share
 //   FX            only the agent's FX line moves with the CBE rate
 //   migration     phase 2 versions converted, and reported
@@ -38,13 +38,12 @@ const GIZA = "tour_giza_pyramids_sphinx_the_grand_e_mq41k335";
 const MODEL = {
   tiers: [
     { from: 4, to: 6, priceEgp: 2540, operatorFeePct: 5 },
-    { from: 7, to: 9, priceEgp: 2487, operatorFeePct: 6 },
-    { from: 10, to: 12, priceEgp: 2360, operatorFeePct: 10 },
+    { from: 7, to: 8, priceEgp: 2487, operatorFeePct: 6 },
   ],
   costLines: [
-    { name: "Transport", basis: "per_group", amounts: [2200, 2200, 3300] },
-    { name: "Guide", basis: "per_group", amounts: [2000, 2000, 2000] },
-    { name: "Entry fees", basis: "per_traveller", amounts: [700, 700, 700] },
+    { name: "Transport", basis: "per_group", amounts: [2200, 2200] },
+    { name: "Guide", basis: "per_group", amounts: [2000, 2000] },
+    { name: "Entry fees", basis: "per_traveller", amounts: [700, 700] },
   ],
   commissionPct: 10,
 };
@@ -216,36 +215,35 @@ const finish = async (dep) => {
 };
 
 // ---------------------------------------------------------------- the rate card
-test("the rate card: published, the tour page shows each tier in whole euros at the site-wide traveler rate", { skip }, async () => {
-  // No EUR rate on the version any more (064): an old client's field is ignored.
-  const withOld = await rates.saveRateDraft(db, productId, { ...MODEL, eurRate: 99 }, { by: "it" });
-  assert.equal("eurRate" in withOld, false);
-  const cols = (await db.query("SELECT column_name FROM information_schema.columns WHERE table_name = 'catalogue_rate_versions' AND column_name = 'eur_rate'")).rowCount;
-  assert.equal(cols, 0, "064 dropped the per-version rate");
-  await assert.rejects(rates.saveRateDraft(db, productId, { ...MODEL, costLines: [{ name: "Van", basis: "per_room", amounts: [1, 1, 1] }] }, { by: "it" }), /per group" or "per traveler/);
-  // Seen by the tour page before the version is published: the listing's price.
+test("the rate card: saved in place (audited); the tour page shows each tier in whole euros at the site-wide rate", { skip }, async () => {
+  const admin = { Authorization: "Bearer ops-token", "Content-Type": "application/json" };
+  // No EUR rate on the card (064): an old client's field is ignored.
+  const withOld = await rates.saveRateCard(db, productId, { ...MODEL, eurRate: 99 }, { by: "it" });
+  assert.equal("eurRate" in withOld.card, false);
+  await rates.deleteRateCard(db, productId);
+  await assert.rejects(rates.saveRateCard(db, productId, { ...MODEL, costLines: [{ name: "Van", basis: "per_room", amounts: [1, 1] }] }, { by: "it" }), /per group" or "per traveler/);
+  // No rate card yet: the tour page says it can't be booked, with no price.
   const before = (await (await fetch(`${on}/api/bootstrap`)).json()).tourProducts.find((p) => p.id === GIZA);
-  assert.deepEqual([before.catalogue.priceLine, before.publishedRate], [null, 95]);
-  // The traveler rate, set by hand in Finance (the admin route: a write, so
+  assert.deepEqual([before.catalogue.priceLine, before.catalogue.priceUnavailable], [null, "Not bookable right now"]);
+  // The exchange rate, set by hand in Finance (the admin route: a write, so
   // the public caches drop).
-  const set = await fetch(`${on}/api/admin/finance/exchange-rate`, {
-    method: "PUT", headers: { Authorization: "Bearer ops-token", "Content-Type": "application/json" },
+  const set = await fetch(`${on}/api/admin/finance/exchange-rate`, { method: "PUT", headers: admin,
     body: JSON.stringify({ mode: "manual", egpPerEur: 50, reason: "test: the agreed rate" }) });
   assert.equal(set.status, 200, await set.text());
-  // Published through the admin screen, which drops the public caches.
-  const v = await rates.saveRateDraft(db, productId, MODEL, { by: "it" });
-  const res = await fetch(`${on}/api/admin/rates/${productId}/versions/${v.id}/publish`, {
-    method: "POST", headers: { Authorization: "Bearer ops-token", "Content-Type": "application/json" }, body: "{}" });
+  // Saved through the admin screen, which drops the public caches and writes the audit log.
+  const res = await fetch(`${on}/api/admin/rates/${productId}`, { method: "PUT", headers: admin, body: JSON.stringify({ values: MODEL }) });
   const body = await res.json();
   assert.equal(res.status, 200, JSON.stringify(body));
-  rateVersion = body.version;
-  assert.deepEqual([rateVersion.commissionPct, rateVersion.tiers.map((t) => t.priceEgp)], [10, [2540, 2487, 2360]]);
+  rateVersion = body.card;
+  assert.deepEqual([rateVersion.commissionPct, rateVersion.tiers.map((t) => t.priceEgp), rateVersion.updatedBy], [10, [2540, 2487], "ops@sawa.test"]);
+  const audit = await one("SELECT * FROM audit_log WHERE action = 'rates.create' ORDER BY created_at DESC LIMIT 1");
+  assert.deepEqual([audit.detail.before, audit.detail.after.tiers.length], [null, 2]);
 
   const boot = await (await fetch(`${on}/api/bootstrap`)).json();
   const giza = boot.tourProducts.find((p) => p.id === GIZA);
-  assert.equal(giza.catalogue.priceLine, "€51 per person, €50 from 7 travelers, €48 from 10", "2,360 ÷ 50 = 47.2, rounded up");
-  assert.deepEqual([giza.publishedRate, giza.breakPrice], [51, 48]);
-  assert.deepEqual(giza.priceTiers, [{ seats: 4, price: 51 }, { seats: 7, price: 50 }, { seats: 10, price: 48 }]);
+  assert.equal(giza.catalogue.priceLine, "€51 per person, €50 from 7 travelers", "2,487 ÷ 50 = 49.7, rounded up");
+  assert.deepEqual([giza.publishedRate, giza.breakPrice, giza.catalogue.priceUnavailable], [51, 50, null]);
+  assert.deepEqual(giza.priceTiers, [{ seats: 4, price: 51 }, { seats: 7, price: 50 }]);
 });
 
 test("a booking keeps the traveler rate in force when made and is quoted its tier; the request charges the tier the departure is in then, at that rate", { skip }, async () => {
@@ -347,30 +345,30 @@ test("FX: the CBE rate on the charge day moves only the agent's FX line", { skip
 });
 
 // ---------------------------------------------------------------- the tier drop
-test("a departure that moves from 7–9 to 10–12 after payment refunds the EUR difference to each paid traveler; nobody pays more", { skip }, async () => {
+test("a departure that moves from 4–6 to 7–8 after payment refunds the EUR difference to each paid traveler; nobody pays more", { skip }, async () => {
   const d = deps.c;
-  const early = [];
-  for (let i = 0; i < 4; i++) early.push(await book(d, 2));
+  const early = [await book(d, 2), await book(d, 2)];
   await cat.runStatusJob({});
   await assignX(d);
-  for (const id of early) assert.equal(Number((await reqOf(id)).amount_eur), 100, "8 travelers: 7–9, €50 a seat");
+  for (const id of early) assert.equal(Number((await reqOf(id)).amount_eur), 102, "4 travelers: 4–6, €51 a seat");
   await payAll(d);
-  // Two more before the cut-off: 10 travelers, the 10–12 tier (€48).
-  const late = await book(d, 2);
-  assert.equal(Number((await one("SELECT price_per_person FROM pledges WHERE id = $1", [late])).price_per_person), 48);
+  // Four more before the cut-off: 8 travelers, the 7–8 tier (€50).
+  const late = [await book(d, 2), await book(d, 2)];
+  assert.equal(Number((await one("SELECT price_per_person FROM pledges WHERE id = $1", [late[1]])).price_per_person), 50, "quoted at 8: the 7–8 tier");
   await pag.runPayAtGoAheadTick({ db, now: Date.now(), send });
-  assert.equal(Number((await reqOf(late)).amount_eur), 96, "the later booking pays the cheaper tier");
+  assert.deepEqual([Number((await reqOf(late[0])).amount_eur), Number((await reqOf(late[1])).amount_eur)], [100, 100],
+    "the later bookings pay the tier the departure is in when asked (the first was quoted €51 at 6)");
   await payAll(d);
   await asg.freezeManifests({ db, now: cutoffOf(d) + MIN });
   const tick = await poolS.runPoolTick({});
-  assert.equal(tick.tierRefunds, 4, JSON.stringify(tick));
+  assert.equal(tick.tierRefunds, 2, JSON.stringify(tick));
   const refunds = (await db.query("SELECT * FROM payment_refunds WHERE pledge_id = ANY($1::text[]) AND kind = 'tier_difference'", [early])).rows;
-  assert.deepEqual(refunds.map((f) => Number(f.amount_eur)), [4, 4, 4, 4], "2 × (€50 − €48)");
+  assert.deepEqual(refunds.map((f) => Number(f.amount_eur)), [2, 2], "2 × (€51 − €50)");
   const tasks = (await db.query(
     "SELECT t.* FROM payment_tasks t JOIN payment_refunds f ON f.id = t.refund_id WHERE f.kind = 'tier_difference' AND t.kind = 'issue_refund'")).rows;
-  assert.equal(tasks.length, 4, "with tab-manual, an ops task each");
-  assert.match(tasks[0].title, /^Refund €4 in Tab for /);
-  assert.equal((await db.query("SELECT 1 FROM payment_refunds WHERE pledge_id = $1", [late])).rowCount, 0);
+  assert.equal(tasks.length, 2, "with tab-manual, an ops task each");
+  assert.match(tasks[0].title, /^Refund €2 in Tab for /);
+  assert.equal((await db.query("SELECT 1 FROM payment_refunds WHERE pledge_id = ANY($1::text[])", [late])).rowCount, 0);
   assert.equal((await poolS.runPoolTick({})).tierRefunds, 0, "once");
 });
 
@@ -395,43 +393,6 @@ test("2 travelers, guaranteed: pool −1,308; the agent pays a 1,308 guarantee; 
   assert.equal(Number(bal.detail.operatorAmount), 5880, "the operator is paid its entitlement in full");
   const st = await settle.statementFor(db, d.id);
   assert.ok(st.snapshot.distribution.lines.some((l) => l.key === "minimum_departure_guarantee" && l.amountEgp === 1308));
-});
-
-// ---------------------------------------------------------------- the migration
-test("migration 061 converts a phase 2 version and records what it did", { skip }, async () => {
-  const old = (await db.query(
-    `INSERT INTO catalogue_rate_versions (product_id, version, land_per_traveler, room_twin, room_single, fee_4_6, fee_7_9, fee_10_12, commission_per_seat)
-     VALUES ($1, 99, 3000, 5000, 4000, 1500, 2000, 2600, 12) RETURNING id`, [productId])).rows[0].id;
-  await db.query("UPDATE catalogue_rate_versions SET tiers = NULL, cost_lines = NULL WHERE id = $1", [old]);
-  await db.query(readFileSync(join(ROOT, "server", "db", "schema_061_pool_model.sql"), "utf8"));
-  const v = rates.mapRate(await one("SELECT * FROM catalogue_rate_versions WHERE id = $1", [old]));
-  assert.deepEqual(v.tiers.map((t) => [t.from, t.to, t.priceEgp, t.operatorFeePct]), [[4, 6, null, 0], [7, 9, null, 0], [10, 12, null, 0]]);
-  assert.deepEqual(v.costLines, [
-    { name: "Departure fee", basis: "per_group", amounts: [1500, 2000, 2600] },
-    { name: "Land services", basis: "per_traveller", amounts: [3000, 3000, 3000] },
-    { name: "Room or cabin (twin share)", basis: "per_traveller", amounts: [2500, 2500, 2500] },
-  ]);
-  const notes = v.source.migration061.notes.join("; ");
-  assert.match(notes, /single room 4000(\.00)? not carried/);
-  assert.match(notes, /fixed agency commission 12(\.00)? per seat retired/);
-  // The same rule as the shared conversion, so the import and the migration agree.
-  const { convertLegacyRate } = await import("../shared/pool-model.js");
-  assert.deepEqual(convertLegacyRate({ landPerTraveler: 3000, roomTwin: 5000, roomSingle: 4000, fee4_6: 1500, fee7_9: 2000, fee10_12: 2600 }).costLines, v.costLines);
-  // Reported, for the rate card screen and the script.
-  const lines = rates.migrationReportLines((await db.query(
-    `SELECT c.catalogue_no, c.code, v.version, v.state, v.cost_lines, v.source
-       FROM catalogue_rate_versions v JOIN catalogue_products c ON c.id = v.product_id WHERE v.id = $1`, [old])).rows);
-  assert.match(lines[0], /converted/);
-  assert.match(lines.at(-1), /1 of 1 version converted by 061/);
-  // Running the migration again changes nothing already converted.
-  await db.query(readFileSync(join(ROOT, "server", "db", "schema_061_pool_model.sql"), "utf8"));
-  assert.deepEqual(rates.mapRate(await one("SELECT * FROM catalogue_rate_versions WHERE id = $1", [old])).costLines, v.costLines);
-  // 061 again re-adds its (empty) EUR column; 064 again takes it away, with
-  // the traveler rate untouched: every migration runs on each db:migrate.
-  const rateBefore = (await one("SELECT count(*)::int n FROM fx_traveller_rates")).n;
-  await db.query(readFileSync(join(ROOT, "server", "db", "schema_064_automatic_fx.sql"), "utf8"));
-  assert.equal((await db.query("SELECT 1 FROM information_schema.columns WHERE table_name = 'catalogue_rate_versions' AND column_name = 'eur_rate'")).rowCount, 0);
-  assert.equal((await one("SELECT count(*)::int n FROM fx_traveller_rates")).n, rateBefore);
 });
 
 // ---------------------------------------------------------------- merge into a catalog date
@@ -507,20 +468,18 @@ test("a EUR price: travelers pay €97 exactly; each booking keeps its rate acro
   const dep = { id: Number(r7.id), date: ymd(r7.date), legacy: Number(r7.legacy_departure_id) };
   // Manual: 59, used exactly.
   await fx.setExchangeRateMode(db, { mode: "manual", egpPerEur: 59, reason: "test: the bank's rate", by: "it" });
-  const v = await rates.saveRateDraft(db, productId, {
+  const v = (await rates.saveRateCard(db, productId, {
     tiers: [{ from: 4, to: 8, priceEur: 97, operatorFeePct: 5 }],
     costLines: [
       { name: "Transport", basis: "per_group", amounts: [2650] }, { name: "Guide", basis: "per_group", amounts: [2000] },
       { name: "Entrance fees", basis: "per_traveller", amounts: [2250] }, { name: "Lunch", basis: "per_traveller", amounts: [400] },
     ],
     commissionPct: 10,
-  }, { by: "it" });
+  }, { by: "it" })).card;
   assert.deepEqual(v.tiers, [{ from: 4, to: 8, priceEur: 97, priceEgp: null, operatorFeePct: 5 }]);
-  // A lone tier that doesn't reach the GoAhead minimum can't be published (the Giza draft).
-  const bad = await rates.saveRateDraft(db, productId, { tiers: [{ from: 10, to: 12, priceEur: 97, operatorFeePct: 5 }], costLines: [] }, { by: "it" });
-  await assert.rejects(rates.publishRate({ productId, versionId: bad.id, by: "it" }), /starts at 10/);
-  await rates.saveRateDraft(db, productId, { tiers: v.tiers, costLines: v.costLines, commissionPct: 10 }, { by: "it" });
-  await rates.publishRate({ productId, versionId: v.id, by: "it" });
+  // A lone tier 10–12 (the Giza draft) can't be saved: "To" is at most 8, and the tiers must start at 4.
+  await assert.rejects(rates.saveRateCard(db, productId, { tiers: [{ from: 10, to: 12, priceEur: 97, operatorFeePct: 5 }], costLines: [] }, { by: "it" }), /can't be more than 8/);
+  await assert.rejects(rates.saveRateCard(db, productId, { tiers: [{ from: 5, to: 8, priceEur: 97, operatorFeePct: 5 }], costLines: [] }, { by: "it" }), /first tier starts at 5/);
 
   const a = await book(dep, 2);
   assert.deepEqual(Object.values(await one("SELECT published_eur_rate, price_per_person, booking_total FROM pledges WHERE id = $1", [a])).map(Number), [59, 97, 194]);
@@ -546,4 +505,44 @@ test("a EUR price: travelers pay €97 exactly; each booking keeps its rate acro
   await cat.runStatusJob({});
   await assignX(dep);
   assert.deepEqual([Number((await reqOf(a)).amount_eur), Number((await reqOf(b)).amount_eur)], [194, 194]);
+});
+
+// ---------------------------------------------------------------- 066: the routes
+test("066 routes: an update and a delete are audited with before and after; a deleted card makes the tour unbookable, and saving again reopens it", { skip }, async () => {
+  const admin = { Authorization: "Bearer ops-token", "Content-Type": "application/json" };
+  const card = (await (await fetch(`${on}/api/admin/rates`, { headers: admin })).json()).products.find((p) => p.id === productId).card;
+  assert.ok(card.updatedBy && card.updatedAt, "the list says who last updated it and when");
+  const changed = { tiers: card.tiers, costLines: card.costLines.map((l, i) => (i === 0 ? { ...l, note: "Higher for 7–8: bigger driver tip" } : l)), commissionPct: 11 };
+  const put = await fetch(`${on}/api/admin/rates/${productId}`, { method: "PUT", headers: admin, body: JSON.stringify({ values: changed }) });
+  assert.equal(put.status, 200, await put.text());
+  const upd = await one("SELECT * FROM audit_log WHERE action = 'rates.update' ORDER BY created_at DESC LIMIT 1");
+  assert.deepEqual([upd.actor_email, Number(upd.detail.before.commissionPct), Number(upd.detail.after.commissionPct), upd.detail.after.costLines[0].note],
+    ["ops@sawa.test", card.commissionPct, 11, "Higher for 7–8: bigger driver tip"]);
+
+  const del = await fetch(`${on}/api/admin/rates/${productId}`, { method: "DELETE", headers: admin });
+  assert.equal(del.status, 200, await del.text());
+  const audit = await one("SELECT * FROM audit_log WHERE action = 'rates.delete' ORDER BY created_at DESC LIMIT 1");
+  assert.deepEqual([Number(audit.detail.before.commissionPct), audit.detail.after], [11, null]);
+  // Snapshots stay: every departure that sold a seat still has its copy.
+  assert.equal((await one("SELECT count(*)::int n FROM catalogue_departures cd JOIN catalogue_departure_seats s ON s.catalogue_departure_id = cd.id WHERE s.seats_sold > 0 AND cd.rate_snapshot IS NULL AND cd.product_id = $1", [productId])).n, 0);
+  // The tour can't be booked: the page says so, and a booking is refused.
+  const page = (await (await fetch(`${on}/api/bootstrap`)).json()).tourProducts.find((p) => p.id === GIZA);
+  assert.deepEqual([page.catalogue.priceUnavailable, page.catalogue.priceLine], ["Not bookable right now", null]);
+  const r8 = (await db.query(
+    `SELECT legacy_departure_id FROM catalogue_departures WHERE product_id = $1 AND legacy_departure_id IS NOT NULL AND status = 'open' AND date >= $2::date + 20
+      ORDER BY date OFFSET 7 LIMIT 1`, [productId, today()])).rows[0];
+  const attempt = () => fetch(`${on}/api/public/departures/${r8.legacy_departure_id}/bookings`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ customerName: "Zoe Ray", customerEmail: "zoe@example.test", customerPhone: "+201001112299", seats: 2,
+      travelerNames: ["Zoe Ray", "Ann Ray"], pickupPoint: "Mena House", safetyNone: true }),
+  });
+  const refused = await attempt();
+  assert.equal(refused.status, 409);
+  assert.match((await refused.json()).error, /can't be booked right now: it has no rate card/);
+  // Saved again: bookable.
+  const again = await fetch(`${on}/api/admin/rates/${productId}`, { method: "PUT", headers: admin, body: JSON.stringify({ values: changed }) });
+  assert.equal(again.status, 200);
+  assert.equal((await one("SELECT action FROM audit_log WHERE action LIKE 'rates.%' ORDER BY created_at DESC LIMIT 1")).action, "rates.create");
+  const ok = await attempt();
+  assert.equal(ok.status, 201, await ok.text());
 });

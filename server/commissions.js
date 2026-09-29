@@ -84,11 +84,10 @@ export async function recordAgencyBooking(c, { pledgeId, agency, catalogueDepart
 // request goes out, at the tier the departure is in then).
 async function recordPoolBooking(c, { pledgeId, agency, catalogueDepartureId }) {
   const p = (await c.query("SELECT seats, booking_total, payment_mode FROM pledges WHERE id = $1", [pledgeId])).rows[0];
-  const rv = (await c.query("SELECT rate_version_id FROM catalogue_departures WHERE id = $1", [catalogueDepartureId])).rows[0];
   await c.query(
     `INSERT INTO agency_commissions (pledge_id, agency_id, departure_id, rate_version_id, seats, basis, state_reason)
      VALUES ($1, $2, $3, $4, $5, 'pool', $6) ON CONFLICT (pledge_id) DO NOTHING`,
-    [pledgeId, agency.id, catalogueDepartureId, rv?.rate_version_id ?? null, Number(p.seats),
+    [pledgeId, agency.id, catalogueDepartureId, null, Number(p.seats),
       "Paid from the departure's pool once it is over."]);
   let invoice = null;
   if (agency.billing_approved === true) {

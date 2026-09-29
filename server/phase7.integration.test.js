@@ -1,6 +1,6 @@
 // Phase 7 on a real Postgres: the repaired 063 (the product's own range, the
-// first tier, every cost line), and the conversion of existing rate cards to
-// EUR prices as drafts for review. docs/phase7/REPORT.md.
+// first tier, every cost line). docs/phase7/REPORT.md. (The conversion into
+// EUR drafts went with the versions in 066: server/rate-cards.integration.test.js.)
 //
 // Skips without TEST_DATABASE_URL.
 import { test, before, after } from "node:test";
@@ -15,7 +15,7 @@ import { freshDatabase, dropDatabase, testDbSkip } from "./test-db.js";
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const DB_NAME = "sawa_test_phase7";
 const skip = testDbSkip;
-let db, dbUrl, conv, fx, rates;
+let db, dbUrl, fx, rates;
 const one = async (sql, args) => (await db.query(sql, args)).rows[0];
 
 const THREE = JSON.stringify([
@@ -66,7 +66,6 @@ before(async () => {
   process.env.DATABASE_URL = dbUrl;
   process.env.PGSSL = "false";
   process.env.FEATURES = "catalogue_v2";
-  conv = await import("./eur-conversion.js");
   fx = await import("./fx.js");
   rates = await import("./rates.js");
 });
@@ -90,47 +89,3 @@ test("063, repaired: the FIRST tier, from the GoAhead minimum to the maximum gro
   assert.deepEqual((await one("SELECT tiers FROM catalogue_rate_versions WHERE product_id = $1 AND state = 'draft'", [ids.GIZA])).tiers[0].from, 10);
 });
 
-test("no site-wide exchange rate: nothing is converted", { skip }, async () => {
-  const plan = await conv.planEurConversion();
-  assert.match(plan.error, /no site-wide exchange rate/);
-});
-
-test("the conversion: EGP ÷ the current site-wide rate, rounded up, as new drafts for review; a person's draft is listed, never overwritten; nothing published", { skip }, async () => {
-  await db.query("INSERT INTO fx_rates (day, egp_per_eur, status, source) VALUES ('2026-09-29', 59, 'approved', 'manual')");
-  const { pool } = await import("./db/index.js");
-  assert.equal((await fx.setExchangeRateMode(pool, { mode: "automatic", by: "it" })).rate.egpPerEur, 57.23);
-  const published = (await one("SELECT count(*)::int n FROM catalogue_rate_versions WHERE state = 'published'")).n;
-
-  const dry = await conv.planEurConversion();
-  const by = Object.fromEntries(dry.items.map((i) => [i.code, i]));
-  assert.equal(dry.eurRate, 57.23);
-  assert.deepEqual([by.GIZA.action, by.GIZA.draft.origin], ["list", "editor"], "the Giza draft is a person's (the editor): listed");
-  assert.deepEqual(by.GIZA.problems, ["tiers 10–12 don't cover 4–8", "4 of 4 cost lines missing compared with v1"]);
-  assert.deepEqual(by.GIZA.wouldBe.tiers, [{ from: 4, to: 8, priceEur: 91, operatorFeePct: 5 }], "5,192 ÷ 57.23 = 90.72 → €91 (never ÷ 97)");
-  assert.deepEqual([by.LUXOR.action, by.LUXOR.draft.origin], ["replace", "migration063_untouched"]);
-  assert.deepEqual([by.ASWAN.action, by.ASWAN.draft.origin], ["replace", "migration063_untouched"], "063's repaired range is recognised as its own");
-  assert.deepEqual([by.ALEX.action, by.ALEX.wouldBe.tiers[0].priceEur], ["create", 56], "3,200 ÷ 57.23 = 55.91 → €56");
-  assert.deepEqual([by.SIWA.action, by.SIWA.draft.origin], ["list", "editor"]);
-  assert.equal((await one("SELECT count(*)::int n FROM catalogue_rate_versions WHERE source ? 'phase7'")).n, 0, "a dry run writes nothing");
-
-  const done = await conv.applyEurConversion(pool, { now: Date.parse("2026-09-29T10:00:00Z") });
-  assert.ok(conv.conversionLines(done).some((l) => /#1 GIZA tour: list/.test(l)));
-  const draft = (code) => one("SELECT * FROM catalogue_rate_versions WHERE product_id = $1 AND state = 'draft'", [ids[code]]);
-  const alex = await draft("ALEX");
-  assert.deepEqual([alex.version, alex.tiers, alex.source.phase7.needsReview, alex.source.phase7.eurRate], [2, [{ from: 4, to: 8, priceEur: 56, operatorFeePct: 5 }], true, 57.23]);
-  const luxor = await draft("LUXOR");
-  assert.deepEqual([luxor.tiers[0].priceEur, luxor.cost_lines.length, luxor.source.phase7.replaced], [91, 4, "v2 (migration063_untouched)"]);
-  assert.equal((await draft("GIZA")).tiers[0].priceEgp, 4071, "Giza's draft untouched");
-  assert.equal((await draft("SIWA")).tiers[0].priceEgp, 6500, "Siwa's draft untouched");
-  assert.equal((await one("SELECT count(*)::int n FROM catalogue_rate_versions WHERE state = 'published'")).n, published, "nothing published");
-  // The editor reads the new draft in EUR.
-  const mapped = (await rates.ratesFor(pool, ids.ALEX)).find((v) => v.state === "draft");
-  assert.deepEqual(mapped.tiers, [{ from: 4, to: 8, priceEur: 56, priceEgp: null, operatorFeePct: 5 }]);
-
-  // Again: nothing more. Asked for by name, the Giza draft is replaced.
-  const again = await conv.applyEurConversion(pool);
-  assert.equal(again.items.find((i) => i.code === "ALEX").why, "already converted (phase 7)");
-  await conv.applyEurConversion(pool, { replace: ["GIZA"] });
-  const giza = await draft("GIZA");
-  assert.deepEqual([giza.version, giza.tiers, giza.cost_lines.length], [2, [{ from: 4, to: 8, priceEur: 91, operatorFeePct: 5 }], 4]);
-});
