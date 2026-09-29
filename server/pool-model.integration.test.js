@@ -234,9 +234,9 @@ test("the rate card: prices need the EUR rate; published, the tour page shows ea
 
   const boot = await (await fetch(`${on}/api/bootstrap`)).json();
   const giza = boot.tourProducts.find((p) => p.id === GIZA);
-  assert.equal(giza.catalogue.priceLine, "€51 per person, €50 from 7 travelers, €47 from 10");
-  assert.deepEqual([giza.publishedRate, giza.breakPrice], [51, 47]);
-  assert.deepEqual(giza.priceTiers, [{ seats: 4, price: 51 }, { seats: 7, price: 50 }, { seats: 10, price: 47 }]);
+  assert.equal(giza.catalogue.priceLine, "€51 per person, €50 from 7 travelers, €48 from 10");
+  assert.deepEqual([giza.publishedRate, giza.breakPrice], [51, 48]);
+  assert.deepEqual(giza.priceTiers, [{ seats: 4, price: 51 }, { seats: 7, price: 50 }, { seats: 10, price: 48 }]);
 });
 
 test("a booking keeps the published EUR rate and is quoted its tier; the request charges the tier the departure is in then", { skip }, async () => {

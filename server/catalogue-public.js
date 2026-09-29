@@ -26,7 +26,7 @@ import {
   mapCatalogueProduct, mapSpec, todayIn, departureInstants, isMissingCatalogueTables, goaheadColumns,
 } from "./catalogue.js";
 import { mapRate, rateInForce } from "./rates.js";
-import { tierPriceEur, tierPriceLine } from "../shared/pool-model.js";
+import { tierPriceEur, tierPriceLine, tierPriceSummary } from "../shared/pool-model.js";
 
 const TTL_MS = 30_000;
 let memo = { at: 0, value: undefined, pending: null };
@@ -78,7 +78,7 @@ async function build(now) {
     const line = rate ? tierPriceLine(rate.tiers, rate.eurRate) : null;
     if (!line) return null;
     const tiers = rate.tiers.map((t) => ({ from: t.from, to: t.to, eur: tierPriceEur(t.priceEgp, rate.eurRate) }));
-    return { line, tiers, rateVersion: rate.version };
+    return { line, summary: tierPriceSummary(rate.tiers, rate.eurRate), tiers, rateVersion: rate.version };
   };
   const specsBy = new Map();
   for (const s of specs.rows.map(mapSpec)) {
@@ -168,6 +168,8 @@ function publicSpec(entry) {
     specVersion: entry.spec?.version ?? null,
     needsNationality: entry.product.needsNationality === true,
     priceLine: entry.pricing?.line || null,
+    // "4–6 travelers €54 · 7–9 travelers €45 · 10–12 travelers €42": the tour page and the widget show this.
+    priceSummary: entry.pricing?.summary || null,
     priceTiersEur: entry.pricing?.tiers || null,
     guideLanguages: specList(c.guideLanguages),
     meals: c.meals || null,
