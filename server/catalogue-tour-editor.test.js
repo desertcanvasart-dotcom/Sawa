@@ -82,7 +82,7 @@ test("catalogue products hide the legacy fields; legacy tours and flag-off show 
   const ed = src.slice(src.indexOf("export function ProductEditor"), src.indexOf("function PriceTierEditor"));
   assert.match(ed, /\{catView \? \(\s*<Field label="Pricing and group size"/);
   const legacyStart = ed.indexOf(") : (<>");
-  const legacyEnd = ed.indexOf("</>)}", legacyStart);
+  const legacyEnd = ed.indexOf("</>)}", ed.indexOf("Deposit %", legacyStart)); // past the sliding-mode fragment inside it
   const legacy = ed.slice(legacyStart, legacyEnd);
   for (const label of ["Min seats (GoAhead)", "Max seats (cap)", "GoAhead price", "Break price (full group)", "<PriceTierEditor", "Deposit %"]) {
     assert.ok(legacy.includes(label), `${label} is inside the legacy-only branch`);
