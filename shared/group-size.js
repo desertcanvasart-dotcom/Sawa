@@ -27,7 +27,7 @@ export const DEFAULT_GO_AHEAD = 4;
 // itinerary, and it is the promise the site markets. Raising it means changing
 // what the booking conditions say, so it is deliberately a literal here rather
 // than anything configurable.
-export const MAX_GROUP_SIZE = 12;
+export const MAX_GROUP_SIZE = 8;
 
 // Prose says "four travellers", a stat display says "4". Both come from the
 // constant, so raising either number updates the sentence and the figure

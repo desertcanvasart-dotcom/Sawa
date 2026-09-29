@@ -32,7 +32,7 @@ const packageFixture = {
   id: "pkg_nile_discovery_internal_id", type: "package", status: "approved", active: true,
   title: "Nile Discovery: 4-Day Cruise from Aswan to Luxor", city: "Cairo",
   cities: ["Aswan", "Kom Ombo", "Edfu", "Luxor"], duration: "4 days · 3 nights",
-  minSeats: 4, maxSeats: 12, publishedRate: 595, breakPrice: 500,
+  minSeats: 4, maxSeats: 8, publishedRate: 595, breakPrice: 500,
   description: "A published Nile cruise package.", images: [], itinerary: [],
   included: [], notIncluded: [], operatingDays: [], depositPercent: 25,
 };

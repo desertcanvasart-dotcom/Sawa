@@ -72,7 +72,7 @@ import {
   listingApprovedEmail, listingRejectedEmail,
   departureRequestReceivedEmail, departureRequestApprovedEmail, departureRequestDeclinedEmail,
   operatorApplicationEmail, operatorApplicationReceiptEmail, operatorApplicationText,
-  opsNewBookingEmail, opsNewListingEmail, opsRecipient,
+  opsNewBookingEmail, opsNewListingEmail, opsGroupRequestEmail, opsRecipient,
   paymentLinkEmail, paymentReceivedEmail,
 } from "./email.js";
 import {
@@ -1059,7 +1059,7 @@ export async function upsertTourProduct(c, body, review) {
   // sell every seat at the interpolated price instead.
   const tierCheck = validatePriceTiers(body.priceTiers, {
     minSeats: Number(body.minSeats || 4),
-    maxSeats: Number(body.maxSeats || 12),
+    maxSeats: Number(body.maxSeats || MAX_GROUP_SIZE),
   });
   if (tierCheck.error) throw new AppError(422, tierCheck.error);
   const priceTiers = tierCheck.tiers ? JSON.stringify(tierCheck.tiers) : null;
@@ -1108,7 +1108,7 @@ export async function upsertTourProduct(c, body, review) {
       body.duration || (type === "package" ? `${Number(body.nights || 3) + 1} days · ${body.nights || 3} nights` : "Full day · about 4 hours"),
       body.defaultTime || "08:00", body.guide || "Licensed Egyptologist",
       body.vehicle || (type === "package" ? "Private van + flights" : "Van, 12 seats"),
-      Number(body.minSeats || 4), Number(body.maxSeats || 12),
+      Number(body.minSeats || 4), Number(body.maxSeats || MAX_GROUP_SIZE),
       Number(body.baseCost || 0), publishedRate,
       Number(body.breakPrice || Math.round(publishedRate * 0.8)), Number(body.quality || 4.7),
       Number(body.depositPercent || (type === "package" ? 20 : 10)), body.description || "",
@@ -1474,6 +1474,72 @@ app.post("/api/public/phone-verifications/check", writeLimiter, h(async (req, re
 // booking_confirmations and the traveler gets a "Confirm my booking" link.
 // The link calls placePublicBooking again with the held booking, which runs
 // the same checks and makes it. Answer 202 while held, 201 once made.
+// Parties larger than 8 are not bookable online (29 Sep 2026). The booking form
+// stops and offers this instead: a short request that becomes an admin lead.
+// No booking is made and no seat is held.
+const groupRequestSchema = z.object({
+  name: z.string().trim().min(2, "Enter your name.").max(120),
+  email: z.string().trim().email("Enter a valid email.").max(200),
+  groupSize: z.coerce.number().int().min(MAX_GROUP_SIZE + 1, `A group request is for more than ${MAX_GROUP_SIZE} travelers.`).max(200),
+  date: z.string().trim().max(40).optional().nullable(),
+  productId: z.string().trim().max(120).optional().nullable(),
+  productTitle: z.string().trim().max(200).optional().nullable(),
+  note: z.string().trim().max(1000).optional().nullable(),
+  website: z.string().max(200).optional(), // honeypot: real people leave it empty
+});
+app.post("/api/public/group-requests", writeLimiter, h(async (req, res) => {
+  const input = groupRequestSchema.parse(req.body || {});
+  if (input.website) return res.status(202).json({ ok: true }); // a bot: answer as if it worked
+  const wanted = /^\d{4}-\d{2}-\d{2}$/.test(input.date || "") ? input.date : null;
+  const product = input.productId
+    ? (await pool.query(`SELECT id, title FROM tour_products WHERE id=$1`, [input.productId])).rows[0]
+    : null;
+  const title = product?.title || input.productTitle || null;
+  let stored = true;
+  try {
+    await pool.query(
+      `INSERT INTO group_requests (name, email, group_size, wanted_date, product_id, product_title, note)
+       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+      [input.name, input.email, input.groupSize, wanted, product?.id || null, title, input.note || null]);
+  } catch (e) {
+    // Migration 062 is applied by hand: before it, the lead still reaches the
+    // operations inbox, which is where it is acted on.
+    if (e?.code !== "42P01") throw e;
+    stored = false;
+  }
+  await logAudit(req, { action: "group_request.create", entity: "group_request", entityId: null, detail: { groupSize: input.groupSize, product: title, stored } });
+  sendEmailInBackground(opsGroupRequestEmail({
+    to: opsRecipient(), name: input.name, email: input.email, groupSize: input.groupSize,
+    date: wanted || input.date || null, product: title, note: input.note || null, portalLink: portalLink(),
+  }));
+  res.status(201).json({ ok: true, stored });
+}));
+
+app.get("/api/admin/group-requests", requireAuth, requireRole("super_admin", "ops_staff"), h(async (_req, res) => {
+  let rows = [];
+  try {
+    rows = (await pool.query(`SELECT * FROM group_requests ORDER BY (status = 'new') DESC, created_at DESC LIMIT 200`)).rows;
+  } catch (e) {
+    if (e?.code !== "42P01") throw e;
+  }
+  res.json({ requests: rows.map((r) => ({
+    id: Number(r.id), name: r.name, email: r.email, groupSize: r.group_size,
+    wantedDate: r.wanted_date instanceof Date ? r.wanted_date.toISOString().slice(0, 10) : r.wanted_date,
+    productId: r.product_id, productTitle: r.product_title, note: r.note, status: r.status,
+    createdAt: r.created_at, handledBy: r.handled_by, handledAt: r.handled_at,
+  })) });
+}));
+
+app.patch("/api/admin/group-requests/:id", requireAuth, requireRole("super_admin", "ops_staff"), h(async (req, res) => {
+  const { status } = z.object({ status: z.enum(["new", "contacted", "closed"]) }).parse(req.body || {});
+  const row = (await pool.query(
+    `UPDATE group_requests SET status=$1, handled_by=$2, handled_at=now() WHERE id=$3 RETURNING id`,
+    [status, req.user.id, Number(req.params.id)])).rows[0];
+  if (!row) throw new AppError(404, "Request not found.");
+  await logAudit(req, { action: "group_request.update", entity: "group_request", entityId: String(row.id), detail: { status } });
+  res.json({ ok: true });
+}));
+
 app.post("/api/public/departures/:id/bookings", writeLimiter, bookingAttemptLimiter, h(async (req, res) => {
   await requireTurnstile(req);
   const out = await placePublicBooking(req, { departureId: Number(req.params.id), body: req.body });
@@ -3438,6 +3504,13 @@ app.get("/api/admin/stats", requireAuth, requireRole("super_admin", "ops_staff")
     pool.query(`SELECT id FROM agencies WHERE status='active'`),
   ]);
   const pendingListings = products.rows.filter((p) => p.status === "pending").length;
+  // Requests for a group larger than the online maximum, not yet answered (0 before migration 062).
+  let pendingGroupRequests = 0;
+  try {
+    pendingGroupRequests = Number((await pool.query(`SELECT COUNT(*)::int AS n FROM group_requests WHERE status = 'new'`)).rows[0]?.n) || 0;
+  } catch (e) {
+    if (e?.code !== "42P01") throw e;
+  }
 
   const livePledges = pledges.rows.filter((p) => p.status !== "cancelled");
   const seatsByDep = new Map();
@@ -3475,6 +3548,7 @@ app.get("/api/admin/stats", requireAuth, requireRole("super_admin", "ops_staff")
       depositsDue: totalDeposits,
     },
     pendingListings,
+    pendingGroupRequests,
     departureStatus: { forming, awaiting, readyToConfirm, confirmed, atRisk, departed },
   });
 }));

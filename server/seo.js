@@ -16,7 +16,7 @@ import { publicOperator, directOperatorId } from "./domain.js";
 import { catalogueV2Enabled } from "./features.js";
 import { catalogueRowsFor, publicCatalogue } from "./catalogue-public.js";
 import { mapAgency } from "./db/mappers.js";
-import { GROUP_MAX_WORD } from "../shared/group-size.js";
+import { GROUP_MAX_WORD, MAX_GROUP_SIZE } from "../shared/group-size.js";
 import { CURRENCY, CURRENCY_SYMBOL } from "../shared/currency.js";
 // DIR-17.1 — the support-availability string has ONE owner. Four variants
 // were live saying four different things; this file rendered one of them.
@@ -598,7 +598,7 @@ async function upcomingDepartures(tourProductId = null) {
     const confirmed = d.status === "supplier_confirmed" || seats >= min;
     return {
       route: d.route, date: d.start_date || d.date, endDate: d.end_date, time: d.time,
-      seats, max: Number(d.max_seats) || 12, min,
+      seats, max: Number(d.max_seats) || MAX_GROUP_SIZE, min,
       label: cat ? cat.dates.get(Number(d.id)).catalogueLabel
         : confirmed ? "confirmed to run (GoAhead)" : `forming — ${Math.max(0, min - seats)} more traveler${min - seats === 1 ? "" : "s"} to confirm`,
       productId: d.tour_product_id,
@@ -674,7 +674,7 @@ export async function buildBody(pathname) {
     return wrapBody(`
 <article>
   <h1>${esc(p.title)}</h1>
-  <p>${esc(p.city || "Egypt")}${p.duration ? ` · ${esc(p.duration)}` : ""} · shared departure for ${Math.max(1, Number(p.min_seats) || 4)}–${Number(p.max_seats) || 12} travelers${from ? ` · from ${from} per person` : ""}${Array.isArray(p.operating_days) && p.operating_days.length ? ` · departs on ${p.operating_days.map((d) => ["Sundays", "Mondays", "Tuesdays", "Wednesdays", "Thursdays", "Fridays", "Saturdays"][d]).join(", ")}` : ""}</p>
+  <p>${esc(p.city || "Egypt")}${p.duration ? ` · ${esc(p.duration)}` : ""} · shared departure for ${Math.max(1, Number(p.min_seats) || 4)}–${Number(p.max_seats) || MAX_GROUP_SIZE} travelers${from ? ` · from ${from} per person` : ""}${Array.isArray(p.operating_days) && p.operating_days.length ? ` · departs on ${p.operating_days.map((d) => ["Sundays", "Mondays", "Tuesdays", "Wednesdays", "Thursdays", "Fridays", "Saturdays"][d]).join(", ")}` : ""}</p>
   ${p.overview_html ? cleanHtml(p.overview_html) : `<p>${esc(p.description || "")}</p>`}
   <h2>Upcoming departures</h2>
   ${departureListHtml(deps)}

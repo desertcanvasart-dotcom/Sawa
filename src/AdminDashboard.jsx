@@ -16,6 +16,7 @@ import { CatalogueSection, CalendarSection } from "./AdminCatalogue.jsx";
 import { OperatorsSection, RosterSection, RatesSection } from "./AdminOperators.jsx";
 import { FinanceSection } from "./AdminFinance.jsx";
 import { UnlinkedBanner } from "./AdminPayAtGoAhead.jsx";
+import { GroupRequestsSection } from "./AdminGroupRequests.jsx";
 // Date-only departure values need a local-noon anchor or they render a day
 // early west of UTC — see src/dates.js.
 import { fmtDate, fmtReceived } from "./dates.js";
@@ -37,6 +38,7 @@ import { blogSlug } from "../shared/blog-slug.js";
 import { catalogueTourView, isCatalogueTour } from "../shared/catalogue-tour-editor.js";
 import { pathForSection } from "./portal-section.js";
 import { CURRENCY, CURRENCY_SYMBOL } from "../shared/currency.js";
+import { MAX_GROUP_SIZE } from "../shared/group-size.js";
 import { depositPctFor, cutoffLabel, normalizeDuration, durationShapeError } from "../shared/booking-policy.js";
 import {
   requestWindowError, minLeadDaysFor, maxHorizonDaysFor,
@@ -62,6 +64,7 @@ const NAV_GROUPS = [
       { id: "archive", label: "Archive", icon: Archive },
       { id: "listings", label: "Listing requests", icon: Inbox, alert: (s) => s?.pendingListings || 0 },
       { id: "daterequests", label: "Date requests", icon: Clock3 },
+      { id: "grouprequests", label: "Group requests", icon: Users, alert: (s) => s?.pendingGroupRequests || 0 },
       { id: "destinations", label: "Destinations", icon: MapPin },
       { id: "blog", label: "Blog", icon: Newspaper },
       // Departures and bookings are one page (28 Sep 2026): the dates, each
@@ -151,6 +154,7 @@ export function AdminDashboard({ user, agency, signOut, navigate }) {
             {section === "archive" && <ArchiveSection data={data} reload={loadAll} flash={flash} />}
             {section === "listings" && <ListingRequestsSection data={data} reload={loadAll} flash={flash} />}
             {section === "daterequests" && <DateRequestsSection data={data} reload={loadAll} flash={flash} />}
+            {section === "grouprequests" && <GroupRequestsSection flash={flash} />}
             {section === "destinations" && <DestinationsSection destinations={destinations} reload={loadAll} flash={flash} />}
             {section === "blog" && <BlogSection posts={posts} reload={loadAll} flash={flash} />}
             {section === "departures" && <DeparturesSection data={data} reload={loadAll} flash={flash} tabs={<DepBookTabs tab="dates" onTab={setSection} />} />}
@@ -705,7 +709,7 @@ export function ProductEditor({ type: typeProp, existing, destinations = [], dep
     guide: existing?.guide || "Licensed Egyptologist",
     vehicle: existing?.vehicle || (pkg ? "Private van + flights" : "Van, 12 seats"),
     minSeats: existing?.minSeats || 4,
-    maxSeats: existing?.maxSeats || 12,
+    maxSeats: existing?.maxSeats || MAX_GROUP_SIZE,
     publishedRate: existing?.publishedRate || "",
     breakPrice: existing?.breakPrice || "",
     // From the authority, not a literal. This read `pkg ? 20 : 10` and was
@@ -1002,8 +1006,8 @@ export function ProductEditor({ type: typeProp, existing, destinations = [], dep
                   </div>
                 </Field>
               ) : (<>
-              <Field label="Min seats (GoAhead)"><input type="number" min="4" max="12" value={f.minSeats} onChange={set("minSeats")} /></Field>
-              <Field label="Max seats (cap)"><input type="number" min="1" max="12" value={f.maxSeats} onChange={set("maxSeats")} /></Field>
+              <Field label="Min seats (GoAhead)"><input type="number" min="4" max={MAX_GROUP_SIZE} value={f.minSeats} onChange={set("minSeats")} /></Field>
+              <Field label="Max seats (cap)"><input type="number" min="1" max={MAX_GROUP_SIZE} value={f.maxSeats} onChange={set("maxSeats")} /></Field>
               <Field label={pkg ? "GoAhead price /person" : "GoAhead price"}><input type="number" min="1" value={f.publishedRate} onChange={set("publishedRate")} /></Field>
               <Field label="Break price (full group)"><input type="number" min="1" value={f.breakPrice} onChange={set("breakPrice")} placeholder="auto = 80%" /></Field>
               <PriceTierEditor
@@ -1012,7 +1016,7 @@ export function ProductEditor({ type: typeProp, existing, destinations = [], dep
                 rows={priceTiers}
                 setRows={setPriceTiers}
                 minSeats={Number(f.minSeats) || 4}
-                maxSeats={Number(f.maxSeats) || 12}
+                maxSeats={Number(f.maxSeats) || MAX_GROUP_SIZE}
                 publishedRate={Number(f.publishedRate) || 0}
                 breakPrice={Number(f.breakPrice) || 0}
               />
