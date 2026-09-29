@@ -4,7 +4,7 @@ import { z } from "zod";
 import { pool, withTransaction, withDepartureWrites } from "./db/index.js";
 import { pendingGoAheads, alertPayload } from "./goahead-alert.js";
 import { refreshStatus } from "./departure-status.js";
-import { publicOperator, operatorForDeparture, directOperatorId, bookingClosesAtMs } from "./domain.js";
+import { publicOperator, operatorSelectable, operatorForDeparture, directOperatorId, bookingClosesAtMs } from "./domain.js";
 import { cspHeader, cspHeaderName, describeViolation, firstSighting } from "./csp.js";
 import {
   phoneVerificationEnabled, normalizePhone, issuePhoneToken, phoneTokenValid,
@@ -1138,6 +1138,16 @@ app.get("/api/admin/tour-products/:id/catalogue", requireAuth, requireRole("supe
 // auto-approved — a platform admin publishing a tour needs no second sign-off.
 app.post("/api/admin/tour-products", requireAuth, requireRole("super_admin", "ops_staff"), h(async (req, res) => {
   const body = req.body || {};
+  // Only an active, listed operator may be attached. Keeping the company a
+  // listing already has is allowed, so an unrelated edit never fails on it.
+  if (body.agencyId) {
+    const cur = body.id ? (await pool.query(`SELECT agency_id FROM tour_products WHERE id=$1`, [body.id])).rows[0] : null;
+    if (cur?.agency_id !== body.agencyId) {
+      const a = (await pool.query(`SELECT * FROM agencies WHERE id=$1`, [body.agencyId])).rows[0];
+      const o = (await pool.query(`SELECT status FROM operators WHERE agency_id=$1`, [body.agencyId])).rows[0];
+      if (!operatorSelectable(a && mapAgency(a), o)) throw new AppError(422, "That company can't be the operating company: it must be an active, publicly listed operator.");
+    }
+  }
   const product = await withTransaction((c) =>
     upsertTourProduct(c, body, {
       status: "approved", submittedBy: req.user.id, reviewedBy: req.user.id,
@@ -3126,11 +3136,14 @@ app.get("/api/admin/agencies", requireAuth, requireAdmin(), h(async (_req, res) 
        FROM app_users WHERE agency_id IS NOT NULL GROUP BY agency_id`
   )).rows;
   const byAgency = new Map(users.map((u) => [u.agency_id, u]));
+  const ops = new Map((await pool.query(`SELECT agency_id, status FROM operators WHERE agency_id IS NOT NULL`)).rows.map((o) => [o.agency_id, o]));
   res.json({
     agencies: agencies.map((a) => ({
       ...a,
       staffCount: byAgency.get(a.id)?.staff_count || 0,
       ownerCount: byAgency.get(a.id)?.owner_count || 0,
+      // The "Operating company" dropdown offers only these.
+      operatorSelectable: operatorSelectable(a, ops.get(a.id)),
     })),
   });
 }));

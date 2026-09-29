@@ -609,6 +609,15 @@ export function directOperatorId(agencies = [], name = "") {
   return hit ? hit.id : null;
 }
 
+// Who an admin may attach as a tour's "Operating company": a company whose
+// operator record is ACTIVE and that is listed publicly. A pending, suspended,
+// removed or unlisted company (Capital Travel Service is both pending and
+// unlisted) is never offered, and the server refuses it too. `operator` is the
+// company's row in `operators` (linked by agency_id), or null when it has none.
+export function operatorSelectable(agency, operator) {
+  return !!agency && agency.publicListed !== false && operator?.status === "active";
+}
+
 export function publicOperator(agency) {
   // 054: a record taken off the traveler-facing surfaces (public_listed =
   // false) is never named, wherever it would otherwise appear.
