@@ -100,8 +100,9 @@ test("tiers: below the first uses the first, above the last the last", () => {
 test("travelers see whole euros at the published rate", () => {
   assert.equal(tierPriceEur(2540, 50), 51);
   assert.equal(tierPriceEur(2487, 50), 50);
-  assert.equal(tierPriceEur(2360, 50), 47);
-  assert.equal(tierPriceLine(MODEL_RATE.tiers, 50), "€51 per person, €50 from 7 travelers, €47 from 10");
+  assert.equal(tierPriceEur(2360, 50), 48, "rounded up (29 Sep 2026), it was 47");
+  assert.equal(tierPriceEur(2500, 50), 50, "an exact division does not tip up");
+  assert.equal(tierPriceLine(MODEL_RATE.tiers, 50), "€51 per person, €50 from 7 travelers, €48 from 10");
   assert.equal(tierPriceLine(MODEL_RATE.tiers, null), null, "no rate, no price line");
   assert.deepEqual(bookingChargeEur({ rate: MODEL_RATE, headcount: 8, seats: 2, eurRate: 50 }), { eachEur: 50, totalEur: 100, tier: "7–9" });
 });
@@ -109,7 +110,7 @@ test("travelers see whole euros at the published rate", () => {
 test("tier drop: 7–9 to 10–12 after payment refunds the EUR difference; a fall never charges more", () => {
   const paid = bookingChargeEur({ rate: MODEL_RATE, headcount: 8, seats: 2, eurRate: 50 }).totalEur;
   const final = bookingChargeEur({ rate: MODEL_RATE, headcount: 10, seats: 2, eurRate: 50 });
-  assert.equal(tierDifferenceEur({ paidEur: paid, seats: 2, finalEachEur: final.eachEur }), 6);
+  assert.equal(tierDifferenceEur({ paidEur: paid, seats: 2, finalEachEur: final.eachEur }), 4, "\u20ac50 each paid, \u20ac48 each at the final tier");
   const dearer = bookingChargeEur({ rate: MODEL_RATE, headcount: 5, seats: 2, eurRate: 50 });
   assert.equal(tierDifferenceEur({ paidEur: paid, seats: 2, finalEachEur: dearer.eachEur }), 0);
 });

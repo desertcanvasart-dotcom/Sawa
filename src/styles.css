@@ -7080,3 +7080,11 @@ button:disabled {
 .dash-table tr.dep-travelers > td { background: #faf8f4; padding-top: 4px; padding-bottom: 12px; }
 .dash-table.sub-table { background: #fff; border: 1px solid #ece5d8; border-radius: 10px; }
 .dash-table.sub-table th { font-size: 11px; }
+
+/* Edit day tour, catalogue products: the read-only pricing block */
+.cat-owned { display: grid; gap: 8px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--sand-50); }
+.cat-owned p { margin: 0; }
+.cat-owned-tiers { font-size: 15px; font-weight: 700; }
+.cat-owned-facts { display: flex; flex-wrap: wrap; gap: 8px 28px; margin: 0; }
+.cat-owned-facts dt { font-size: 12px; font-weight: 700; color: var(--ink-soft); }
+.cat-owned-facts dd { margin: 2px 0 0; font-size: 14px; }

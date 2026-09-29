@@ -64,6 +64,7 @@ import {
 } from "./booking-confirmation.js";
 import { verifyTurnstile, turnstileSiteKey } from "./turnstile.js";
 import { catalogueV2Enabled } from "./features.js";
+import { loadCatalogueTourInfo } from "./catalogue-tour-pricing.js";
 import { publicCatalogue, overlayBootstrap, clearPublicCatalogue } from "./catalogue-public.js";
 import {
   sendEmail, sendEmailInBackground, emailMode,
@@ -1126,6 +1127,12 @@ export async function upsertTourProduct(c, body, review) {
   );
   return loadProduct(c, id);
 }
+
+// The "Edit day tour" page: whether this tour is a catalogue product (flag on)
+// and, if so, its catalogue values and the published rate card's tiers.
+app.get("/api/admin/tour-products/:id/catalogue", requireAuth, requireRole("super_admin", "ops_staff"), h(async (req, res) => {
+  res.json(await loadCatalogueTourInfo(req.params.id));
+}));
 
 // Admin creates / updates a tour product (platform staff only). Admin edits are
 // auto-approved — a platform admin publishing a tour needs no second sign-off.

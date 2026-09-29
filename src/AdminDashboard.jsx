@@ -34,6 +34,8 @@ const seatsOf = (d) => (d.pledges || []).reduce((s, p) => (p?.status === "cancel
 // lacked the server's `|| "post"` fallback, so an untitled post previewed an
 // empty slug and was stored at /blog/post.
 import { blogSlug } from "../shared/blog-slug.js";
+import { catalogueTourView, isCatalogueTour } from "../shared/catalogue-tour-editor.js";
+import { pathForSection } from "./portal-section.js";
 import { CURRENCY, CURRENCY_SYMBOL } from "../shared/currency.js";
 import { depositPctFor, cutoffLabel, normalizeDuration, durationShapeError } from "../shared/booking-policy.js";
 import {
@@ -752,6 +754,28 @@ export function ProductEditor({ type: typeProp, existing, destinations = [], dep
     return () => { alive = false; };
   }, [agencyMode]);
 
+  // catalogue_v2: is this tour a catalogue product? If so the catalogue and the
+  // rate card own its price, deposit, cut-off and group size, and those fields
+  // are read-only here. Flag off, or a legacy tour: nothing changes.
+  const [catInfo, setCatInfo] = useState(null);
+  // A failure is shown, not swallowed: without the answer a catalogue product
+  // would look like a legacy tour, with editable prices the catalogue ignores.
+  const [catError, setCatError] = useState("");
+  useEffect(() => {
+    if (agencyMode || !existing?.id) return undefined;
+    let alive = true;
+    apiFetch(`/admin/tour-products/${encodeURIComponent(existing.id)}/catalogue`)
+      .then(async (r) => {
+        if (!r.ok) throw new Error(`the catalogue details did not load (${r.status})`);
+        return r.json();
+      })
+      .then((j) => { if (alive) { setCatInfo(j); setCatError(""); } })
+      .catch((e) => { if (alive) setCatError(e.message || "the catalogue details did not load"); });
+    return () => { alive = false; };
+  }, [agencyMode, existing?.id]);
+  const catView = catalogueTourView(catInfo);
+  const catalogueOwned = isCatalogueTour(catInfo);
+
   // Shown under the window fields: the error if the pair is unsavable, else what
   // the traveller will actually get, resolved through the same functions the
   // server and the calendar use.
@@ -961,6 +985,23 @@ export function ProductEditor({ type: typeProp, existing, destinations = [], dep
               </Field>
               <Field label="Guide"><input value={f.guide} onChange={set("guide")} /></Field>
               <Field label="Vehicle"><input value={f.vehicle} onChange={set("vehicle")} /></Field>
+              {catError && <small className="form-error">{catError}. If this tour is sold through the catalogue, its prices here are not the ones travelers pay: reopen the editor before changing them.</small>}
+              {catView ? (
+                <Field label="Pricing and group size" full asDiv>
+                  <div className="cat-owned" data-testid="catalogue-pricing">
+                    {catView.hasRate
+                      ? <p className="cat-owned-tiers">{catView.summary}</p>
+                      : <p className="auth-error" role="status">{catView.warning}</p>}
+                    <p className="field-hint">
+                      <a href={pathForSection(window.location.pathname, "rates", "overview")}>{catView.rateCardLabel}</a>
+                    </p>
+                    <dl className="cat-owned-facts">
+                      {catView.facts.map((x) => <div key={x.label}><dt>{x.label}</dt><dd>{x.value}</dd></div>)}
+                    </dl>
+                    <p className="field-hint">The catalogue and the rate card own the price, the deposit, the cut-off and the group size.</p>
+                  </div>
+                </Field>
+              ) : (<>
               <Field label="Min seats (GoAhead)"><input type="number" min="4" max="12" value={f.minSeats} onChange={set("minSeats")} /></Field>
               <Field label="Max seats (cap)"><input type="number" min="1" max="12" value={f.maxSeats} onChange={set("maxSeats")} /></Field>
               <Field label={pkg ? "GoAhead price /person" : "GoAhead price"}><input type="number" min="1" value={f.publishedRate} onChange={set("publishedRate")} /></Field>
@@ -976,6 +1017,8 @@ export function ProductEditor({ type: typeProp, existing, destinations = [], dep
                 breakPrice={Number(f.breakPrice) || 0}
               />
               <Field label="Deposit %"><input type="number" min="0" max="100" value={f.depositPercent} onChange={set("depositPercent")} /></Field>
+              </>)}
+              {!catalogueOwned && (
               <Field label="Booking cutoff (before departure)">
                 <div style={{ display: "flex", gap: 6 }}>
                   <input type="number" min="0" value={f.bookingCutoffValue} onChange={set("bookingCutoffValue")} style={{ flex: "1 1 auto", minWidth: 0 }} aria-label="Booking cutoff" />
@@ -987,7 +1030,8 @@ export function ProductEditor({ type: typeProp, existing, destinations = [], dep
                   </select>
                 </div>
               </Field>
-              {!agencyMode && (
+              )}
+              {!agencyMode && !catalogueOwned && (
                 <Field label="Operating company" full>
                   <select value={f.agencyId} onChange={set("agencyId")}>
                     <option value="">Not assigned</option>

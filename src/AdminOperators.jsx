@@ -690,7 +690,7 @@ function RateEditor({ product, flash, onClose }) {
             <input type="number" min="0" step="0.0001" value={form.eurRate} onChange={(e) => setForm({ ...form, eurRate: e.target.value })} /></label>
           <label className="field"><span>Takes effect</span><input type="date" value={effectiveFrom} onChange={(e) => setEffectiveFrom(e.target.value)} /></label>
         </div>
-        <p className="field-hint">The published EUR rate is used only to show and charge travelers in EUR (each tier price ÷ the rate, in whole euros). Everything below, and every statement, is in EGP. A published version applies to departures that haven't sold a seat yet; departures already sold keep the version they were locked to.</p>
+        <p className="field-hint">The published EUR rate is used only to show and charge travelers in EUR (each tier price ÷ the rate, rounded up to a whole euro). Everything below, and every statement, is in EGP. A published version applies to departures that haven't sold a seat yet; departures already sold keep the version they were locked to.</p>
         {tierPriceLine(model.tiers, model.eurRate) && <p className="field-hint">Tour page: {tierPriceLine(model.tiers, model.eurRate)}</p>}
         {problem && <div className="auth-error">{problem}</div>}
 

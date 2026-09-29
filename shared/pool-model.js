@@ -56,10 +56,27 @@ export function poolTierIndex(tiers, headcount) {
 
 export const tierLabel = (t) => `${t.from}–${t.to}`;
 
-// A tier's price in EUR, for travelers: EGP ÷ the published rate, to whole euros.
+// A tier's price in EUR, for travelers: EGP ÷ the published rate, rounded UP to
+// a whole euro (29 Sep 2026; it was rounded to the nearest). The one place the
+// conversion happens: the rate card editor, the tour page, the widget and the
+// charge itself all read it, so what is shown is what is charged.
 export function tierPriceEur(priceEgp, eurRate) {
   if (!isNum(priceEgp) || !isNum(eurRate) || Number(eurRate) <= 0) return null;
-  return Math.round(Number(priceEgp) / Number(eurRate));
+  // The tiny epsilon keeps an exact division (4850 / 97 = 50) from tipping up on float noise.
+  return Math.ceil(Number(priceEgp) / Number(eurRate) - 1e-9);
+}
+
+// The tiers as travelers read them: [{ label: "4–6", eur }], one per tier.
+export function tierPriceRows(tiers, eurRate) {
+  return (tiers || []).map((t) => ({ label: `${t.from}–${t.to}`, from: Number(t.from), to: Number(t.to), eur: tierPriceEur(t.priceEgp, eurRate) }));
+}
+
+// "4–6 travelers €54 · 7–9 travelers €45 · 10–12 travelers €42". Null unless every
+// tier has a price and there is a rate: a half-filled card shows nothing.
+export function tierPriceSummary(tiers, eurRate, symbol = "€") {
+  const rows = tierPriceRows(tiers, eurRate);
+  if (!rows.length || rows.some((r) => r.eur == null)) return null;
+  return rows.map((r) => `${r.label} travelers ${symbol}${r.eur}`).join(" · ");
 }
 
 // What the tour page says: "€X per person, €Y from 7 travelers, €Z from 10".

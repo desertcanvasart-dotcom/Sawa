@@ -1991,7 +1991,7 @@ function TourDetailV2({ isSaving, navigate, phoneVerification = false, onBookPub
                     <div className="book-price">
                       <b className="tnum">{CURRENCY_SYMBOL}{pp}</b><span>{CURRENCY} / person</span>
                       {/* Phase 5: the rate card's tier prices, and the refund promise. */}
-                      {tour.catalogue?.priceLine && <span className="book-threshold">{tour.catalogue.priceLine}. You pay the price of the group size your date has when payment is asked for; if it grows into a cheaper tier by the cut-off, the difference is refunded.</span>}
+                      {(tour.catalogue?.priceSummary || tour.catalogue?.priceLine) && <span className="book-threshold">{tour.catalogue.priceSummary || tour.catalogue.priceLine}. You pay the price of the group size your date has when payment is asked for; if it grows into a cheaper tier by the cut-off, the difference is refunded.</span>}
                       <span className="book-promise">Never more than {GROUP_MAX_WORD}. Ever.</span>
                       <span className="book-threshold">This date confirms at {numberWord(goAhead)} traveler{goAhead === 1 ? "" : "s"}.</span>
                     </div>
@@ -2898,7 +2898,9 @@ function EmbedWidget({ type, product }) {
         <div className="embed-price">
           <span>from</span><b>{CURRENCY_SYMBOL}{livePrice.toLocaleString()}</b><span>{CURRENCY} / person</span>
         </div>
-        <p className="embed-hook">Shared price — it drops as the group grows, down to {CURRENCY_SYMBOL}{breakPrice.toLocaleString()} {CURRENCY}/person.</p>
+        {product.catalogue?.priceSummary
+          ? <p className="embed-hook">{product.catalogue.priceSummary}</p>
+          : <p className="embed-hook">Shared price — it drops as the group grows, down to {CURRENCY_SYMBOL}{breakPrice.toLocaleString()} {CURRENCY}/person.</p>}
         <span className="embed-cta">View &amp; book<ArrowRight size={16} /></span>
         <span className="embed-brand">Powered by <b>Sawa&nbsp;Tours</b></span>
       </div>
@@ -3222,6 +3224,7 @@ function EmbedBookTour({ product, refCode, phoneVerification }) {
       <div className="eb-head">
         <strong className="eb-title">{product.title}</strong>
         <span className="eb-facts">{pkg ? (product.cities || [product.city]).join(" → ") : product.city}{product.duration ? ` · ${product.duration}` : ""}</span>
+        {product.catalogue?.priceSummary && <p className="eb-desc"><b>{product.catalogue.priceSummary}</b></p>}
         {product.description && <p className="eb-desc">{product.description}</p>}
         <a className="eb-link" href={sawaUrl} target="_blank" rel="noopener noreferrer">Full itinerary &amp; what's included <ArrowRight size={14} /></a>
       </div>
