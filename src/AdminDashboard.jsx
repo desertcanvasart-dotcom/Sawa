@@ -36,6 +36,7 @@ const seatsOf = (d) => (d.pledges || []).reduce((s, p) => (p?.status === "cancel
 // empty slug and was stored at /blog/post.
 import { blogSlug } from "../shared/blog-slug.js";
 import { catalogueTourView, isCatalogueTour } from "../shared/catalogue-tour-editor.js";
+import { listingPrices } from "../shared/price-mode.js";
 import { pathForSection } from "./portal-section.js";
 import { CURRENCY, CURRENCY_SYMBOL } from "../shared/currency.js";
 import { MAX_GROUP_SIZE } from "../shared/group-size.js";
@@ -870,8 +871,10 @@ export function ProductEditor({ type: typeProp, existing, destinations = [], dep
   async function save() {
     setErr("");
     if (!f.title.trim()) { setStep(0); return setErr("Title is required."); }
-    if (!(Number(f.publishedRate) > 0)) { setStep(0); return setErr("GoAhead price must be a positive number."); }
-    if (f.breakPrice && Number(f.breakPrice) > Number(f.publishedRate)) { setStep(0); return setErr("Break price can't exceed the GoAhead price."); }
+    // A catalogue product's price is the rate card's: the fields below are not on the page, and the
+    // listing keeps the values it has. Otherwise sliding mode enters the two prices; grid mode derives them.
+    const prices = catalogueOwned ? null : listingPrices({ useTiers, rows: priceTiers, publishedRate: f.publishedRate, breakPrice: f.breakPrice });
+    if (prices?.error) { setStep(0); return setErr(prices.error); }
     // Date rows are validated BEFORE the product saves, so a half-filled row
     // can't leave the product written and the dates silently dropped.
     const wantDates = agencyMode ? [] : dates.filter((r) => r.date || r.name.trim() || r.email.trim() || r.phone.trim());
@@ -887,8 +890,8 @@ export function ProductEditor({ type: typeProp, existing, destinations = [], dep
         type, title: f.title.trim(), city: f.city.trim(),
         guide: f.guide, vehicle: f.vehicle,
         minSeats: Number(f.minSeats), maxSeats: Number(f.maxSeats),
-        publishedRate: Number(f.publishedRate),
-        breakPrice: Number(f.breakPrice || Math.round(Number(f.publishedRate) * 0.8)),
+        publishedRate: prices ? prices.publishedRate : Number(f.publishedRate),
+        breakPrice: prices ? prices.breakPrice : Number(f.breakPrice || Math.round(Number(f.publishedRate) * 0.8)),
         depositPercent: Number(f.depositPercent),
         description: f.description.trim(),
         duration: f.duration.trim() || undefined,
@@ -1011,8 +1014,11 @@ export function ProductEditor({ type: typeProp, existing, destinations = [], dep
               ) : (<>
               <Field label="Min seats (GoAhead)"><input type="number" min="4" max={MAX_GROUP_SIZE} value={f.minSeats} onChange={set("minSeats")} /></Field>
               <Field label="Max seats (cap)" hint={Number(existing?.maxSeats) > MAX_GROUP_SIZE ? `Stored as ${existing.maxSeats}. The maximum group is ${MAX_GROUP_SIZE}: saving lowers it, and drops price rows above it.` : undefined}><input type="number" min="1" max={MAX_GROUP_SIZE} value={f.maxSeats} onChange={set("maxSeats")} /></Field>
+              {/* Sliding mode: the two prices. Grid mode: the grid below, and nothing else. */}
+              {!useTiers && (<>
               <Field label={pkg ? "GoAhead price /person" : "GoAhead price"}><input type="number" min="1" value={f.publishedRate} onChange={set("publishedRate")} /></Field>
               <Field label="Break price (full group)"><input type="number" min="1" value={f.breakPrice} onChange={set("breakPrice")} placeholder="auto = 80%" /></Field>
+              </>)}
               <PriceTierEditor
                 on={useTiers}
                 setOn={setUseTiers}
