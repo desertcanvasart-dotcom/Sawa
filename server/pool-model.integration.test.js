@@ -458,3 +458,41 @@ test("a legacy date beside a catalog date merges into it; each booking becomes a
   assert.deepEqual([Number(back.departure_id), back.payment_mode === "pay_at_goahead", back.published_eur_rate, Number(back.booking_total)], [dupId, false, null, 190]);
   assert.equal(await one("SELECT 1 FROM agency_commissions WHERE pledge_id = $1", [pid]), undefined);
 });
+
+// ---------------------------------------------------------------- no traveler rate (064)
+test("no traveler rate: the page says so and shows no euro price, no payment request goes out, and the held request is sent once a rate is set", { skip }, async () => {
+  const admin = { Authorization: "Bearer ops-token", "Content-Type": "application/json" };
+  const r6 = (await db.query(
+    `SELECT id, date, legacy_departure_id FROM catalogue_departures
+      WHERE product_id = $1 AND legacy_departure_id IS NOT NULL AND status = 'open' AND date >= $2::date + 20
+      ORDER BY date OFFSET 5 LIMIT 1`, [productId, today()])).rows[0];
+  const dep = { id: Number(r6.id), date: ymd(r6.date), legacy: Number(r6.legacy_departure_id) };
+  await db.query("DELETE FROM fx_traveller_rates");
+  // Any admin write drops the public caches.
+  const w = await fetch(`${on}/api/admin/finance/traveller-rate/buffer`, { method: "PUT", headers: admin, body: JSON.stringify({ bufferPct: 3 }) });
+  assert.equal(w.status, 200, await w.text());
+  const giza = (await (await fetch(`${on}/api/bootstrap`)).json()).tourProducts.find((p) => p.id === GIZA);
+  assert.equal(giza.catalogue.priceNotSet, true);
+  assert.equal(giza.catalogue.priceLine, null, "no euro price line");
+  assert.equal(giza.catalogue.priceSummary, null);
+  // The rate card editor reads the same: no rate.
+  const fxs = await (await fetch(`${on}/api/admin/finance/fx`, { headers: admin })).json();
+  assert.equal(fxs.traveller, null);
+  // Four travelers: GoAhead. The operator acknowledges; nothing is asked for.
+  const held = [await book(dep, 2), await book(dep, 2)];
+  assert.deepEqual(Object.values(await one("SELECT published_eur_rate, awaiting_exchange_rate FROM pledges WHERE id = $1", [held[0]])), [null, true], "no rate to keep: marked as waiting for one");
+  await cat.runStatusJob({});
+  await assignX(dep);
+  assert.equal(await reqOf(held[0]), undefined, "no payment request without a traveler rate");
+  assert.equal((await one("SELECT count(*)::int n FROM payment_requests WHERE departure_id = $1", [dep.id])).n, 0);
+  // An admin sets the rate, with a reason: the held requests go out at it.
+  const set = await fetch(`${on}/api/admin/finance/traveller-rate/override`, {
+    method: "POST", headers: admin, body: JSON.stringify({ egpPerEur: 50, reason: "test: first rate" }) });
+  assert.equal(set.status, 200, await set.text());
+  for (const id of held) {
+    const req = await reqOf(id);
+    assert.ok(req, "the request was released");
+    assert.equal(Number((await one("SELECT published_eur_rate FROM pledges WHERE id = $1", [id])).published_eur_rate), 50);
+    assert.equal(Number(req.amount_eur), 102, "2 × €51: four travelers is the 4–6 tier, 2,540 ÷ 50 = 50.8 rounded up");
+  }
+});

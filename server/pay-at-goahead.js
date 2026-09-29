@@ -222,7 +222,12 @@ export async function requestPayment(c, { pledgeId, departure, now = Date.now(),
   if (live) return null;
   if (!(now < departure.cutoffAt)) return null;
   if (!(await sellerOf(c, departure.id))) return null;
-  const who = await payerFor(c, pledge);
+  // 064: no site-wide traveler rate, no request. It goes out once a rate exists
+  // (releaseHeldPayments, run when the rate changes).
+  const { exchangeRateGate } = await import("./pool-settlement.js");
+  const gate = await exchangeRateGate(c, pledge, { now });
+  if (!gate.ok) return null;
+  const who = await payerFor(c, gate.stamped ? (await c.query("SELECT * FROM pledges WHERE id = $1", [pledgeId])).rows[0] : pledge);
   if (!(who.amount > 0)) return null;
   const reference = await ensureBookingCode(c, pledgeId);
   const provider = activeProvider(env);
@@ -238,6 +243,29 @@ export async function requestPayment(c, { pledgeId, departure, now = Date.now(),
   });
   if (made?.linkUrl) return sendLink(c, { requestId: request.id, linkUrl: made.linkUrl, by: provider.name, now, send });
   return request;
+}
+
+// 064: the traveler rate was set (or changed) after bookings were held for want
+// of one: send the payment requests that were waiting. Safe to run at any time.
+export async function releaseHeldPayments({ db = pool, now = Date.now(), send = null, env = process.env } = {}) {
+  const deps = (await db.query(
+    `SELECT DISTINCT cd.id FROM catalogue_departures cd JOIN pledges p ON p.departure_id = cd.legacy_departure_id
+      WHERE cd.status = 'go_ahead' AND p.payment_mode = 'pay_at_goahead' AND p.status <> 'cancelled' AND p.awaiting_exchange_rate
+        AND NOT EXISTS (SELECT 1 FROM payment_requests r WHERE r.pledge_id = p.id AND r.state IN ('awaiting_link', 'sent', 'paid', 'unsecured'))`)).rows;
+  let requested = 0;
+  for (const d of deps) {
+    requested += await inTx(db, async (c) => {
+      const departure = await departureFor(c, { id: Number(d.id) });
+      if (!departure) return 0;
+      const pledges = (await c.query(
+        `SELECT id FROM pledges WHERE departure_id = $1 AND payment_mode = 'pay_at_goahead' AND status <> 'cancelled' AND awaiting_exchange_rate ORDER BY created_at, id`,
+        [departure.legacyDepartureId])).rows;
+      let n = 0;
+      for (const p of pledges) if (await requestPayment(c, { pledgeId: p.id, departure, now, send, env })) n += 1;
+      return n;
+    });
+  }
+  return { requested };
 }
 
 // The link is out: stamp the deadline (from now, capped at the cut-off),

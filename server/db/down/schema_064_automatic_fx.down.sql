@@ -12,6 +12,7 @@ UPDATE catalogue_rate_versions SET eur_rate = (source -> 'migration064' ->> 'eur
  WHERE source ? 'migration064' AND source -> 'migration064' ->> 'eurRate' IS NOT NULL;
 UPDATE catalogue_rate_versions SET source = source - 'migration064' WHERE source ? 'migration064';
 ALTER TABLE catalogue_rate_versions ENABLE TRIGGER trg_catalogue_rate_immutable;
+ALTER TABLE pledges DROP COLUMN IF EXISTS awaiting_exchange_rate;
 DELETE FROM finance_settings WHERE key = 'traveller_rate';
 DROP TABLE IF EXISTS fx_traveller_rates;
 DROP TABLE IF EXISTS fx_alerts;

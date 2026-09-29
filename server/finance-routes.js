@@ -23,7 +23,7 @@ import { mapCommission, mapStatement, buildCommissionStatement } from "./commiss
 import { bookingDetailsByToken, saveBookingDetailsByToken } from "./booking-details.js";
 import { statementPdf } from "./pdf.js";
 import {
-  fxOverview, runFxDaily, decideFxRate, afterManualRate, setTravellerBuffer, overrideTravellerRate,
+  fxOverview, runFxDaily, releaseHeldPayments, decideFxRate, afterManualRate, setTravellerBuffer, overrideTravellerRate,
 } from "./fx.js";
 import { mapReceivable } from "./receivables.js";
 
@@ -101,6 +101,7 @@ export function registerFinanceRoutes(app, { requireAuth, requireRole, h, logAud
     // The rate is saved either way; a follow-up that fails (before 064) is
     // logged, not hidden.
     await afterManualRate(pool, { by: by(req) })
+      .then((r) => (r?.changed ? releaseHeldPayments({ send: sendEmail }) : null))
       .catch((e) => console.error("[finance] after a manual rate: pending alert and traveler rate not updated —", e.message));
     res.json(out);
   }));
@@ -130,6 +131,7 @@ export function registerFinanceRoutes(app, { requireAuth, requireRole, h, logAud
     const decision = String(req.params.decision);
     if (!["approve", "reject"].includes(decision)) throw new CatalogueError(404, "Not found.");
     const out = await fxRoute(() => decideFxRate(pool, { day: ymdSchema.parse(req.params.day), approve: decision === "approve", by: by(req) }));
+    if (out.traveller?.changed) await releaseHeldPayments({ send: sendEmail });
     await logAudit(req, { action: `finance.fx_rate.${decision}`, entity: "fx_rate", entityId: req.params.day, detail: out });
     res.json(out);
   }));
@@ -142,6 +144,7 @@ export function registerFinanceRoutes(app, { requireAuth, requireRole, h, logAud
   // history and in the audit log.
   app.post("/api/admin/finance/traveller-rate/override", ...staff, route(async (req, res) => {
     const out = await fxRoute(() => overrideTravellerRate(pool, { egpPerEur: req.body?.egpPerEur, reason: req.body?.reason, by: by(req) }));
+    await releaseHeldPayments({ send: sendEmail });
     await logAudit(req, { action: "finance.traveller_rate.override", entity: "fx_traveller_rate", entityId: out.id, detail: out });
     res.json(out);
   }));

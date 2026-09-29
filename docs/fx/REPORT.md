@@ -91,15 +91,16 @@ A rate entered by hand is `approved` / `manual`, and replaces a fetched rate for
 
 **Migration from per-version rates:**
 - The per-version rate (`catalogue_rate_versions.eur_rate`) is removed.
-- The most recently published version's rate becomes the first site-wide rate (`reason = migrated`), so prices don't vanish before the first fetch.
-- Each version keeps a note of its old rate in `source.migration064`, which the rate-card history shows.
+- **Old values are not carried over** (decided 29 Sep 2026: they were wrong, e.g. 43 and 97). After the migration the site-wide traveller rate is **empty** until the first fetched rate is approved, or an admin sets one by hand.
+- While it is empty, the rate card editor and the tour pages and widget say **"Exchange rate not set"** and show no euro prices. A booking made then is marked `pledges.awaiting_exchange_rate`; no payment request goes out for it. When a rate is set (approved, renewed by the job, or overridden), the held requests are sent at that rate, and the booking keeps it.
+- Each version keeps a note of its old rate in `source.migration064`, for the record only; the rate-card history shows it.
 - The rollback puts each version's rate back.
 
 ### Decisions to confirm
 
 1. **"More than 3% from the current traveller rate."** Taken literally, this fires every day. The traveller rate is 3% below the market by design, so the market is always about 3.1% above it. The rule is therefore implemented as: the market moves more than 3% **from the market rate the current traveller rate was worked out from**.
    - For an override, that is the market rate on the day of the override.
-   - For the migrated rate, it is the migrated rate ÷ (1 − buffer).
+   - For an override made before any market rate was approved, it is the override ÷ (1 − buffer).
 2. **An override is not permanent.** It is replaced at the next weekly or early renewal. The alternative, keeping it until an admin clears it, is a small change if you prefer it.
 3. **Rounding up.** EUR prices are now EGP ÷ rate **rounded up**, as asked; until now they rounded to the nearest euro. At 50 EGP per EUR, 2,360 EGP was €47 and is now €48. The worked-example tests were updated to match.
 4. **Who can change it.** Staff roles (super admin and ops staff) can approve or reject rates, set the buffer and override, the same roles as the other Finance settings.
@@ -117,7 +118,7 @@ The public price caches are cleared when the job changes the rate (`onTravellerR
 
 ## 5. Tests
 
-**`server/fx-rules.test.js`** (rules, no database): the 5% approval threshold; the traveller rate = market less the buffer, rounded down; EUR rounded up; and the weekly, market-move and initial renewal rules, including the migrated-rate base.
+**`server/fx-rules.test.js`** (rules, no database): the 5% approval threshold; the traveller rate = market less the buffer, rounded down; EUR rounded up; the weekly, market-move and initial renewal rules; and the worked example: a market rate of 59 with a 3% buffer gives a traveller rate of 57.23, and 3,200 EGP ÷ 57.23 = 55.91 → **€56**.
 
 **`server/fx.integration.test.js`** (real Postgres, stubbed fetch):
 - The daily fetch stores the rate with its source and timestamp, and a second run the same day makes no call.
@@ -135,12 +136,15 @@ The public price caches are cleared when the job changes the rate (`onTravellerR
 - A booking keeps its locked rate after the rate changes, and a later booking pays at the new one.
 - The per-version column is gone and stays gone after re-running 061 and 064.
 - The tier-drop refund is now €4 (it was €6).
+- With no traveller rate: the tour page says the rate is not set and shows no euro price, a booking is held with no payment request, and setting the rate sends the held requests at it.
+
+**`server/catalogue-tour-editor.test.js`**: with no traveller rate the "Edit day tour" view says "Exchange rate not set" and shows no euro prices.
 
 `node scripts/ci-gate.js` passes all 11 runnable steps.
 
 ## 6. Applying it
 
-The order matters: apply migration 064 **before** deploying.
+The order matters: apply migrations **062 and 063 first** (the groups-of-8 and numbered-departures changes, if not applied yet), then **064**, and do this **before** deploying. `npm run db:migrate` runs them in that order. By hand, 063 must not run after 064: 063 copies the per-version rate column that 064 drops.
 
 The new code reads `fx_rates.status`, so Finance's rate screens and the margin report would fail on a database without 064. The other order has a smaller gap: after the migration and before the deploy, only saving a rate-card draft would fail, because the old code still writes the dropped column.
 

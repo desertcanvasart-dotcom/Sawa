@@ -196,6 +196,7 @@ export async function runFxDaily({ db = pool, now = Date.now(), fetchImpl, send 
     }
   }
   const traveller = catalogueV2Enabled(env) ? await updateTravellerRate(db, { now }) : { skipped: "catalogue_v2 is off" };
+  if (traveller.changed && db === pool) await releaseHeldPayments({ send, now, env });
   return { market, traveller };
 }
 
@@ -227,6 +228,20 @@ export async function afterManualRate(db, { by, now = Date.now(), env = process.
 // The public pages cache prices. An admin's change is a write, which clears
 // them anyway; the job's is not, so it tells whoever registered here (app.js
 // clears the public caches).
+// Bookings made while no traveler rate was set wait for one (no payment
+// request is sent). Called once a rate has been committed; a failure is
+// logged and never undoes the rate.
+export async function releaseHeldPayments({ send = null, now = Date.now(), env = process.env } = {}) {
+  if (!catalogueV2Enabled(env)) return { requested: 0 };
+  try {
+    const { releaseHeldPayments: release } = await import("./pay-at-goahead.js");
+    return await release({ send, now, env });
+  } catch (e) {
+    console.error("[fx] releasing held payment requests failed —", e.message);
+    return { requested: 0, error: e.message };
+  }
+}
+
 const changeListeners = [];
 export function onTravellerRateChange(fn) { changeListeners.push(fn); }
 function announceChange() {
@@ -301,6 +316,7 @@ export async function overrideTravellerRate(db, { egpPerEur, reason, by, now = D
     `INSERT INTO fx_traveller_rates (egp_per_eur, market_egp_per_eur, market_day, buffer_pct, reason, note, set_by, effective_at)
      VALUES ($1, $2, $3, $4, 'override', $5, $6, $7) RETURNING *`,
     [Math.round(rate * 10000) / 10000, market?.egpPerEur ?? null, market?.day ?? null, bufferPct, note.slice(0, 500), by, new Date(now)]);
+  announceChange();
   return mapTraveller(r.rows[0]);
 }
 

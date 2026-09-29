@@ -95,5 +95,10 @@ BEGIN
   END IF;
 END $$;
 
+-- A booking made while no traveler rate is set: priced by the rate card but
+-- with no rate to keep. No payment request goes out for it until a rate
+-- exists; then it keeps that rate and its request is sent.
+ALTER TABLE pledges ADD COLUMN IF NOT EXISTS awaiting_exchange_rate BOOLEAN NOT NULL DEFAULT false;
+
 ALTER TABLE fx_alerts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE fx_traveller_rates ENABLE ROW LEVEL SECURITY;

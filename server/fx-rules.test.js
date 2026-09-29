@@ -46,3 +46,10 @@ test("renewal: none yet → initial; a week old → weekly; market 3% from its b
   assert.equal(travellerUpdateDue({ current: override, market: 50, bufferPct: 3, now: NOW }), null, "48.5 ÷ 0.97 = 50");
   assert.equal(travellerUpdateDue({ current: override, market: 52, bufferPct: 3, now: NOW }), "market_move");
 });
+
+test("worked example: a market rate of 59 and a 3% buffer turn 3,200 EGP into €56", () => {
+  const rate = travellerRateFrom(59, 3);
+  assert.equal(rate, 57.23, "59 × 0.97");
+  assert.equal(eurFromEgp(3200, rate), 56, "3,200 ÷ 57.23 = 55.91, rounded up");
+  assert.equal(eurFromEgp(3200, 59), 55, "at the bare market rate it would be 55: the buffer is what makes it 56");
+});
