@@ -7129,3 +7129,23 @@ button:disabled {
 .fx-control .fx-edit { display: grid; gap: 8px; margin-top: 8px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--sand-50); }
 .fx-control .fx-edit label { display: flex; gap: 8px; align-items: center; font-size: 13px; }
 .fx-control .fx-edit input:not([type=radio]) { border: 1px solid #ccd8dc; border-radius: 8px; padding: 8px 10px; font-size: 14px; }
+
+/* Rate card section 3 and the exchange rate control: room between the value, the market line, the button and the notes */
+.fx-control { gap: 10px; align-content: start; }
+.fx-control .fx-value { display: grid; gap: 4px; }
+.fx-control .fx-value strong { font-size: 18px; }
+.fx-control .fx-value strong.fx-unset { color: #9a6a12; }
+.fx-control .field-hint { line-height: 1.45; }
+.fx-control .fx-market { font-size: 13px; color: var(--ink-soft); }
+.fx-control .fx-change { justify-self: start; align-self: flex-start; width: auto; margin-top: 2px; }
+.fx-control > span.fx-market { font-weight: 400; }
+/* The three labels in section 3 take the same height, so the inputs line up. */
+.rate-editor .re-grid3 { align-items: start; }
+.rate-editor .re-grid3 > .field > span:first-child { min-height: 2.6em; }
+@media (max-width: 800px) { .rate-editor .re-grid3 > .field > span:first-child { min-height: 0; } }
+.rate-editor .re-notes { display: grid; gap: 10px; margin: 24px 0 8px; padding-top: 16px; border-top: 1px solid var(--line); }
+.rate-editor .re-notes .field-hint { margin: 0; line-height: 1.5; }
+.rate-editor .re-callout { margin: 0; padding: 12px 14px; background: #fdf7ea; border: 1px solid #f1dfb5; border-radius: 12px; font-size: 13px; line-height: 1.5; }
+.rate-editor .re-preview { margin: 0; font-size: 14px; }
+.rate-editor .dash-table td.re-empty { color: var(--ink-faint); font-size: 13px; padding: 16px 14px; white-space: normal; }
+.rate-editor .re-price-hint { margin-top: 6px; }

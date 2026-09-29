@@ -674,7 +674,7 @@ function RateEditor({ product, flash, onClose }) {
               <td><input className="re-num" type="number" min="1" step="1" value={t.from} onChange={(e) => setTier(i, "from", e.target.value)} style={{ width: 70 }} /></td>
               <td><input className="re-num" type="number" min="1" step="1" value={t.to} onChange={(e) => setTier(i, "to", e.target.value)} style={{ width: 70 }} /></td>
               <td><input className="re-num" type="number" min="0" step="0.01" value={t.priceEur} aria-label="Tour price per traveller (EUR)" onChange={(e) => setTier(i, "priceEur", e.target.value)} />
-                <div className="field-hint tnum">{numOrNull(t.priceEur) == null ? (t.oldEgp != null ? `Was EGP ${egpFmt(t.oldEgp)}: enter the EUR price.` : "")
+                <div className="field-hint tnum re-price-hint">{numOrNull(t.priceEur) == null ? (t.oldEgp != null ? `Was EGP ${egpFmt(t.oldEgp)}: enter the EUR price.` : "")
                   : eurRate == null ? "EGP: exchange rate not set"
                   : `≈ ${egpFmt(tierEgp({ priceEur: numOrNull(t.priceEur) }, eurRate))} EGP at the current rate (${at})`}</div></td>
               <td><input className="re-num" type="number" min="0" max="100" step="0.1" value={t.operatorFeePct} onChange={(e) => setTier(i, "operatorFeePct", e.target.value)} style={{ width: 90 }} /></td>
@@ -686,7 +686,9 @@ function RateEditor({ product, flash, onClose }) {
         <h3><span className="re-step">2</span>Cost lines</h3>
         <div className="table-wrap"><table className="dash-table">
           <thead><tr><th>Name</th><th>Basis</th>{form.tiers.map((t, i) => <th key={i}>{t.from}–{t.to} (EGP)</th>)}<th /></tr></thead>
-          <tbody>{form.costLines.map((l, i) => (
+          <tbody>{!form.costLines.length && (
+            <tr><td colSpan={form.tiers.length + 3} className="re-empty">No cost lines yet. Add what the tour costs the operator: transport, guide, entrance fees, meals.</td></tr>
+          )}{form.costLines.map((l, i) => (
             <tr key={i}>
               <td><input value={l.name} maxLength={80} placeholder="e.g. Transport" className="re-wide" onChange={(e) => setLine(i, { name: e.target.value })} /></td>
               <td><select value={l.basis} onChange={(e) => setLine(i, { basis: e.target.value })}>
@@ -707,14 +709,19 @@ function RateEditor({ product, flash, onClose }) {
           <ExchangeRateControl summary={fx} onChanged={setFx} fromRateCard flash={flash} />
           <label className="field"><span>Takes effect</span><input type="date" value={effectiveFrom} onChange={(e) => setEffectiveFrom(e.target.value)} /></label>
         </div>
-        <p className="field-hint">The exchange rate is one rate for every tour. Each booking keeps the rate in force when it was made, and its revenue in EGP is its EUR price × that rate. Costs, fees, the commission and the pool are in EGP. A published version applies to departures that haven't sold a seat yet; departures already sold keep the version they were locked to.</p>
-        {fx !== undefined && eurRate == null && <p className="field-hint"><b>Exchange rate not set.</b> No euro prices are shown to travelers and no payment requests are sent until a rate is approved or a manual rate is set.</p>}
-        {eurRate != null && tierPriceLine(model.tiers, eurRate) && <p className="field-hint">Tour page preview: Travelers pay {tierPriceLine(model.tiers, eurRate)}</p>}
+        <div className="re-notes">
+          {fx !== undefined && eurRate == null && <p className="re-callout" role="status"><b>Exchange rate not set.</b> No euro prices are shown to travelers and no payment requests are sent until a rate is approved or a manual rate is set.</p>}
+          {eurRate != null && tierPriceLine(model.tiers, eurRate) && <p className="re-preview">Tour page preview: <b>Travelers pay {tierPriceLine(model.tiers, eurRate)}</b></p>}
+          <p className="field-hint">The exchange rate is one rate for every tour. Each booking keeps the rate in force when it was made, and its revenue in EGP is its EUR price × that rate. Costs, fees, the commission and the pool are in EGP.</p>
+          <p className="field-hint">A published version applies to departures that haven't sold a seat yet; departures already sold keep the version they were locked to.</p>
+        </div>
         {problem && <div className="auth-error">{problem}</div>}
 
         <h3><span className="re-step">4</span>By group size</h3>
         <p className="field-hint" style={{ marginTop: 0 }}>{eurRate == null ? "In EGP. Set the exchange rate to see the revenue." : `In EGP at the current exchange rate (${at}). Real departures use the rate locked on each booking.`}</p>
-        {table ? (
+        {table && table.rows.every((r) => !r.complete) ? (
+          <p className="re-callout">To see the table, fill in: {[...new Set(table.rows.flatMap((r) => r.missing))].join(", ")}.</p>
+        ) : table ? (
           <>
             {table.warnings.length > 0 && <ul className="re-warnings">{table.warnings.map((w, i) => <li key={i}><span className="tag tag-warn">{w.kind === "negative_pool" ? "Guarantee needed" : "Pool shrinks"}</span> <span>{w.text}</span></li>)}</ul>}
             <div className="table-wrap"><table className="dash-table">
@@ -727,7 +734,7 @@ function RateEditor({ product, flash, onClose }) {
                     <td className="tnum">{egpFmt(r.operatorFee)}</td><td className="tnum">{egpFmt(r.entitlement)}</td><td className="tnum">{egpFmt(r.commission)}</td>
                     <td className="tnum">{r.negativePool ? <b>{egpFmt(r.pool)}</b> : egpFmt(r.pool)}</td><td className="tnum">{egpFmt(r.poolPerTraveller)}</td>
                     <td className="tnum">{r.poolChange == null ? "—" : `${r.poolChange > 0 ? "+" : ""}${egpFmt(r.poolChange)}`}</td>
-                  </>) : <td colSpan={9} className="field-hint">Missing: {r.missing.slice(0, 4).join(", ")}{r.missing.length > 4 ? "…" : ""}</td>}
+                  </>) : <td colSpan={9} className="re-empty">Missing: {r.missing.slice(0, 4).join(", ")}{r.missing.length > 4 ? "…" : ""}</td>}
                 </tr>
               ))}</tbody>
             </table></div>

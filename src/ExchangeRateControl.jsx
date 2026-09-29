@@ -46,13 +46,15 @@ export function ExchangeRateControl({ summary, onChanged, fromRateCard = false, 
   return (
     <div className="field fx-control">
       <span>{RATE_LABEL} · site-wide</span>
-      <strong className="tnum">{s.rate == null ? "Exchange rate not set" : `${s.rate} (${s.mode})`}</strong>
-      <span className="field-hint">{RATE_HELP}</span>
-      {s.mode === "automatic" && s.rate != null && <span className="field-hint">The latest approved market rate less {s.bufferPct}%, renewed weekly or when the market moves more than 3%.</span>}
-      {s.market && <span className="field-hint tnum">Market today: {s.market.egpPerEur}{s.rate != null ? ` · You're using: ${s.rate}` : ""}</span>}
+      <div className="fx-value">
+        <strong className={`tnum${s.rate == null ? " fx-unset" : ""}`}>{s.rate == null ? "Exchange rate not set" : `${s.rate} (${s.mode})`}</strong>
+        <span className="field-hint">{RATE_HELP}</span>
+        {s.mode === "automatic" && s.rate != null && <span className="field-hint">The latest approved market rate less {s.bufferPct}%, renewed weekly or when the market moves more than 3%.</span>}
+      </div>
+      {s.market && <span className="fx-market tnum">Market today: <b>{s.market.egpPerEur}</b>{s.rate != null ? <> · You're using: <b>{s.rate}</b></> : ""}</span>}
       {s.gapWarning && <span className="auth-error" role="status"><AlertTriangle size={14} /> The manual rate is {s.gapPct}% from the market rate.</span>}
       {!editing ? (
-        <button type="button" className="btn-ghost sm" onClick={() => { setF({ mode: s.mode, rate: s.mode === "manual" && s.rate != null ? String(s.rate) : "", reason: "" }); setEditing(true); }}>Change exchange rate</button>
+        <button type="button" className="btn-ghost sm fx-change" onClick={() => { setF({ mode: s.mode, rate: s.mode === "manual" && s.rate != null ? String(s.rate) : "", reason: "" }); setEditing(true); }}>Change exchange rate</button>
       ) : (
         <div className="fx-edit" role="group" aria-label="Change the exchange rate for all tours">
           <label><input type="radio" name="fx-mode" checked={f.mode === "automatic"} onChange={() => setF({ ...f, mode: "automatic" })} /> Automatic (market rate less {s.bufferPct ?? 3}%)</label>
