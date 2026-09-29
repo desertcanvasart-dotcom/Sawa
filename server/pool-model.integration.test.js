@@ -337,21 +337,21 @@ test("a departure that moves from 7–9 to 10–12 after payment refunds the EUR
   await assignX(d);
   for (const id of early) assert.equal(Number((await reqOf(id)).amount_eur), 100, "8 travelers: 7–9, €50 a seat");
   await payAll(d);
-  // Two more before the cut-off: 10 travelers, the 10–12 tier (€47).
+  // Two more before the cut-off: 10 travelers, the 10–12 tier (€48).
   const late = await book(d, 2);
-  assert.equal(Number((await one("SELECT price_per_person FROM pledges WHERE id = $1", [late])).price_per_person), 47);
+  assert.equal(Number((await one("SELECT price_per_person FROM pledges WHERE id = $1", [late])).price_per_person), 48);
   await pag.runPayAtGoAheadTick({ db, now: Date.now(), send });
-  assert.equal(Number((await reqOf(late)).amount_eur), 94, "the later booking pays the cheaper tier");
+  assert.equal(Number((await reqOf(late)).amount_eur), 96, "the later booking pays the cheaper tier");
   await payAll(d);
   await asg.freezeManifests({ db, now: cutoffOf(d) + MIN });
   const tick = await poolS.runPoolTick({});
   assert.equal(tick.tierRefunds, 4, JSON.stringify(tick));
   const refunds = (await db.query("SELECT * FROM payment_refunds WHERE pledge_id = ANY($1::text[]) AND kind = 'tier_difference'", [early])).rows;
-  assert.deepEqual(refunds.map((f) => Number(f.amount_eur)), [6, 6, 6, 6], "2 × (€50 − €47)");
+  assert.deepEqual(refunds.map((f) => Number(f.amount_eur)), [4, 4, 4, 4], "2 × (€50 − €48)");
   const tasks = (await db.query(
     "SELECT t.* FROM payment_tasks t JOIN payment_refunds f ON f.id = t.refund_id WHERE f.kind = 'tier_difference' AND t.kind = 'issue_refund'")).rows;
   assert.equal(tasks.length, 4, "with tab-manual, an ops task each");
-  assert.match(tasks[0].title, /^Refund €6 in Tab for /);
+  assert.match(tasks[0].title, /^Refund €4 in Tab for /);
   assert.equal((await db.query("SELECT 1 FROM payment_refunds WHERE pledge_id = $1", [late])).rowCount, 0);
   assert.equal((await poolS.runPoolTick({})).tierRefunds, 0, "once");
 });
