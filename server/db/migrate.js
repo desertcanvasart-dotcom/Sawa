@@ -74,6 +74,7 @@ const MIGRATIONS = [
   { name: "063_numbered_departures", file: "schema_063_numbered_departures.sql" },
   { name: "064_automatic_fx", file: "schema_064_automatic_fx.sql" },
   { name: "065_exchange_mode_eur_prices", file: "schema_065_exchange_mode_eur_prices.sql" },
+  { name: "066_rate_cards", file: "schema_066_rate_cards.sql" },
 ];
 
 async function main() {

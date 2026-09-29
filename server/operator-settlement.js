@@ -20,7 +20,6 @@ import { departureMoney, poolModelAvailable } from "./pool-settlement.js";
 import { notifyOperator, operatorRecipients } from "./operators.js";
 import { applySetoffs, releaseSetoffs, syncBalanceReceivable, createReceivable, setoffLines } from "./receivables.js";
 import { shiftDate } from "../shared/catalogue.js";
-import { rateFieldsFor } from "../shared/operators.js";
 import {
   advanceFor, operatorBalance, deductionRoom, egyptBusinessDaysAfter, balanceDueOn, statementAutoAcceptAt, collectionsDistribution, departureMargin,
 } from "../shared/settlement-rules.js";
@@ -65,7 +64,7 @@ export async function createAdvance(c, { assignment, now = Date.now() }) {
      VALUES ($1, $2, $3, 'advance', $4, $5, $6, $7, $8)
      ON CONFLICT (assignment_id) WHERE kind = 'advance' DO NOTHING RETURNING *`,
     [assignment.departureId, assignment.operatorId, assignment.id, amount, dueOn, hold ? "on_hold" : "due", hold,
-      JSON.stringify({ expectedTotal: expected.total, travelers: expected.travelers, band: expected.band, rateVersion: expected.rateVersion })]);
+      JSON.stringify({ expectedTotal: expected.total, travelers: expected.travelers, band: expected.band, rateSource: expected.rateSource })]);
   if (!r.rows[0]) return null;
   // What the operator owes Sawa comes off this advance first (9.4).
   await applySetoffs(c, Number(r.rows[0].id));
@@ -198,17 +197,16 @@ async function settlementParty(c, departureId) {
 async function departureFacts(c, departureId) {
   const r = (await c.query(
     `SELECT cd.id, cd.date, cd.status, c.code, c.title, c.type, t.nights, sv.version AS spec_version,
-            rv.id AS rate_id, rv.version AS rate_version
+            cd.rate_snapshot
        FROM catalogue_departures cd JOIN catalogue_products c ON c.id = cd.product_id
        LEFT JOIN tour_products t ON t.id = c.legacy_product_id
        LEFT JOIN catalogue_spec_versions sv ON sv.id = cd.spec_version_id
-       LEFT JOIN catalogue_rate_versions rv ON rv.id = cd.rate_version_id
       WHERE cd.id = $1`, [departureId])).rows[0];
   if (!r) throw new CatalogueError(404, "Departure not found.");
   const date = ymd(r.date);
   return {
     id: Number(r.id), date, endDate: shiftDate(date, Number(r.nights) || 0), status: r.status, code: r.code, title: r.title,
-    type: r.type, specVersion: r.spec_version, rateVersionId: r.rate_id == null ? null : Number(r.rate_id), rateVersion: r.rate_version,
+    type: r.type, specVersion: r.spec_version, rateSnapshot: r.rate_snapshot || null,
   };
 }
 
@@ -330,19 +328,17 @@ async function poolDistribution(c, departureId, operatorId) {
 async function statementSnapshot(c, departureId, figures = null) {
   const f = figures || await settlementFigures(c, departureId);
   const manifest = (await c.query("SELECT frozen_at, travelers, seat_count FROM catalogue_manifests WHERE departure_id = $1", [departureId])).rows[0];
-  const rate = f.departure.rateVersionId ? (await c.query("SELECT * FROM catalogue_rate_versions WHERE id = $1", [f.departure.rateVersionId])).rows[0] : null;
   const op = f.party ? (await c.query("SELECT id, legal_name FROM operators WHERE id = $1", [f.party.operatorId])).rows[0] : null;
-  const perTraveler = rate ? num(rate.per_traveler ?? rate.land_per_traveler) : null;
   return {
     currency: "EGP",
     operator: op ? { id: Number(op.id), legalName: op.legal_name } : null,
     departure: { id: f.departure.id, code: f.departure.code, title: f.departure.title, date: f.departure.date, endDate: f.departure.endDate, specVersion: f.departure.specVersion },
-    rateVersion: rate ? { id: Number(rate.id), version: rate.version, fields: rateFieldsFor(f.departure.type) } : null,
+    // 066: the departure's copy of the rate card (taken at its first seat), or the card as it is now.
+    rateCard: { source: f.departure.rateSnapshot ? "snapshot" : "current", takenAt: f.departure.rateSnapshot?.takenAt || null, label: f.expected.rateSource },
     manifestFrozenAt: manifest?.frozen_at || null,
     travelers: (manifest?.travelers || []).map((t) => ({ booking: t.booking, name: t.name, canceledAfterCutoff: !!t.canceledAfterCutoff })),
     travelerCount: f.expected.travelers,
     band: f.expected.band || null,
-    perTraveler,
     lines: f.expected.lines,
     operatorAmount: f.expected.total,
     missing: f.expected.missing,

@@ -13,7 +13,7 @@
 //                   accept that same version, never the current one.
 import { pool, withTransaction } from "./db/index.js";
 import { CatalogueError, todayIn } from "./catalogue.js";
-import { rateInForce, mapRate } from "./rates.js";
+import { getRateCard, departureRate } from "./rates.js";
 import { PRODUCT_TYPES, TYPE_LABELS } from "../shared/catalogue.js";
 import {
   versionInForce, tierRowsError, describeTiers, lossCheck, owedPerSeatEgp, pointLabel,
@@ -180,8 +180,7 @@ export async function tierLossReport(db, { versionId, now = Date.now() }) {
   const today = todayIn(now);
   const out = [];
   for (const p of products) {
-    const rates = (await db.query("SELECT * FROM catalogue_rate_versions WHERE product_id = $1", [p.id])).rows.map(mapRate);
-    const rate = rateInForce(rates, today);
+    const rate = await getRateCard(db, Number(p.id));
     const retail = p.published_rate == null ? null : Number(p.published_rate);
     const windows = lossCheck({
       rows: version.rows, productType: p.type, cutoffHours: p.cutoff_hours, goaheadDeadlineDays: p.goahead_deadline_days,
@@ -189,7 +188,7 @@ export async function tierLossReport(db, { versionId, now = Date.now() }) {
     });
     out.push({
       product: { id: Number(p.id), code: p.code, title: p.title, type: p.type, typeLabel: TYPE_LABELS[p.type] },
-      point: pointLabel(p.type), retailEur: retail, rateVersion: rate?.version ?? null, windows,
+      point: pointLabel(p.type), retailEur: retail, rateCard: !!rate, windows,
       losesMoney: windows.some((w) => w.losesMoney),
     });
   }
@@ -202,12 +201,12 @@ export async function tierLossReport(db, { versionId, now = Date.now() }) {
 // if none carries one yet). Windows where a cancellation would lose money.
 export async function departureLossWarnings(db, { departureId, fx }) {
   const d = (await db.query(
-    `SELECT cd.id, cd.rate_version_id, cd.legacy_departure_id, c.type, c.cutoff_hours, c.goahead_deadline_days, dep.published_rate
+    `SELECT cd.id, cd.rate_snapshot, cd.product_id, cd.legacy_departure_id, c.type, c.cutoff_hours, c.goahead_deadline_days, dep.published_rate
        FROM catalogue_departures cd JOIN catalogue_products c ON c.id = cd.product_id
        LEFT JOIN departures dep ON dep.id = cd.legacy_departure_id WHERE cd.id = $1`, [departureId])).rows[0];
   if (!d) return [];
-  const rate = d.rate_version_id == null ? null
-    : mapRate((await db.query("SELECT * FROM catalogue_rate_versions WHERE id = $1", [d.rate_version_id])).rows[0]);
+  // Its snapshot once a seat sold, else the product's rate card (066).
+  const rate = await departureRate(db, d);
   let versionIds = (await db.query(
     `SELECT DISTINCT cancellation_tier_version_id AS id FROM pledges
       WHERE departure_id = $1 AND status <> 'cancelled' AND cancellation_tier_version_id IS NOT NULL`, [d.legacy_departure_id])).rows.map((r) => Number(r.id));

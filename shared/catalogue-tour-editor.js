@@ -10,7 +10,7 @@
 import { tierPriceRows, tierPriceSummary, tierEgp } from "./pool-model.js";
 import { cutoffLabel } from "./booking-policy.js";
 
-export const NO_RATE_CARD = "No published rate card: this tour can't be booked";
+export const NO_RATE_CARD = "No rate card: this tour can't be booked";
 export const NO_EXCHANGE_RATE = "Exchange rate not set";
 
 // The legacy fields a catalogue product hides.

@@ -25,7 +25,7 @@ import { activeSpec, publicDateLabel, publiclyListed } from "../shared/catalogue
 import {
   mapCatalogueProduct, mapSpec, todayIn, departureInstants, isMissingCatalogueTables, goaheadColumns,
 } from "./catalogue.js";
-import { mapRate, rateInForce } from "./rates.js";
+import { listRateCards } from "./rates.js";
 import { tierEur, tierPriced, tierPriceLine, tierPriceSummary } from "../shared/pool-model.js";
 import { currentTravellerRate } from "./fx.js";
 
@@ -65,34 +65,33 @@ async function build(now) {
                  WHERE cd.status IN ('open', 'go_ahead') AND cd.legacy_departure_id IS NOT NULL AND cd.date >= $1`, [today])),
   ]);
   const listingBy = new Map(listings.rows.map((t) => [t.id, t]));
-  // The rate card's prices, where they are complete (phase 5).
-  const ratesByProduct = new Map();
-  // Every EUR price from the one site-wide traveler rate (064).
+  // Each product's rate card (066: one per product, no versions).
+  const cardBy = new Map();
+  // Every EUR price from the one site-wide exchange rate (064).
   const eurRate = (await currentTravellerRate(pool))?.egpPerEur ?? null;
   try {
-    for (const v of (await pool.query("SELECT * FROM catalogue_rate_versions WHERE state = 'published'")).rows.map(mapRate)) {
-      if (!ratesByProduct.has(v.productId)) ratesByProduct.set(v.productId, []);
-      ratesByProduct.get(v.productId).push(v);
-    }
+    for (const card of await listRateCards(pool)) cardBy.set(card.productId, card);
   } catch (e) {
     if (e?.code !== "42P01") throw e;
   }
   const pricingFor = (productId) => {
-    const rate = rateInForce(ratesByProduct.get(productId) || [], today);
+    const rate = cardBy.get(productId) || null;
     // No site-wide rate: no euro price at all, EUR-priced cards included
     // ("Exchange rate not set"; no payment request goes out either).
     const line = rate && eurRate != null ? tierPriceLine(rate.tiers, eurRate) : null;
     if (!line) return null;
     // Phase 7: a EUR price is shown exactly as entered; an EGP one converted.
     const tiers = rate.tiers.map((t) => ({ from: t.from, to: t.to, eur: tierEur(t, eurRate) }));
-    return { line, summary: tierPriceSummary(rate.tiers, eurRate), tiers, rateVersion: rate.version };
+    return { line, summary: tierPriceSummary(rate.tiers, eurRate), tiers };
   };
-  // A rate card with prices but no site-wide traveler rate yet: no euro price
-  // can be shown ("Exchange rate not set") and no payment request goes out.
-  const rateNotSet = (productId) => {
-    if (eurRate != null) return false;
-    const rate = rateInForce(ratesByProduct.get(productId) || [], today);
-    return !!rate?.tiers?.length && rate.tiers.every(tierPriced);
+  // Why a tour shows no price and can't be booked (066): no rate card ("Not
+  // bookable right now"), or no site-wide exchange rate ("Exchange rate not
+  // set"). Null when it can be booked (a card without prices shows the
+  // listing's price, as before).
+  const priceUnavailable = (productId) => {
+    if (!cardBy.get(productId)?.tiers?.length) return "Not bookable right now";
+    if (eurRate == null) return "Exchange rate not set";
+    return null;
   };
   const specsBy = new Map();
   for (const s of specs.rows.map(mapSpec)) {
@@ -110,7 +109,7 @@ async function build(now) {
     // build links, so both sides agree on every URL.
     const path = listing ? tourPath({ title: product.title, city: listing.city, type: listing.type }) : null;
     const oldPath = listing ? tourPath(listing) : null;
-    return { product, listing, spec, visible, path, oldPath, pricing: pricingFor(product.id), rateNotSet: rateNotSet(product.id) };
+    return { product, listing, spec, visible, path, oldPath, pricing: pricingFor(product.id), priceUnavailable: priceUnavailable(product.id) };
   });
   const byCatalogueId = new Map(all.map((e) => [e.product.id, e]));
 
@@ -192,7 +191,8 @@ function publicSpec(entry) {
     endCity: entry.product.endCity,
     specVersion: entry.spec?.version ?? null,
     needsNationality: entry.product.needsNationality === true,
-    priceNotSet: entry.rateNotSet === true,
+    priceNotSet: entry.priceUnavailable != null,
+    priceUnavailable: entry.priceUnavailable ?? null,
     priceLine: entry.pricing?.line || null,
     // "4–6 travelers €54 · 7–9 travelers €45 · 10–12 travelers €42": the tour page and the widget show this.
     priceSummary: entry.pricing?.summary || null,

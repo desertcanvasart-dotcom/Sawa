@@ -8,7 +8,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   departureEconomics, operatorEntitlement, poolRateGaps, poolRateTable, DEFAULT_POOL_TIERS, RATE_TABLE_FROM, RATE_TABLE_TO,
-  withFeeOverride, tierPriceSummary, tierPriceLine, tierPriceEur,
+  withFeeOverride, tierPriceSummary, tierPriceLine, tierPriceEur, rateCardError,
 } from "../shared/pool-model.js";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -52,14 +52,16 @@ test("an operator fee override of 8% on the same 8 travelers moves only that dep
   assert.equal(withFeeOverride(ONE, null), ONE, "no override: the rate card");
 });
 
-test("the operator fee is required: with none, the rate card is incomplete and can't be published", () => {
+test("the operator fee is required: with none, the rate card is incomplete and can't be saved", () => {
   const empty = { ...ONE, tiers: [{ ...ONE.tiers[0], operatorFeePct: "" }] };
   assert.ok(poolRateGaps(empty).includes("operator fee 4–8"));
   const nulled = { ...ONE, tiers: [{ ...ONE.tiers[0], operatorFeePct: null }] };
   assert.ok(poolRateGaps(nulled).includes("operator fee 4–8"));
   assert.deepEqual(poolRateGaps(ONE), []);
-  // The server refuses to publish while any gap besides the price is open (server/rates.js publishRate).
-  assert.match(read("server", "rates.js"), /poolRateGaps\(v\)/);
+  // The server refuses to save it (066: server/rates.js saveRateCard checks rateCardError).
+  assert.match(rateCardError(empty), /operator fee is required/);
+  assert.equal(rateCardError(ONE), null);
+  assert.match(read("server", "rates.js"), /rateCardError\(model, product\)/);
 });
 
 test("tour pages and the widget say \"€X per person\" for one price; the from-7 / from-10 lines are gone", () => {

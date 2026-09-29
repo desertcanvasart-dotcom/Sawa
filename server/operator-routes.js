@@ -19,7 +19,10 @@ import {
 import {
   rosterMonth, setPlanLine, buildMonth, overrideEntry, publishMonth, decideSwap, requestSwap, operatorRoster,
 } from "./roster.js";
-import { ratesFor, saveRateDraft, publishRate, importRateCard, mapRate, migrationReportLines } from "./rates.js";
+import { listRateCards, saveRateCard, deleteRateCard, migrationReportLines } from "./rates.js";
+
+// A card's values, for the audit log (before and after a change).
+const cardValues = (c) => ({ tiers: c.tiers, costLines: c.costLines, commissionPct: c.commissionPct, updatedBy: c.updatedBy, updatedAt: c.updatedAt });
 import { acknowledge, declineAssignment, assignByAdmin, manifestFor, expectedAmountFor, mapAssignment } from "./assignments.js";
 import { DOCUMENT_KINDS, STRIKE_KINDS, strikesInWindow, OPERATOR_STATUSES } from "../shared/operators.js";
 import { parseReceiptDataUrl } from "./receipts.js";
@@ -256,54 +259,41 @@ export function registerOperatorRoutes(app, { requireAuth, requireRole, h, logAu
   }));
 
   // ============================================================== rate card
+  // 066: one rate card per product, saved in place; every change in the audit
+  // log with the values before and after.
   app.get("/api/admin/rates", ...staff, route(async (_req, res) => {
-    const [products, versions] = await Promise.all([
+    const [products, cards] = await Promise.all([
       pool.query("SELECT id, catalogue_no, code, title, type, status, goahead_min, max_group FROM catalogue_products ORDER BY catalogue_no"),
-      pool.query("SELECT * FROM catalogue_rate_versions ORDER BY product_id, version"),
+      listRateCards(pool),
     ]);
-    const by = new Map();
-    for (const v of versions.rows.map(mapRate)) (by.get(v.productId) || by.set(v.productId, []).get(v.productId)).push(v);
-    res.json({ products: products.rows.map((p) => ({ ...p, id: Number(p.id), versions: by.get(Number(p.id)) || [] })) });
+    const cardBy = new Map(cards.map((c) => [c.productId, c]));
+    res.json({ products: products.rows.map((p) => ({ ...p, id: Number(p.id), card: cardBy.get(Number(p.id)) || null })) });
   }));
 
-  // What migration 061 converted, for the rate card screen.
+  // What migration 066 did (rate_card_migration_066), for the rate card screen.
   app.get("/api/admin/rates/migration-report", ...staff, route(async (_req, res) => {
-    const rows = (await pool.query(
-      `SELECT c.catalogue_no, c.code, v.version, v.state, v.cost_lines, v.source
-         FROM catalogue_rate_versions v JOIN catalogue_products c ON c.id = v.product_id
-        ORDER BY c.catalogue_no, v.version`)).rows;
+    let rows = [];
+    try {
+      rows = (await pool.query("SELECT * FROM rate_card_migration_066 ORDER BY catalogue_no, id")).rows;
+    } catch (e) {
+      if (e?.code !== "42P01") throw e;
+    }
     res.json({ lines: migrationReportLines(rows) });
   }));
 
-  app.put("/api/admin/rates/:productId/draft", ...staff, route(async (req, res) => {
-    const version = await saveRateDraft(pool, id(req.params.productId), req.body?.values || {}, { by: by(req) });
-    await logAudit(req, { action: "rates.draft", entity: "catalogue_product", entityId: version.productId, detail: { version: version.version } });
-    res.json({ version });
-  }));
-
-  app.post("/api/admin/rates/:productId/versions/:versionId/publish", ...staff, route(async (req, res) => {
-    const effectiveFrom = req.body?.effectiveFrom ? ymdSchema.parse(req.body.effectiveFrom) : null;
-    const version = await publishRate({ productId: id(req.params.productId), versionId: id(req.params.versionId), effectiveFrom, by: by(req) });
-    await logAudit(req, { action: "rates.publish", entity: "catalogue_product", entityId: version.productId, detail: { version: version.version, effectiveFrom: version.effectiveFrom } });
-    // Phase 5: the tour pages show the rate card's tier prices.
+  app.put("/api/admin/rates/:productId", ...staff, route(async (req, res) => {
+    const out = await saveRateCard(pool, id(req.params.productId), req.body?.values || {}, { by: by(req) });
+    await logAudit(req, { action: out.before ? "rates.update" : "rates.create", entity: "catalogue_product", entityId: out.card.productId,
+      detail: { before: out.before && cardValues(out.before), after: cardValues(out.card), warnings: out.warnings.map((w) => w.text) } });
     invalidatePublic();
-    res.json({ version });
+    res.json(out);
   }));
 
-  app.post("/api/admin/rates/import", ...staff, route(async (req, res) => {
-    const m = /^data:[^;]+;base64,(.+)$/.exec(String(req.body?.dataUrl || ""));
-    if (!m) throw new CatalogueError(422, "Choose the rate card spreadsheet (.xlsx).");
-    const buffer = Buffer.from(m[1], "base64");
-    if (buffer.length > 5_000_000) throw new CatalogueError(413, "That file is too large for a rate card.");
-    let result;
-    try {
-      result = await importRateCard({ buffer, filename: String(req.body?.filename || "rate-card.xlsx").slice(0, 200), by: by(req) });
-    } catch (e) {
-      if (/xlsx|zip/i.test(e.message)) throw new CatalogueError(422, `That file couldn't be read as a spreadsheet: ${e.message}`);
-      throw e;
-    }
-    await logAudit(req, { action: "rates.import", entity: "catalogue", entityId: null, detail: { imported: result.imported.length, skipped: result.skipped.length, problems: result.problems.length } });
-    res.json(result);
+  app.delete("/api/admin/rates/:productId", ...staff, route(async (req, res) => {
+    const before = await deleteRateCard(pool, id(req.params.productId));
+    await logAudit(req, { action: "rates.delete", entity: "catalogue_product", entityId: before.productId, detail: { before: cardValues(before), after: null } });
+    invalidatePublic();
+    res.json({ deleted: true });
   }));
 
   // ============================================================== assignment

@@ -1,15 +1,13 @@
-// Phase 7: rate cards priced in EUR, the tier-removal fix and the conversion
-// rules, with no database. docs/phase7/REPORT.md.
+// Phase 7: rate cards priced in EUR and the tier-removal fix, with no
+// database. docs/phase7/REPORT.md. (The phase 7 conversion into drafts went
+// with the versions in 066.)
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   departureEconomics, poolRateTable, tierEur, tierEgp, tierPriceLine, bookingChargeEur, removeTierAt, singlePriceFrom, eurTiersFrom, poolRateGaps,
 } from "../shared/pool-model.js";
 import { travellerRateFrom, eurFromEgp, manualMarketGap } from "../shared/fx-rules.js";
-// The server modules open a (lazy) pool on import: a placeholder URL, never connected.
-process.env.DATABASE_URL ||= "postgres://unit:unit@127.0.0.1:1/unit";
-const { draftOrigin, draftProblems, eurDraftFor } = await import("./eur-conversion.js");
-const { tierCoverageError } = await import("./rates.js");
+import { rateCardError } from "../shared/pool-model.js";
 
 // €97 per traveller; transport 2,650 and guide 2,000 per group, entry 2,250
 // and lunch 400 per traveller; operator fee 5%; commission 10%.
@@ -80,14 +78,14 @@ test("the cause: removing the first two tiers used to leave one tier, 10–12; i
   // What the editor did: drop the tier and its range.
   const old = { tiers: GIZA_V1.tiers.filter((_, i) => i === 2), costLines: GIZA_V1.costLines };
   assert.deepEqual(old.tiers, [{ from: 10, to: 12, priceEgp: 4071, operatorFeePct: 10 }], "the Giza draft v2: 10–12, 4,071, 10%");
-  assert.match(tierCoverageError(old.tiers, PRODUCT), /starts at 10.*from 4 travelers/, "and it can no longer be published");
+  assert.match(rateCardError({ ...old, costLines: [] }, PRODUCT), /Tier 10–12: "To" can't be more than 8/, "and it can no longer be saved");
+  assert.match(rateCardError({ ...old, tiers: [{ from: 7, to: 8, priceEgp: 4071, operatorFeePct: 10 }], costLines: [] }, PRODUCT), /first tier starts at 7: start it at 4/);
   // Now: the removed range goes to the neighbour.
   const one = removeTierAt(removeTierAt(GIZA_V1, 0), 0);
   assert.deepEqual(one.tiers, [{ from: 4, to: 12, priceEgp: 4071, operatorFeePct: 10 }]);
   const last = removeTierAt(GIZA_V1, 2);
   assert.deepEqual(last.tiers.map((t) => `${t.from}–${t.to}`), ["4–6", "7–12"]);
   assert.deepEqual(last.costLines[0].amounts, [2650, 2650], "the tier's cost amounts go with it; the lines stay");
-  assert.equal(tierCoverageError(GIZA_V1.tiers, PRODUCT), null);
 });
 
 test("one price as phase 6 meant it: the FIRST tier, from the GoAhead minimum to the maximum group, cost lines kept", () => {
@@ -97,26 +95,3 @@ test("one price as phase 6 meant it: the FIRST tier, from the GoAhead minimum to
   assert.deepEqual(singlePriceFrom(GIZA_V1, { goaheadMin: 6, maxGroup: 12 }).tiers[0].from, 6);
 });
 
-test("converting to EUR: EGP ÷ the site-wide rate, rounded up; never the old per-version rate", () => {
-  assert.deepEqual(eurTiersFrom([{ from: 4, to: 8, priceEgp: 5192, operatorFeePct: 5 }], 57.23), [{ from: 4, to: 8, priceEur: 91, operatorFeePct: 5 }], "5,192 ÷ 57.23 = 90.72 → 91 (at 97 it would have been 54)");
-  const d = eurDraftFor(GIZA_V1, PRODUCT, 57.23);
-  assert.deepEqual(d.tiers, [{ from: 4, to: 8, priceEur: 91, operatorFeePct: 5 }]);
-  assert.equal(d.costLines.length, 2);
-  assert.match(d.notes.join(" "), /first tier \(4–6\) of 3/);
-});
-
-test("which drafts are left alone: a person's edits are listed, never overwritten", () => {
-  const versions = [GIZA_V1];
-  const untouched = { version: 2, state: "draft", commissionPct: 10, createdBy: "migration 063",
-    source: { migration063: { from: "version 1 (published)" } },
-    tiers: [{ from: 4, to: 8, priceEgp: 5192, operatorFeePct: 5 }],
-    costLines: [{ name: "Transport", basis: "per_group", amounts: [2650] }, { name: "Entrance fees", basis: "per_traveller", amounts: [2250] }] };
-  assert.equal(draftOrigin(untouched, versions).origin, "migration063_untouched");
-  const edited = { ...untouched, tiers: [{ from: 4, to: 8, priceEgp: 5000, operatorFeePct: 5 }] };
-  assert.equal(draftOrigin(edited, versions).origin, "migration063_edited");
-  const giza = { version: 2, state: "draft", createdBy: "ops@sawa.test", source: { copiedFrom: "version 1" }, commissionPct: 10,
-    tiers: [{ from: 10, to: 12, priceEgp: 4071, operatorFeePct: 10 }], costLines: [] };
-  assert.equal(draftOrigin(giza, versions).origin, "editor");
-  assert.deepEqual(draftProblems(giza, PRODUCT, GIZA_V1), ["tiers 10–12 don't cover 4–8", "2 of 2 cost lines missing compared with v1"]);
-  assert.deepEqual(draftProblems(untouched, PRODUCT, GIZA_V1), []);
-});

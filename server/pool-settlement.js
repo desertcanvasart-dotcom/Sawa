@@ -20,7 +20,7 @@
 //
 // Records only: nothing here moves money. Finance pays from the statements.
 import { pool, withTransaction } from "./db/index.js";
-import { rateById, rateInForce, ratesFor, poolModelAvailable } from "./rates.js";
+import { departureRate, poolModelAvailable } from "./rates.js";
 import { todayIn } from "./catalogue.js";
 import { currentTravellerRate } from "./fx.js";
 import {
@@ -38,16 +38,14 @@ export { poolModelAvailable };
 
 async function departureRow(c, departureId) {
   return (await c.query(
-    `SELECT cd.id, cd.status, cd.date, cd.legacy_departure_id, cd.rate_version_id, cd.product_id, cd.operator_fee_pct_override
+    `SELECT cd.id, cd.status, cd.date, cd.legacy_departure_id, cd.rate_snapshot, cd.product_id, cd.operator_fee_pct_override
        FROM catalogue_departures cd WHERE cd.id = $1`, [departureId])).rows[0] || null;
 }
 
-// The rate a departure is priced under: the version it was locked to at its
-// first sale, else the one in force today.
-export async function rateForDeparture(c, dep, now = Date.now()) {
-  const rate = dep.rate_version_id != null
-    ? await rateById(c, Number(dep.rate_version_id))
-    : rateInForce(await ratesFor(c, Number(dep.product_id)), todayIn(now));
+// The rate a departure is priced under (066): its snapshot, taken when it sold
+// its first seat, else its product's rate card as it is now.
+export async function rateForDeparture(c, dep) {
+  const rate = await departureRate(c, dep);
   // An admin's operator fee for this departure alone replaces the rate card's.
   return withFeeOverride(rate, dep.operator_fee_pct_override);
 }
@@ -137,7 +135,7 @@ async function record(c, calc, stage) {
      VALUES ($1, $2, $3, $4, $5, $6, $7, now())
      ON CONFLICT (departure_id) DO UPDATE SET rate_version_id = EXCLUDED.rate_version_id, stage = EXCLUDED.stage,
        headcount = EXCLUDED.headcount, economics = EXCLUDED.economics, places = EXCLUDED.places, shares = EXCLUDED.shares, computed_at = now()`,
-    [calc.departure.id, calc.rate?.id ?? null, stage, calc.headcount,
+    [calc.departure.id, null, stage, calc.headcount,
       JSON.stringify({ ...calc.economics, entitlementOnly: calc.entitlement }), JSON.stringify(calc.places), JSON.stringify(calc.shares)]);
 }
 
@@ -159,7 +157,7 @@ export async function stampBookingPrice(c, { pledgeId, now = Date.now() }) {
   if (!(await poolModelAvailable(c))) return null;
   const p = (await c.query("SELECT seats, departure_id FROM pledges WHERE id = $1", [pledgeId])).rows[0];
   const dep = p ? (await c.query(
-    "SELECT id, status, date, legacy_departure_id, rate_version_id, product_id FROM catalogue_departures WHERE legacy_departure_id = $1",
+    "SELECT id, status, date, legacy_departure_id, rate_snapshot, product_id FROM catalogue_departures WHERE legacy_departure_id = $1",
     [p.departure_id])).rows[0] : null;
   if (!dep) return null;
   const rate = await rateForDeparture(c, dep, now);
@@ -210,7 +208,7 @@ export async function exchangeRateGate(c, pledge, { now = Date.now() } = {}) {
 export async function poolChargeFor(c, pledge, { now = Date.now() } = {}) {
   if (pledge.published_eur_rate == null) return null;
   const dep = (await c.query(
-    "SELECT id, status, date, legacy_departure_id, rate_version_id, product_id FROM catalogue_departures WHERE legacy_departure_id = $1",
+    "SELECT id, status, date, legacy_departure_id, rate_snapshot, product_id FROM catalogue_departures WHERE legacy_departure_id = $1",
     [pledge.departure_id])).rows[0];
   if (!dep) return null;
   const rate = await rateForDeparture(c, dep, now);

@@ -1993,7 +1993,7 @@ function TourDetailV2({ isSaving, navigate, phoneVerification = false, onBookPub
                         at more than the default. */}
                     <div className="book-price">
                       {tour.catalogue?.priceNotSet
-                        ? <b className="tnum">Exchange rate not set</b>
+                        ? <b className="tnum">{tour.catalogue.priceUnavailable || "Exchange rate not set"}</b>
                         : <><b className="tnum">{CURRENCY_SYMBOL}{pp}</b><span>{CURRENCY} / person</span></>}
                       {/* Phase 5: the rate card's tier prices, and the refund promise. */}
                       {(tour.catalogue?.priceSummary || tour.catalogue?.priceLine) && (
@@ -2907,7 +2907,7 @@ function EmbedWidget({ type, product }) {
           <span>from</span><b>{CURRENCY_SYMBOL}{livePrice.toLocaleString()}</b><span>{CURRENCY} / person</span>
         </div>}
         {product.catalogue?.priceNotSet
-          ? <p className="embed-hook">Exchange rate not set</p>
+          ? <p className="embed-hook">{product.catalogue.priceUnavailable || "Exchange rate not set"}</p>
           : product.catalogue?.priceSummary
           ? <p className="embed-hook">{product.catalogue.priceSummary}</p>
           : <p className="embed-hook">Shared price — it drops as the group grows, down to {CURRENCY_SYMBOL}{breakPrice.toLocaleString()} {CURRENCY}/person.</p>}
@@ -3237,7 +3237,7 @@ function EmbedBookTour({ product, refCode, phoneVerification }) {
         <strong className="eb-title">{product.title}</strong>
         <span className="eb-facts">{pkg ? (product.cities || [product.city]).join(" → ") : product.city}{product.duration ? ` · ${product.duration}` : ""}</span>
         {product.catalogue?.priceNotSet
-          ? <p className="eb-desc"><b>Exchange rate not set</b></p>
+          ? <p className="eb-desc"><b>{product.catalogue.priceUnavailable || "Exchange rate not set"}</b></p>
           : product.catalogue?.priceSummary && <p className="eb-desc"><b>{product.catalogue.priceSummary}</b></p>}
         {product.description && <p className="eb-desc">{product.description}</p>}
         <a className="eb-link" href={sawaUrl} target="_blank" rel="noopener noreferrer">Full itinerary &amp; what's included <ArrowRight size={14} /></a>

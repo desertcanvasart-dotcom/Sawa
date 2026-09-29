@@ -22,6 +22,7 @@ import { fileURLToPath } from "node:url";
 import pg from "pg";
 import { readFileSync } from "node:fs";
 import { freshDatabase, dropDatabase, testDbSkip } from "./test-db.js";
+import { makeToursBookable } from "./test-rate-cards.js";
 import { shiftDate } from "../shared/catalogue.js";
 import { zonedDateTimeToUtc } from "./tz.js";
 
@@ -129,8 +130,8 @@ before(async () => {
   const draft = (await db.query("SELECT id FROM catalogue_spec_versions WHERE product_id = $1 AND state = 'draft'", [productId])).rows[0].id;
   await cat.publishDraft({ productId, versionId: Number(draft), by: "it" });
   await cat.generateDepartures({ materialise: true });
-  const rd = await rates.saveRateDraft(db, productId, MODEL, { by: "it" });
-  await rates.publishRate({ productId, versionId: rd.id, by: "it" });
+  await rates.saveRateCard(db, productId, MODEL, { by: "it" });
+  await makeToursBookable(db);
   const operator = async (legalName, email) => {
     const id = (await ops.createOperator(db, { legalName, email }, "it")).id;
     for (const kind of ["tourism_license", "etaa_membership", "liability_insurance", "vehicle_insurance"]) {
@@ -336,11 +337,9 @@ test("merging is refused above 8 and allowed within it", { skip }, async () => {
   assert.equal(ok.body.seatsAfter, 8, "5 + 3 fits exactly");
 });
 
-test("operator fee: a rate card can't be published with an empty fee", { skip }, async () => {
-  const draft = await rates.saveRateDraft(db, productId, { tiers: [{ from: 4, to: 8, priceEgp: 5192, operatorFeePct: "" }], costLines: MODEL.costLines, commissionPct: 10, eurRate: 97 }, { by: "it" });
-  await assert.rejects(rates.publishRate({ productId, versionId: draft.id, by: "it" }), /operator fee/i);
-  assert.equal((await one("SELECT state FROM catalogue_rate_versions WHERE id = $1", [draft.id])).state, "draft", "still a draft");
-  await db.query("DELETE FROM catalogue_rate_versions WHERE id = $1", [draft.id]);
+test("operator fee: a rate card can't be saved with an empty fee", { skip }, async () => {
+  await assert.rejects(rates.saveRateCard(db, productId, { tiers: [{ from: 4, to: 8, priceEgp: 5192, operatorFeePct: "" }], costLines: MODEL.costLines, commissionPct: 10 }, { by: "it" }), /operator fee is required/i);
+  assert.equal(Number((await one("SELECT tiers->0->>'operatorFeePct' AS fee FROM catalogue_rate_cards WHERE product_id = $1", [productId])).fee), 5, "the card is unchanged");
 });
 
 test("operator fee: a per-departure override changes that departure's entitlement and pool only", { skip }, async () => {
@@ -361,7 +360,7 @@ test("operator fee: a per-departure override changes that departure's entitlemen
   const row = await one("SELECT operator_fee_pct_override, operator_fee_override_reason, operator_fee_override_by FROM catalogue_departures WHERE id = $1", [d1.id]);
   assert.deepEqual([Number(row.operator_fee_pct_override), row.operator_fee_override_reason, row.operator_fee_override_by], [8, "Two vehicles needed", "boss@sawa.test"], "logged with who changed it");
   // The rate card itself is untouched.
-  assert.equal((await one("SELECT (tiers->0->>'operatorFeePct')::numeric AS fee FROM catalogue_rate_versions WHERE product_id = $1 AND state = 'published'", [productId])).fee, "5");
+  assert.equal((await one("SELECT (tiers->0->>'operatorFeePct')::numeric AS fee FROM catalogue_rate_cards WHERE product_id = $1", [productId])).fee, "5");
 });
 
 test("operator fee: the statements and the margin report show the % used and mark an override", { skip }, async () => {

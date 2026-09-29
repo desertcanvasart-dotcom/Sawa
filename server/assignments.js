@@ -17,7 +17,7 @@ import { BRAND } from "./brand.js";
 import { CatalogueError, todayIn, departureInstants, mapCatalogueProduct } from "./catalogue.js";
 import { rosteredOperator } from "./roster.js";
 import { rosterEligibility, addStrike, notifyOperator, operatorRecipients, documentGaps } from "./operators.js";
-import { rateById, lockRatesForSoldDepartures } from "./rates.js";
+import { departureRate, lockRatesForSoldDepartures } from "./rates.js";
 import { ACK_HOURS, MANIFEST_ACCESS_DAYS, roomsFor } from "../shared/operators.js";
 import { operatorEntitlement, withFeeOverride } from "../shared/pool-model.js";
 import { shiftDate } from "../shared/catalogue.js";
@@ -60,7 +60,9 @@ async function departureContext(c, departureId) {
   const product = mapCatalogueProduct({ ...row, id: row.product_id_, status: row.status });
   return {
     id: Number(row.dep_id), date: ymd(row.date), status: row.dep_status, seatsSold: Number(row.seats_sold) || 0,
-    legacyDepartureId: row.legacy_departure_id, rateVersionId: row.rate_version_id == null ? null : Number(row.rate_version_id),
+    legacyDepartureId: row.legacy_departure_id,
+    // 066: the rate card copy taken at the first seat (null before), and the product.
+    rateSnapshot: row.rate_snapshot || null, productId: Number(row.product_id),
     // Numbered departures: 1, 2, … on the same date. Each has its own offer.
     departureNo: row.departure_no == null ? 1 : Number(row.departure_no),
     // The operator fee for this departure alone (an admin's override), until acknowledged.
@@ -506,27 +508,34 @@ export async function revokeExpiredManifestAccess({ db = pool, now = Date.now() 
 // set-off rules that read this are unchanged.
 export async function expectedAmountFor(db, departureId) {
   const d = await departureContext(db, departureId);
-  const rate = withFeeOverride(await rateById(db, d.rateVersionId), d.feeOverridePct);
+  // Its snapshot once a seat sold, else the product's rate card as it is now.
+  const rate = withFeeOverride(await departureRate(db, { rate_snapshot: d.rateSnapshot, product_id: d.productId }), d.feeOverridePct);
   const frozen = (await db.query("SELECT seat_count FROM catalogue_manifests WHERE departure_id = $1", [departureId])).rows[0];
   const count = frozen
     ? Number(frozen.seat_count)
     : (await livePledges(db, d.legacyDepartureId)).reduce((s, p) => s + (Number(p.seats) || 0), 0);
-  const base = { currency: "EGP", rateVersion: rate?.version ?? null, frozen: !!frozen, travelers: count };
-  if (!rate) return { ...base, total: null, lines: [], missing: ["rate version"], band: null };
+  const base = { currency: "EGP", rateSource: rateSourceLabel(rate), frozen: !!frozen, travelers: count };
+  if (!rate) return { ...base, total: null, lines: [], missing: ["rate card"], band: null };
   const e = operatorEntitlement(rate, count);
   if (!e.complete) return { ...base, total: null, lines: [], missing: e.missing, band: null };
   const lines = [
-    ...e.costLines.map((l) => ({ label: `${l.name}${l.basis === "per_traveller" ? " per traveler" : ", per group"}`, qty: l.qty, unit: l.unit, amount: l.amount })),
+    ...e.costLines.map((l) => ({ label: `${l.name}${l.basis === "per_traveller" ? " per traveler" : ", per group"}${l.note ? ` (${l.note})` : ""}`, qty: l.qty, unit: l.unit, amount: l.amount, ...(l.note ? { note: l.note } : {}) })),
     ...(e.operatorFee ? [{ label: `Operator fee, ${e.operatorFeePct}% of operating cost${rate.feeOverridePct != null ? " (set for this departure)" : ""}`, qty: 1, unit: e.operatorFee, amount: e.operatorFee }] : []),
   ];
   return { ...base, total: e.entitlement, lines, missing: [], band: e.tier, operatingCost: e.operatingCost, operatorFeePct: e.operatorFeePct, operatorFee: e.operatorFee,
     feeOverride: rate.feeOverridePct != null };
 }
 
+// Where a departure's rate comes from, for the offer and the statement.
+export function rateSourceLabel(rate) {
+  if (!rate) return null;
+  return rate.snapshot ? `rate card as of ${String(rate.takenAt || "").slice(0, 10) || "its first seat"}` : "current rate card";
+}
+
 // ---------------------------------------------------------------- the tick
 // Run by the scheduler with the catalogue status job, behind catalogue_v2.
 export async function runAssignmentTick({ db = pool, now = Date.now(), send = null, log = () => {} } = {}) {
-  const locked = await lockRatesForSoldDepartures(db, now);
+  const locked = await lockRatesForSoldDepartures(db);
   const frozen = await freezeManifests({ db, now, log });
   const assigned = await processGoAheadEvents({ db, now, send, log });
   const expired = await expireAcknowledgements({ db, now, send, log });
