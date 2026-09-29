@@ -991,9 +991,12 @@ export function ProductEditor({ type: typeProp, existing, destinations = [], dep
                 <Field label="Operating company" full>
                   <select value={f.agencyId} onChange={set("agencyId")}>
                     <option value="">Not assigned</option>
-                    {(agencies || []).map((a) => (
-                      <option key={a.id} value={a.id}>
-                        {a.name}{a.verificationState === "verified" ? " — verified" : ""}
+                    {/* Only active, publicly listed operators. A company already
+                        attached but no longer eligible stays visible, disabled,
+                        so the form doesn't silently show "Not assigned". */}
+                    {(agencies || []).filter((a) => a.operatorSelectable || String(a.id) === String(f.agencyId)).map((a) => (
+                      <option key={a.id} value={a.id} disabled={!a.operatorSelectable}>
+                        {a.name}{a.operatorSelectable ? (a.verificationState === "verified" ? " — verified" : "") : " — not eligible"}
                       </option>
                     ))}
                   </select>
