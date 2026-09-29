@@ -27,8 +27,12 @@ export function catalogueTourView(info) {
   const tiers = info.rate?.tiers || [];
   const rows = tierPriceRows(tiers, info.rate?.eurRate);
   const summary = info.rate ? tierPriceSummary(tiers, info.rate.eurRate) : null;
+  // One price (the default): "€54 per person", with how it is worked out shown beside it.
+  const single = summary && tiers.length === 1 ? { eur: rows[0].eur, egp: tiers[0].priceEgp, eurRate: info.rate.eurRate } : null;
   return {
     hasRate: !!summary,
+    single,
+    howWorked: single ? `EGP ${Number(single.egp).toLocaleString("en-US")} ÷ traveler rate ${single.eurRate}, rounded up` : null,
     warning: summary ? null : NO_RATE_CARD,
     rows: summary ? rows : [],
     summary,
@@ -37,6 +41,6 @@ export function catalogueTourView(info) {
       { label: "Maximum group", value: `${c.maxGroup} travelers` },
       { label: "Booking cut-off", value: cutoffLabel(c.cutoffHours, "hours") },
     ],
-    rateCardLabel: "Edit prices in Rate card",
+    rateCardLabel: tiers.length > 1 ? "Edit prices in Rate card" : "Edit price in Rate card",
   };
 }

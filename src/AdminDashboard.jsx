@@ -997,7 +997,7 @@ export function ProductEditor({ type: typeProp, existing, destinations = [], dep
                 <Field label="Pricing and group size" full asDiv>
                   <div className="cat-owned" data-testid="catalogue-pricing">
                     {catView.hasRate
-                      ? <p className="cat-owned-tiers">{catView.summary}</p>
+                      ? <p className="cat-owned-tiers">{catView.summary}{catView.howWorked && <span className="field-hint" style={{ fontWeight: 400 }}> ({catView.howWorked})</span>}</p>
                       : <p className="auth-error" role="status">{catView.warning}</p>}
                     <p className="field-hint">
                       <a href={pathForSection(window.location.pathname, "rates", "overview")}>{catView.rateCardLabel}</a>
