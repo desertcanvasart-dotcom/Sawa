@@ -58,7 +58,12 @@ export function registerOperatorRoutes(app, { requireAuth, requireRole, h, logAu
       await fn(req, res);
     } catch (e) {
       if (isMissingCatalogueTables(e)) {
-        throw Object.assign(new CatalogueError(503, "Operators aren't switched on yet: migration 049 has not been applied to this database."), { expose: true });
+        // Name the migration that is actually missing: the rate card tables
+        // and the departure snapshot come from 066, everything else from 049.
+        const msg = /catalogue_rate_cards|rate_snapshot|rate_card_migration_066/.test(e.message || "")
+          ? "The rate card isn't switched on yet: migration 066 has not been applied to this database."
+          : "Operators aren't switched on yet: migration 049 has not been applied to this database.";
+        throw Object.assign(new CatalogueError(503, msg), { expose: true });
       }
       throw e;
     }
@@ -272,11 +277,13 @@ export function registerOperatorRoutes(app, { requireAuth, requireRole, h, logAu
 
   // What migration 066 did (rate_card_migration_066), for the rate card screen.
   app.get("/api/admin/rates/migration-report", ...staff, route(async (_req, res) => {
-    let rows = [];
+    let rows;
     try {
       rows = (await pool.query("SELECT * FROM rate_card_migration_066 ORDER BY catalogue_no, id")).rows;
     } catch (e) {
       if (e?.code !== "42P01") throw e;
+      // No report table: 066 hasn't run, so it can't have "recorded nothing".
+      return res.json({ lines: ["Migration 066 has not been applied to this database yet (npm run db:migrate, or docs/ops/apply-migration-066.sql)."] });
     }
     res.json({ lines: migrationReportLines(rows) });
   }));
