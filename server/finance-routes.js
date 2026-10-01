@@ -115,6 +115,11 @@ export function registerFinanceRoutes(app, { requireAuth, requireRole, h, logAud
       if (e?.code === "42P01" || e?.code === "42703") {
         throw Object.assign(new CatalogueError(503, "The automatic exchange rate isn't switched on yet: migration 064 has not been applied to this database."), { expose: true });
       }
+      // 064's CHECK allows no 'manual' / 'automatic' rows; 065 widens it.
+      // Without 065 a manual rate failed as a bare "Server error.".
+      if (e?.code === "23514" && /^fx_traveller_(rates_reason_check|override_reason)$/.test(e.constraint || "")) {
+        throw Object.assign(new CatalogueError(503, "The manual exchange rate isn't switched on yet: migration 065 has not been applied to this database."), { expose: true });
+      }
       throw e;
     }
   };

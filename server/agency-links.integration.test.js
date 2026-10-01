@@ -176,3 +176,20 @@ test("Listing requests: only a listing an agency's own login submitted, not a to
   const pub = (await fetch(`${base}/api/bootstrap`).then((r) => r.json())).tourProducts || [];
   assert.ok(pub.every((p) => !("submittedByAgency" in p)));
 });
+
+test("a manual exchange rate on a database without 065 says so, instead of a bare server error", { skip }, async () => {
+  const widen = "CHECK (reason IN ('migrated', 'initial', 'weekly', 'market_move', 'override', 'manual', 'automatic'))";
+  await db.query("ALTER TABLE fx_traveller_rates DROP CONSTRAINT fx_traveller_rates_reason_check");
+  await db.query("ALTER TABLE fx_traveller_rates ADD CONSTRAINT fx_traveller_rates_reason_check CHECK (reason IN ('initial', 'weekly', 'market_move', 'override'))");
+  try {
+    const r = await call("admin", "PUT", "/admin/finance/exchange-rate", { mode: "manual", egpPerEur: 55, reason: "average" });
+    assert.equal(r.status, 503, JSON.stringify(r.body));
+    assert.match(r.body.error, /migration 065 has not been applied/);
+  } finally {
+    await db.query("ALTER TABLE fx_traveller_rates DROP CONSTRAINT fx_traveller_rates_reason_check");
+    await db.query(`ALTER TABLE fx_traveller_rates ADD CONSTRAINT fx_traveller_rates_reason_check ${widen}`);
+  }
+  const ok = await call("admin", "PUT", "/admin/finance/exchange-rate", { mode: "manual", egpPerEur: 55, reason: "average" });
+  assert.equal(ok.status, 200, JSON.stringify(ok.body));
+  assert.equal(ok.body.summary.rate, 55);
+});
