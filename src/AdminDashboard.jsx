@@ -3,7 +3,7 @@ import {
   LayoutDashboard, Package, CalendarDays, Users, ClipboardList, ScrollText,
   Plus, Check, X, Search, Archive, ArchiveRestore, Euro, ShieldCheck,
   TrendingUp, AlertTriangle, MapPin, Hotel, ArrowUpRight, ArrowLeft, Trash2, Pencil,
-  Newspaper, Share2, Copy, Inbox, Eye, Clock3, Download, BookOpen, CalendarRange, Truck, CalendarCheck, Coins, Landmark, ChevronRight,
+  Newspaper, Share2, Copy, Inbox, Eye, Clock3, Download, BookOpen, CalendarRange, Truck, CalendarCheck, Coins, Landmark, ChevronRight, Link2, Power,
 } from "lucide-react";
 import { apiFetch, uploadImage } from "./supabaseClient";
 import { DashSidebar } from "./DashSidebar";
@@ -2695,19 +2695,57 @@ function AgenciesSection({ flash }) {
     try {
       const r = await apiFetch(`/admin/agencies/${a.id}`, { method: "DELETE" });
       const j = await r.json();
+      // Blocked by what still points at it: show those, not just the counts.
+      if (r.status === 409) { setLinks(null); await openLinks(a.id, j.error); return; }
       if (!r.ok) throw new Error(j.error || "Could not delete agency.");
-      load(); flash("Agency deleted.");
+      setLinks(null); load(); flash("Agency deleted.");
+    } catch (e2) { setErr(e2.message); }
+  }
+
+  // The tours, bookings and referral codes that still reference an agency.
+  const [links, setLinks] = useState(null);
+  useBackToClose(!!links, () => setLinks(null));
+  const [linkBusy, setLinkBusy] = useState(false);
+  async function openLinks(id, blocked = null) {
+    setErr("");
+    try {
+      const r = await apiFetch(`/admin/agencies/${id}/links`);
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || "Could not load what's linked to this agency.");
+      setLinks({ ...j, blocked });
+    } catch (e2) { setErr(e2.message); }
+  }
+  async function unassign(tour) {
+    if (!window.confirm(`Take "${tour.title}" off ${links.agency.name}? Its operating company becomes "Not assigned". Its bookings are not changed.`)) return;
+    setLinkBusy(true);
+    try {
+      const r = await apiFetch(`/admin/agencies/${links.agency.id}/tours/${encodeURIComponent(tour.id)}/unassign`, { method: "POST" });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.error || "Could not unassign the tour.");
+      flash("Tour unassigned.");
+      await openLinks(links.agency.id, links.blocked);
+    } catch (e2) { setErr(e2.message); } finally { setLinkBusy(false); }
+  }
+  async function setStatus(a, status) {
+    if (status === "inactive" && !window.confirm(`Deactivate "${a.name}"? Its team can't sign in and it can't be chosen as a tour's operating company. Nothing is deleted: its tours, bookings and referral codes stay, and you can reactivate it any time.`)) return;
+    setErr("");
+    try {
+      const r = await apiFetch(`/admin/agencies/${a.id}/status`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status }) });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.error || "Could not change the agency's status.");
+      load(); flash(status === "active" ? "Agency reactivated." : "Agency deactivated.");
+      if (links?.agency.id === a.id) setLinks({ ...links, agency: { ...links.agency, status } });
     } catch (e2) { setErr(e2.message); }
   }
 
   const open = list && editing ? list.find((a) => a.id === editing) : null;
   // Escape closes whichever panel is open.
   useEffect(() => {
-    if (!creating && !editing) return undefined;
-    const onKey = (e) => { if (e.key === "Escape") { setCreating(false); setEditing(null); } };
+    if (!creating && !editing && !links) return undefined;
+    const onKey = (e) => { if (e.key === "Escape") { setCreating(false); setEditing(null); setLinks(null); } };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [creating, editing]);
+  }, [creating, editing, links]);
 
   return (
     <>
@@ -2716,7 +2754,7 @@ function AgenciesSection({ flash }) {
         sub="Partner operators, their owner logins, and the record that verifies them."
         action={<button className="btn-primary" onClick={() => { setCreating(true); setCreated(null); setErr(""); }}><Plus size={16} />New agency</button>}
       />
-      {err && !creating && <div className="auth-error" role="alert">{err}</div>}
+      {err && !creating && !links && <div className="auth-error" role="alert">{err}</div>}
       <div className="dash-card">
         <div className="table-wrap table-scroll">
           <table className="dash-table agencies-table">
@@ -2737,6 +2775,10 @@ function AgenciesSection({ flash }) {
                   <td>
                     <div className="row-actions">
                       <button className="btn-ghost sm" onClick={() => setEditing(a.id)}><ShieldCheck size={14} />Operator record</button>
+                      <button className="btn-ghost sm" onClick={() => openLinks(a.id)} title="Tours, bookings and referral codes linked to this agency"><Link2 size={14} />Linked</button>
+                      {a.status === "inactive"
+                        ? <button className="btn-ghost sm" onClick={() => setStatus(a, "active")}><Power size={14} />Reactivate</button>
+                        : <button className="btn-ghost sm" onClick={() => setStatus(a, "inactive")}><Power size={14} />Deactivate</button>}
                       <button className="icon-btn danger" onClick={() => remove(a)} aria-label={`Delete ${a.name}`}
                         title={a.staffCount ? "Delete — its team logins are removed with it" : `Delete ${a.name}`}><Trash2 size={15} /></button>
                     </div>
@@ -2776,6 +2818,69 @@ function AgenciesSection({ flash }) {
                   <button className="btn-primary" disabled={busy}>{busy ? "Creating…" : "Create agency + owner"}</button>
                 </form>
               )}
+            </div>
+          </aside>
+        </div>
+      )}
+
+      {links && (
+        <div className="drawer-overlay" onClick={() => setLinks(null)}>
+          <aside className="drawer drawer-wide" onClick={(e) => e.stopPropagation()} aria-label={`Linked to ${links.agency.name}`}>
+            <div className="drawer-head">
+              <div><h2>{links.agency.name}</h2><span className="sub">What's linked to this agency{links.agency.status === "inactive" ? " · inactive" : ""}</span></div>
+              <button className="icon-btn" onClick={() => setLinks(null)} aria-label="Close"><X size={18} /></button>
+            </div>
+            <div className="drawer-body agency-links">
+              {links.blocked && <div className="auth-error" role="status">{links.blocked}</div>}
+              {err && <div className="auth-error" role="alert">{err}</div>}
+
+              <section>
+                <h3>Tours it operates ({links.tours.length})</h3>
+                {links.tours.length ? (
+                  <>
+                    <p className="field-hint">Unassign a tour to take it off this agency; its operating company becomes "Not assigned". You can pick another company in Tours &amp; Packages.</p>
+                    <table className="dash-table"><tbody>{links.tours.map((t) => (
+                      <tr key={t.id}>
+                        <td><strong>{t.title}</strong><div className="field-hint">{t.type === "package" ? "Package" : "Day tour"} · {t.status}{t.active ? "" : " · archived"}</div></td>
+                        <td className="row-actions"><button className="btn-ghost sm" disabled={linkBusy} onClick={() => unassign(t)}>Unassign</button></td>
+                      </tr>
+                    ))}</tbody></table>
+                  </>
+                ) : <p className="field-hint">None.</p>}
+              </section>
+
+              <section>
+                <h3>Bookings recorded under it ({links.bookings.length})</h3>
+                {links.bookings.length ? (
+                  <>
+                    <p className="field-hint">Bookings are history and stay with the agency, so an agency with bookings can't be deleted. Deactivate it instead.</p>
+                    <table className="dash-table"><tbody>{links.bookings.map((b) => (
+                      <tr key={b.id}>
+                        <td><strong>{b.bookingCode || b.id}</strong><div className="field-hint">{b.status || "—"} · {b.seats} seat{b.seats === 1 ? "" : "s"}</div></td>
+                        <td>{b.route || "—"}<div className="field-hint">{b.date ? fmtDate(b.date) : "no departure"}</div></td>
+                      </tr>
+                    ))}</tbody></table>
+                  </>
+                ) : <p className="field-hint">None.</p>}
+              </section>
+
+              <section>
+                <h3>Referral codes with bookings ({links.referralCodes.length})</h3>
+                {links.referralCodes.length ? (
+                  <table className="dash-table"><tbody>{links.referralCodes.map((c) => (
+                    <tr key={c.code}><td><code>{c.code}</code></td><td>{c.bookings} booking{c.bookings === 1 ? "" : "s"}</td></tr>
+                  ))}</tbody></table>
+                ) : <p className="field-hint">None.</p>}
+              </section>
+
+              <div className="op-actions">
+                {links.agency.status === "inactive"
+                  ? <button className="btn-ghost" onClick={() => setStatus(links.agency, "active")}><Power size={14} />Reactivate</button>
+                  : <button className="btn-ghost" onClick={() => setStatus(links.agency, "inactive")}><Power size={14} />Deactivate instead</button>}
+                {!links.tours.length && !links.bookings.length && !links.referralCodes.length && (
+                  <button className="btn-primary" onClick={() => remove({ ...links.agency, staffCount: (list || []).find((a) => a.id === links.agency.id)?.staffCount || 0 })}><Trash2 size={14} />Delete agency</button>
+                )}
+              </div>
             </div>
           </aside>
         </div>

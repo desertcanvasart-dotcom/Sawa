@@ -19,7 +19,12 @@ function bearerToken(req) {
 }
 
 async function loadProfile(authUserId) {
-  const r = await pool.query(`SELECT * FROM app_users WHERE id = $1`, [authUserId]);
+  // agency_status: a deactivated agency's team is signed out with it, without
+  // touching each login, so reactivating brings exactly the same team back.
+  const r = await pool.query(
+    `SELECT u.*, a.status AS agency_status FROM app_users u LEFT JOIN agencies a ON a.id = u.agency_id WHERE u.id = $1`,
+    [authUserId]
+  );
   return r.rows[0] || null;
 }
 
@@ -34,6 +39,7 @@ export async function attachUser(req, _res, next) {
     if (!authUser) return next();
     const profile = await loadProfile(authUser.id);
     if (!profile || profile.status !== "active") return next();
+    if (profile.agency_id && profile.agency_status === "inactive") return next();
     req.user = {
       id: profile.id,
       email: profile.email,
