@@ -12,6 +12,7 @@ import {
 import { DashSidebar } from "./DashSidebar";
 import { AgencySettings } from "./AgencySettings.jsx";
 import { AgencyMoney } from "./AgencyMoney.jsx";
+import { AgencyDocuments } from "./AgencyDocuments.jsx";
 import { usePortalSection } from "./portal-section.js";
 import { useBackToClose, useUnsavedGuard } from "./back-to-close.js";
 import { apiFetch } from "./supabaseClient";
@@ -53,7 +54,7 @@ export function AgencyDashboard({ user, agency, signOut, refreshProfile, navigat
   // Model phase 3: commission statements, with the catalog (catalogue_v2) on.
   const catalogueOn = tourProducts.some((p) => p.catalogue);
   const [section, setSection] = usePortalSection(
-    ["overview", "book", "listings", "bookings", "money", ...(catalogueOn ? ["commission"] : []), "widget", ...(isOwner ? ["team"] : []), "settings"], "overview");
+    ["overview", "book", "listings", "bookings", "money", ...(catalogueOn ? ["commission"] : []), "widget", ...(isOwner ? ["team"] : []), "settings", "documents"], "overview");
   // Clicking "Book seats" while a tour is open inside it used to do nothing:
   // the section was already active, so the open tour stayed on screen. A
   // repeat click remounts the catalog, which closes the tour (and takes its
@@ -124,6 +125,7 @@ export function AgencyDashboard({ user, agency, signOut, refreshProfile, navigat
       title: "Account",
       items: [
         { id: "settings", label: "Settings", icon: SettingsIcon },
+        { id: "documents", label: "Documents", icon: ShieldCheck },
         ...(isOwner ? [{ id: "team", label: "Team", icon: UsersIcon }] : []),
       ],
     },
@@ -223,6 +225,8 @@ export function AgencyDashboard({ user, agency, signOut, refreshProfile, navigat
         {section === "settings" && (
           <AgencySettings user={user} agency={agency} isOwner={isOwner} onSaved={refreshProfile} />
         )}
+
+        {section === "documents" && <AgencyDocuments isOwner={isOwner} agencyName={agency?.name} />}
 
         {section === "team" && isOwner && (
           <>

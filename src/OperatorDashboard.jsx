@@ -8,7 +8,7 @@ import { apiFetch } from "./supabaseClient";
 import { DashSidebar } from "./DashSidebar";
 import { usePortalSection } from "./portal-section.js";
 import { ManifestTable } from "./AdminOperators.jsx";
-import { DOCUMENT_LABELS, STRIKE_LABELS, ACK_HOURS } from "../shared/operators.js";
+import { DOCUMENT_KINDS, DOCUMENT_LABELS, STRIKE_LABELS, ACK_HOURS } from "../shared/operators.js";
 
 const NAV_GROUPS = [{
   title: null,
@@ -253,7 +253,7 @@ function Account({ me }) {
       <div className="dash-card" style={{ marginBottom: 12 }}>
         <h2>Documents</h2>
         <ul>
-          {Object.keys(DOCUMENT_LABELS).map((kind) => {
+          {DOCUMENT_KINDS.map((kind) => {
             const d = me.documents.find((x) => x.kind === kind);
             const gap = me.documentGaps.find((g) => g.kind === kind);
             return <li key={kind}>{DOCUMENT_LABELS[kind]}: {d ? `expires ${dayLabel(d.expiresOn)}` : "not on file"}{gap && <span className="tag tag-warn" style={{ marginLeft: 6 }}>{gap.problem}</span>}</li>;

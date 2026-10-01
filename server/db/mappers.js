@@ -42,6 +42,8 @@ export function mapAgency(r) {
     tourismLicenseNo: r.tourism_license_no || null,
     tourismLicenseYear: r.tourism_license_year ?? null,
     etaaRegistrationNo: r.etaa_registration_no || null,
+    // 068: the ETAA register link an admin set (absent before 068).
+    etaaUrl: r.etaa_url || null,
     insuranceInsurer: r.insurance_insurer || null,
     insurancePolicyNo: r.insurance_policy_no || null,
     insuranceExpires: r.insurance_expires || null,
@@ -51,6 +53,8 @@ export function mapAgency(r) {
     verifiedAt: r.verified_at || null,
     // 054. Missing column (054 not yet applied) reads as shown.
     publicListed: r.public_listed !== false,
+    // 068: runs direct bookings (at most one agency). Absent before 068: no.
+    directBookingsPreferred: r.direct_bookings_preferred === true,
   };
 }
 

@@ -7193,3 +7193,25 @@ button:disabled {
 .agency-links .dash-table tr:last-child td { border-bottom: 0; }
 .agency-links td.row-actions { display: table-cell; text-align: right; width: 1%; }
 .agency-links .op-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+
+/* Agency → Documents, and the review / exception blocks in Admin → Operators (068). */
+.agency-docs { display: grid; gap: 24px; }
+.agency-docs .dash-card { padding: 24px 28px; }
+.agency-docs .dash-card > h2 { margin: 0 0 8px; }
+.agency-docs .dash-card > .field-hint { margin: 0 0 16px; line-height: 1.55; }
+.agency-docs .dash-table td { padding: 14px 10px; vertical-align: middle; }
+.agency-docs .dash-table tr:last-child td { border-bottom: 0; }
+.agency-docs td.row-actions { display: table-cell; text-align: right; white-space: nowrap; width: 1%; }
+.agency-docs td.row-actions > * + * { margin-left: 8px; }
+.agency-docs .doc-form { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--d-line, var(--line)); }
+.doc-rejected { color: #b3261e; }
+.op-review { margin: 12px 0 18px; padding: 14px 16px; border: 1px solid #f0d9a8; background: #fffaf0; border-radius: 12px; }
+.op-review h3 { margin: 0 0 6px; font-size: 14px; }
+.op-review td.row-actions { display: table-cell; text-align: right; white-space: nowrap; }
+.op-review td.row-actions > * + * { margin-left: 6px; }
+.op-exception { margin: 10px 0; padding: 12px 14px; border: 1px solid #f0d9a8; background: #fffaf0; border-radius: 12px; font-size: 14px; line-height: 1.5; }
+.direct-pref { display: flex; gap: 12px; align-items: flex-start; margin: 0 0 20px; padding: 14px 16px; border: 1px solid var(--d-line, var(--line)); border-radius: 12px; cursor: pointer; }
+.direct-pref input { margin-top: 3px; width: 18px; height: 18px; flex: none; }
+.direct-pref span { display: grid; gap: 4px; }
+.direct-pref .field-hint { margin: 0; line-height: 1.5; }
+.linklike { background: none; border: 0; padding: 0; font: inherit; color: inherit; text-decoration: underline; cursor: pointer; }

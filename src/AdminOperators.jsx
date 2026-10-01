@@ -85,7 +85,7 @@ export function OperatorsSection({ flash, isSuperAdmin }) {
     e.preventDefault();
     try {
       const { operator } = await call("/admin/operators", "POST", { legalName });
-      flash(`${operator.legalName} added as pending. Upload its four documents, then activate it.`);
+      flash(`${operator.legalName} added as pending. Add its documents (or let the agency send them), then activate it.`);
       setAdding(false); setLegalName("");
       setOpenId(operator.id);
     } catch (e2) { setErr(e2.message); }
@@ -124,7 +124,9 @@ export function OperatorsSection({ flash, isSuperAdmin }) {
                   <td><strong>{o.legalName}</strong>{o.tradingName && <div className="field-hint">{o.tradingName}</div>}</td>
                   <td><span className={`tag ${STATUS_TONE[o.status]}`}>{STATUS_LABEL[o.status]}</span>
                     {o.statusReason && <div className="field-hint">{o.statusReason.replace("document_expired:", "expired: ").replace(/_/g, " ")}</div>}</td>
-                  <td><DocGaps gaps={o.documentGaps} /></td>
+                  <td><DocGaps gaps={o.documentGaps} />
+                    {o.toReview > 0 && <div><span className="tag tag-warn" title="Papers or bank details the agency sent, waiting for you">{o.toReview} to review</span></div>}
+                    {o.activationException && <div className="field-hint">Active by exception</div>}</td>
                   <td className="tnum">{o.approvedProductIds.length}</td>
                   <td><StrikeFlag n={o.strikes90} /></td>
                 </tr>
@@ -139,7 +141,9 @@ export function OperatorsSection({ flash, isSuperAdmin }) {
 
 const OPERATOR_TEXT_FIELDS = [
   ["legalName", "Legal name"], ["tradingName", "Trading name"],
-  ["tourismLicenseNo", "Ministry of Tourism license no."], ["etaaNo", "ETAA membership no."],
+  // No ETAA field: membership comes with the Ministry license, and ETAA has no
+  // member number (its register is looked up by the license number).
+  ["tourismLicenseNo", "Ministry of Tourism license no."],
   // Printed for travelers where this operator is named as seller (payment
   // request, receipt, voucher, booking page). Empty: the Ministry license no.
   ["travellerLicenceNo", "License no. shown to travelers (as seller)"],
@@ -174,7 +178,9 @@ function OperatorEditor({ id, products, agencies, flash, isSuperAdmin, onClose }
 
   if (!d) return <>{err ? <div className="auth-error">{err}</div> : <div className="dash-empty">Loading…</div>}</>;
   const op = d.operator;
-  const current = new Map(d.documents.filter((x) => !x.supersededAt).map((x) => [x.kind, x]));
+  const current = new Map(d.documents.filter((x) => !x.supersededAt && x.reviewState === "approved").map((x) => [x.kind, x]));
+  const waiting = new Map(d.documents.filter((x) => !x.supersededAt && x.reviewState === "pending").map((x) => [x.kind, x]));
+  const openFile = (doc) => call(`/admin/operators/${id}/documents/${doc.id}/file`).then((j) => window.open(j.url, "_blank", "noopener")).catch((e) => setErr(e.message));
 
   return (
     <>
@@ -185,10 +191,23 @@ function OperatorEditor({ id, products, agencies, flash, isSuperAdmin, onClose }
 
       <div className="dash-card" style={{ marginBottom: 12 }}>
         <h2>Status</h2>
-        <p className="field-hint">Activating needs all four documents current. The daily check suspends an operator whose document expires and reactivates it when you upload a valid replacement. Removal is always a manual decision.</p>
+        <p className="field-hint">Activating needs every document below current and approved. If some are missing for a good reason, activate by exception and record why. The daily check suspends an operator whose document expires (except a paper its exception covers) and reactivates it when a valid replacement is approved. Removal is always a manual decision.</p>
+        {op.activationException && (
+          <div className="op-exception" role="status">
+            <strong>Active by exception</strong> — without {op.activationExceptionKinds.map((k) => DOCUMENT_LABELS[k] || k).join(", ") || "some papers"}.
+            <div>Why: {op.activationException}</div>
+            <div className="field-hint">Recorded by {op.activationExceptionBy || "—"} {stamp(op.activationExceptionAt)}</div>
+          </div>
+        )}
         <div className="cat-actions">
           {op.activationBlocked && <div className="auth-error" role="status">{op.activationBlocked}</div>}
-          {op.status !== "active" && op.status !== "removed" && !op.activationBlocked && <button className="btn-primary" disabled={busy} onClick={() => run(() => call(`/admin/operators/${id}/status`, "POST", { status: "active" }), "Operator activated.")}>Activate</button>}
+          {op.status !== "active" && op.status !== "removed" && !op.activationBlocked && (d.documentGaps.length === 0
+            ? <button className="btn-primary" disabled={busy} onClick={() => run(() => call(`/admin/operators/${id}/status`, "POST", { status: "active" }), "Operator activated.")}>Activate</button>
+            : <button className="btn-primary" disabled={busy} onClick={() => {
+                const missing = d.documentGaps.map((g) => `${DOCUMENT_LABELS[g.kind]} (${g.problem})`).join(", ");
+                const exceptionReason = window.prompt(`Activate by exception, without: ${missing}.\n\nWhy? This is recorded with your name.`);
+                if (exceptionReason && exceptionReason.trim()) run(() => call(`/admin/operators/${id}/status`, "POST", { status: "active", exceptionReason: exceptionReason.trim() }), "Operator activated by exception.");
+              }}>Activate by exception</button>)}
           {op.status === "active" && <button className="btn-ghost" disabled={busy} onClick={() => { const reason = window.prompt("Reason for suspending"); if (reason) run(() => call(`/admin/operators/${id}/status`, "POST", { status: "suspended", reason }), "Operator suspended."); }}>Suspend</button>}
           {op.status !== "removed" && <button className="btn-ghost" disabled={busy} onClick={() => { const reason = window.prompt("Reason for removing this operator from the roster"); if (reason) run(() => call(`/admin/operators/${id}/status`, "POST", { status: "removed", reason }), "Operator removed."); }}>Remove</button>}
           {op.status === "removed" && <button className="btn-ghost" disabled={busy} onClick={() => run(() => call(`/admin/operators/${id}/status`, "POST", { status: "pending" }), "Operator moved back to pending.")}>Reinstate as pending</button>}
@@ -216,6 +235,31 @@ function OperatorEditor({ id, products, agencies, flash, isSuperAdmin, onClose }
 
       <div className="dash-card" style={{ marginBottom: 12 }}>
         <h2>Documents</h2>
+        <p className="field-hint">The agency can send these from its dashboard; each one waits here for you to approve. No ETAA paper is needed: membership comes with the Ministry of Tourism license.</p>
+        {waiting.size > 0 && (
+          <div className="op-review">
+            <h3>Waiting for your review ({waiting.size})</h3>
+            <table className="dash-table"><tbody>
+              {[...waiting.values()].map((doc) => (
+                <tr key={doc.id}>
+                  <td><strong>{DOCUMENT_LABELS[doc.kind] || doc.kind}</strong><div className="field-hint">Sent by the agency {stamp(doc.uploadedAt)}{doc.uploadedBy ? ` · ${doc.uploadedBy}` : ""}</div></td>
+                  <td>{doc.number || "—"}<div className="field-hint">expires {dayLabel(doc.expiresOn)}</div></td>
+                  <td className="row-actions">
+                    {doc.hasFile && <button className="btn-ghost sm" onClick={() => openFile(doc)}>Open</button>}
+                    <button className="btn-primary sm" disabled={busy} onClick={() => run(async () => {
+                      const r = await call(`/admin/operators/${id}/documents/${doc.id}/review`, "POST", { approve: true });
+                      if (r.reactivated) flash("Approved. All documents are current again, so the operator is active.");
+                    }, "Document approved.")}>Approve</button>
+                    <button className="btn-ghost sm" disabled={busy} onClick={() => {
+                      const note = window.prompt("Why is it rejected? The agency sees this.");
+                      if (note && note.trim()) run(() => call(`/admin/operators/${id}/documents/${doc.id}/review`, "POST", { approve: false, note: note.trim() }), "Document rejected.");
+                    }}>Reject</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody></table>
+          </div>
+        )}
         <div className="table-wrap">
           <table className="dash-table">
             <thead><tr><th>Document</th><th>Number</th><th>Expires</th><th>File</th><th></th></tr></thead>
@@ -227,8 +271,10 @@ function OperatorEditor({ id, products, agencies, flash, isSuperAdmin, onClose }
                   <tr key={kind}>
                     <td>{DOCUMENT_LABELS[kind]}</td>
                     <td>{doc?.number || "—"}</td>
-                    <td>{doc ? dayLabel(doc.expiresOn) : "—"} {gap && <span className="tag tag-warn">{gap.problem}</span>}</td>
-                    <td>{doc?.hasFile ? <button className="btn-ghost sm" onClick={() => call(`/admin/operators/${id}/documents/${doc.id}/file`).then((j) => window.open(j.url, "_blank", "noopener")).catch((e) => setErr(e.message))}>Open</button> : "—"}</td>
+                    <td>{doc ? dayLabel(doc.expiresOn) : "—"} {gap && <span className="tag tag-warn">{gap.problem}</span>}
+                      {waiting.has(kind) && <span className="tag tag-warn">sent, to review</span>}
+                      {gap && op.activationExceptionKinds.includes(kind) && <span className="tag">excused</span>}</td>
+                    <td>{doc?.hasFile ? <button className="btn-ghost sm" onClick={() => openFile(doc)}>Open</button> : "—"}</td>
                     <td className="row-actions"><button className="btn-ghost sm" onClick={() => setDocForm({ kind, number: "", expiresOn: "", file: null })}><Upload size={14} />{doc ? "Replace" : "Add"}</button></td>
                   </tr>
                 );

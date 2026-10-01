@@ -147,7 +147,7 @@ async function pledge(legacyId, seats, extra = {}) {
   return id;
 }
 const fullDocs = async (operatorId, expiresOn = shiftDate(today(), 365)) => {
-  for (const kind of ["tourism_license", "etaa_membership", "liability_insurance", "vehicle_insurance"]) {
+  for (const kind of ["tourism_license", "commercial_registration", "tax_card", "liability_insurance", "vehicle_insurance"]) {
     await ops.addDocument(db, operatorId, { kind, number: `${kind}-1`, expiresOn }, { by: "it" });
   }
 };
@@ -203,7 +203,7 @@ test("an operator is activated only with four current documents; an expired one 
   assert.equal((await ops.getOperator(db, C)).status, "active");
   // An operator suspended by an admin is not reactivated by an upload.
   await ops.setOperatorStatus(db, C, "suspended", { by: "it", reason: "service review" });
-  assert.equal((await ops.addDocument(db, C, { kind: "etaa_membership", number: "E-2", expiresOn: shiftDate(today(), 365) }, { by: "it" })).reactivated, false);
+  assert.equal((await ops.addDocument(db, C, { kind: "tax_card", number: "T-2", expiresOn: shiftDate(today(), 365) }, { by: "it" })).reactivated, false);
   assert.equal((await ops.getOperator(db, C)).status, "suspended");
 });
 

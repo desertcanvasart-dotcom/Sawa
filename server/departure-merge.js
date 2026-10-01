@@ -153,7 +153,7 @@ async function splitOf(db, ids, data) {
   const adjustments = (await has(db, "settlement_adjustments")) ? (await db.query(
     "SELECT * FROM settlement_adjustments WHERE departure_id = ANY($1::int[])", [ids])).rows.map((r) => ({
     departureId: Number(r.departure_id), agencyId: r.agency_id || null, amount: Number(r.amount) })) : [];
-  const agencies = (await db.query("SELECT id, name FROM agencies")).rows;
+  const agencies = (await db.query("SELECT * FROM agencies")).rows;
   const inputs = await loadOperatorInputs(db);
   const ctx = { directAgencyId: directOperatorId(agencies, DIRECT_BOOKINGS_OPERATOR), referralAgencies: inputs.referralAgencies };
   const name = (id) => (id ? agencies.find((a) => a.id === id)?.name || id : "Sawa");

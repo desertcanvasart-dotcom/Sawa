@@ -160,7 +160,7 @@ before(async () => {
   await fx.setExchangeRateMode(db, { mode: "manual", egpPerEur: 50, reason: "test: the agreed rate", by: "it" });
 
   X = (await ops.createOperator(db, { legalName: "Nile Tours S.A.E.", email: "dispatch@nile-tours.test" }, "it")).id;
-  for (const kind of ["tourism_license", "etaa_membership", "liability_insurance", "vehicle_insurance"]) {
+  for (const kind of ["tourism_license", "commercial_registration", "tax_card", "liability_insurance", "vehicle_insurance"]) {
     await ops.addDocument(db, X, { kind, number: "1", expiresOn: shiftDate(today(), 400) }, { by: "it" });
   }
   await ops.setApprovals(db, X, [productId], "it");
@@ -923,7 +923,7 @@ test("seller disclosure: no seller and no payment request until the operator ack
 
 test("reassigned after travelers paid: once the new operator acknowledges, each paid traveler is told, the receipt is reissued naming the new seller (the original kept, superseded), and a full refund is offered for 48 hours; logged", { skip }, async () => {
   const Y = (await ops.createOperator(db, { legalName: "Delta Nile Travel", email: "dispatch@delta-nile.test" }, "it")).id;
-  for (const kind of ["tourism_license", "etaa_membership", "liability_insurance", "vehicle_insurance"]) {
+  for (const kind of ["tourism_license", "commercial_registration", "tax_card", "liability_insurance", "vehicle_insurance"]) {
     await ops.addDocument(db, Y, { kind, number: "2", expiresOn: shiftDate(today(), 400) }, { by: "it" });
   }
   await ops.setApprovals(db, Y, [productId], "it");
@@ -1071,15 +1071,20 @@ test("the statement converts the entitlement per traveler, at the CBE rate on ea
   assert.equal(same.operatorEur, f.entitlementEur);
 });
 
-test("the Capital Travel Service operator record stays pending and can't be activated", { skip }, async () => {
+test("068: Capital Travel Service is a partner again — 053's block is lifted for good and it activates like any operator", { skip }, async () => {
   const cts = await ops.createOperator(db, { legalName: "Capital Travel Service" }, "it");
+  // 053 blocked it (27 Sep 2026); 068 (1 Oct 2026) lifts that once, and a later
+  // db:migrate, which reruns every migration, doesn't put the block back.
+  await db.query("UPDATE operators SET activation_blocked = 'Capital Travel Service is not involved in Sawa (decided 27 Sep 2026). This record must stay pending and must not be activated.' WHERE id = $1", [cts.id]);
+  await db.query("DELETE FROM schema_migrations WHERE name = '068_agency_documents'");
+  execFileSync(process.execPath, [join(ROOT, "server", "db", "migrate.js")], { env: { ...process.env, DATABASE_URL: dbUrl, PGSSL: "false" }, stdio: "pipe" });
+  assert.equal((await ops.getOperator(db, cts.id)).activationBlocked, null);
   execFileSync(process.execPath, [join(ROOT, "server", "db", "migrate.js")], { env: { ...process.env, DATABASE_URL: dbUrl, PGSSL: "false" }, stdio: "pipe" });
   const op = await ops.getOperator(db, cts.id);
+  assert.equal(op.activationBlocked, null, "a second db:migrate doesn't re-block it");
   assert.equal(op.status, "pending");
-  assert.match(op.activationBlocked, /not involved in Sawa/);
-  for (const kind of ["tourism_license", "etaa_membership", "liability_insurance", "vehicle_insurance"]) {
+  for (const kind of ["tourism_license", "commercial_registration", "tax_card", "liability_insurance", "vehicle_insurance"]) {
     await ops.addDocument(db, cts.id, { kind, number: "1", expiresOn: shiftDate(today(), 400) }, { by: "it" });
   }
-  await assert.rejects(ops.setOperatorStatus(db, cts.id, "active", { by: "it" }), /must not be activated/);
-  assert.equal((await ops.getOperator(db, cts.id)).status, "pending");
+  assert.equal((await ops.setOperatorStatus(db, cts.id, "active", { by: "it" })).status, "active");
 });

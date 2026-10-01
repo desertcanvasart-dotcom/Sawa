@@ -15,6 +15,7 @@ import { catalogueV2Enabled } from "./features.js";
 import {
   listOperators, getOperator, createOperator, updateOperator, setOperatorStatus, addDocument, setApprovals,
   addStrike, voidStrike, strikesFor, currentDocuments, documentGaps, mapDocument, mapOperator,
+  agencyOperator, submitAgencyDocument, reviewDocument,
 } from "./operators.js";
 import {
   rosterMonth, setPlanLine, buildMonth, overrideEntry, publishMonth, decideSwap, requestSwap, operatorRoster,
@@ -46,6 +47,7 @@ export function registerOperatorRoutes(app, { requireAuth, requireRole, h, logAu
   const staff = [requireAuth, requireRole("super_admin", "ops_staff")];
   const superAdmin = [requireAuth, requireRole("super_admin")];
   const operatorOnly = [requireAuth, requireRole("operator_owner", "operator_staff")];
+  const agencyOnly = [requireAuth, requireRole("agency_owner", "agency_agent")];
   const send = () => (catalogueV2Enabled() ? sendEmail : null);
   const by = (req) => req.user?.email || req.user?.id || null;
   const id = (v) => {
@@ -60,9 +62,12 @@ export function registerOperatorRoutes(app, { requireAuth, requireRole, h, logAu
       if (isMissingCatalogueTables(e)) {
         // Name the migration that is actually missing: the rate card tables
         // and the departure snapshot come from 066, everything else from 049.
-        const msg = /catalogue_rate_cards|rate_snapshot|rate_card_migration_066/.test(e.message || "")
+        const m = e.message || "";
+        const msg = /catalogue_rate_cards|rate_snapshot|rate_card_migration_066/.test(m)
           ? "The rate card isn't switched on yet: migration 066 has not been applied to this database."
-          : "Operators aren't switched on yet: migration 049 has not been applied to this database.";
+          : /review_state|review_note|reviewed_|submitted_via|activation_exception|direct_bookings_preferred/.test(m)
+            ? "Document review isn't switched on yet: migration 068 has not been applied to this database."
+            : "Operators aren't switched on yet: migration 049 has not been applied to this database.";
         throw Object.assign(new CatalogueError(503, msg), { expose: true });
       }
       throw e;
@@ -74,6 +79,24 @@ export function registerOperatorRoutes(app, { requireAuth, requireRole, h, logAu
     if (!req.user?.operatorId) throw new CatalogueError(403, "This login isn't linked to an operator.");
     await fn(req, res);
   });
+
+  // A document file into the private bucket; returns its storage key.
+  const storeDocument = async (oid, kind, dataUrl) => {
+    if (!supabaseAdmin) throw new CatalogueError(500, "Storage is not configured.");
+    const file = parseReceiptDataUrl(dataUrl);
+    if (file.error) throw new CatalogueError(422, file.error);
+    await ensureBucket();
+    const fileRef = `operator/${oid}/${kind}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${file.ext}`;
+    const { error } = await supabaseAdmin.storage.from(DOCUMENT_BUCKET).upload(fileRef, file.buffer, { contentType: file.contentType, upsert: false });
+    if (error) throw new CatalogueError(502, "Upload failed: " + error.message);
+    return fileRef;
+  };
+  const signedDocumentUrl = async (fileRef) => {
+    if (!supabaseAdmin) throw new CatalogueError(500, "Storage is not configured.");
+    const { data, error } = await supabaseAdmin.storage.from(DOCUMENT_BUCKET).createSignedUrl(fileRef, SIGNED_SECONDS);
+    if (error || !data?.signedUrl) throw new CatalogueError(502, "Couldn't open the file. Please try again.");
+    return data.signedUrl;
+  };
 
   let bucketReady = null;
   const ensureBucket = () => {
@@ -128,8 +151,8 @@ export function registerOperatorRoutes(app, { requireAuth, requireRole, h, logAu
   }));
 
   app.post("/api/admin/operators/:id/status", ...staff, route(async (req, res) => {
-    const input = z.object({ status: z.enum(OPERATOR_STATUSES), reason: text(300) }).parse(req.body || {});
-    const op = await setOperatorStatus(pool, id(req.params.id), input.status, { by: by(req), reason: input.reason || null });
+    const input = z.object({ status: z.enum(OPERATOR_STATUSES), reason: text(300), exceptionReason: text(500) }).parse(req.body || {});
+    const op = await setOperatorStatus(pool, id(req.params.id), input.status, { by: by(req), reason: input.reason || null, exceptionReason: input.exceptionReason || null });
     await logAudit(req, { action: "operator.status", entity: "operator", entityId: op.id, detail: input });
     res.json({ operator: op });
   }));
@@ -142,16 +165,7 @@ export function registerOperatorRoutes(app, { requireAuth, requireRole, h, logAu
       kind: z.enum(DOCUMENT_KINDS), number: text(120), expiresOn: ymdSchema,
       filename: text(200), dataUrl: z.string().max(12_000_000).optional(),
     }).parse(req.body || {});
-    let fileRef = null;
-    if (input.dataUrl) {
-      if (!supabaseAdmin) throw new CatalogueError(500, "Storage is not configured.");
-      const file = parseReceiptDataUrl(input.dataUrl);
-      if (file.error) throw new CatalogueError(422, file.error);
-      await ensureBucket();
-      fileRef = `operator/${oid}/${input.kind}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${file.ext}`;
-      const { error } = await supabaseAdmin.storage.from(DOCUMENT_BUCKET).upload(fileRef, file.buffer, { contentType: file.contentType, upsert: false });
-      if (error) throw new CatalogueError(502, "Upload failed: " + error.message);
-    }
+    const fileRef = input.dataUrl ? await storeDocument(oid, input.kind, input.dataUrl) : null;
     const result = await addDocument(pool, oid, { kind: input.kind, number: input.number, expiresOn: input.expiresOn, fileRef }, { by: by(req) });
     await logAudit(req, {
       action: "operator.document", entity: "operator", entityId: oid,
@@ -167,6 +181,17 @@ export function registerOperatorRoutes(app, { requireAuth, requireRole, h, logAu
     const { data, error } = await supabaseAdmin.storage.from(DOCUMENT_BUCKET).createSignedUrl(row.file_ref, SIGNED_SECONDS);
     if (error || !data?.signedUrl) throw new CatalogueError(502, "Couldn't open the file. Please try again.");
     res.json({ url: data.signedUrl, expiresInSeconds: SIGNED_SECONDS });
+  }));
+
+  // A document an agency sent, approved or rejected (068).
+  app.post("/api/admin/operators/:id/documents/:docId/review", ...staff, route(async (req, res) => {
+    const input = z.object({ approve: z.boolean(), note: text(500) }).parse(req.body || {});
+    const result = await reviewDocument(pool, id(req.params.id), id(req.params.docId), { approve: input.approve, note: input.note || null, by: by(req) });
+    await logAudit(req, {
+      action: input.approve ? "operator.document.approve" : "operator.document.reject", entity: "operator", entityId: req.params.id,
+      detail: { documentId: result.document.id, kind: result.document.kind, note: input.note || null, reactivated: result.reactivated },
+    });
+    res.json(result);
   }));
 
   app.put("/api/admin/operators/:id/approvals", ...staff, route(async (req, res) => {
@@ -356,6 +381,51 @@ export function registerOperatorRoutes(app, { requireAuth, requireRole, h, logAu
   }));
 
   // ============================================================== operator portal
+  // ============================================================== agency documents
+  // 068: an agency sends its company's papers from its own dashboard; each
+  // waits for an admin (Operators → the company → Documents). Works with the
+  // catalogue_v2 flag off. Its owner uploads; its agents see the status.
+  const agencyDocs = (fn) => route(async (req, res) => {
+    if (!req.user?.agencyId) throw new CatalogueError(403, "This account is not linked to an agency.");
+    await fn(req, res);
+  });
+  app.get("/api/agency/documents", ...agencyOnly, agencyDocs(async (req, res) => {
+    res.set("Cache-Control", "no-store");
+    const op = await agencyOperator(pool, req.user.agencyId);
+    if (!op) return res.json({ operator: null, documents: [], documentGaps: documentGaps([], todayIn()) });
+    const docs = (await pool.query(
+      `SELECT * FROM operator_documents WHERE operator_id = $1 AND (superseded_at IS NULL OR review_state = 'rejected')
+        ORDER BY kind, uploaded_at DESC`, [op.id])).rows.map(mapDocument);
+    res.json({
+      operator: { id: op.id, legalName: op.legalName, status: op.status, activationException: op.activationException },
+      // Who reviewed it stays with Sawa; the agency sees the state and the reason.
+      documents: docs.map(({ uploadedBy, reviewedBy, ...d }) => d),
+      documentGaps: documentGaps(docs.filter((d) => !d.supersededAt), todayIn()),
+    });
+  }));
+  app.post("/api/agency/documents", ...agencyOnly, agencyDocs(async (req, res) => {
+    if (req.user.role !== "agency_owner") throw new CatalogueError(403, "Only the agency's owner can send its documents.");
+    const input = z.object({
+      kind: z.enum(DOCUMENT_KINDS), number: text(120), expiresOn: ymdSchema,
+      filename: text(200), dataUrl: z.string().max(12_000_000),
+    }).parse(req.body || {});
+    const op = await agencyOperator(pool, req.user.agencyId, { create: true, by: by(req) });
+    const fileRef = await storeDocument(op.id, input.kind, input.dataUrl);
+    const document = await submitAgencyDocument(pool, op.id, { kind: input.kind, number: input.number, expiresOn: input.expiresOn, fileRef }, { by: by(req) });
+    await logAudit(req, {
+      action: "operator.document.submit", entity: "operator", entityId: op.id,
+      detail: { kind: input.kind, expiresOn: input.expiresOn, documentId: document.id, agencyId: req.user.agencyId },
+    });
+    res.status(201).json({ document: { ...document, uploadedBy: undefined } });
+  }));
+  app.get("/api/agency/documents/:docId/file", ...agencyOnly, agencyDocs(async (req, res) => {
+    const row = (await pool.query(
+      `SELECT d.file_ref FROM operator_documents d JOIN operators o ON o.id = d.operator_id
+        WHERE d.id = $1 AND o.agency_id = $2`, [id(req.params.docId), req.user.agencyId])).rows[0];
+    if (!row?.file_ref) throw new CatalogueError(404, "No file on this document.");
+    res.json({ url: await signedDocumentUrl(row.file_ref), expiresInSeconds: SIGNED_SECONDS });
+  }));
+
   app.get("/api/operator/me", ...operatorOnly, portal(async (req, res) => {
     const oid = req.user.operatorId;
     const [operator, docs, strikes] = await Promise.all([getOperator(pool, oid), currentDocuments(pool, oid), strikesFor(pool, oid)]);
