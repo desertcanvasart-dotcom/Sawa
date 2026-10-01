@@ -15,6 +15,7 @@ import { operatingDayError } from "../shared/operating-days.js";
 import { minLeadDaysFor, maxHorizonDaysFor, requestWindowError } from "../shared/request-window.js";
 import { cleanRefCode } from "../shared/ref-code.js";
 import { CURRENCY, CURRENCY_SYMBOL } from "../shared/currency.js";
+import { etaaLinkOk } from "../shared/operators.js";
 import { mapAgency, mapCity, mapProduct, mapDeparture, mapPledge, isoDate } from "./db/mappers.js";
 import {
   enrichDeparture,
@@ -3376,6 +3377,9 @@ const operatorRecordSchema = z.object({
   // A YEAR, not a date: an Egyptian tourism licence does not expire (035).
   tourismLicenseYear: z.coerce.number().int().min(1900).max(2200).nullish(),
   etaaRegistrationNo: z.string().trim().max(64).nullish(),
+  // 068: the company's ETAA register entry, as a link on ETAA's own site.
+  etaaUrl: z.string().trim().max(500).nullish()
+    .refine((v) => !v || etaaLinkOk(v), "The ETAA link must be an https link on www.etaa-egypt.org."),
   insuranceInsurer: z.string().trim().max(120).nullish(),
   insurancePolicyNo: z.string().trim().max(64).nullish(),
   insuranceExpires: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/).nullish(),
@@ -3388,6 +3392,23 @@ const operatorRecordSchema = z.object({
   verificationState: z.enum(["verified", "rejected", "lapsed"]).nullish(),
   verificationEvidence: z.string().trim().max(2000).nullish(),
 });
+
+// The company's ETAA register link (068). Clearing it clears the old "ETAA
+// no." too, which the page would otherwise build the link from. Before 068
+// there is no link column: a link can't be saved yet, and clearing still works.
+async function saveEtaaLink(c, agencyId, url) {
+  await c.query("SAVEPOINT etaa_link");
+  try {
+    return (await c.query(
+      `UPDATE agencies SET etaa_url = $2::text, etaa_registration_no = CASE WHEN $2::text IS NULL THEN NULL ELSE etaa_registration_no END
+        WHERE id = $1 RETURNING *`, [agencyId, url])).rows[0];
+  } catch (e) {
+    if (e?.code !== "42703") throw e;
+    await c.query("ROLLBACK TO SAVEPOINT etaa_link");
+    if (url) throw new AppError(503, "The ETAA link isn't switched on yet: migration 068 has not been applied to this database.");
+    return (await c.query("UPDATE agencies SET etaa_registration_no = NULL WHERE id = $1 RETURNING *", [agencyId])).rows[0];
+  }
+}
 
 app.patch("/api/admin/agencies/:id", requireAuth, requireAdmin(), writeLimiter, h(async (req, res) => {
   const input = parse(operatorRecordSchema, req.body || {});
@@ -3412,7 +3433,8 @@ app.patch("/api/admin/agencies/:id", requireAuth, requireAdmin(), writeLimiter, 
          relationship            = COALESCE($2, relationship),
          tourism_license_no      = $3,
          tourism_license_year    = $4,
-         etaa_registration_no    = $5,
+         -- 068: no longer entered (ETAA has no member no.); kept unless sent.
+         etaa_registration_no    = COALESCE($5, etaa_registration_no),
          insurance_insurer       = $6,
          insurance_policy_no     = $7,
          insurance_expires       = $8,
@@ -3428,6 +3450,8 @@ app.patch("/api/admin/agencies/:id", requireAuth, requireAdmin(), writeLimiter, 
        blank(input.trackRecord), blank(input.verificationState), blank(input.verificationEvidence),
        verifiedAt, req.user.id]
     );
+    // The ETAA link, only when the form sent it (068).
+    if (Object.hasOwn(req.body || {}, "etaaUrl")) return saveEtaaLink(c, req.params.id, blank(input.etaaUrl));
     return r.rows[0];
   });
 
@@ -3553,6 +3577,34 @@ app.post("/api/admin/agencies/:id/tours/:tourId/unassign", requireAuth, requireA
     detail: { title: r.rows[0].title, agencyId: req.params.id },
   });
   res.json({ ok: true });
+}));
+
+// The agency preferred for direct bookings (068): a traveler who books with no
+// agency and no referral code counts for it, it runs a Sawa-listed tour with no
+// operating company, and in the profit split it takes the direct travelers'
+// share. At most one; choosing another moves the preference. Off for all: the
+// DIRECT_BOOKINGS_OPERATOR setting applies, as before.
+app.post("/api/admin/agencies/:id/direct-bookings", requireAuth, requireAdmin(), writeLimiter, h(async (req, res) => {
+  const { preferred } = parse(z.object({ preferred: z.boolean() }), req.body || {});
+  const before = (await pool.query(`SELECT * FROM agencies WHERE id=$1`, [req.params.id])).rows[0];
+  if (!before) throw new AppError(404, "Agency not found.");
+  if (preferred && before.status === "inactive") throw new AppError(409, "Reactivate the agency first.");
+  const { row, previous } = await withTransaction(async (c) => {
+    const prev = preferred
+      ? (await c.query(`UPDATE agencies SET direct_bookings_preferred = false WHERE direct_bookings_preferred AND id <> $1 RETURNING id, name`, [req.params.id])).rows
+      : [];
+    const r = (await c.query(`UPDATE agencies SET direct_bookings_preferred = $2 WHERE id = $1 RETURNING *`, [req.params.id, preferred])).rows[0];
+    return { row: r, previous: prev };
+  }).catch((e) => {
+    if (e?.code === "42703") throw new AppError(503, "Direct-bookings preference isn't switched on yet: migration 068 has not been applied to this database.");
+    throw e;
+  });
+  clearSeoCaches();
+  await logAudit(req, {
+    action: preferred ? "agency.direct_bookings.prefer" : "agency.direct_bookings.unprefer", entity: "agency", entityId: row.id,
+    detail: { name: row.name, previous: previous.map((p) => p.name) },
+  });
+  res.json({ agency: mapAgency(row) });
 }));
 
 // Deactivate / reactivate an agency: the way to retire one that has history.
@@ -4137,7 +4189,7 @@ async function loadSettlements(db, ids = null) {
                 FROM payout_lines l JOIN payout_runs r ON r.id = l.run_id
                WHERE r.state = 'approved' AND l.departure_id = ANY($1::int[])
                GROUP BY l.departure_id, l.agency_id, r.pay_date`, [depIds]),
-    db.query(`SELECT id, name FROM agencies`),
+    db.query(`SELECT * FROM agencies`),
     loadOperatorInputs(db),
   ]);
   const pledgesByDep = groupBy(pledgeRows.rows.map(mapPledge).map((p, i) => ({ ...p, departureId: pledgeRows.rows[i].departure_id })), "departureId");

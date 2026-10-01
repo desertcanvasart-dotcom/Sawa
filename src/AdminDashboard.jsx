@@ -35,6 +35,7 @@ const seatsOf = (d) => (d.pledges || []).reduce((s, p) => (p?.status === "cancel
 // lacked the server's `|| "post"` fallback, so an untitled post previewed an
 // empty slug and was stored at /blog/post.
 import { blogSlug } from "../shared/blog-slug.js";
+import { etaaRegisterUrl } from "../shared/operators.js";
 import { catalogueTourView, isCatalogueTour } from "../shared/catalogue-tour-editor.js";
 import { listingPrices } from "../shared/price-mode.js";
 import { pathForSection } from "./portal-section.js";
@@ -2561,7 +2562,8 @@ function ReferralsSection({ flash }) {
 }
 
 /* ---------------- Operator record ----------------
-   What Sawa has CHECKED about a company: licence, ETAA registration, insurance,
+   What Sawa has CHECKED about a company: licence (which is also its ETAA
+   membership: the register is looked up by the licence number), insurance,
    and a verification decision. Separate from creating the agency, which is an
    account action — verification usually happens days later, by someone else.
 
@@ -2575,10 +2577,13 @@ function ReferralsSection({ flash }) {
    checked are two different claims, and conflating them is what put a "Verified
    operator" badge on a product page with nothing behind it. */
 function OperatorRecord({ agency, onSaved }) {
+  // The ETAA link the site shows now: the one set here, else (before 068) the
+  // one built from the old "ETAA no." field.
+  const shownEtaa = agency.etaaUrl || etaaRegisterUrl(agency.etaaRegistrationNo) || "";
   const [f, setF] = useState({
+    etaaUrl: shownEtaa,
     tourismLicenseNo: agency.tourismLicenseNo || "",
     tourismLicenseYear: agency.tourismLicenseYear || "",
-    etaaRegistrationNo: agency.etaaRegistrationNo || "",
     insuranceInsurer: agency.insuranceInsurer || "",
     insurancePolicyNo: agency.insurancePolicyNo || "",
     insuranceExpires: agency.insuranceExpires ? String(agency.insuranceExpires).slice(0, 10) : "",
@@ -2594,6 +2599,8 @@ function OperatorRecord({ agency, onSaved }) {
     e.preventDefault(); setBusy(true); setErr("");
     try {
       const body = { ...f, relationship: "operator" };
+      // Sent only when changed: publishing (or removing) the link is its own decision.
+      if (f.etaaUrl.trim() === shownEtaa) delete body.etaaUrl;
       // Empty strings mean "not recorded", not "recorded as blank".
       for (const k of Object.keys(body)) if (body[k] === "") body[k] = null;
       const r = await apiFetch(`/admin/agencies/${agency.id}`, {
@@ -2610,14 +2617,28 @@ function OperatorRecord({ agency, onSaved }) {
       <div className="op-grid">
         <label className="field"><span>Tourism license no.</span>
           <input value={f.tourismLicenseNo} onChange={set("tourismLicenseNo")} placeholder="Ministry license" />
-          <em className="field-hint">Never published. Used only to confirm registration.</em>
+          <em className="field-hint">Never shown on the site, except inside the ETAA register link below if you set one.</em>
         </label>
         <label className="field"><span>Registered (year)</span>
           <input value={f.tourismLicenseYear} onChange={set("tourismLicenseYear")} inputMode="numeric" placeholder="e.g. 2011" />
           <em className="field-hint">An Egyptian tourism license has no expiry.</em>
         </label>
-        <label className="field"><span>ETAA registration no.</span>
-          <input value={f.etaaRegistrationNo} onChange={set("etaaRegistrationNo")} />
+        <label className="field op-wide"><span>ETAA register link</span>
+          {/* No member number: every company with a Ministry of Tourism license
+              is an ETAA member, and the register is looked up by the license.
+              The link is published on the site, and it carries the license
+              number, so it is set here on purpose rather than built for all. */}
+          <input value={f.etaaUrl} onChange={set("etaaUrl")} placeholder="https://www.etaa-egypt.org/…" />
+          <em className="field-hint">
+            Membership comes with the Ministry license; there is no ETAA number. This link is shown on the site as the company's ETAA entry.{" "}
+            {etaaRegisterUrl(f.tourismLicenseNo) && f.etaaUrl !== etaaRegisterUrl(f.tourismLicenseNo) && (
+              <>
+                <a href={etaaRegisterUrl(f.tourismLicenseNo)} target="_blank" rel="noopener noreferrer">Look it up by the license no.</a>
+                {" · "}
+                <button type="button" className="linklike" onClick={() => setF((s) => ({ ...s, etaaUrl: etaaRegisterUrl(s.tourismLicenseNo) }))}>Use that link</button>
+              </>
+            )}
+          </em>
         </label>
         <label className="field"><span>Insurer</span>
           <input value={f.insuranceInsurer} onChange={set("insuranceInsurer")} />
@@ -2726,6 +2747,17 @@ function AgenciesSection({ flash }) {
       await openLinks(links.agency.id, links.blocked);
     } catch (e2) { setErr(e2.message); } finally { setLinkBusy(false); }
   }
+  async function preferDirect(a, preferred) {
+    const others = (list || []).find((x) => x.directBookingsPreferred && x.id !== a.id);
+    if (preferred && others && !window.confirm(`${others.name} is preferred for direct bookings now. Move it to ${a.name}?`)) return;
+    setErr("");
+    try {
+      const r = await apiFetch(`/admin/agencies/${a.id}/direct-bookings`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ preferred }) });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.error || "Could not change the direct-bookings preference.");
+      await load(); flash(preferred ? `${a.name} is preferred for direct bookings.` : `${a.name} is no longer preferred for direct bookings.`);
+    } catch (e2) { setErr(e2.message); }
+  }
   async function setStatus(a, status) {
     if (status === "inactive" && !window.confirm(`Deactivate "${a.name}"? Its team can't sign in and it can't be chosen as a tour's operating company. Nothing is deleted: its tours, bookings and referral codes stay, and you can reactivate it any time.`)) return;
     setErr("");
@@ -2764,7 +2796,9 @@ function AgenciesSection({ flash }) {
                 <tr key={a.id}>
                   <td>
                     <strong className="agency-name">{a.name}</strong>
-                    <div className="agency-verify">{verificationTag(a)}</div>
+                    <div className="agency-verify">{verificationTag(a)}
+                      {a.directBookingsPreferred && <span className="tag tag-pkg" title="Direct bookings count for this agency">Direct bookings</span>}
+                      {!a.publicListed && <span className="tag" title="Not named on the public site or the partners page">Unlisted</span>}</div>
                   </td>
                   <td>
                     {a.contactName ? a.contactName : <span className="muted-line">No contact on file</span>}
@@ -2894,6 +2928,13 @@ function AgenciesSection({ flash }) {
               <button className="icon-btn" onClick={() => setEditing(null)} aria-label="Close"><X size={18} /></button>
             </div>
             <div className="drawer-body">
+              {err && <div className="auth-error" role="alert">{err}</div>}
+              <label className="direct-pref">
+                <input type="checkbox" checked={!!open.directBookingsPreferred} disabled={open.status === "inactive"}
+                  onChange={(e) => preferDirect(open, e.target.checked)} />
+                <span><strong>Preferred for direct bookings</strong>
+                  <em className="field-hint">A traveler who books on the site with no agency or referral code counts for this agency: it runs those dates and takes the direct travelers' share. One agency at a time; choosing this one moves it. It doesn't make the agency the payee: Sawa's collecting agent still collects every payment.</em></span>
+              </label>
               <OperatorRecord agency={open} onSaved={() => { load(); setEditing(null); flash("Operator record saved."); }} />
             </div>
           </aside>

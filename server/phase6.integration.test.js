@@ -134,7 +134,7 @@ before(async () => {
   await makeToursBookable(db);
   const operator = async (legalName, email) => {
     const id = (await ops.createOperator(db, { legalName, email }, "it")).id;
-    for (const kind of ["tourism_license", "etaa_membership", "liability_insurance", "vehicle_insurance"]) {
+    for (const kind of ["tourism_license", "commercial_registration", "tax_card", "liability_insurance", "vehicle_insurance"]) {
       await ops.addDocument(db, id, { kind, number: "1", expiresOn: shiftDate(today(), 400) }, { by: "it" });
     }
     await ops.setApprovals(db, id, [productId], "it");

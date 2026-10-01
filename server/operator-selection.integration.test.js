@@ -125,7 +125,7 @@ before(async () => {
     if (agencyId) await db.query("INSERT INTO agencies (id, name) VALUES ($1, $2)", [agencyId, legalName]);
     const o = await ops.createOperator(db, { legalName, email: `dispatch@${key.toLowerCase()}.test` }, "it");
     if (agencyId) await db.query("UPDATE operators SET agency_id = $2 WHERE id = $1", [o.id, agencyId]);
-    for (const kind of ["tourism_license", "etaa_membership", "liability_insurance", "vehicle_insurance"]) {
+    for (const kind of ["tourism_license", "commercial_registration", "tax_card", "liability_insurance", "vehicle_insurance"]) {
       await ops.addDocument(db, o.id, { kind, number: "1", expiresOn: shiftDate(today(), 400) }, { by: "it" });
     }
     await ops.setApprovals(db, o.id, [productId], "it");

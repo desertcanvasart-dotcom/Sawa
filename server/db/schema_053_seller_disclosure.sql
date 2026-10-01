@@ -28,8 +28,11 @@ ALTER TABLE operators ADD COLUMN IF NOT EXISTS activation_blocked TEXT;
 
 -- Capital Travel Service is not involved in Sawa (decided 27 Sep 2026). The
 -- operator record 049 creates for it stays pending and can't be activated.
+-- Superseded by 068 (1 Oct 2026: CTS is a partner agency again). Every
+-- migration reruns on db:migrate, so once 068 is applied this no longer re-blocks it.
 UPDATE operators SET activation_blocked = 'Capital Travel Service is not involved in Sawa (decided 27 Sep 2026). This record must stay pending and must not be activated.'
- WHERE legal_name ILIKE 'capital travel%' AND activation_blocked IS NULL;
+ WHERE legal_name ILIKE 'capital travel%' AND activation_blocked IS NULL
+   AND NOT EXISTS (SELECT 1 FROM schema_migrations WHERE name = '068_agency_documents');
 
 ALTER TABLE payment_requests ADD COLUMN IF NOT EXISTS seller_operator_id BIGINT REFERENCES operators(id) ON DELETE SET NULL;
 ALTER TABLE payment_requests ADD COLUMN IF NOT EXISTS seller_legal_name TEXT;

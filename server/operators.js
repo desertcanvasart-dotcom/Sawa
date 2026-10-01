@@ -4,7 +4,8 @@
 // An operator is the operator ROLE of a company; `agencies` stays the company
 // record. Status rules:
 //   pending    created, documents not all valid yet — can't be rostered
-//   active     all four documents current — can be rostered and assigned
+//   active     every required document current and approved (or activated
+//              by exception, 068, with the reason recorded) — can be rostered
 //   suspended  a document expired (or an admin suspended it) — can't be
 //              rostered; a valid replacement for an expired document
 //              reactivates it
@@ -31,6 +32,10 @@ export function mapOperator(r) {
     notes: r.notes, createdAt: r.created_at,
     // Migration 053 (absent before it is applied).
     travellerLicenceNo: r.traveller_licence_no ?? null, activationBlocked: r.activation_blocked ?? null,
+    // 068: activated with papers missing, and why (absent before it is applied).
+    activationException: r.activation_exception ?? null,
+    activationExceptionKinds: Array.isArray(r.activation_exception_kinds) ? r.activation_exception_kinds : [],
+    activationExceptionBy: r.activation_exception_by ?? null, activationExceptionAt: r.activation_exception_at ?? null,
   };
 }
 
@@ -39,7 +44,21 @@ export function mapDocument(r) {
     id: Number(r.id), operatorId: Number(r.operator_id), kind: r.kind, number: r.number,
     expiresOn: ymd(r.expires_on), hasFile: !!r.file_ref, uploadedBy: r.uploaded_by, uploadedAt: r.uploaded_at,
     supersededAt: r.superseded_at,
+    // 068. Before it every document was entered by an admin, so approved.
+    reviewState: r.review_state || "approved", reviewNote: r.review_note ?? null,
+    reviewedBy: r.reviewed_by ?? null, reviewedAt: r.reviewed_at ?? null, submittedVia: r.submitted_via || "admin",
   };
+}
+
+// Only an APPROVED document counts (068). Before 068 there is no review_state
+// column and every document is approved, so the filter is dropped.
+export async function queryApprovedDocs(db, sql, params) {
+  try {
+    return await db.query(sql.replace("{approved}", "AND d.review_state = 'approved'"), params);
+  } catch (e) {
+    if (e?.code !== "42703") throw e;
+    return db.query(sql.replace("{approved}", ""), params);
+  }
 }
 
 export function mapStrike(r) {
@@ -58,15 +77,16 @@ export async function getOperator(db, id) {
 }
 
 export async function currentDocuments(db, operatorId) {
-  const r = await db.query(
-    "SELECT * FROM operator_documents WHERE operator_id = $1 AND superseded_at IS NULL ORDER BY kind", [operatorId]);
+  const r = await queryApprovedDocs(db,
+    "SELECT d.* FROM operator_documents d WHERE d.operator_id = $1 AND d.superseded_at IS NULL {approved} ORDER BY d.kind", [operatorId]);
   return r.rows.map(mapDocument);
 }
 
-// Which of the four documents are missing or expired on `today`.
-export function documentGaps(docs, today) {
-  const byKind = new Map(docs.map((d) => [d.kind, d]));
-  return DOCUMENT_KINDS.flatMap((kind) => {
+// Which required documents are missing or expired on `today`. `excused`: the
+// kinds an activation by exception covers (068), not counted as gaps.
+export function documentGaps(docs, today, excused = []) {
+  const byKind = new Map(docs.filter((d) => (d.reviewState || "approved") === "approved").map((d) => [d.kind, d]));
+  return DOCUMENT_KINDS.filter((kind) => !excused.includes(kind)).flatMap((kind) => {
     const d = byKind.get(kind);
     if (!d) return [{ kind, problem: "missing" }];
     if (d.expiresOn < today) return [{ kind, problem: "expired", expiresOn: d.expiresOn }];
@@ -78,7 +98,7 @@ export async function listOperators(db = pool, now = Date.now()) {
   const today = todayIn(now);
   const [ops, docs, strikes, approvals] = await Promise.all([
     db.query("SELECT * FROM operators ORDER BY legal_name"),
-    db.query("SELECT * FROM operator_documents WHERE superseded_at IS NULL"),
+    queryApprovedDocs(db, "SELECT d.* FROM operator_documents d WHERE d.superseded_at IS NULL {approved}"),
     db.query("SELECT * FROM operator_strikes WHERE created_at >= now() - ($1 || ' days')::interval", [String(STRIKE_WINDOW_DAYS)]),
     db.query("SELECT operator_id, product_id FROM operator_product_approvals"),
   ]);
@@ -90,9 +110,17 @@ export async function listOperators(db = pool, now = Date.now()) {
   const docsBy = group(docs.rows, mapDocument);
   const strikesBy = group(strikes.rows, mapStrike);
   const approvalsBy = group(approvals.rows, (r) => Number(r.product_id));
+  // What waits for an admin: papers and bank details an agency sent (068).
+  const waiting = await db.query(
+    `SELECT operator_id, COUNT(*)::int AS n FROM (
+       SELECT operator_id FROM operator_documents WHERE superseded_at IS NULL AND review_state = 'pending'
+       UNION ALL SELECT operator_id FROM operator_bank_accounts WHERE state = 'pending') x GROUP BY operator_id`)
+    .then((r) => new Map(r.rows.map((x) => [Number(x.operator_id), x.n])))
+    .catch((e) => { if (e?.code === "42703" || e?.code === "42P01") return new Map(); throw e; });
   return ops.rows.map(mapOperator).map((o) => ({
     ...o,
     documents: docsBy.get(o.id) || [],
+    toReview: waiting.get(o.id) || 0,
     documentGaps: documentGaps(docsBy.get(o.id) || [], today),
     strikes90: strikesInWindow(strikesBy.get(o.id) || [], now).length,
     approvedProductIds: approvalsBy.get(o.id) || [],
@@ -151,23 +179,48 @@ export async function updateOperator(db, id, fields) {
   return mapOperator(r.rows[0]);
 }
 
-// Status changes an admin makes. Activating needs all four documents current.
-export async function setOperatorStatus(db, id, status, { by, reason = null, now = Date.now() } = {}) {
+// Status changes an admin makes. Activating needs every required document
+// current and approved, unless the admin activates by exception and says why
+// (068): the reason and the papers it covers are recorded on the operator, and
+// the daily check doesn't suspend it for those papers.
+export async function setOperatorStatus(db, id, status, { by, reason = null, exceptionReason = null, now = Date.now() } = {}) {
   if (!OPERATOR_STATUSES.includes(status)) throw new CatalogueError(422, "Unknown operator status.");
   const op = await getOperator(db, id);
   if (op.status === "removed" && status !== "removed") throw new CatalogueError(409, "A removed operator can't be reinstated here; create a new operator record.");
   // Migration 053: a record that must never be activated (Capital Travel
   // Service, decided 27 Sep 2026).
   if (status === "active" && op.activationBlocked) throw new CatalogueError(409, op.activationBlocked);
+  const why = String(exceptionReason || "").trim();
+  let exception = null;
   if (status === "active") {
     const gaps = documentGaps(await currentDocuments(db, id), todayIn(now));
+    if (gaps.length && !why) {
+      throw new CatalogueError(422, `Upload a current ${gaps.map((g) => DOCUMENT_LABELS[g.kind].toLowerCase()).join(", ")} before activating, or activate by exception and record why.`);
+    }
     if (gaps.length) {
-      throw new CatalogueError(422, `Upload a current ${gaps.map((g) => DOCUMENT_LABELS[g.kind].toLowerCase()).join(", ")} before activating.`);
+      if (why.length < 10) throw new CatalogueError(422, "Say why it is activated without these papers (at least 10 characters).");
+      exception = { reason: why.slice(0, 500), kinds: gaps.map((g) => g.kind) };
     }
   }
   const r = await db.query(
     `UPDATE operators SET status = $2, status_reason = $3, status_changed_at = now(), status_changed_by = $4, updated_at = now()
-      WHERE id = $1 RETURNING *`, [id, status, reason, by]);
+      WHERE id = $1 RETURNING *`,
+    [id, status, exception ? `Activated by exception: ${exception.reason}` : reason, by]);
+  // The exception lasts while the operator is active on it; any other status
+  // change, or an activation with every paper in order, ends it.
+  if (exception) {
+    const x = await db.query(
+      `UPDATE operators SET activation_exception = $2, activation_exception_kinds = $3::jsonb,
+              activation_exception_by = $4, activation_exception_at = now() WHERE id = $1 RETURNING *`,
+      [id, exception.reason, JSON.stringify(exception.kinds), by]);
+    return mapOperator(x.rows[0]);
+  }
+  if (op.activationException) {
+    const x = await db.query(
+      `UPDATE operators SET activation_exception = NULL, activation_exception_kinds = NULL,
+              activation_exception_by = NULL, activation_exception_at = NULL WHERE id = $1 RETURNING *`, [id]);
+    return mapOperator(x.rows[0]);
+  }
   return mapOperator(r.rows[0]);
 }
 
@@ -186,15 +239,77 @@ export async function addDocument(db, operatorId, { kind, number, expiresOn, fil
       `INSERT INTO operator_documents (operator_id, kind, number, expires_on, file_ref, uploaded_by)
        VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
       [operatorId, kind, number ? String(number).trim() : null, expires, fileRef || null, by]);
-    const op = await getOperator(c, operatorId);
-    let reactivated = false;
-    if (op.status === "suspended" && !op.activationBlocked && String(op.statusReason || "").startsWith("document_expired")
-        && documentGaps(await currentDocuments(c, operatorId), today).length === 0) {
+    const reactivated = await reactivateIfComplete(c, operatorId, { by, today });
+    return { document: mapDocument(r.rows[0]), reactivated };
+  });
+}
+
+// Suspended because a document expired, and every document is now current and
+// approved: active again — the one automatic way back.
+async function reactivateIfComplete(c, operatorId, { by, today }) {
+  const op = await getOperator(c, operatorId);
+  if (op.status === "suspended" && !op.activationBlocked && String(op.statusReason || "").startsWith("document_expired")
+      && documentGaps(await currentDocuments(c, operatorId), today).length === 0) {
+    await c.query(
+      `UPDATE operators SET status = 'active', status_reason = 'Reactivated: valid replacement uploaded',
+              status_changed_at = now(), status_changed_by = $2, updated_at = now() WHERE id = $1`, [operatorId, by]);
+    return true;
+  }
+  return false;
+}
+
+// The operator record of an agency's company. `create`: make a pending one
+// (named after the agency) when it has none, for the agency's first upload.
+export async function agencyOperator(db, agencyId, { create = false, by = null } = {}) {
+  const found = await db.query("SELECT * FROM operators WHERE agency_id = $1", [agencyId]);
+  if (found.rows.length) return mapOperator(found.rows[0]);
+  if (!create) return null;
+  const a = (await db.query("SELECT name FROM agencies WHERE id = $1", [agencyId])).rows[0];
+  if (!a) throw new CatalogueError(404, "Agency not found.");
+  return createOperator(db, { legalName: a.name, agencyId }, by);
+}
+
+// A document the agency sends from its dashboard (068). It waits for an admin:
+// it doesn't count until approved, and the approved one stays in force until
+// then. A second upload of the same kind replaces the one still waiting.
+export async function submitAgencyDocument(db, operatorId, { kind, number, expiresOn, fileRef }, { by }) {
+  if (!DOCUMENT_KINDS.includes(kind)) throw new CatalogueError(422, "Unknown document type.");
+  const expires = ymd(expiresOn);
+  if (!expires || !/^\d{4}-\d{2}-\d{2}$/.test(expires)) throw new CatalogueError(422, "A document needs its expiry date.");
+  if (!fileRef) throw new CatalogueError(422, "Attach the document (PDF or photo).");
+  return inTx(db, async (c) => {
+    await getOperator(c, operatorId);
+    await c.query(
+      `UPDATE operator_documents SET superseded_at = now()
+        WHERE operator_id = $1 AND kind = $2 AND superseded_at IS NULL AND review_state = 'pending'`, [operatorId, kind]);
+    const r = await c.query(
+      `INSERT INTO operator_documents (operator_id, kind, number, expires_on, file_ref, uploaded_by, review_state, submitted_via)
+       VALUES ($1, $2, $3, $4, $5, $6, 'pending', 'agency') RETURNING *`,
+      [operatorId, kind, number ? String(number).trim() : null, expires, fileRef, by]);
+    return mapDocument(r.rows[0]);
+  });
+}
+
+// An admin approves or rejects a document waiting for review. Approving puts it
+// in force (the previous approved one of that kind is kept, superseded);
+// rejecting needs a reason, which the agency sees.
+export async function reviewDocument(db, operatorId, documentId, { approve, note = null, by, now = Date.now() }) {
+  return inTx(db, async (c) => {
+    const d = (await c.query(
+      "SELECT * FROM operator_documents WHERE id = $1 AND operator_id = $2 FOR UPDATE", [documentId, operatorId])).rows[0];
+    if (!d || d.review_state !== "pending" || d.superseded_at) throw new CatalogueError(409, "Only a document waiting for review can be approved or rejected.");
+    const why = String(note || "").trim().slice(0, 500) || null;
+    if (!approve && !why) throw new CatalogueError(422, "Say why the document is rejected; the agency sees it.");
+    if (approve) {
       await c.query(
-        `UPDATE operators SET status = 'active', status_reason = 'Reactivated: valid replacement uploaded',
-                status_changed_at = now(), status_changed_by = $2, updated_at = now() WHERE id = $1`, [operatorId, by]);
-      reactivated = true;
+        `UPDATE operator_documents SET superseded_at = now()
+          WHERE operator_id = $1 AND kind = $2 AND superseded_at IS NULL AND review_state = 'approved'`, [operatorId, d.kind]);
     }
+    const r = await c.query(
+      `UPDATE operator_documents SET review_state = $2, review_note = $3, reviewed_by = $4, reviewed_at = now(),
+              superseded_at = CASE WHEN $2 = 'rejected' THEN now() ELSE NULL END
+        WHERE id = $1 RETURNING *`, [documentId, approve ? "approved" : "rejected", why, by]);
+    const reactivated = approve ? await reactivateIfComplete(c, operatorId, { by, today: todayIn(now) }) : false;
     return { document: mapDocument(r.rows[0]), reactivated };
   });
 }
@@ -289,9 +404,15 @@ export async function operatorRecipients(db, operatorId) {
 export async function runDocumentJob({ db = pool, now = Date.now(), send = null, adminEmail = null, log = () => {} } = {}) {
   const today = todayIn(now);
   const out = { suspended: 0, reminders: 0 };
-  const expired = await db.query(
+  // An approved document that expired, unless the operator was activated by
+  // exception for that paper (068).
+  const expired = await queryApprovedDocs(db,
     `SELECT DISTINCT d.operator_id, d.kind, d.expires_on FROM operator_documents d JOIN operators o ON o.id = d.operator_id
-      WHERE d.superseded_at IS NULL AND d.expires_on < $1 AND o.status = 'active'`, [today]);
+      WHERE d.superseded_at IS NULL AND d.expires_on < $1 AND o.status = 'active' {approved}`, [today]);
+  const excused = await db.query("SELECT id, activation_exception_kinds FROM operators WHERE activation_exception IS NOT NULL")
+    .then((r) => new Map(r.rows.map((x) => [Number(x.id), x.activation_exception_kinds || []])))
+    .catch((e) => { if (e?.code === "42703") return new Map(); throw e; });
+  expired.rows = expired.rows.filter((row) => !(excused.get(Number(row.operator_id)) || []).includes(row.kind));
   for (const row of expired.rows) {
     const r = await db.query(
       `UPDATE operators SET status = 'suspended', status_reason = $2, status_changed_at = now(),
@@ -310,9 +431,9 @@ export async function runDocumentJob({ db = pool, now = Date.now(), send = null,
     }
   }
   for (const days of DOCUMENT_REMINDER_DAYS) {
-    const due = await db.query(
+    const due = await queryApprovedDocs(db,
       `SELECT d.*, o.legal_name FROM operator_documents d JOIN operators o ON o.id = d.operator_id
-        WHERE d.superseded_at IS NULL AND d.expires_on = $1 AND o.status IN ('active', 'pending')`,
+        WHERE d.superseded_at IS NULL AND d.expires_on = $1 AND o.status IN ('active', 'pending') {approved}`,
       [shiftDate(today, days)]);
     for (const d of due.rows) {
       const recipients = [...await operatorRecipients(db, d.operator_id), ...(adminEmail ? [adminEmail] : [])];

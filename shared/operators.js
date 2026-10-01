@@ -4,13 +4,37 @@
 import { usesDeadline } from "./catalogue.js";
 
 export const OPERATOR_STATUSES = ["pending", "active", "suspended", "removed"];
-export const DOCUMENT_KINDS = ["tourism_license", "etaa_membership", "liability_insurance", "vehicle_insurance"];
+// The papers a company sends, all needed to activate it (068). No ETAA paper:
+// every company with a Ministry of Tourism license is an ETAA member, and ETAA
+// has no membership number; its register is looked up by the license number.
+export const DOCUMENT_KINDS = ["tourism_license", "commercial_registration", "tax_card", "liability_insurance", "vehicle_insurance"];
 export const DOCUMENT_LABELS = {
-  tourism_license: "Tourism license",
-  etaa_membership: "ETAA membership",
+  tourism_license: "Ministry of Tourism license",
+  commercial_registration: "Commercial registration",
+  tax_card: "Tax card",
   liability_insurance: "Public liability insurance",
   vehicle_insurance: "Vehicle insurance",
+  // No longer asked for (068); kept so a document already on file still reads.
+  etaa_membership: "ETAA membership",
 };
+export const DOCUMENT_REVIEW_STATES = ["approved", "pending", "rejected"];
+
+// A company's entry in the ETAA register, looked up by its Ministry of Tourism
+// license number (ETAA keys its register by license; there is no member no.).
+export const etaaRegisterUrl = (licenseNo) => {
+  const n = String(licenseNo ?? "").trim();
+  return n ? `https://www.etaa-egypt.org/SitePages/CompanyDetails.aspx?licc=${encodeURIComponent(n)}` : null;
+};
+
+// A link that may be published as a company's ETAA entry: https, on ETAA's own
+// site. Anything else is refused rather than shown to a traveler.
+export const ETAA_HOST = "www.etaa-egypt.org";
+export function etaaLinkOk(url) {
+  try {
+    const u = new URL(String(url || "").trim());
+    return u.protocol === "https:" && (u.hostname === ETAA_HOST || u.hostname === "etaa-egypt.org");
+  } catch { return false; }
+}
 export const STRIKE_KINDS = ["missed_acknowledgement", "unapproved_substitution", "shopping_stop", "service_failure", "other"];
 export const STRIKE_LABELS = {
   missed_acknowledgement: "Missed acknowledgement",

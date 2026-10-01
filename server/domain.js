@@ -48,6 +48,7 @@ import { goAheadSeatsFor, seatsTotal, statusFor } from "../shared/departure-stat
 // charged were two copies guarded by a comment saying they must agree.
 // Re-exported so existing importers of server/domain.js are unaffected.
 import { clampPrice, priceFromTiers, livePriceFor } from "../shared/pricing.js";
+import { etaaRegisterUrl, etaaLinkOk } from "../shared/operators.js";
 export { clampPrice, priceFromTiers, livePriceFor };
 
 // MIN_GROUP_SIZE is the floor a listing may not go below, which is the same
@@ -599,10 +600,14 @@ export function operatorForDeparture(departure, {
   return tied.sort((a, b) => firstAt.get(a) - firstAt.get(b) || String(a).localeCompare(String(b)))[0];
 }
 
-// The agency id of the direct-bookings operator, by exact (case-insensitive)
-// name. Null when no such record exists — the page then names nobody rather
-// than guessing.
+// The agency id of the direct-bookings operator: the agency marked "preferred
+// for direct bookings" in Admin → Agencies (068; Capital Travel Service, 1 Oct
+// 2026), else the one named by DIRECT_BOOKINGS_OPERATOR, by exact
+// (case-insensitive) name. Null when neither exists — the page then names
+// nobody rather than guessing. A deactivated agency is never it (067).
 export function directOperatorId(agencies = [], name = "") {
+  const preferred = agencies.find((a) => (a?.direct_bookings_preferred === true || a?.directBookingsPreferred === true) && a?.status !== "inactive");
+  if (preferred) return preferred.id;
   const want = String(name || "").trim().toLowerCase();
   if (!want) return null;
   const hit = agencies.find((a) => String(a?.name || "").trim().toLowerCase() === want);
@@ -623,6 +628,8 @@ export function publicOperator(agency) {
   // 054: a record taken off the traveler-facing surfaces (public_listed =
   // false) is never named, wherever it would otherwise appear.
   if (!agency || !agency.name || agency.publicListed === false) return null;
+  // 067: a deactivated agency isn't named either (it leaves /partners too).
+  if (agency.status === "inactive") return null;
   const verified = agency.verificationState === "verified";
   return {
     name: agency.name,
@@ -642,8 +649,11 @@ export function publicOperator(agency) {
     // the membership claim into one a traveller can check on the register
     // itself, the DIR-17.2 move. /verify's handling promise was amended the
     // same day to carry the exception.
-    etaaUrl: agency.etaaRegistrationNo
-      ? `https://www.etaa-egypt.org/SitePages/CompanyDetails.aspx?licc=${encodeURIComponent(agency.etaaRegistrationNo)}`
-      : null,
+    //
+    // 068: ETAA has no membership number (membership comes with the Ministry
+    // license, and the register is looked up by the license number). The link
+    // is one an admin set in the operator record, so publishing it stays a
+    // decision; before 068 it was built from the old "ETAA no." field.
+    etaaUrl: etaaLinkOk(agency.etaaUrl) ? String(agency.etaaUrl).trim() : etaaRegisterUrl(agency.etaaRegistrationNo),
   };
 }

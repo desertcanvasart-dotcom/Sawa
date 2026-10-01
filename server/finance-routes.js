@@ -19,6 +19,7 @@ import {
   mapPayable, mapStatementRow,
 } from "./operator-settlement.js";
 import { bankAccountsFor, submitBankDetails, decideBankDetails } from "./bank-details.js";
+import { agencyOperator } from "./operators.js";
 import { mapCommission, mapStatement, buildCommissionStatement } from "./commissions.js";
 import { bookingDetailsByToken, saveBookingDetailsByToken } from "./booking-details.js";
 import { statementPdf } from "./pdf.js";
@@ -334,6 +335,30 @@ export function registerFinanceRoutes(app, { requireAuth, requireRole, h, logAud
     const account = await submitBankDetails(pool, req.user.operatorId, req.body || {}, { user: req.user, send: send(), adminEmail: opsRecipient() });
     await logAudit(req, { action: "operator.bank.submit", entity: "operator", entityId: req.user.operatorId, detail: { accountId: account.id } });
     res.status(201).json({ account: { ...account, accountNumber: account.accountNumber ? `•••• ${String(account.accountNumber).slice(-4)}` : null, iban: account.iban ? `•••• ${String(account.iban).slice(-4)}` : null } });
+  }));
+
+  // An agency's bank details, from its dashboard (068). Same rules as the
+  // operator portal: a change waits for an admin to verify it (Operators → the
+  // company → Bank details), the holder must be the company's legal name, and
+  // the agency and Sawa's admin are emailed about every change. Works with the
+  // catalogue_v2 flag off.
+  const agencyOperatorId = async (req, { create = false } = {}) => {
+    if (!req.user?.agencyId) throw new CatalogueError(403, "This account is not linked to an agency.");
+    const op = await agencyOperator(pool, req.user.agencyId, { create, by: req.user.email || req.user.id });
+    return op?.id ?? null;
+  };
+  const masked = (a) => ({ ...a, accountNumber: a.accountNumber ? `•••• ${String(a.accountNumber).slice(-4)}` : null, iban: a.iban ? `•••• ${String(a.iban).slice(-4)}` : null });
+  app.get("/api/agency/bank", ...agencyOnly, route(async (req, res) => {
+    res.set("Cache-Control", "no-store");
+    const oid = await agencyOperatorId(req);
+    res.json({ accounts: oid ? await bankAccountsFor(pool, oid, { user: req.user, reveal: false }) : [] });
+  }));
+  app.post("/api/agency/bank", ...agencyOnly, writeLimiter, route(async (req, res) => {
+    if (req.user.role !== "agency_owner") throw new CatalogueError(403, "Only the agency's owner can change its bank details.");
+    const oid = await agencyOperatorId(req, { create: true });
+    const account = await submitBankDetails(pool, oid, req.body || {}, { user: req.user, send: sendEmail, adminEmail: opsRecipient() });
+    await logAudit(req, { action: "operator.bank.submit", entity: "operator", entityId: oid, detail: { accountId: account.id, agencyId: req.user.agencyId } });
+    res.status(201).json({ account: masked(account) });
   }));
 
   // ============================================================== agency portal

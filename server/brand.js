@@ -52,8 +52,8 @@ export const BRAND = {
 
   // ⚠️ ETAA 2179 IS NOT ONLINE ERA'S. It is Capital Travel Service's travel-agency
   // registration, and it used to sit in the footer because CTS was presented as
-  // the operator of the platform. Under DIR-19.3 CTS becomes an OPERATOR RECORD
-  // — a founding partner — and the number goes with it. Presenting one company's
+  // the operator of the platform. CTS is a partner agency (068: preferred for
+  // direct bookings), never the platform's operator, and the number goes with it. Presenting one company's
   // licence as another's is the class this project removes, and
   // server/entity-disclosure.test.js fails the build if "ETAA 2179" reappears.
   //
@@ -176,8 +176,13 @@ export function websiteSchema() {
 // client on 25 Sep 2026 — see operatorForDeparture() in domain.js for the rule.
 // Overridable per environment; an unmatched name simply names nobody.
 //
-// No default since 27 Sep 2026: Capital Travel Service, the former default, is
-// not involved in Sawa. With none set, a direct traveler's date names no
+// Since 068 (1 Oct 2026) the agency marked "preferred for direct bookings" in
+// Admin → Agencies comes first (Capital Travel Service: a partner agency again,
+// preferred for direct bookings, not the platform's operator or payee — the
+// collecting agent, BRAND.legalName, stays both). This setting applies only when
+// no agency is marked.
+//
+// No default since 27 Sep 2026. With none set, a direct traveler's date names no
 // operator, the pages and emails say "a licensed Sawa partner"
 // (shared/operator-label.js), and in the profit split (settlement.js) direct
 // travelers count for no agency, so their share stays with Sawa.

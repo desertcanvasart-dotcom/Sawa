@@ -16,7 +16,7 @@ import { catalogueV2Enabled } from "./features.js";
 import { BRAND } from "./brand.js";
 import { CatalogueError, todayIn, departureInstants, mapCatalogueProduct } from "./catalogue.js";
 import { rosteredOperator } from "./roster.js";
-import { rosterEligibility, addStrike, notifyOperator, operatorRecipients, documentGaps } from "./operators.js";
+import { rosterEligibility, addStrike, notifyOperator, operatorRecipients, documentGaps, queryApprovedDocs } from "./operators.js";
 import { departureRate, lockRatesForSoldDepartures } from "./rates.js";
 import { ACK_HOURS, MANIFEST_ACCESS_DAYS, roomsFor } from "../shared/operators.js";
 import { operatorEntitlement, withFeeOverride } from "../shared/pool-model.js";
@@ -153,10 +153,12 @@ export async function agencyCandidates(c, departure) {
 export async function operatorEligibility(c, operatorId, productId, now = Date.now()) {
   const base = await rosterEligibility(c, operatorId, productId);
   if (!base.ok) return base;
-  const docs = (await c.query(
-    "SELECT kind, expires_on FROM operator_documents WHERE operator_id = $1 AND superseded_at IS NULL", [operatorId])).rows
+  const docs = (await queryApprovedDocs(c,
+    "SELECT d.kind, d.expires_on FROM operator_documents d WHERE d.operator_id = $1 AND d.superseded_at IS NULL {approved}", [operatorId])).rows
     .map((d) => ({ kind: d.kind, expiresOn: ymd(d.expires_on) }));
-  const gaps = documentGaps(docs, todayIn(now));
+  // Papers an activation by exception covers don't block (068).
+  const excused = (await c.query("SELECT * FROM operators WHERE id = $1", [operatorId])).rows[0]?.activation_exception_kinds || [];
+  const gaps = documentGaps(docs, todayIn(now), excused);
   if (gaps.length) return { ok: false, reason: `Documents not in order: ${gaps.map((g) => `${g.kind.replace(/_/g, " ")} ${g.problem}`).join(", ")}.` };
   const bank = (await c.query("SELECT to_regclass('public.operator_bank_accounts') IS NOT NULL AS ok")).rows[0].ok
     && (await c.query("SELECT 1 FROM operator_bank_accounts WHERE operator_id = $1 AND state = 'verified'", [operatorId])).rowCount > 0;

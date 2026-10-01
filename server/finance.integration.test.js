@@ -138,7 +138,7 @@ before(async () => {
 
   // One operator, active, approved, rostered on the month's dates.
   X = (await ops.createOperator(db, { legalName: "Nile Tours S.A.E.", email: "dispatch@nile-tours.test" }, "it")).id;
-  for (const kind of ["tourism_license", "etaa_membership", "liability_insurance", "vehicle_insurance"]) {
+  for (const kind of ["tourism_license", "commercial_registration", "tax_card", "liability_insurance", "vehicle_insurance"]) {
     await ops.addDocument(db, X, { kind, number: "1", expiresOn: shiftDate(today(), 400) }, { by: "it" });
   }
   await ops.setApprovals(db, X, [productId], "it");
@@ -605,7 +605,7 @@ test("a negative balance becomes a receivable, set off against the operator's ne
 
 test("reassigned after a paid advance, through the operator's fault: the whole advance is owed back, with a penalty; the new operator gets its own advance", { skip }, async () => {
   const Y = (await ops.createOperator(db, { legalName: "Delta Travel", email: "ops@delta.test" }, "it")).id;
-  for (const kind of ["tourism_license", "etaa_membership", "liability_insurance", "vehicle_insurance"]) {
+  for (const kind of ["tourism_license", "commercial_registration", "tax_card", "liability_insurance", "vehicle_insurance"]) {
     await ops.addDocument(db, Y, { kind, number: "1", expiresOn: shiftDate(today(), 400) }, { by: "it" });
   }
   await ops.setApprovals(db, Y, [productId], "it");
