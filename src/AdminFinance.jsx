@@ -350,7 +350,7 @@ function FxPanel({ flash, onChange }) {
         </div>
       ))}
       {fx.pending.length > 0 && (
-        <div className="dash-card" style={{ marginBottom: 12 }}>
+        <div className="dash-card">
           <h2>Waiting for approval</h2>
           <p className="field-hint">A fetched rate more than 5% from the previous one. Approve it if the market really moved; reject it if the source is wrong (then enter the day's rate by hand below).</p>
           <table className="dash-table"><tbody>{fx.pending.map((r) => (
@@ -363,7 +363,7 @@ function FxPanel({ flash, onChange }) {
           ))}</tbody></table>
         </div>
       )}
-      <div className="dash-card" style={{ marginBottom: 12 }}>
+      <div className="dash-card">
         <h2>Exchange rate (EGP per 1 EUR)</h2>
         <p className="field-hint">
           One rate for every tour. Travelers pay each tour's EUR price exactly; the rate converts it into EGP for the operator and agency calculations, and a booking keeps the rate in force when it was made.
@@ -413,10 +413,10 @@ function Settings({ flash }) {
   const run = async (fn, msg) => { setErr(""); try { await fn(); flash(msg); await load(); } catch (e) { setErr(e.message); } };
   if (!data) return err ? <div className="auth-error">{err}</div> : <div className="dash-empty">Loading…</div>;
   return (
-    <>
+    <div className="fin-settings">
       {err && <div className="auth-error">{err}</div>}
       <FxPanel flash={flash} onChange={load} />
-      <div className="dash-card" style={{ marginBottom: 12 }}>
+      <div className="dash-card">
         <h2>Exchange rates (EGP per 1 EUR)</h2>
         <p className="field-hint">The market rate, one a day: fetched automatically every morning (Cairo), or entered here by hand, which replaces the day's fetched rate. Used for the FX line, Egyptian agencies' commission statements and the margin report. A rate marked "waiting" or "rejected" is never used.</p>
         <form className="cat-actions" style={{ justifyContent: "flex-start" }} onSubmit={(e) => { e.preventDefault(); run(() => call(`/admin/finance/fx-rates/${fx.day}`, "PUT", { egpPerEur: Number(fx.rate), sourceNote: "CBE" }), "Rate saved."); }}>
@@ -431,7 +431,7 @@ function Settings({ flash }) {
             <td className="row-actions"><button className="btn-ghost sm" onClick={() => run(() => call(`/admin/finance/fx-rates/${r.day}`, "DELETE"), "Rate removed.")}>Remove</button></td></tr>
         ))}</tbody></table>
       </div>
-      <div className="dash-card" style={{ marginBottom: 12 }}>
+      <div className="dash-card">
         <h2>Egyptian public holidays</h2>
         <p className="field-hint">An operator advance is due 2 business days after acknowledgement: Sunday to Thursday, skipping these.</p>
         <form className="cat-actions" style={{ justifyContent: "flex-start" }} onSubmit={(e) => { e.preventDefault(); run(() => call(`/admin/finance/holidays/${hol.day}`, "PUT", { name: hol.name }).then(() => setHol({ day: "", name: "" })), "Holiday saved."); }}>
@@ -444,7 +444,7 @@ function Settings({ flash }) {
             <td className="row-actions"><button className="btn-ghost sm" onClick={() => run(() => call(`/admin/finance/holidays/${h.day}`, "DELETE"), "Holiday removed.")}>Remove</button></td></tr>
         ))}</tbody></table>
       </div>
-      <div className="dash-card" style={{ marginBottom: 12 }}>
+      <div className="dash-card">
         <h2>Penalty amounts (Operator Schedule 6)</h2>
         <p className="field-hint">In EGP. 0 until set.</p>
         <table className="dash-table"><tbody>{data.penalties.map((p) => (
@@ -462,6 +462,6 @@ function Settings({ flash }) {
           <button className="btn-primary sm">Save fees</button>
         </form>
       </div>
-    </>
+    </div>
   );
 }
