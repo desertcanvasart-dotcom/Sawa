@@ -153,3 +153,26 @@ test("Deactivate signs the team out and keeps everything; Reactivate brings them
 test("067 allows only active and inactive", { skip }, async () => {
   await assert.rejects(db.query("UPDATE agencies SET status='paused' WHERE id='ag_empty'"), /agencies_status_check/);
 });
+
+test("Listing requests: only a listing an agency's own login submitted, not a tour staff gave an operating company", { skip }, async () => {
+  // tour_linked_a: the agency's owner submitted it. tour_linked_b: staff added
+  // it and named the agency as operating company (the case that showed staff's
+  // own tours as the agency's requests).
+  await db.query("UPDATE tour_products SET submitted_by = $1, submitted_at = '2026-09-20T10:00:00Z' WHERE id = 'tour_linked_a'", [USERS.owner.id]);
+  await db.query("UPDATE tour_products SET submitted_by = $1, agency_id = 'ag_linked' WHERE id = 'tour_linked_b'", [USERS.admin.id]);
+  const boot = (await call("admin", "GET", "/bootstrap")).body;
+  const byId = new Map(boot.tourProducts.map((p) => [p.id, p]));
+  assert.equal(byId.get("tour_linked_a").submittedByAgency, true);
+  assert.equal(byId.get("tour_linked_b").submittedByAgency, false);
+  assert.equal(byId.get("tour_linked_b").agencyId, "ag_linked");
+
+  // Staff editing the agency's listing keep its submitter and date.
+  const edited = await call("admin", "POST", "/admin/tour-products", tourBody("tour_linked_a", { title: "Giza with Linked" }));
+  assert.equal(edited.status, 201, JSON.stringify(edited.body));
+  const row = (await db.query("SELECT submitted_by, submitted_at FROM tour_products WHERE id = 'tour_linked_a'")).rows[0];
+  assert.equal(row.submitted_by, USERS.owner.id);
+  assert.equal(new Date(row.submitted_at).toISOString(), "2026-09-20T10:00:00.000Z");
+  // The public payload doesn't carry it.
+  const pub = (await fetch(`${base}/api/bootstrap`).then((r) => r.json())).tourProducts || [];
+  assert.ok(pub.every((p) => !("submittedByAgency" in p)));
+});

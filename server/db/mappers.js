@@ -88,6 +88,9 @@ export function mapProduct(r) {
     // Approval workflow
     status: r.status || "approved",
     agencyId: r.agency_id || null,
+    // Staff payload only: the listing came from an agency's own login (the
+    // Listing requests queue). The operating company alone doesn't say that.
+    ...(r.submitted_by_agency !== undefined ? { submittedByAgency: r.submitted_by_agency === true } : {}),
     submittedAt: r.submitted_at || null,
     reviewedAt: r.reviewed_at || null,
     rejectionReason: r.rejection_reason || "",

@@ -1510,8 +1510,10 @@ function ListingRequestsSection({ data, reload, flash }) {
   const [preview, setPreview] = useState(null); // listing being viewed in full
   useBackToClose(!!preview, () => setPreview(null));
 
-  // Only agency-submitted listings enter this queue (agency_id present).
-  const submitted = (data.tourProducts || []).filter((p) => p.agencyId);
+  // Only listings an agency submitted from its own login enter this queue. A
+  // tour staff added and gave an operating company has an agency too, but it
+  // was never a request (submittedByAgency comes from the server).
+  const submitted = (data.tourProducts || []).filter((p) => p.agencyId && p.submittedByAgency);
   const pending = submitted.filter((p) => p.status === "pending");
   const shown = submitted
     .filter((p) => p.status === tab)

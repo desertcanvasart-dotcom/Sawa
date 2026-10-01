@@ -745,8 +745,11 @@ async function buildBootstrap(user) {
   // only sees live, approved listings. An agency's own pending/rejected listings
   // are served separately via GET /api/agency/tour-products.
   const canSeeAll = user && (user.role === "super_admin" || user.role === "ops_staff");
+  // Staff also learn whether a listing came from an agency's own login (the
+  // Listing requests queue), which an operating company alone doesn't say.
   const productsSql = canSeeAll
-    ? "SELECT * FROM tour_products ORDER BY id"
+    ? `SELECT p.*, EXISTS (SELECT 1 FROM app_users u WHERE u.id::text = p.submitted_by AND u.agency_id IS NOT NULL) AS submitted_by_agency
+         FROM tour_products p ORDER BY p.id`
     : "SELECT * FROM tour_products WHERE active IS NOT FALSE AND status = 'approved' ORDER BY id";
 
   // The two filters below used to run only in JS, after every departure and
@@ -1097,8 +1100,13 @@ export async function upsertTourProduct(c, body, review) {
        what_to_bring=EXCLUDED.what_to_bring, meeting_point=EXCLUDED.meeting_point,
        pickup_note=EXCLUDED.pickup_note, booking_cutoff_hours=EXCLUDED.booking_cutoff_hours,
        images=EXCLUDED.images, meeting_points=EXCLUDED.meeting_points,
-       status=EXCLUDED.status, submitted_at=EXCLUDED.submitted_at,
-       submitted_by=EXCLUDED.submitted_by, reviewed_by=EXCLUDED.reviewed_by,
+       status=EXCLUDED.status,
+       -- Staff editing a listing (saved straight to approved) keep who submitted
+       -- it and when: overwriting them made an agency's listing read as staff's,
+       -- and a tour staff added read as the operating company's request.
+       submitted_at=CASE WHEN EXCLUDED.status = 'approved' AND tour_products.submitted_by IS NOT NULL THEN tour_products.submitted_at ELSE EXCLUDED.submitted_at END,
+       submitted_by=CASE WHEN EXCLUDED.status = 'approved' AND tour_products.submitted_by IS NOT NULL THEN tour_products.submitted_by ELSE EXCLUDED.submitted_by END,
+       reviewed_by=EXCLUDED.reviewed_by,
        reviewed_at=EXCLUDED.reviewed_at, rejection_reason=EXCLUDED.rejection_reason,
        -- The operator. Argument order matters and used to be the other way
        -- round: existing-wins meant a product could never be REASSIGNED, and an
