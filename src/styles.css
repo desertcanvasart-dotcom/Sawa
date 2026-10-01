@@ -7184,3 +7184,12 @@ button:disabled {
   .fin-settings > .dash-card { padding: 20px 18px; }
   .fin-settings > .auth-error + .auth-error { margin-top: -10px; }
 }
+
+/* Agencies → "Linked": what still points at an agency. */
+.agency-links { display: grid; gap: 28px; }
+.agency-links section h3 { margin: 0 0 6px; font-size: 15px; }
+.agency-links section > .field-hint { margin: 0 0 10px; line-height: 1.5; }
+.agency-links .dash-table td { padding: 12px 10px; vertical-align: middle; }
+.agency-links .dash-table tr:last-child td { border-bottom: 0; }
+.agency-links td.row-actions { display: table-cell; text-align: right; width: 1%; }
+.agency-links .op-actions { display: flex; flex-wrap: wrap; gap: 10px; }

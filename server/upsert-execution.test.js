@@ -69,7 +69,10 @@ test("a tour save executes end to end against a stub client", async () => {
   assert.ok(insert, "no INSERT was issued");
   // The two 037 parameters, through blankNum: a number stays a number, an
   // empty field becomes NULL — never 0, which would mean "same-day requests".
-  assert.equal(insert.params.length, 42, "parameter count drifted from the 42 columns");
+  // 42 columns, plus $43: "clear the operating company", false unless the
+  // admin chose "Not assigned".
+  assert.equal(insert.params.length, 43, "parameter count drifted from the 42 columns + the clear flag");
+  assert.equal(insert.params[42], false);
   assert.equal(insert.params[39], 3);
   assert.equal(insert.params[40], null);
   // The cutoff unit (038): BODY didn't choose one, so NULL — reads as hours.

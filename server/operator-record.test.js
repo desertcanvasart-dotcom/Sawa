@@ -164,8 +164,10 @@ test("an admin can assign the operating company; an agency cannot choose one", (
 test("an edit that says nothing about the operator does not wipe it", () => {
   // The upsert's COALESCE order is the whole rule. New-value-wins so a product
   // can be reassigned; NULL falls back so an unrelated edit leaves it alone.
+  // Clearing ("Not assigned") is a separate, explicit flag, never a NULL.
   const app = read("server/app.js");
-  assert.match(app, /agency_id=COALESCE\(EXCLUDED\.agency_id, tour_products\.agency_id\)/);
+  assert.match(app, /ELSE COALESCE\(EXCLUDED\.agency_id, tour_products\.agency_id\) END/);
+  assert.match(app, /agency_id=CASE WHEN \$43::boolean THEN NULL/);
   assert.ok(!/agency_id=COALESCE\(tour_products\.agency_id, EXCLUDED\.agency_id\)/.test(app),
     "existing-wins means a listing can never be reassigned");
 });

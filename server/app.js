@@ -1107,7 +1107,9 @@ export async function upsertTourProduct(c, body, review) {
        -- an operator sets it, and an edit that says nothing leaves it alone.
        -- The no-wipe property the old order existed for is preserved, because
        -- EXCLUDED.agency_id is NULL on every path that does not mean to change it.
-       agency_id=COALESCE(EXCLUDED.agency_id, tour_products.agency_id)`,
+       -- Clearing is the one exception, and it is explicit ($43): an admin who
+       -- picks "Not assigned" used to see the old company come straight back.
+       agency_id=CASE WHEN $43::boolean THEN NULL ELSE COALESCE(EXCLUDED.agency_id, tour_products.agency_id) END`,
     [
       id, type, title, body.city || "Cairo",
       type === "package" ? JSON.stringify(body.cities || [body.city || "Cairo"]) : null,
@@ -1130,6 +1132,7 @@ export async function upsertTourProduct(c, body, review) {
       review.status, review.agencyId || null, review.submittedBy || null, now,
       review.reviewedBy || null, reviewedAt, null, operatingDays, priceTiers,
       blankNum(body.requestMinLeadDays), blankNum(body.requestMaxHorizonDays), cutoffUnit,
+      review.clearAgency === true,
     ]
   );
   return loadProduct(c, id);
@@ -1162,6 +1165,9 @@ app.post("/api/admin/tour-products", requireAuth, requireRole("super_admin", "op
       // its own listing still gets its own id from the session below — this
       // is the only path where the operator is a CHOICE.
       agencyId: body.agencyId || null,
+      // "Not assigned": the editor sends agencyId: null. A caller that leaves
+      // the key out changes nothing, as before.
+      clearAgency: Object.hasOwn(body, "agencyId") && !body.agencyId,
     }));
   // DIR-1 — the agency route audits `listing.submit`; this one writes a listing
   // straight to `approved` and audited nothing. The path with LESS review had
@@ -3497,6 +3503,74 @@ app.delete("/api/admin/agencies/:id", requireAuth, requireAdmin(), h(async (req,
     },
   });
   res.json({ ok: true, loginsRevoked: revoked.length, referralCodesDeleted: codesDeleted.length });
+}));
+
+// What still points at an agency: the tours it operates, the bookings recorded
+// under it, and its referral codes that have bookings. The delete above names
+// only counts; this lists them so the screen can show each one.
+app.get("/api/admin/agencies/:id/links", requireAuth, requireAdmin(), h(async (req, res) => {
+  const id = req.params.id;
+  const agency = (await pool.query(`SELECT id, name, status FROM agencies WHERE id=$1`, [id])).rows[0];
+  if (!agency) throw new AppError(404, "Agency not found.");
+  const [tours, bookings, codes] = await Promise.all([
+    pool.query(`SELECT id, title, type, status, active FROM tour_products WHERE agency_id=$1 ORDER BY title`, [id]),
+    pool.query(
+      `SELECT p.id, p.booking_code, p.status, p.seats, p.created_at, d.id AS departure_id, d.route, d.date
+         FROM pledges p LEFT JOIN departures d ON d.id = p.departure_id
+        WHERE p.agency_id=$1 ORDER BY p.created_at DESC`,
+      [id]
+    ),
+    pool.query(
+      `SELECT r.code, COUNT(p.id)::int AS bookings
+         FROM referrals r JOIN pledges p ON p.ref_code = r.code
+        WHERE r.agency_id=$1 GROUP BY r.code ORDER BY r.code`,
+      [id]
+    ),
+  ]);
+  res.json({
+    agency: { id: agency.id, name: agency.name, status: agency.status },
+    tours: tours.rows.map((t) => ({ id: t.id, title: t.title, type: t.type, status: t.status, active: t.active !== false })),
+    bookings: bookings.rows.map((b) => ({
+      id: b.id, bookingCode: b.booking_code || null, status: b.status || null, seats: Number(b.seats),
+      createdAt: b.created_at, departureId: b.departure_id ?? null, route: b.route || null, date: isoDate(b.date),
+    })),
+    referralCodes: codes.rows.map((r) => ({ code: r.code, bookings: r.bookings })),
+  });
+}));
+
+// Take a tour off an agency: its operating company becomes "Not assigned", the
+// same as choosing that in the tour editor. Works for catalogue tours too, whose
+// editor hides the field. Bookings are never moved: they are history.
+app.post("/api/admin/agencies/:id/tours/:tourId/unassign", requireAuth, requireAdmin(), writeLimiter, h(async (req, res) => {
+  const r = await pool.query(
+    `UPDATE tour_products SET agency_id = NULL WHERE id=$1 AND agency_id=$2 RETURNING id, title`,
+    [req.params.tourId, req.params.id]
+  );
+  if (!r.rowCount) throw new AppError(404, "That tour isn't linked to this agency.");
+  clearSeoCaches();
+  await logAudit(req, {
+    action: "listing.unassign_operator", entity: "tour_product", entityId: r.rows[0].id,
+    detail: { title: r.rows[0].title, agencyId: req.params.id },
+  });
+  res.json({ ok: true });
+}));
+
+// Deactivate / reactivate an agency: the way to retire one that has history.
+// Nothing is deleted. While inactive its team can't sign in (auth.js) and it
+// can't be chosen as a tour's operating company (operatorSelectable); its tours,
+// bookings and referral codes stay as they are.
+app.post("/api/admin/agencies/:id/status", requireAuth, requireAdmin(), writeLimiter, h(async (req, res) => {
+  const { status } = parse(z.object({ status: z.enum(["active", "inactive"]) }), req.body || {});
+  const before = (await pool.query(`SELECT id, name, status FROM agencies WHERE id=$1`, [req.params.id])).rows[0];
+  if (!before) throw new AppError(404, "Agency not found.");
+  const row = (await pool.query(`UPDATE agencies SET status=$1 WHERE id=$2 RETURNING *`, [status, req.params.id])).rows[0];
+  if (status !== "active") clearAuthCache();
+  clearSeoCaches();
+  await logAudit(req, {
+    action: status === "active" ? "agency.reactivate" : "agency.deactivate", entity: "agency", entityId: row.id,
+    detail: { name: row.name, from: before.status, to: row.status },
+  });
+  res.json({ agency: mapAgency(row) });
 }));
 
 // Admin: recent audit trail (who did what, when).
