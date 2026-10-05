@@ -6720,6 +6720,7 @@ button:disabled {
 .embed-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
 .embed-rating { display: inline-flex; align-items: center; gap: 4px; font-size: 12.5px; font-weight: 800; color: var(--ink); }
 .embed-rating svg { color: var(--gold); fill: var(--gold); }
+.embed-rating-count { font-weight: 600; color: var(--muted); }
 .embed-facts { font-size: 12.5px; color: var(--ink-soft); font-weight: 600; }
 .embed-title { font-family: var(--font-display); font-weight: 600; font-size: 18px; line-height: 1.25; letter-spacing: -0.01em; color: var(--ink); }
 .embed-price { display: flex; align-items: baseline; gap: 6px; margin-top: 2px; }

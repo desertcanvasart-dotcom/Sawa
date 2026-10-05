@@ -72,7 +72,7 @@ import { BookingPayAtGoAhead, WaitlistJoin, WaitlistOfferPage } from "./PayAtGoA
 import { JoinGroupLink, JoinGroupPage, partyTokenFromUrl } from "./GroupBooking.jsx";
 import { TurnstileBox } from "./Turnstile.jsx";
 import { ConfirmBookingPage, ResendConfirmation } from "./BookingConfirmation.jsx";
-import { TourReviews } from "./TourReviews.jsx";
+import { TourReviews, useReviewSummary } from "./TourReviews.jsx";
 import { deviceHint } from "./deviceHint.js";
 
 
@@ -2881,6 +2881,9 @@ function BrandEmbed() {
 // Shows a product's cover, rating, live shared price and a click-through CTA.
 function EmbedWidget({ type, product }) {
   useEmbedAutoResize(product);
+  // The average of the tour's published reviews (069), shown only when it has
+  // some. It replaces tour_products.quality, a seeded number with no review behind it.
+  const reviews = useReviewSummary(product?.id);
 
   if (!product) {
     return <div className="embed-card embed-empty">This tour is no longer available.</div>;
@@ -2906,7 +2909,7 @@ function EmbedWidget({ type, product }) {
       </div>
       <div className="embed-body">
         <div className="embed-meta">
-          {product.quality ? <span className="embed-rating"><Star size={12} />{Number(product.quality).toFixed(1)}</span> : null}
+          {reviews ? <span className="embed-rating" aria-label={`Average ${reviews.average.toFixed(1)} of 5 from ${reviews.count} traveler review${reviews.count === 1 ? "" : "s"}`}><Star size={12} />{reviews.average.toFixed(1)} <span className="embed-rating-count">({reviews.count})</span></span> : null}
           <span className="embed-facts">{facts}</span>
         </div>
         <strong className="embed-title">{product.title}</strong>

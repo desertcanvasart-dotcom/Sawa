@@ -20,6 +20,23 @@ function Stars({ value, label }) {
   );
 }
 
+// A tour's published-review count and average, or null while loading or when
+// it has none (the embed widget shows it only when there is one).
+export function useReviewSummary(productId) {
+  const [summary, setSummary] = useState(null);
+  useEffect(() => {
+    if (!productId) return undefined;
+    let live = true;
+    setSummary(null);
+    fetch(`${API_BASE}/public/tours/${encodeURIComponent(productId)}/reviews`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => { if (live) setSummary(j?.count ? { count: j.count, average: j.average } : null); })
+      .catch(() => { if (live) setSummary(null); });
+    return () => { live = false; };
+  }, [productId]);
+  return summary;
+}
+
 export function TourReviews({ productId }) {
   const [data, setData] = useState(null);
   const [shown, setShown] = useState(PAGE);
