@@ -77,8 +77,9 @@ import {
   departureRequestReceivedEmail, departureRequestApprovedEmail, departureRequestDeclinedEmail,
   operatorApplicationEmail, operatorApplicationReceiptEmail, operatorApplicationText,
   opsNewBookingEmail, opsNewListingEmail, opsGroupRequestEmail, opsRecipient,
-  paymentLinkEmail, paymentReceivedEmail,
+  paymentLinkEmail, paymentReceivedEmail, reviewRequestEmail, opsNewReviewEmail,
 } from "./email.js";
+import { registerReviewRoutes } from "./reviews.js";
 import {
   PAYMENT_KINDS, PAYMENT_PROVIDER, STAGE_LABEL, cleanLinkUrl, defaultAmount, isMissingPaymentsTable,
   linkDueAt, mapPayment, paidTotal, paymentSummary, paymentsByPledge,
@@ -3659,6 +3660,13 @@ app.get("/api/admin/stats", requireAuth, requireRole("super_admin", "ops_staff")
   ]);
   const pendingListings = products.rows.filter((p) => p.status === "pending").length;
   // Requests for a group larger than the online maximum, not yet answered (0 before migration 062).
+  // Reviews sent by travelers, waiting to be published (0 before migration 069).
+  let pendingReviews = 0;
+  try {
+    pendingReviews = Number((await pool.query(`SELECT COUNT(*)::int AS n FROM customer_reviews WHERE status = 'submitted'`)).rows[0]?.n) || 0;
+  } catch (e) {
+    if (e?.code !== "42P01") throw e;
+  }
   let pendingGroupRequests = 0;
   try {
     pendingGroupRequests = Number((await pool.query(`SELECT COUNT(*)::int AS n FROM group_requests WHERE status = 'new'`)).rows[0]?.n) || 0;
@@ -3703,6 +3711,7 @@ app.get("/api/admin/stats", requireAuth, requireRole("super_admin", "ops_staff")
     },
     pendingListings,
     pendingGroupRequests,
+    pendingReviews,
     departureStatus: { forming, awaiting, readyToConfirm, confirmed, atRisk, departed },
   });
 }));
@@ -4827,6 +4836,10 @@ registerCatalogueRoutes(app, { requireAuth, requireRole, h, logAudit, invalidate
 registerOperatorRoutes(app, { requireAuth, requireRole, h, logAudit, provisionUser, supabaseAdmin, sendEmail, invalidatePublic: () => invalidatePublicBootstrap() });
 registerFinanceRoutes(app, { requireAuth, requireRole, h, logAudit, sendEmail, opsRecipient, writeLimiter });
 registerPayAtGoAheadRoutes(app, { requireAuth, requireRole, h, logAudit, sendEmail, writeLimiter });
+registerReviewRoutes(app, {
+  requireAuth, requireRole, h, logAudit, writeLimiter, uploadLimiter, supabaseAdmin,
+  sendEmail, sendEmailInBackground, reviewRequestEmail, opsNewReviewEmail, opsRecipient, portalLink,
+});
 
 app.use("/api", (_req, res) => res.status(404).json({ error: "Not found." }));
 

@@ -347,6 +347,9 @@ export async function buildHead(pathname) {
   } else if (/^\/booking-details\/[^/]+$/.test(path)) {
     // Model phase 3: the private link to complete a booking's details.
     m = { ...m, noindex: true, title: `Booking details | ${BRAND.name}`, description: "Complete your booking details." };
+  } else if (/^\/review\/[^/]+$/.test(path)) {
+    // A traveler's private link to review a tour they took (069).
+    m = { ...m, noindex: true, title: `Leave a review | ${BRAND.name}`, description: "Tell other travelers how your tour went." };
   } else if (/^\/embed(\/|$)/.test(path)) {
     m = { ...m, noindex: true, title: `Shared departures | ${BRAND.name}` };
   } else if (path === "/packages" || path === "/tours") {

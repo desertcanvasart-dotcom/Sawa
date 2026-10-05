@@ -3,7 +3,7 @@ import {
   LayoutDashboard, Package, CalendarDays, Users, ClipboardList, ScrollText,
   Plus, Check, X, Search, Archive, ArchiveRestore, Euro, ShieldCheck,
   TrendingUp, AlertTriangle, MapPin, Hotel, ArrowUpRight, ArrowLeft, Trash2, Pencil,
-  Newspaper, Share2, Copy, Inbox, Eye, Clock3, Download, BookOpen, CalendarRange, Truck, CalendarCheck, Coins, Landmark, ChevronRight, Link2, Power,
+  Newspaper, Share2, Copy, Inbox, Eye, Clock3, Download, BookOpen, CalendarRange, Truck, CalendarCheck, Coins, Landmark, ChevronRight, Link2, Power, Star,
 } from "lucide-react";
 import { apiFetch, uploadImage } from "./supabaseClient";
 import { DashSidebar } from "./DashSidebar";
@@ -17,6 +17,7 @@ import { OperatorsSection, RosterSection, RatesSection } from "./AdminOperators.
 import { FinanceSection } from "./AdminFinance.jsx";
 import { UnlinkedBanner } from "./AdminPayAtGoAhead.jsx";
 import { GroupRequestsSection } from "./AdminGroupRequests.jsx";
+import { ReviewsSection, ReviewLinkBox } from "./AdminReviews.jsx";
 // Date-only departure values need a local-noon anchor or they render a day
 // early west of UTC — see src/dates.js.
 import { fmtDate, fmtReceived } from "./dates.js";
@@ -67,6 +68,7 @@ const NAV_GROUPS = [
       { id: "listings", label: "Listing requests", icon: Inbox, alert: (s) => s?.pendingListings || 0 },
       { id: "daterequests", label: "Date requests", icon: Clock3 },
       { id: "grouprequests", label: "Group requests", icon: Users, alert: (s) => s?.pendingGroupRequests || 0 },
+      { id: "reviews", label: "Reviews", icon: Star, alert: (s) => s?.pendingReviews || 0 },
       { id: "destinations", label: "Destinations", icon: MapPin },
       { id: "blog", label: "Blog", icon: Newspaper },
       // Departures and bookings are one page (28 Sep 2026): the dates, each
@@ -157,6 +159,7 @@ export function AdminDashboard({ user, agency, signOut, navigate }) {
             {section === "listings" && <ListingRequestsSection data={data} reload={loadAll} flash={flash} />}
             {section === "daterequests" && <DateRequestsSection data={data} reload={loadAll} flash={flash} />}
             {section === "grouprequests" && <GroupRequestsSection flash={flash} />}
+            {section === "reviews" && <ReviewsSection flash={flash} />}
             {section === "destinations" && <DestinationsSection destinations={destinations} reload={loadAll} flash={flash} />}
             {section === "blog" && <BlogSection posts={posts} reload={loadAll} flash={flash} />}
             {section === "departures" && <DeparturesSection data={data} reload={loadAll} flash={flash} tabs={<DepBookTabs tab="dates" onTab={setSection} />} />}
@@ -2459,6 +2462,7 @@ function BookingDrawer({ booking: b, onClose, onStatus }) {
             {b.balanceDueDate && <div className="full"><span>Balance due</span><strong>{fmtDate(b.balanceDueDate)}</strong></div>}
           </div>
           <p className="sub">{b.source === "public_request" ? "Requested" : "Booked"} {fmtReceived(b.createdAt)}</p>
+          <ReviewLinkBox bookingId={b.id} />
         </div>
       </aside>
     </div>

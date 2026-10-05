@@ -66,11 +66,13 @@ const LoginGate = lazy(() => import("./LoginGate").then((m) => ({ default: m.Log
 const AdminDashboard = lazy(() => import("./AdminDashboard").then((m) => ({ default: m.AdminDashboard })));
 const AgencyDashboard = lazy(() => import("./AgencyDashboard").then((m) => ({ default: m.AgencyDashboard })));
 const OperatorDashboard = lazy(() => import("./OperatorDashboard.jsx").then((m) => ({ default: m.OperatorDashboard })));
+const ReviewPage = lazy(() => import("./ReviewPage.jsx").then((m) => ({ default: m.ReviewPage })));
 import { TravelerDetailsFields, emptyTravelerDetails, travelerDetailsBody, travelerDetailsError } from "./TravelerDetails.jsx";
 import { BookingPayAtGoAhead, WaitlistJoin, WaitlistOfferPage } from "./PayAtGoAheadPublic.jsx";
 import { JoinGroupLink, JoinGroupPage, partyTokenFromUrl } from "./GroupBooking.jsx";
 import { TurnstileBox } from "./Turnstile.jsx";
 import { ConfirmBookingPage, ResendConfirmation } from "./BookingConfirmation.jsx";
+import { TourReviews } from "./TourReviews.jsx";
 import { deviceHint } from "./deviceHint.js";
 
 
@@ -988,6 +990,9 @@ function App() {
   // The "Confirm my booking" link from the email (live).
   const confirmBookingMatch = path.match(/^\/confirm-booking\/([^/?#]+)$/);
   if (confirmBookingMatch) return <ConfirmBookingPage token={decodeURIComponent(confirmBookingMatch[1])} />;
+  // A traveler's private link to review a tour they took (069).
+  const reviewMatch = path.match(/^\/review\/([^/?#]+)$/);
+  if (reviewMatch) return <Suspense fallback={<LoadingScreen label="Loading…" />}><ReviewPage token={decodeURIComponent(reviewMatch[1])} /></Suspense>;
   // Group bookings: the page behind a "Join my group" link.
   const joinMatch = path.match(/^\/join\/([^/?#]+)$/);
   if (joinMatch && catalogueV2()) return <JoinGroupPage token={decodeURIComponent(joinMatch[1])} />;
@@ -1971,6 +1976,8 @@ function TourDetailV2({ isSaving, navigate, phoneVerification = false, onBookPub
                   </div></div>
                 </section>
               ) : null}
+
+              <TourReviews productId={tour.id} />
 
               <section className="sec rv" style={{ borderBottom: 0, marginBottom: 0 }}>
                 <h2>Good to know</h2>
