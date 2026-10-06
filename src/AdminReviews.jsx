@@ -1,7 +1,7 @@
 // Admin: customer reviews (069). A review link is made from a booking whose
 // tour has run (ReviewLinkBox, in the booking drawer); the reviews travelers
 // send wait here until an admin publishes them on the tour page.
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { apiFetch } from "./supabaseClient";
 import { fmtDate, fmtReceived } from "./dates.js";
 
