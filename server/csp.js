@@ -25,7 +25,8 @@
 //   - fonts: Google Fonts' files.
 //   - images: this origin, data: (inline SVG backgrounds), blob:, the Supabase
 //     storage bucket, and Google Analytics' measurement pixels.
-//   - connections: this origin (the API), Supabase (auth), Google Analytics.
+//   - video: this origin, blob: (a preview before upload), Supabase storage.
+//   - connections: this origin (the API), Supabase (auth, review uploads), Google Analytics.
 //   - frames: GTM's <noscript> frame, and our own pages (the widget preview).
 //   - never: plugins (object-src), a moved <base>, forms posting off-site
 //     (mailto: kept for the contact form), and being framed by another site —
@@ -93,6 +94,8 @@ export const CSP_DIRECTIVES = {
   "style-src": ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
   "font-src": ["'self'", "https://fonts.gstatic.com", "data:"],
   "img-src": ["'self'", "data:", "blob:", SUPABASE, ...GOOGLE_ANALYTICS],
+  // A traveler's review video (069), played from a signed storage link.
+  "media-src": ["'self'", "blob:", SUPABASE],
   "connect-src": ["'self'", SUPABASE, "wss://*.supabase.co", ...GOOGLE_ANALYTICS, TURNSTILE],
   // 'self': the Promote page previews the agency's own widget (/embed/*).
   // Supabase: a PDF receipt previewed inline on a cost line (signed link).

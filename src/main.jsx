@@ -66,11 +66,13 @@ const LoginGate = lazy(() => import("./LoginGate").then((m) => ({ default: m.Log
 const AdminDashboard = lazy(() => import("./AdminDashboard").then((m) => ({ default: m.AdminDashboard })));
 const AgencyDashboard = lazy(() => import("./AgencyDashboard").then((m) => ({ default: m.AgencyDashboard })));
 const OperatorDashboard = lazy(() => import("./OperatorDashboard.jsx").then((m) => ({ default: m.OperatorDashboard })));
+const ReviewPage = lazy(() => import("./ReviewPage.jsx").then((m) => ({ default: m.ReviewPage })));
 import { TravelerDetailsFields, emptyTravelerDetails, travelerDetailsBody, travelerDetailsError } from "./TravelerDetails.jsx";
 import { BookingPayAtGoAhead, WaitlistJoin, WaitlistOfferPage } from "./PayAtGoAheadPublic.jsx";
 import { JoinGroupLink, JoinGroupPage, partyTokenFromUrl } from "./GroupBooking.jsx";
 import { TurnstileBox } from "./Turnstile.jsx";
 import { ConfirmBookingPage, ResendConfirmation } from "./BookingConfirmation.jsx";
+import { TourReviews, useReviewSummary } from "./TourReviews.jsx";
 import { deviceHint } from "./deviceHint.js";
 
 
@@ -988,6 +990,9 @@ function App() {
   // The "Confirm my booking" link from the email (live).
   const confirmBookingMatch = path.match(/^\/confirm-booking\/([^/?#]+)$/);
   if (confirmBookingMatch) return <ConfirmBookingPage token={decodeURIComponent(confirmBookingMatch[1])} />;
+  // A traveler's private link to review a tour they took (069).
+  const reviewMatch = path.match(/^\/review\/([^/?#]+)$/);
+  if (reviewMatch) return <Suspense fallback={<LoadingScreen label="Loading…" />}><ReviewPage token={decodeURIComponent(reviewMatch[1])} /></Suspense>;
   // Group bookings: the page behind a "Join my group" link.
   const joinMatch = path.match(/^\/join\/([^/?#]+)$/);
   if (joinMatch && catalogueV2()) return <JoinGroupPage token={decodeURIComponent(joinMatch[1])} />;
@@ -1972,6 +1977,8 @@ function TourDetailV2({ isSaving, navigate, phoneVerification = false, onBookPub
                 </section>
               ) : null}
 
+              <TourReviews productId={tour.id} />
+
               <section className="sec rv" style={{ borderBottom: 0, marginBottom: 0 }}>
                 <h2>Good to know</h2>
                 <div className="faq">
@@ -2874,6 +2881,9 @@ function BrandEmbed() {
 // Shows a product's cover, rating, live shared price and a click-through CTA.
 function EmbedWidget({ type, product }) {
   useEmbedAutoResize(product);
+  // The average of the tour's published reviews (069), shown only when it has
+  // some. It replaces tour_products.quality, a seeded number with no review behind it.
+  const reviews = useReviewSummary(product?.id);
 
   if (!product) {
     return <div className="embed-card embed-empty">This tour is no longer available.</div>;
@@ -2899,7 +2909,7 @@ function EmbedWidget({ type, product }) {
       </div>
       <div className="embed-body">
         <div className="embed-meta">
-          {product.quality ? <span className="embed-rating"><Star size={12} />{Number(product.quality).toFixed(1)}</span> : null}
+          {reviews ? <span className="embed-rating" aria-label={`Average ${reviews.average.toFixed(1)} of 5 from ${reviews.count} traveler review${reviews.count === 1 ? "" : "s"}`}><Star size={12} />{reviews.average.toFixed(1)} <span className="embed-rating-count">({reviews.count})</span></span> : null}
           <span className="embed-facts">{facts}</span>
         </div>
         <strong className="embed-title">{product.title}</strong>

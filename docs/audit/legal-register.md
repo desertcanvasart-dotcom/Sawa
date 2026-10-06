@@ -103,12 +103,29 @@ star ratings drawn from a seeded `quality` column, with **no reviews table in th
 database and zero bookings ever taken**. All of it has been removed.
 
 **Facts as they stand.**
-- No reviews table exists. Ratings remain unpublishable because no review
-  mechanism exists — **not** because nobody has travelled: `pledges` held its
-  first rows on 2026-08-12 (`E-2 ENDED 2026-08-12`), confirmed by the client
-  on 2026-08-15 to be real bookings, so the "no travellers" half of the old
-  premise is historical and may only be cited for the period before that date.
-- Ratings were removed under U1 and are not live.
+- Until 2026-10-05 there was no review mechanism, so no rating could be
+  shown. `pledges` held its first rows on 2026-08-12 (`E-2 ENDED 2026-08-12`),
+  confirmed by the client on 2026-08-15 to be real bookings, so the "no
+  travellers" half of the old premise is historical and may only be cited for
+  the period before that date.
+- Migration 069 (2026-10-05, client's request: tours have run) adds
+  `customer_reviews`. What it captures at the point of collection:
+  **provenance** — every review is tied to one booking (`pledge_id`) on a date
+  that has run; Sawa makes a private link per booking and only that link can
+  send it; **consent** — `publish_consent_at`, the traveler ticking "Sawa may
+  publish my review, photos and videos … My email is never shown";
+  **moderation** — published or hidden by a named admin, at a time, audit-logged;
+  the text is never edited.
+- What the tour page discloses: the average and count of published reviews
+  only (computed by the server, never written into copy), and "Every review
+  here is from a traveler who booked this tour with Sawa, sent through a
+  private link after their date ran. We check reviews before publishing them
+  and don't edit what travelers write." The admin screen tells staff not to
+  hide an honest review because it is negative.
+- Not decided: whether every booking must be invited (today an admin chooses
+  which bookings get a link, which is a selection the disclosure does not yet
+  state), and whether hidden reviews count towards the average.
+- The seeded `quality` ratings removed under U1 stay removed.
 - The client has said ratings may return "later at the operator profile level,
   tied to records, with the source stated".
 
@@ -265,7 +282,7 @@ apply 024, and pull the dashboard API logs before they roll off.
 |---|---|---|---|
 | 1 | Marketplace licensing | Low today — **but may govern answer #3** | Footer disclosure, **all payment work** |
 | 2 | Organiser status | **Highest** — packages are on sale | Terms §2/§13/§15 |
-| 3 | Rating display | None — nothing displayed | Reviews schema |
+| 3 | Rating display | Low once reviews are published — source stated on the page (069) | Whether every booking is invited; hidden reviews and the average |
 | 4 | Autoura disclosure | Low — inventory only, and **prospective**: nothing has ever been transmitted | A privacy policy line, **drafted**, publishes alone |
 | 5 | Entity disclosure | Site currently states the pre-change position | All of Phase 2 |
 | 6 | **Data API exposure** | **Live until 024 is applied** — staff identities, email recipients and the activity log readable by anyone. No traveller data, because there is none yet | Notification decision. **Does not block the fix.** |

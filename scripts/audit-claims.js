@@ -70,7 +70,10 @@ export const RULES = [
     ok: (ctx) => /not guarantee|no .{0,12}guarantee|never guarantee|minimum[ _]departure[ _]guarantee/i.test(ctx) },
   { id: "absolute-claim", why: "an unconditional promise the model cannot keep",
     re: /100%\s*(guaranteed|safe|refund)|risk[- ]free|hassle[- ]free/gi },
-  { id: "rating", why: "no reviews table exists; a rating cannot be evidenced or sourced",
+  // 069 added customer_reviews: a tour page now shows the average of its
+  // published reviews, fetched from the API, never written into the copy. A
+  // rating that IS in the copy still has no review behind it.
+  { id: "rating", why: "a rating in the copy has no review behind it; only the published reviews' average (customer_reviews, 069) may be shown",
     re: /\b[0-9]\.[0-9]\s*(?:\/\s*5|out of 5|average|stars?)|\baverage (?:traveller?|customer) rating|★{3,}/gi },
   // E-2 ENDED 2026-08-12 — until that date `pledges` held no rows at all; after
   // it, any figure must be counted from the table and stated as of a date. The

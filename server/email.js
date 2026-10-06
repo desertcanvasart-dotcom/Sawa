@@ -659,6 +659,37 @@ export function opsNewBookingEmail({ to, isRequest, route, dateLabel, seats, sea
 }
 
 // A traveler asked for a group larger than 8, which is not bookable online.
+// A traveler whose tour has run is asked for a review (069). The link is
+// theirs alone: it opens a form for this booking, and the review waits for
+// Sawa before it is shown on the tour page.
+export function reviewRequestEmail({ to, customerName, route, dateLabel, url }) {
+  const subject = `How was ${route}?`;
+  const text =
+    `Hi ${customerName || ""},\n\nThank you for traveling with Sawa on ${route} (${dateLabel}). We'd love to hear how it went.\n\n`
+    + `Leave a review — a star rating, a few words, and photos or videos if you like:\n${url}\n\n`
+    + `It takes a couple of minutes. Once we publish it, it appears on the tour page under the name you choose, never with your email.`;
+  const html = shell(
+    "How was your tour?",
+    `<p style="margin:0 0 20px">Thank you for traveling with Sawa on <strong>${esc(route)}</strong> (${esc(dateLabel)}). We'd love to hear how it went.</p>
+     <p style="margin:0 0 4px">A star rating, a few words, and photos or videos if you like.</p>
+     ${button(url, "Leave a review")}
+     ${note("It takes a couple of minutes. Once we publish it, it appears on the tour page under the name you choose, never with your email.")}`,
+    { eyebrow: "Your review", preheader: `Tell other travelers about ${route}` }
+  );
+  return { to, subject, html, text, kind: "review_request" };
+}
+
+export function opsNewReviewEmail({ to, route, rating, displayName, media = 0, portalLink }) {
+  const subject = `New review to approve: ${rating}★ — ${route}`;
+  const text =
+    `A traveler sent a review.\n\n`
+    + `${route}\nRating: ${rating} of 5\nName shown: ${displayName}\nPhotos and videos: ${media}\n\n`
+    + `It is not shown on the site until you publish it under Reviews.\n`
+    + (portalLink ? `\n${portalLink}/reviews\n` : "");
+  return { to, subject, text, html: `<pre style="font:14px/1.5 ui-monospace,monospace">${
+    text.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</pre>`, kind: "ops_new_review" };
+}
+
 export function opsGroupRequestEmail({ to, name, email, groupSize, date, product, note, portalLink }) {
   const subject = `Group request: ${groupSize} travelers${product ? ` — ${product}` : ""}`;
   const text =
