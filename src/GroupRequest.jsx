@@ -1,7 +1,7 @@
 // Parties larger than the online maximum are not bookable: the booking form
 // stops and shows this short request, which becomes an admin lead. No booking
 // is made and no seat is held.
-import { useState } from "react";
+import React, { useState } from "react";
 import { API_BASE } from "./supabaseClient";
 import { MAX_GROUP_SIZE } from "../shared/group-size.js";
 

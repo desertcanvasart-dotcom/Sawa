@@ -1,7 +1,7 @@
 // Admin: requests for a group larger than the online maximum. Each one is a
 // lead: no booking exists and no seats are held. Mark it once someone has
 // replied.
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { apiFetch } from "./supabaseClient";
 
 async function call(path, method = "GET", body) {
