@@ -1,5 +1,5 @@
-// Apply only the small, explicitly deploy-safe catalogue repair needed by the
-// current release. Full schema migrations remain a manual production action:
+// Apply the explicitly scoped catalogue repair and one requested blog import.
+// Full schema migrations remain a manual production action:
 // this is not a replacement for `npm run db:migrate`.
 //
 // The migration is create-only and recorded under the same name used by the
@@ -9,6 +9,7 @@ import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { pool } from "./index.js";
+import { publishPrivateTourArticle } from "./publish-private-tour-article.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const NAME = "041_restore_cairo_luxor_package";
@@ -32,7 +33,9 @@ try {
   } else {
     console.log(`Deploy data fix already applied: ${NAME}`);
   }
+  const articleResult = await publishPrivateTourArticle(client);
   await client.query("COMMIT");
+  console.log(`Private/group/DIY article: ${articleResult}`);
 } catch (error) {
   await client.query("ROLLBACK");
   console.error("Deploy data fix failed:", error.message);
