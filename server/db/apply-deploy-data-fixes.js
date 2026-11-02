@@ -9,7 +9,7 @@ import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { pool } from "./index.js";
-import { publishPrivateTourArticle } from "./publish-private-tour-article.js";
+import { publishPrivateTourArticle, addPrivateTourHero } from "./publish-private-tour-article.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const NAME = "041_restore_cairo_luxor_package";
@@ -34,6 +34,7 @@ try {
     console.log(`Deploy data fix already applied: ${NAME}`);
   }
   const articleResult = await publishPrivateTourArticle(client);
+  await addPrivateTourHero(client);
   await client.query("COMMIT");
   console.log(`Private/group/DIY article: ${articleResult}`);
 } catch (error) {
