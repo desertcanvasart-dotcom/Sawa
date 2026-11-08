@@ -46,6 +46,16 @@ export function cleanHtml(value) {
   return sanitizeHtml(value, OPTIONS);
 }
 
+// Blog comparisons need semantic tables; other rich-text fields keep their
+// narrower allow-list. No script, style or event attributes are admitted.
+export function cleanBlogHtml(value) {
+  if (typeof value !== "string" || !value.trim()) return "";
+  return sanitizeHtml(value, {
+    ...OPTIONS,
+    allowedTags: [...OPTIONS.allowedTags, "table", "thead", "tbody", "tr", "th", "td", "caption"],
+  });
+}
+
 // Sanitize the free-text "description" of each itinerary day (packages), leaving
 // the rest of the day object (day number, title) untouched. Non-arrays pass through.
 export function cleanItinerary(itinerary) {

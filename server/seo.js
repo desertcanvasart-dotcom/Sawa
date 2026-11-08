@@ -4,6 +4,7 @@
 // crawlers and AI engines read fully-formed pages — plus
 // robots.txt, sitemap.xml and llms.txt.
 // ============================================================
+import { publicBlogHtml } from "./blog-publication.js";
 import { pool } from "./db/index.js";
 import { BRAND, ORG_ID, SITE_ID, travelAgencySchema, websiteSchema, DIRECT_BOOKINGS_OPERATOR } from "./brand.js";
 // tourPath is the one definition of a product's public URL. It already existed
@@ -21,7 +22,7 @@ import { CURRENCY, CURRENCY_SYMBOL } from "../shared/currency.js";
 // DIR-17.1 — the support-availability string has ONE owner. Four variants
 // were live saying four different things; this file rendered one of them.
 import { INTERIM_COPY } from "../shared/site-copy.js";
-import { cleanHtml } from "./sanitize.js";
+import { cleanHtml, cleanBlogHtml } from "./sanitize.js";
 
 const esc = (s) => String(s == null ? "" : s)
   .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -296,7 +297,7 @@ async function tourSchema(idOrSlug, url) {
 }
 
 async function postSchema(slug, url) {
-  const r = await pool.query("SELECT * FROM blog_posts WHERE slug=$1 AND status='published' LIMIT 1", [slug]);
+  const r = await pool.query("SELECT * FROM blog_posts WHERE slug=$1 AND status='published' AND (published_at IS NULL OR published_at <= now()) LIMIT 1", [slug]);
   if (!r.rows.length) return null;
   const p = r.rows[0];
   const title = p.meta_title || p.title;
@@ -305,7 +306,9 @@ async function postSchema(slug, url) {
   const out = [{
     "@type": "Article", headline: title, description: desc, image: img ? [img] : undefined,
     author: { "@type": "Person", name: p.author || BRAND.name, description: p.author_credentials || undefined },
-    publisher: { "@id": ORG_ID }, datePublished: p.published_at, dateModified: p.updated_at, mainEntityOfPage: url,
+    publisher: { "@id": ORG_ID }, datePublished: p.published_at,
+    dateModified: p.published_at && new Date(p.published_at) > new Date(p.updated_at) ? p.published_at : p.updated_at,
+    mainEntityOfPage: url,
     about: p.geo_place || undefined,
   }];
   const faq = Array.isArray(p.faq) ? p.faq.filter((f) => f.q) : [];
@@ -316,7 +319,7 @@ async function postSchema(slug, url) {
   if (p.geo_place) geoMeta.push(meta("name", "geo.placename", p.geo_place));
   if (p.geo_lat && p.geo_lng) { geoMeta.push(meta("name", "geo.position", `${p.geo_lat};${p.geo_lng}`)); geoMeta.push(meta("name", "ICBM", `${p.geo_lat}, ${p.geo_lng}`)); }
   if (p.keywords && p.keywords.length) geoMeta.push(meta("name", "keywords", p.keywords.join(", ")));
-  return { post: mapPost({ ...p, body_html: cleanHtml(p.body_html) }), schema: out, meta: { title: `${title} | ${BRAND.name}`, description: desc, ogImage: img || DEFAULT_OG, ogType: "article", author: p.author, noindex: p.noindex === true, extraMeta: geoMeta.join("") }, crumbName: p.title };
+  return { post: mapPost({ ...p, body_html: cleanBlogHtml(p.body_html) }), schema: out, meta: { title: `${title} | ${BRAND.name}`, description: desc, ogImage: img || DEFAULT_OG, ogType: "article", author: p.author, noindex: p.noindex === true, extraMeta: geoMeta.join("") }, crumbName: p.title };
 }
 
 // Build the injected <head> for a given pathname.
@@ -543,7 +546,7 @@ export async function sitemapXml() {
        WHERE p.active IS NOT FALSE AND p.status = 'approved'
        GROUP BY p.id`);
     tours.rows.forEach((t) => add(tourPath(t), iso(t.lastmod), "weekly"));
-    const posts = await pool.query("SELECT slug, updated_at FROM blog_posts WHERE status='published'");
+    const posts = await pool.query("SELECT slug, GREATEST(updated_at, published_at) AS updated_at FROM blog_posts WHERE status='published' AND (published_at IS NULL OR published_at <= now())");
     posts.rows.forEach((p) => add(`/blog/${encodeURIComponent(p.slug)}`, iso(p.updated_at), "monthly"));
   } catch (e) {
     // AAA1.3 — the DB genuinely is optional here, and a comment saying so is
@@ -695,7 +698,7 @@ export async function buildBody(pathname) {
   }
 
   if (/^\/blog\/[^/]+$/.test(path)) {
-    const r = await pool.query("SELECT * FROM blog_posts WHERE slug=$1 AND status='published' LIMIT 1", [decodeURIComponent(path.split("/")[2])]);
+    const r = await pool.query("SELECT * FROM blog_posts WHERE slug=$1 AND status='published' AND (published_at IS NULL OR published_at <= now()) LIMIT 1", [decodeURIComponent(path.split("/")[2])]);
     if (!r.rows.length) return "";
     const p = r.rows[0];
     const faq = Array.isArray(p.faq) ? p.faq.filter((f) => f && f.q) : [];
@@ -705,13 +708,13 @@ export async function buildBody(pathname) {
   <p>${p.author ? `By ${esc(p.author)} · ` : ""}${esc(dateLabel(p.published_at))}</p>
   ${p.cover_image ? `<figure><img src="${esc(p.cover_image)}" alt="${esc(p.cover_alt || p.title)}">${p.cover_caption ? `<figcaption>${esc(p.cover_caption)}</figcaption>` : ""}</figure>` : ""}
   ${p.tldr ? `<p><strong>In short:</strong> ${esc(p.tldr)}</p>` : ""}
-  ${cleanHtml(p.body_html || "")}
+  ${publicBlogHtml(cleanBlogHtml(p.body_html || ""))}
   ${faq.length ? `<h2>Questions</h2>${faq.map((f) => `<h3>${esc(f.q)}</h3><p>${esc(f.a || "")}</p>`).join("")}` : ""}
 </article>`);
   }
 
   if (path === "/blog") {
-    const r = await pool.query("SELECT slug, title, excerpt, published_at FROM blog_posts WHERE status='published' ORDER BY published_at DESC LIMIT 50");
+    const r = await pool.query("SELECT slug, title, excerpt, published_at FROM blog_posts WHERE status='published' AND (published_at IS NULL OR published_at <= now()) ORDER BY published_at DESC LIMIT 50");
     return wrapBody(`
 <h1>Notes from the Nile — the Sawa blog</h1>
 <ul>${r.rows.map((p) => `<li><a href="/blog/${encodeURIComponent(p.slug)}">${esc(p.title)}</a>${p.excerpt ? ` — ${esc(p.excerpt)}` : ""} (${esc(dateLabel(p.published_at))})</li>`).join("")}</ul>`);

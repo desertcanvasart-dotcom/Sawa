@@ -1,3 +1,4 @@
+import { mergedBlogSlugs } from "./blog-publication.js";
 import "dotenv/config";
 import express from "express";
 import { z } from "zod";
@@ -118,7 +119,7 @@ import { BRAND, DIRECT_BOOKINGS_OPERATOR } from "./brand.js";
 import { operatorFor, loadOperatorInputs, withDepositTimes } from "./operator-lookup.js";
 import { startJobScheduler, jobSchedulerEnabled, cancelJobDryRun, goAheadNotifyDryRun, goAheadAlertDryRun } from "./jobs/scheduler.js";
 import { TOUR_TIMEZONE } from "./tz.js";
-import { cleanHtml, cleanItinerary } from "./sanitize.js";
+import { cleanHtml, cleanBlogHtml, cleanItinerary } from "./sanitize.js";
 import { canonicalRedirect } from "./canonical.js";
 import { canonicalPathRedirect } from "./path-canonical.js";
 import { injectStaticSchema } from "./static-seo.js";
@@ -709,10 +710,7 @@ const publicBootstrap = staleWhileRevalidate({
   build: () => buildBootstrap(undefined),
   onError: (e) => console.error("[bootstrap] background refresh failed —", e.message),
 });
-// The published-post list is read on every /blog view and never varies per
-// visitor, so cache it the same way. Both are dropped on any successful write.
-const PUBLIC_BLOG_TTL = 60_000;
-let publicBlogCache = { at: 0, payload: null };
+// Blog visibility is evaluated against the database clock on each request.
 // The server-rendered page cache and llms-full.txt snapshot also go stale on a
 // write (they embed seat counts and prices), but they're defined further down —
 // the SPA one only exists when /dist is present. So they register a clearer here
@@ -726,7 +724,6 @@ onTravellerRateChange(() => invalidatePublicBootstrap());
 function invalidatePublicBootstrap() {
   clearPublicCatalogue();
   publicBootstrap.invalidate();
-  publicBlogCache = { at: 0, payload: null };
   for (const clear of cacheClearers) clear();
 }
 
@@ -2318,7 +2315,7 @@ app.get("/api/public/route-head", h(async (req, res) => {
     throw new AppError(422, "Invalid path.");
   }
   const { meta, notFound } = await buildHead(path);
-  res.set("Cache-Control", "public, max-age=60, s-maxage=300");
+  res.set("Cache-Control", path.startsWith("/blog") ? "no-store" : "public, max-age=60, s-maxage=300");
   res.json({ ...meta, notFound });
 }));
 
@@ -2906,18 +2903,16 @@ app.delete("/api/admin/destinations/:id", requireAuth, requireRole("super_admin"
 // ---- Blog posts (content + SEO + GEO) ----
 // Public: published posts (list).
 app.get("/api/blog", h(async (_req, res) => {
-  if (publicBlogCache.payload && Date.now() - publicBlogCache.at < PUBLIC_BLOG_TTL) {
-    return res.json(publicBlogCache.payload);
-  }
-  const r = await pool.query("SELECT * FROM blog_posts WHERE status='published' ORDER BY published_at DESC NULLS LAST, updated_at DESC");
+  res.set("Cache-Control", "no-store");
+  const r = await pool.query("SELECT * FROM blog_posts WHERE status='published' AND (published_at IS NULL OR published_at <= now()) ORDER BY published_at DESC NULLS LAST, updated_at DESC");
   const payload = { posts: r.rows.map(mapPost) };
-  publicBlogCache = { at: Date.now(), payload };
   res.json(payload);
 }));
 
 // Public: a single published post by slug.
 app.get("/api/blog/:slug", h(async (req, res) => {
-  const r = await pool.query("SELECT * FROM blog_posts WHERE slug=$1 AND status='published' LIMIT 1", [req.params.slug]);
+  res.set("Cache-Control", "no-store");
+  const r = await pool.query("SELECT * FROM blog_posts WHERE slug=$1 AND status='published' AND (published_at IS NULL OR published_at <= now()) LIMIT 1", [req.params.slug]);
   if (!r.rows.length) throw new AppError(404, "Post not found.");
   res.json({ post: mapPost(r.rows[0]) });
 }));
@@ -2960,7 +2955,7 @@ app.post("/api/admin/blog", requireAuth, requireRole("super_admin", "ops_staff")
         cover_alt=EXCLUDED.cover_alt, cover_caption=EXCLUDED.cover_caption
      RETURNING *`,
     [
-      id, slug, title, b.excerpt || null, b.coverImage || null, cleanHtml(b.bodyHtml) || null, b.author || null,
+      id, slug, title, b.excerpt || null, b.coverImage || null, cleanBlogHtml(b.bodyHtml) || null, b.author || null,
       b.authorCredentials || null, arr(b.tags), status, b.publishedAt || null,
       b.metaTitle || null, b.metaDescription || null, arr(b.keywords), b.canonicalUrl || null, b.ogImage || null,
       b.noindex === true, b.tldr || null, arr(b.keyTakeaways), faq, b.geoRegion || null, b.geoPlace || null,
@@ -4844,6 +4839,15 @@ registerReviewRoutes(app, {
 app.use("/api", (_req, res) => res.status(404).json({ error: "Not found." }));
 
 // ============================ AI-readability files ============================
+app.get("/blog/:slug", h(async (req, res, next) => {
+  const target = mergedBlogSlugs[req.params.slug];
+  if (!target) return next();
+  const result = await pool.query("SELECT id FROM blog_posts WHERE slug=$1 AND status='published' AND (published_at IS NULL OR published_at <= now())", [target]);
+  if (!result.rows.length) return next();
+  res.set("Cache-Control", "no-store");
+  return res.redirect(301, `/blog/${target}`);
+}));
+
 app.get("/robots.txt", (_req, res) => res.type("text/plain").send(robotsTxt()));
 app.get("/llms.txt", (_req, res) => res.type("text/plain").send(llmsTxt()));
 // llms-full.txt now embeds a live tours/departures snapshot; cache briefly so
@@ -5117,7 +5121,7 @@ if (existsSync(distDir)) {
       // catalogue write clears pageCache through cacheClearers, so an edge copy
       // is the only thing that can lag, and only by s-maxage.
       // Pages without a payload (portal, embed) must never be shared-cached.
-      const cacheControl = notFound
+      const cacheControl = notFound || /^\/blog(?:\/|$)/.test(path)
         ? "no-store"
         : bootstrap
           ? "public, max-age=0, s-maxage=60, stale-while-revalidate=300"
@@ -5157,6 +5161,7 @@ if (existsSync(distDir)) {
   const renderPage = async (req, res) => {
     try {
       const path = req.path;
+      if (/^\/blog(?:\/|$)/.test(path)) return send(res, await renderToCache(path), "miss");
       const hit = pageCache.get(path);
       const state = cacheState(hit, Date.now(), PAGE_TTL, PAGE_STALE_TTL);
 

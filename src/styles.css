@@ -6326,6 +6326,10 @@ button:disabled {
 .blog-post-body li { margin: 0.35em 0; }
 .blog-post-body blockquote { margin: 1.2em 0; padding: 4px 0 4px 20px; border-left: 3px solid var(--accent-soft); color: var(--ink-soft); font-style: italic; }
 .blog-post-body img { max-width: 100%; border-radius: 14px; margin: 1em 0; }
+.blog-post-body table { display: block; max-width: 100%; overflow-x: auto; border-collapse: collapse; margin: 1.3em 0; font-size: 0.9em; }
+.blog-post-body th, .blog-post-body td { padding: 12px 14px; border: 1px solid var(--line, #ddd); text-align: left; vertical-align: top; min-width: 120px; }
+.blog-post-body th { background: var(--surface, #f5f5f2); font-weight: 600; }
+.blog-post-body pre { max-width: 100%; overflow-x: auto; }
 
 .blog-takeaways { margin: clamp(32px, 4vw, 48px) 0 0; padding: clamp(22px, 2.6vw, 30px); background: var(--surface); border: 1px solid var(--line); border-radius: 20px; box-shadow: var(--shadow-sm); }
 .blog-takeaways h2 { margin: 0 0 14px; font-family: var(--font-display); font-weight: 500; font-size: 20px; color: var(--ink); }
