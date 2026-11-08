@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync, existsSync } from "node:fs";
 import { blogSchedule, isBlogPublished, publicBlogHtml, stripBlogSources, mergedBlogSlugs } from "./blog-publication.js";
 import { cleanBlogHtml } from "./sanitize.js";
-import { importScheduledBlogs, BLOG_BATCH_MARKER } from "./db/import-scheduled-blogs.js";
+import { importScheduledBlogs, BLOG_BATCH_MARKER, REVIEWED_DRAFT } from "./db/import-scheduled-blogs.js";
 
 test("67 daily releases use Cairo time and stay hidden until the boundary", () => {
   assert.equal(blogSchedule.length, 67);
@@ -72,11 +72,33 @@ test("colliding posts and failed inserts abort without recording the batch marke
   for (const mode of ["collision", "failure"]) {
     const client = { async query(sql) {
       assert.doesNotMatch(sql, /INSERT INTO schema_migrations/);
-      if (sql.startsWith("SELECT id FROM blog_posts") && mode === "collision") return { rows: [{ id: "draft" }] };
+      if (sql.startsWith("SELECT id, slug, status") && mode === "collision") return { rows: [{ id: "draft" }] };
       if (sql.startsWith("INSERT INTO blog_posts")) throw new Error("insert failed");
       return { rows: [] };
     } };
     await assert.rejects(importScheduledBlogs(client), mode === "collision" ? /already exists/ : /insert failed/);
+  }
+});
+
+test("only the backed-up matching draft is replaced, preserving its ID; later edits abort", async () => {
+  for (const edited of [false, true]) {
+    const updates = [];
+    const client = { async query(sql, values) {
+      if (sql.startsWith("SELECT id, slug, status") && values[1] === REVIEWED_DRAFT.slug) return { rows: [{
+        id: REVIEWED_DRAFT.id, slug: REVIEWED_DRAFT.slug, status: "draft",
+        updated_at: edited ? "2026-11-08T00:00:00Z" : REVIEWED_DRAFT.updatedAt,
+      }] };
+      if (sql.startsWith("UPDATE blog_posts SET slug=")) updates.push(values);
+      return { rows: [] };
+    } };
+    if (edited) await assert.rejects(importScheduledBlogs(client), /already exists/);
+    else {
+      await importScheduledBlogs(client);
+      assert.equal(updates.length, 1);
+      assert.equal(updates[0][0], REVIEWED_DRAFT.id);
+      assert.equal(updates[0][1], REVIEWED_DRAFT.slug);
+      assert.equal(updates[0][9], blogSchedule.find(p => p.slug === REVIEWED_DRAFT.slug).publishAt);
+    }
   }
 });
 

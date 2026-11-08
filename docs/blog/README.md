@@ -14,8 +14,12 @@ UTC+02:00 offset. See `daily-publication-schedule.csv` and
 `content/blog-schedule.json` for the complete order.
 
 The deploy importer inserts the batch once, in the existing deploy transaction,
-with a migration marker and advisory lock. It refuses collisions and never
-overwrites an existing post or draft. A failed deployment rolls back the batch.
+with a migration marker and advisory lock. It refuses unreviewed collisions.
+One matching October draft (`group-tour-minimum-numbers`) is replaced by its
+supplied final version, preserving its ID. Its exact ID, draft status and
+last-edit timestamp are checked under a row lock; an intervening edit aborts.
+The original draft is backed up locally in the supplied Final folder as
+`sawa-existing-draft-backup-2026-11-08.json`. A failed deployment rolls back the batch.
 The marker means later deploys do not re-import deleted or edited posts.
 
 Posts are stored with status `published` and a future `published_at`. Every
@@ -72,5 +76,5 @@ External URL checks returned 20 HTTP 200s; eight requests were blocked with 403
 were additionally inspected through browsing.
 
 The full test suite on Windows reports 15 failures, exactly matching the
-unchanged `0f4fffd` baseline; the six new tests add six passes. These existing
+unchanged `0f4fffd` baseline; the seven new tests add seven passes. These existing
 failures include platform/line-ending assumptions and unrelated policy checks.
