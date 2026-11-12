@@ -15,6 +15,7 @@ import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, dirname, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { BANNED } from "../scripts/check-catch-handlers.js";
+import { appSource } from "./app-source.js";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const REGISTER = readFileSync(join(ROOT, "docs", "audit", "evidence-expiry.md"), "utf8");
@@ -90,7 +91,7 @@ test("E-1 is recorded as expired, and the thing that expired it still exists", (
   const e1 = ENTRIES.find((e) => e.id === "E-1");
   assert.match(e1.body.split("**Status**")[1].split("\n")[0], /EXPIRED 2026-08-10/);
 
-  const app = readFileSync(join(ROOT, "server", "app.js"), "utf8");
+  const app = appSource();
   assert.match(app, /ban_duration: allowed \? "none" : "876000h"/,
     "E-1 says a ban can now be lifted; nothing in app.js lifts one");
 });

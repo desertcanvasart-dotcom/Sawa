@@ -62,6 +62,7 @@ import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { publicRoutes } from "./audit-claims.js";
+import { appSource } from "../server/app-source.js";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const arg = (n, d) => (process.argv.find((a) => a.startsWith(`--${n}=`)) || `--${n}=${d}`).slice(n.length + 3);
@@ -95,7 +96,7 @@ async function buildSources() {
 
   // 3. Server-side text builders.
   for (const f of ["seo.js", "static-seo.js", "brand.js", "email.js", "domain.js", "app.js"])
-    add(`server (${f})`, readFileSync(join(root, "server", f), "utf8"));
+    add(`server (${f})`, f === "app.js" ? appSource() : readFileSync(join(root, "server", f), "utf8"));
 
   // 4. Database text. The surface that exists in no file at all.
   try {

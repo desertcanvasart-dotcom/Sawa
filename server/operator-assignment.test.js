@@ -8,6 +8,7 @@ import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { operatorForDeparture, directOperatorId } from "./domain.js";
+import { appSource } from "./app-source.js";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const read = (...p) => readFileSync(join(ROOT, ...p), "utf8");
@@ -119,7 +120,7 @@ test("the direct-bookings operator is found by name, exactly", () => {
 });
 
 test("every date and listing carries its operator, computed before pledges are stripped", () => {
-  const app = read("server", "app.js");
+  const app = appSource();
   const at = app.indexOf("enriched.operatorAgencyId = operatorForDeparture(");
   assert.ok(at > 0 && at < app.indexOf("return presentDeparture(enriched, user);", at));
   assert.match(app, /operatorAgencyId: p\.agencyId \|\| directAgencyId \|\| null/);

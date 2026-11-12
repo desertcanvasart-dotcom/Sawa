@@ -16,6 +16,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { appSource } from "./app-source.js";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const read = (p) => readFileSync(join(ROOT, p), "utf8");
@@ -52,7 +53,7 @@ test("a closed day is disabled and says why", () => {
 
 test("every reason the calendar closes a day, the server also enforces", () => {
   // The calendar is a convenience, never the authority.
-  const app = read("server/app.js");
+  const app = appSource();
   assert.match(app, /minLeadDaysFor\(product\)/, "lead time");
   assert.match(app, /maxHorizonDaysFor\(product\)/, "horizon");
   assert.match(app, /operatingDayError\(product, input\.date\)/, "operating day");
@@ -68,7 +69,7 @@ test("the fences come from one authority, not a constant on each side", () => {
   assert.match(ui, /const REQUEST_MAX_HORIZON_DAYS = maxHorizonDaysFor\(tour\);/);
   assert.match(ui, /from "\.\.\/shared\/request-window\.js"/);
 
-  const app = read("server/app.js");
+  const app = appSource();
   assert.ok(!/const REQUEST_MIN_LEAD_DAYS = 3;/.test(app),
     "the server still carries its own copy of the fence");
   assert.ok(!/const REQUEST_MAX_HORIZON_DAYS = 90;/.test(app));

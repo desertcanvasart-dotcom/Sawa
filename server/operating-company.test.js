@@ -7,6 +7,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { operatorSelectable } from "./domain.js";
 import { mapAgency } from "./db/mappers.js";
+import { appSource } from "./app-source.js";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const read = (...p) => readFileSync(join(ROOT, ...p), "utf8");
@@ -29,7 +30,7 @@ test("pending, suspended, removed, unlisted or operator-less companies can't be 
 });
 
 test("the server refuses an ineligible company and the dropdown filters on the same flag", () => {
-  const app = read("server", "app.js");
+  const app = appSource();
   assert.match(app, /operatorSelectable\(a && mapAgency\(a\), o\)\)\s*throw new AppError\(422/);
   assert.match(app, /operatorSelectable: operatorSelectable\(a, ops\.get\(a\.id\)\)/);
   assert.match(read("src", "AdminDashboard.jsx"), /filter\(\(a\) => a\.operatorSelectable \|\|/);

@@ -10,9 +10,10 @@ import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { bookingLookupView } from "./domain.js";
+import { appSource } from "./app-source.js";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
-const app = readFileSync(join(ROOT, "server", "app.js"), "utf8");
+const app = appSource();
 const ui = readFileSync(join(ROOT, "src", "AgencyDashboard.jsx"), "utf8");
 const route = (sig) => {
   const f = app.indexOf(sig);

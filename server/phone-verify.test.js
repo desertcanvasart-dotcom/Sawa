@@ -2,16 +2,13 @@
 // Verify) before a seat is held. Off until Twilio is configured.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { join, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
+import { appSource } from "./app-source.js";
 import {
   normalizePhone, issuePhoneToken, phoneTokenValid, PHONE_TOKEN_TTL_MS,
   phoneVerificationEnabled, startVerification, checkVerification,
 } from "./phone-verify.js";
 
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
-const app = readFileSync(join(ROOT, "server", "app.js"), "utf8");
+const app = appSource();
 
 test("numbers are normalised to E.164; Egyptian mobiles may be typed locally", () => {
   const cases = [

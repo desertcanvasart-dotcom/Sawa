@@ -9,6 +9,7 @@
 // traveller owes by four times, and one quoting 20% where the system charges 25%
 // understates what they are about to pay.
 import test from "node:test";
+import { appSource } from "./app-source.js";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join, dirname, relative } from "node:path";
@@ -302,7 +303,7 @@ test("nothing computes a refund from the schedule yet", () => {
   // It exists to disclose. If something later charges from it, that is a
   // deliberate step and this assertion is where the reader finds out.
   const hits = ["server/app.js", "server/jobs/cancel-unconfirmed.js"]
-    .filter((f) => /cancellationBandsFor|ofDeposit/.test(read(f)));
+    .filter((f) => /cancellationBandsFor|ofDeposit/.test(f === "server/app.js" ? appSource() : read(f)));
   assert.deepEqual(hits, [], `${hits.join(", ")} now computes from the schedule — intended?`);
 });
 

@@ -16,6 +16,7 @@ import {
   durationShapeError, DAY_TOUR_DURATION, PACKAGE_DURATION, EXTENDED_DAY_HOURS,
 } from "../shared/booking-policy.js";
 import { tourPath } from "./slug.js";
+import { appSource } from "./app-source.js";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const read = (p) => readFileSync(join(ROOT, p), "utf8");
@@ -80,7 +81,7 @@ test("every duration in the catalogue's own house format passes", () => {
 });
 
 test("it is enforced on write, not only exported", () => {
-  const app = read("server/app.js");
+  const app = appSource();
   assert.match(app, /const durationProblem = durationShapeError\(type, body\.duration\)/);
   assert.match(app, /if \(durationProblem\) throw new AppError\(422, durationProblem\)/);
   // Beside the capacity check, i.e. before anything is written.
@@ -101,7 +102,7 @@ test("type decides the prefix, so retyping a product moves its URL", () => {
 });
 
 test("a clean slug under the wrong prefix redirects to the canonical one", () => {
-  const app = read("server/app.js");
+  const app = appSource();
   assert.match(app, /const canonical = await canonicalTourPath\(seg\)/);
   // The query rides along (F06): a ?date= link must not lose its date.
   assert.match(app, /return res\.redirect\(301, canonical \+ queryOf\(req\)\)/);

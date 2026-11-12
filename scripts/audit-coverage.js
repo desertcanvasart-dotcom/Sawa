@@ -15,8 +15,9 @@
 //
 //   node scripts/audit-coverage.js
 import { readFileSync } from "node:fs";
-import { join, dirname } from "node:path";
+import { join, dirname, relative } from "node:path";
 import { fileURLToPath } from "node:url";
+import { routeModuleFiles } from "../server/app-source.js";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -44,12 +45,27 @@ export const EXEMPT = {
     + "The merge itself (POST /api/admin/departures/merge) and its undo are audited.",
 };
 
-// Deliberately line-based over app.js rather than a parser: the file is one
-// module with a consistent `app.method("path", ...)` shape at column 0, and a
-// parser dependency for this would be a heavier promise than the check makes.
+// Deliberately line-based rather than a parser: every route is written in a
+// consistent `app.method("path", ...)` shape at column 0, and a parser
+// dependency for this would be a heavier promise than the check makes.
 // The handler body runs to the closing `}));` at column 0 — asserted below by
 // the fact that the known-audited routes are all found.
-export function scanMutatingRoutes(file = join(ROOT, "server", "app.js")) {
+//
+// The subject is app.js AND every module under server/routes/. Routes moved
+// out of app.js keep that shape precisely so that this scan still judges them;
+// scanning app.js alone would have reported the moved ones clean by not
+// looking at them.
+export function routeSourceFiles() {
+  return [join(ROOT, "server", "app.js"), ...routeModuleFiles()];
+}
+
+export function scanMutatingRoutes(files = routeSourceFiles()) {
+  if (typeof files === "string") files = [files];
+  if (!Array.isArray(files) || !files.length) throw new Error("audit-coverage: no source file to scan — refusing to report clean");
+  return files.flatMap((file) => scanFile(file));
+}
+
+function scanFile(file) {
   // EEEE1.1 — a check operating over a collection must assert its subject set is
   // non-empty BEFORE interpreting the outcome. Zero subjects is the absence of a
   // question, not an answer to it, and which verdict that produces depends only
@@ -82,6 +98,7 @@ export function scanMutatingRoutes(file = join(ROOT, "server", "app.js")) {
       path: m[2],
       key: `${m[1].toUpperCase()} ${m[2]}`,
       line: i + 1,
+      file: relative(ROOT, file),
       audited: /logAudit\(/.test(body),
     });
   }
@@ -106,7 +123,7 @@ if (isCli) {
     process.exit(0);
   }
   console.error(`\n${gaps.length} route(s) change state and leave no record:\n`);
-  for (const r of gaps) console.error(`  server/app.js:${r.line}  ${r.key}`);
+  for (const r of gaps) console.error(`  ${r.file}:${r.line}  ${r.key}`);
   console.error(
     "\nCall logAudit with the actor, the target, and the OUTCOME — the last is the\n"
     + "part that could not be reconstructed later. If the route genuinely needs no\n"

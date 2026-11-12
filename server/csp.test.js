@@ -10,8 +10,9 @@ import { fileURLToPath } from "node:url";
 import { cspHeader, cspHeaderName, describeViolation, firstSighting, CSP_DIRECTIVES, inlineScripts, scriptHash, siteScriptHashes } from "./csp.js";
 import { dataScript } from "./inline-json.js";
 import { readInlineData } from "../src/inline-data.js";
+import { appSource } from "./app-source.js";
 
-const app = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "app.js"), "utf8");
+const app = appSource();
 const directive = (h, name) => h.split(";").map((s) => s.trim()).find((s) => s.startsWith(name + " "));
 
 test("scripts and connections only from this site and the services it uses", () => {

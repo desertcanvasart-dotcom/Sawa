@@ -12,13 +12,10 @@ process.env.PAGE_WARM_INTERVAL_MS = "0";
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { join, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
+import { appSource } from "./app-source.js";
 
 const { presentProduct, presentDeparture } = await import("./app.js");
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
-const app = readFileSync(join(ROOT, "server", "app.js"), "utf8");
+const app = appSource();
 
 const product = {
   id: "p1", title: "Giza", agencyId: 7, baseCost: 35, publishedRate: 80,

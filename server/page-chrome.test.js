@@ -10,12 +10,13 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { appSource } from "./app-source.js";
 
 const { buildHead } = await import("./seo.js");
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const read = (...p) => readFileSync(join(ROOT, ...p), "utf8");
 const main = read("src", "main.jsx");
-const app = read("server", "app.js");
+const app = appSource();
 
 test("U03: no Save button without a saved list", () => {
   assert.doesNotMatch(main, /aria-label="Save"/);

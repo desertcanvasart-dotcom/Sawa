@@ -1,4 +1,5 @@
 import test from "node:test";
+import { appSource } from "./app-source.js";
 import assert from "node:assert/strict";
 import { readFileSync, existsSync } from "node:fs";
 import { blogSchedule, isBlogPublished, publicBlogHtml, stripBlogSources, mergedBlogSlugs } from "./blog-publication.js";
@@ -104,7 +105,7 @@ test("only the backed-up matching draft is replaced, preserving its ID; later ed
 
 test("all public blog SQL reads enforce publication time", () => {
   for (const file of ["app.js", "seo.js"]) {
-    const code = readFileSync(new URL(file, import.meta.url), "utf8");
+    const code = file === "app.js" ? appSource() : readFileSync(new URL(file, import.meta.url), "utf8");
     const reads = code.match(/SELECT [^"`\n]*FROM blog_posts[^"`\n]*status='published'[^"`\n]*/g) || [];
     assert.ok(reads.length > 0);
     for (const read of reads) assert.match(read, /published_at <= now\(\)/);

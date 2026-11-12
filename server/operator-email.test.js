@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { appSource } from "./app-source.js";
 
 // The pool is never queried here (every lookup is handed a stand-in), but
 // importing it needs a URL; a closed port, as in email-contract.test.js.
@@ -106,7 +107,7 @@ test("operatorFor: a programmer error is not swallowed", async () => {
 });
 
 test("every traveller confirmation and GoAhead send passes the operator", () => {
-  const app = readFileSync(join(ROOT, "server", "app.js"), "utf8");
+  const app = appSource();
   const job = readFileSync(join(ROOT, "server", "jobs", "notify-goahead.js"), "utf8");
   const calls = [...app.matchAll(/(bookingConfirmationEmail|goAheadEmail)\(\{[\s\S]*?\}\)/g), ...job.matchAll(/goAheadEmail\(\{[\s\S]*?\}\)/g)];
   assert.ok(calls.length >= 4, `expected the four send sites, found ${calls.length}`);

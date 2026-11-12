@@ -13,9 +13,10 @@ import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { bookingLookupView } from "./domain.js";
+import { appSource } from "./app-source.js";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
-const app = readFileSync(join(ROOT, "server", "app.js"), "utf8");
+const app = appSource();
 const main = readFileSync(join(ROOT, "src", "main.jsx"), "utf8");
 
 test("S02: the id-only public cancel route is gone", () => {

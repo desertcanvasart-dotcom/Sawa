@@ -9,6 +9,7 @@ import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { watchdogReport, STALE_AFTER_MS, WATCH_ACTION } from "./watchdog.js";
+import { appSource } from "./app-source.js";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const NOW = Date.parse("2026-08-12T12:00:00Z");
@@ -115,7 +116,7 @@ test("the alert applies PP2 discipline", () => {
 });
 
 test("/api/modes reports the heartbeat, and cannot report unknown as healthy", () => {
-  const app = readFileSync(join(ROOT, "server", "app.js"), "utf8");
+  const app = appSource();
   assert.match(app, /watchdogReport\(await lastWatchRunAt\(pool\)\)/);
   // Three states, not two: the read itself can fail, and "unable to say" must
   // not collapse into "fine" — the same argument as no-auth-provider.

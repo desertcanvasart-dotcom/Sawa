@@ -13,6 +13,7 @@
 // This is the guard that generalises. Written as a test rather than a note
 // because a note is a promise.
 import { test } from "node:test";
+import { appSource } from "./app-source.js";
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
@@ -78,7 +79,7 @@ test("026 — nothing writes to it yet", () => {
   // which is consent territory rather than the transparency-only basis that
   // covers attribution.
   for (const f of ["server/app.js", "server/db/mappers.js", "server/email.js"]) {
-    const src = readFileSync(join(ROOT, f), "utf8");
+    const src = f === "server/app.js" ? appSource() : readFileSync(join(ROOT, f), "utf8");
     assert.ok(!/route_alerts/.test(src), `${f} already touches route_alerts — that is a separate change`);
   }
 });

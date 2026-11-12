@@ -24,13 +24,14 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { appSource } from "./app-source.js";
 import {
   buildDeparturePayload, mirrorDecision, NOT_MIRRORED,
   syncDivergences, __resetDivergences,
 } from "./autoura-sync.js";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
-const APP = readFileSync(join(ROOT, "server", "app.js"), "utf8");
+const APP = appSource();
 const JOB = readFileSync(join(ROOT, "server", "jobs", "cancel-unconfirmed.js"), "utf8");
 
 // ---- TT1: the decision, and its reasons -----------------------------------

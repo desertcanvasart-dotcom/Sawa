@@ -8,6 +8,7 @@
 // had closed the previous evening — the exact claim-vs-code drift this repo
 // exists to hunt, aimed at its own staff instead of a traveller.
 import test from "node:test";
+import { appSource } from "./app-source.js";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
@@ -18,7 +19,7 @@ const read = (p) => readFileSync(join(ROOT, p), "utf8");
 
 test("nothing writes or accepts the decorative label any more", () => {
   for (const f of ["server/app.js", "server/db/seed.js", "server/db/mappers.js"]) {
-    const src = read(f);
+    const src = f === "server/app.js" ? appSource() : read(f);
     assert.ok(!src.includes("Open until 18:00"), `${f} still writes the decorative default`);
     // Bare `cutoff` catches the column in SQL lists, the zod field and the
     // mapper key, while leaving booking_cutoff_hours / bookingCutoffUnit /
