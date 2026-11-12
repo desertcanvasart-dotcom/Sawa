@@ -92,7 +92,8 @@ test("L-9 is closed, and closed means one implementation", () => {
   assert.doesNotMatch(app, /function cleanRefCode\(/, "server/app.js declares it again");
   assert.doesNotMatch(spa, /function cleanRef\w*\(/, "src/main.jsx declares it again");
   for (const src of [app, spa]) {
-    assert.match(src, /from "\.\.\/shared\/ref-code\.js"/, "both sides must import the one authority");
+    // A route module under server/routes/ reaches shared/ one directory further up.
+    assert.match(src, /from "(\.\.\/)+shared\/ref-code\.js"/, "both sides must import the one authority");
   }
   assert.match(REGISTER, /\*\*L-9 —[\s\S]{0,600}?shared\/ref-code\.js/,
     "the closed row must name what closed it");

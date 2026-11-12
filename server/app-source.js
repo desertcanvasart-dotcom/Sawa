@@ -17,7 +17,9 @@ import { fileURLToPath } from "node:url";
 const SERVER = dirname(fileURLToPath(import.meta.url));
 
 // provideRouteContext({ … });  await import("./routes/NAME.js");
-const LOAD = /^provideRouteContext\(\{\n([^}]*)\}\);\nawait import\("\.\/routes\/([\w-]+)\.js"\);$/gm;
+// A module that defines something the rest of app.js still calls hands it
+// back, so the load may also read `const { … } = await import(…)`.
+const LOAD = /^provideRouteContext\(\{\n([^}]*)\}\);\n(?:const \{\n[^}]*\} = )?await import\("\.\/routes\/([\w-]+)\.js"\);$/gm;
 
 export function routeModuleFiles() {
   return readdirSync(join(SERVER, "routes")).filter((f) => f.endsWith(".js")).sort()

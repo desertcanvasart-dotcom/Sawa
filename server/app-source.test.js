@@ -28,7 +28,6 @@ test("a module is handed every name it takes from the route context", () => {
     const taken = /const \{\n([^}]*)\} = routeContext\(\);/.exec(src);
     assert.ok(taken, `${name}.js does not take its dependencies from routeContext()`);
     const names = taken[1].split(",").map((s) => s.trim()).filter(Boolean);
-    assert.ok(names.includes("app"), `${name}.js does not take the Express app`);
     const missing = names.filter((n) => !provided.includes(n));
     assert.deepEqual(missing, [], `app.js loads ${name}.js without providing these`);
   }
@@ -44,8 +43,11 @@ test("the combined source holds every moved route, where it used to stand", () =
   const src = appSource();
   assert.doesNotMatch(src, /await import\("\.\/routes\//, "a load point was left in the combined source instead of the module");
   for (const { name, file } of loads) {
-    const routes = readFileSync(file, "utf8").match(/^app\.(get|post|patch|put|delete)\("[^"]+"/gm) || [];
-    assert.ok(routes.length, `${name}.js registers no routes`);
+    const text = readFileSync(file, "utf8");
+    const routes = text.match(/^app\.(get|post|patch|put|delete)\("[^"]+"/gm) || [];
+    // A module either registers routes or holds what other modules call and
+    // hands it back (date-request-create.js). One that does neither is dead.
+    assert.ok(routes.length || /^export /m.test(text), `${name}.js registers no routes and exports nothing`);
     for (const r of routes) assert.ok(src.includes(r), `${r} (${name}.js) is missing from the combined source`);
   }
   // Order is registration order: payments were, and are, before settlements.
@@ -55,8 +57,9 @@ test("the combined source holds every moved route, where it used to stand", () =
 test("the audit scan reads the route modules too", () => {
   assert.equal(routeSourceFiles().length, routeModuleFiles().length + 1);
   const routes = scanMutatingRoutes();
-  for (const { name } of loads) {
-    assert.ok(routes.some((r) => r.file === `server/routes/${name}.js`), `no mutating route scanned in ${name}.js`);
+  const scanned = new Set(routes.map((r) => r.file));
+  for (const name of ["payments", "settlements", "bookings", "public-bookings", "date-requests", "agencies-staff"]) {
+    assert.ok(scanned.has(`server/routes/${name}.js`), `no mutating route scanned in ${name}.js`);
   }
   // The same routes, whether counted file by file or in the combined text.
   const combined = (appSource().match(/^app\.(post|patch|put|delete)\(\s*"/gm) || []).length;

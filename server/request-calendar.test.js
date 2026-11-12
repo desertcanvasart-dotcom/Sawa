@@ -73,7 +73,8 @@ test("the fences come from one authority, not a constant on each side", () => {
   assert.ok(!/const REQUEST_MIN_LEAD_DAYS = 3;/.test(app),
     "the server still carries its own copy of the fence");
   assert.ok(!/const REQUEST_MAX_HORIZON_DAYS = 90;/.test(app));
-  assert.match(app, /from "\.\.\/shared\/request-window\.js"/);
+  // The date-request code is in server/routes/, one directory further from shared/.
+  assert.match(app, /from "(\.\.\/)+shared\/request-window\.js"/);
 });
 
 test("month navigation stops at the fences rather than running forever", () => {
