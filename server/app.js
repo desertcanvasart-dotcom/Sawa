@@ -111,7 +111,7 @@ import { watchdogReport, lastWatchRunAt } from "./watchdog.js";
 // to be written differently.
 import { rethrowIfProgrammerError, surfaceProgrammerError } from "./errors.js";
 import { tourSlug, tourPath } from "./slug.js";
-import { throughPartner, partnerPageFor, rememberPartnerPage, confirmLink } from "./partner.js";
+import { throughPartner, partnerPageFor, rememberPartnerPage, confirmLink, partnerJoinUrl } from "./partner.js";
 import { normalizeWebsite } from "../shared/partner-page.js";
 import { blogSlug } from "../shared/blog-slug.js";
 import { mapPost } from "./blog-post.js";
@@ -1966,6 +1966,8 @@ app.get("/api/public/bookings/:code", h(async (req, res) => {
   let group = null;
   if (catalogueV2Enabled() && payAtGoAhead && b.pledge_status !== "cancelled") {
     const party = await partyForBooking(pool, b.pledge_id);
+    // Shared from a partner's page, the link brings friends to that page.
+    if (party?.url) party.url = await partnerJoinUrl(pool, b.booking_code, party.url);
     group = party || (JOINABLE_STATUSES.includes(b.dep_status) && await partiesAvailable(pool) ? { url: null } : null);
   }
 
@@ -2113,7 +2115,7 @@ app.post("/api/public/bookings/:code/party", writeLimiter, h(async (req, res) =>
   if (!code) throw new AppError(422, "Booking code required.");
   const link = await partyLinkFor(pool, { code });
   await logAudit(req, { action: link.created ? "party.create" : "party.link_view", entity: "party", entityId: link.partyId, detail: { bookingCode: code.toUpperCase() } });
-  res.json({ group: { url: link.url, seatsLeft: link.seatsLeft } });
+  res.json({ group: { url: await partnerJoinUrl(pool, code, link.url), seatsLeft: link.seatsLeft } });
 }));
 
 // What a "Join my group" link shows: the date, the lead's first name and the

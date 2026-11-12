@@ -7380,3 +7380,29 @@ button:disabled {
 .eb-booking .page-empty { padding: 18px 0; }
 .eb-confirm-body { padding: 0 18px 18px; font-size: 14.5px; line-height: 1.6; }
 .eb-confirm-body p { margin: 0 0 8px; }
+
+/* ---- Widget: city filter, group links and the waitlist ------------------- */
+.eb-cities { display: flex; flex-wrap: wrap; gap: 8px; }
+.eb-city { font: inherit; font-size: 13px; font-weight: 700; padding: 7px 14px; border-radius: 999px; cursor: pointer; color: var(--ink); background: var(--surface); border: 1px solid var(--line); }
+.eb-city.on { background: var(--gold); color: var(--embed-cta-text, #14242a); border-color: transparent; }
+.eb-party { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-weight: 600; color: var(--ink); }
+.eb-party svg { color: #1f7a52; flex: 0 0 auto; }
+.eb-dates details.note { font-size: 12.5px; color: var(--ink-soft); }
+.eb-dates details.note summary { cursor: pointer; font-weight: 700; color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
+.eb-dates details.note select, .eb-dates details.note input { width: 100%; font: inherit; font-size: 14px; padding: 9px 11px; border-radius: 10px; color: var(--ink); background: transparent; border: 1px solid var(--line); }
+.eb-dates details.note .btn-pill, .eb-done .btn-pill { justify-content: center; background: transparent; color: var(--ink); border-color: var(--line); }
+.eb-dates .bk-ok { font-size: 13px; line-height: 1.5; padding: 10px 12px; border-radius: 10px; background: rgba(31,122,82,.1); color: var(--ink); }
+.eb-done .booking-group { width: 100%; max-width: 520px; margin: 6px 0; padding: 14px; text-align: left; border: 1px solid var(--line); border-radius: 12px; display: grid; gap: 10px; }
+.eb-done .booking-group p { font-size: 13.5px; }
+.eb-done .booking-group small { color: var(--ink-soft); }
+.eb-done .booking-group-link input { color: var(--ink); background: transparent; border: 1px solid var(--line); }
+.eb-booking .booking-group-link input { color: var(--ink); background: transparent; border-color: var(--line); }
+.embed-pick { margin: 4px 0 10px; font-size: 13.5px; }
+.embed-pick summary { cursor: pointer; font-weight: 600; }
+.embed-pick-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 6px 16px; margin: 10px 0 6px; }
+.embed-pick-list label { display: flex; align-items: baseline; gap: 8px; }
+.eb-months { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: thin; }
+.eb-months .eb-city { flex: 0 0 auto; padding: 6px 12px; font-size: 12.5px; }
+.eb-date-list { display: grid; gap: 8px; }
+/* A month of daily dates: a short scroll inside the list, not a longer frame. */
+.eb-date-list.many { max-height: 322px; overflow-y: auto; padding: 2px 4px 2px 2px; scrollbar-width: thin; }

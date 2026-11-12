@@ -100,3 +100,18 @@ test("a later email about the booking links to the partner's page, and only for 
   assert.deepEqual(linkBookingToPartnerPage(first, { pageUrl: "https://nilegate.com/tours", bookingCode: "SAWA-OTHER999" }), first, "another booking's code rewrites nothing");
   assert.match(linkBookingToPartnerPage(first, { pageUrl: "https://nilegate.com/tours", bookingCode: "SAWA-ABCD2345" }).text, /\/terms/, "the terms link stays Sawa's");
 });
+
+// ---- "Join my group" from a partner's page
+const { partnerJoinUrl } = await import("./partner.js");
+
+test("a group link made on a partner's page brings friends to that page; otherwise it is Sawa's", async () => {
+  forget070();
+  const sawa = "https://sawa.tours/join/abcDEF123_-x";
+  const onPartner = db({ name: "Nile Gate Travel", booking_code: "SAWA-ABCD2345", partner_page_url: "https://nilegate.com/tours", website: "https://nilegate.com" });
+  assert.equal(await partnerJoinUrl(onPartner, "SAWA-ABCD2345", sawa), "https://nilegate.com/tours?sawa-join=abcDEF123_-x");
+  assert.equal(await partnerJoinUrl(db({ name: "Nile Gate Travel", booking_code: "SAWA-ABCD2345", partner_page_url: null, website: "https://nilegate.com" }), "SAWA-ABCD2345", sawa), sawa, "booked without a page");
+  assert.equal(await partnerJoinUrl(db(null), "SAWA-ABCD2345", sawa), sawa, "not a partner booking");
+  const untouched = db(null);
+  assert.equal(await partnerJoinUrl(untouched, "SAWA-ABCD2345", null), null);
+  assert.equal(untouched.seen.length, 0, "no link yet, nothing looked up");
+});

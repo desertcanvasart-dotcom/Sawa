@@ -99,6 +99,16 @@ export async function rememberPartnerPage(db, bookingCode, pageUrl) {
   }
 }
 
+// A traveler's "Join my group" link. Sawa's own address ends /join/<token>;
+// for a booking made on a partner's page the friends it is shared with should
+// land on that page too, with the widget open on the group's date.
+export async function partnerJoinUrl(db, bookingCode, sawaUrl) {
+  const token = /\/join\/([^/?#]+)$/.exec(String(sawaUrl || ""))?.[1];
+  if (!token || !bookingCode) return sawaUrl;
+  const { pageUrl } = await partnerOf(db, { bookingCode });
+  return pageUrl ? withWidgetParam(pageUrl, "sawa-join", decodeURIComponent(token)) : sawaUrl;
+}
+
 // "Confirm my booking": on the partner's page when there is one, else Sawa's.
 export const confirmLink = (sawaUrl, token, pageUrl) => (pageUrl ? withWidgetParam(pageUrl, "sawa-confirm", token) : sawaUrl);
 

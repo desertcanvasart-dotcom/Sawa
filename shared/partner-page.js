@@ -48,8 +48,9 @@ export function partnerPageUrl(rawPage, website) {
 }
 
 // The page with one widget instruction on it: ?sawa-booking=CODE opens that
-// booking in the widget, ?sawa-confirm=TOKEN confirms a held one.
-export const WIDGET_PARAMS = ["sawa-booking", "sawa-confirm"];
+// booking in the widget, ?sawa-confirm=TOKEN confirms a held one, and
+// ?sawa-join=TOKEN opens a "Join my group" link's date.
+export const WIDGET_PARAMS = ["sawa-booking", "sawa-confirm", "sawa-join"];
 export function withWidgetParam(pageUrl, key, value) {
   if (!WIDGET_PARAMS.includes(key)) throw new Error(`unknown widget parameter: ${key}`);
   const u = new URL(pageUrl);
