@@ -7286,3 +7286,76 @@ button:disabled {
 .review-link-box { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
 .review-link-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
 .review-link-url { width: 100%; box-sizing: border-box; font: inherit; font-size: 12px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; }
+
+/* ---- The tour inside the widget (src/EmbedTourDetails.jsx) -----------------
+   Photos, overview, itinerary, inclusions, terms and reviews, so the visitor
+   reads the whole tour on the partner's site. Theme variables only (--surface,
+   --ink, --ink-soft, --line, --gold): the widget takes the host's palette, and
+   a fixed colour here would be the one thing that didn't follow it.
+   Media queries measure the FRAME, which is what the partner sized. */
+.eb-gallery { position: relative; display: grid; gap: 8px; background: var(--surface); }
+.eb-gallery-main { display: block; width: 100%; aspect-ratio: 16 / 9; max-height: 440px; object-fit: cover; background: var(--sand-200); }
+.eb-gallery-cap { position: absolute; left: 12px; top: 12px; max-width: calc(100% - 24px); padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; color: #fff; background: rgba(0,0,0,.55); }
+.eb-thumbs { display: flex; gap: 8px; padding: 0 18px; overflow-x: auto; scrollbar-width: thin; }
+.eb-thumb { flex: 0 0 auto; width: 76px; height: 54px; padding: 0; border-radius: 10px; overflow: hidden; cursor: pointer; background: var(--sand-200); border: 2px solid transparent; opacity: .72; transition: opacity .15s, border-color .15s; }
+.eb-thumb img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.eb-thumb:hover, .eb-thumb:focus-visible { opacity: 1; }
+.eb-thumb.on { opacity: 1; border-color: var(--gold); }
+
+.eb-tour .eb-head { padding: 16px 18px 6px; gap: 8px; }
+.eb-tour .eb-title { font-size: clamp(20px, 3.2vw, 27px); }
+.eb-rating { white-space: nowrap; }
+.eb-rating svg { vertical-align: -1px; color: var(--gold); fill: currentColor; }
+.eb-overview { margin: 2px 0 0; font-size: 14.5px; line-height: 1.65; color: var(--ink-soft); max-width: 70ch; }
+.eb-overview.rich p:last-child { margin-bottom: 0; }
+.eb-tour .rich, .eb-tour .rich strong, .eb-tour .rich h2, .eb-tour .rich h3 { color: inherit; }
+.eb-tour .rich a { color: var(--ink); }
+
+.eb-cols { display: grid; grid-template-columns: minmax(0, 1fr); }
+/* Narrow frame: the form first — dates and price are what a visitor on a
+   phone came for — then the full detail beneath it. */
+.eb-cols > .eb-form { order: 1; }
+.eb-cols > .eb-info { order: 2; border-top: 1px solid var(--line); }
+@media (min-width: 820px) {
+  .eb-cols { grid-template-columns: minmax(0, 1fr) minmax(340px, 400px); align-items: start; }
+  .eb-cols > .eb-info { order: 1; border-top: 0; }
+  .eb-cols > .eb-form { order: 2; margin: 14px 18px 18px 0; padding: 16px; border: 1px solid var(--line); border-radius: var(--embed-radius, 18px); }
+  .eb-cols > .eb-form .eb-row { grid-template-columns: 1fr; }
+}
+
+.eb-info { display: grid; gap: 22px; padding: 16px 18px 20px; align-content: start; min-width: 0; }
+.eb-sec h3, .eb-info .sec h2 { margin: 0 0 10px; font-family: var(--font-display); font-weight: 600; font-size: 17px; line-height: 1.25; letter-spacing: -0.01em; color: var(--ink); }
+.eb-itin { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
+.eb-itin li { display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 12px; align-items: start; }
+.eb-itin-n { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 800; color: var(--ink); border: 1.5px solid var(--gold); }
+.eb-itin-when { display: block; font-size: 11px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; color: var(--ink-soft); }
+.eb-itin b { display: block; font-size: 14.5px; line-height: 1.35; }
+.eb-itin p, .eb-itin .rich { margin: 3px 0 0; font-size: 13.5px; line-height: 1.6; color: var(--ink-soft); }
+.eb-inc { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px 22px; }
+.eb-inc ul, .eb-bring { list-style: none; margin: 0; padding: 0; display: grid; gap: 7px; font-size: 13.5px; line-height: 1.45; align-content: start; }
+.eb-inc li { position: relative; padding-left: 22px; }
+.eb-inc li::before { position: absolute; left: 0; top: 0; font-weight: 800; }
+.eb-inc .yes li::before { content: "✓"; color: #1f7a52; }
+.eb-inc .no li { color: var(--ink-soft); }
+.eb-inc .no li::before { content: "✕"; opacity: .6; }
+.eb-bring { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
+.eb-bring li::before { content: "·"; margin-right: 8px; font-weight: 800; }
+.eb-facts-list, .eb-info .cat-facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 7px 18px; margin: 0; font-size: 13.5px; line-height: 1.5; }
+.eb-facts-list dt, .eb-info .cat-facts dt { font-weight: 700; color: var(--ink-soft); }
+.eb-facts-list dd, .eb-info .cat-facts dd { margin: 0; }
+.eb-info .tour-reviews .tr-summary { margin-top: 0; }
+.eb-info .tour-reviews .tr-summary b { color: var(--ink); }
+
+/* The terms beside the form: the tour page's own components, in the widget's
+   colours (their page styles are scoped to the tour page). */
+.eb-sum .pay-timeline { margin: 8px 0 2px; }
+.eb-sum .bk-policy { font-size: 12.5px; color: var(--ink-soft); border-top: 1px solid var(--line); padding-top: 10px; margin-top: 4px; }
+.eb-sum .bk-policy summary { cursor: pointer; font-weight: 700; color: var(--ink); list-style: none; }
+.eb-sum .bk-policy summary::-webkit-details-marker { display: none; }
+.eb-sum .bk-policy summary::after { content: " +"; font-weight: 800; }
+.eb-sum .bk-policy[open] summary::after { content: " –"; }
+.eb-sum .bk-policy p { margin: 8px 0 0; line-height: 1.55; font-size: 12.5px; }
+.eb-sum .bk-policy table { width: 100%; border-collapse: collapse; margin: 8px 0 0; }
+.eb-sum .bk-policy th { text-align: left; font-weight: 700; padding: 0 8px 5px 0; }
+.eb-sum .bk-policy td { padding: 6px 8px 6px 0; border-top: 1px solid var(--line); vertical-align: top; color: var(--ink); }
+.eb-sum .bk-policy a { color: var(--ink); text-decoration: underline; }

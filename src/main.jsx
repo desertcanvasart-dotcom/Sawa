@@ -74,6 +74,8 @@ import { TurnstileBox } from "./Turnstile.jsx";
 import { ConfirmBookingPage, ResendConfirmation } from "./BookingConfirmation.jsx";
 import { TourReviews, useReviewSummary } from "./TourReviews.jsx";
 import { deviceHint } from "./deviceHint.js";
+import { EmbedGallery, EmbedOverview, EmbedTourDetails } from "./EmbedTourDetails.jsx";
+import { keepLinksOutOfFrame } from "./embed-links.js";
 
 
 // Three named traveler quotes lived here — Valencia, Munich, Abu Dhabi, each
@@ -3145,7 +3147,8 @@ function EmbedBookTour({ product, refCode, phoneVerification }) {
   const preview = embedPreview();
   // A preview never texts a real code: the step is shown as a note instead.
   const phoneConfirmed = preview || !phoneVerification || (!!phoneToken && verifiedPhone === phone.trim());
-  const sawaUrl = withEmbedRef(`${SITE_URL}/${pkg ? "package" : "tour"}/${product.id}`);
+  // The average of the tour's published reviews, shown only when it has some.
+  const reviews = useReviewSummary(product.id);
 
   // The window this tour accepts new dates in — the same shared rule the
   // server applies — and the weekdays it runs on.
@@ -3241,17 +3244,28 @@ function EmbedBookTour({ product, refCode, phoneVerification }) {
   }
 
   return (
-    <div className="eb-panel">
-      <div className="eb-hero" style={{ backgroundImage: `url(${coverImage(product)})` }} />
+    // The whole tour is here, so nothing sends the visitor to sawa.tours to
+    // read it: photos, overview, itinerary, inclusions, reviews, and the
+    // payment and cancellation terms beside the form they apply to.
+    <div className="eb-panel eb-tour" onClickCapture={keepLinksOutOfFrame}>
+      <EmbedGallery images={product.images} fallback={coverImage(product)} title={product.title} />
       <div className="eb-head">
         <strong className="eb-title">{product.title}</strong>
-        <span className="eb-facts">{pkg ? (product.cities || [product.city]).join(" → ") : product.city}{product.duration ? ` · ${product.duration}` : ""}</span>
+        <span className="eb-facts">
+          {pkg ? (product.cities || [product.city]).join(" → ") : product.city}{product.duration ? ` · ${product.duration}` : ""}
+          {reviews ? <span className="eb-rating" aria-label={`Average ${reviews.average.toFixed(1)} of 5 from ${reviews.count} traveler review${reviews.count === 1 ? "" : "s"}`}> · <Star size={12} /> {reviews.average.toFixed(1)} ({reviews.count})</span> : null}
+        </span>
         {product.catalogue?.priceNotSet
           ? <p className="eb-desc"><b>{product.catalogue.priceUnavailable || "Exchange rate not set"}</b></p>
           : product.catalogue?.priceSummary && <p className="eb-desc"><b>{product.catalogue.priceSummary}</b></p>}
-        {product.description && <p className="eb-desc">{product.description}</p>}
-        <a className="eb-link" href={sawaUrl} target="_blank" rel="noopener noreferrer">Full itinerary &amp; what's included <ArrowRight size={14} /></a>
+        <EmbedOverview product={product} />
       </div>
+
+      <div className="eb-cols">
+      <EmbedTourDetails product={product} isPackage={pkg}>
+        {catalogueV2() && product.catalogue && <CatalogueFacts facts={product.catalogue} />}
+        <TourReviews productId={product.id} />
+      </EmbedTourDetails>
 
       <form className="eb-form" onSubmit={submit} onFocusCapture={() => trackEmbedVisit(refCode)}>
         {requesting ? (
@@ -3354,6 +3368,10 @@ function EmbedBookTour({ product, refCode, phoneVerification }) {
           <div><span>{CURRENCY_SYMBOL}{pp.toLocaleString()} × {nSeats} traveler{nSeats === 1 ? "" : "s"}</span><b>{CURRENCY_SYMBOL}{total.toLocaleString()}</b></div>
           <div><span>Deposit once the date is confirmed ({depositPct}%)</span><b>{CURRENCY_SYMBOL}{deposit.toLocaleString()}</b></div>
           <p>Nothing is charged today. The shared price drops as the group grows.</p>
+          {/* The terms a reservation is made under, in view before it is made —
+              the tour page shows both here, and the widget showed neither. */}
+          <PaymentTimeline />
+          <CancellationSchedule tour={product} depositPct={depositPct} />
         </div>
 
         {!preview && <TurnstileBox siteKey={turnstileSiteKey()} onToken={setTurnstileToken} resetKey={turnstileReset} />}
@@ -3368,6 +3386,7 @@ function EmbedBookTour({ product, refCode, phoneVerification }) {
           </button>
         )}
       </form>
+      </div>
     </div>
   );
 }
