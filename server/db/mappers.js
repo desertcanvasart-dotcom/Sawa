@@ -44,6 +44,9 @@ export function mapAgency(r) {
     etaaRegistrationNo: r.etaa_registration_no || null,
     // 068: the ETAA register link an admin set (absent before 068).
     etaaUrl: r.etaa_url || null,
+    // 070: the agency's own website, which the widget's email links may
+    // return to (absent before 070).
+    website: r.website || null,
     insuranceInsurer: r.insurance_insurer || null,
     insurancePolicyNo: r.insurance_policy_no || null,
     insuranceExpires: r.insurance_expires || null,

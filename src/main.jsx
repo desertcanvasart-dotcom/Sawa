@@ -980,6 +980,12 @@ function App() {
     if (isLoading) return null;
     return <EmbedBook products={customerCalendars} phoneVerification={phoneVerification} bookingCode={decodeURIComponent(embedBookingMatch[1] || "")} />;
   }
+  // "Confirm my booking", returned to the partner's page from the email.
+  const embedConfirmMatch = embedPath.match(/^\/embed\/confirm\/([^/?#]+)$/);
+  if (embedConfirmMatch) {
+    if (isLoading) return null;
+    return <EmbedBook products={customerCalendars} phoneVerification={phoneVerification} confirmToken={decodeURIComponent(embedConfirmMatch[1])} />;
+  }
   const embedMatch = path.match(/^\/embed\/(tour|package)\/([^/?#]+)/);
   if (embedMatch) {
     if (isLoading) return null;
@@ -2840,6 +2846,9 @@ function embedThemeFromUrl() {
   } catch (e) { return {}; }
 }
 
+let EMBED_HOST_PAGE = "";
+const embedHostPage = () => (embedPreview() ? "" : EMBED_HOST_PAGE);
+
 function useEmbedAutoResize(dep) {
   useEffect(() => {
     // The page's own background (set on <html>) showed as a grey box around
@@ -2856,7 +2865,14 @@ function useEmbedAutoResize(dep) {
       catch (e) { warnOnce("embed-height", "[embed] height not posted to host —", e.message); }
     };
     // Let the host's optional companion script send its palette to match.
-    const onMsg = (e) => { if (e.data && e.data.type === "sawa-embed-theme") applyEmbedTheme(e.data); };
+    const onMsg = (e) => {
+      if (!e.data || e.data.type !== "sawa-embed-theme") return;
+      applyEmbedTheme(e.data);
+      // The page the widget sits on, from the snippet's script. Sent with a
+      // booking so its emails can link back there; the server keeps it only if
+      // it is on the website the partner registered (shared/partner-page.js).
+      if (typeof e.data.page === "string" && /^https:\/\//.test(e.data.page)) EMBED_HOST_PAGE = e.data.page.slice(0, 600);
+    };
     window.addEventListener("message", onMsg);
     try { window.parent?.postMessage({ type: "sawa-embed-ready" }, "*"); }
     catch (e) { warnOnce("embed-ready", "[embed] ready signal not posted to host —", e.message); }
@@ -3029,7 +3045,7 @@ function useEmbedPartner(code) {
   return name;
 }
 
-function EmbedBook({ products = [], productId = null, phoneVerification = false, bookingCode = null }) {
+function EmbedBook({ products = [], productId = null, phoneVerification = false, bookingCode = null, confirmToken = null }) {
   const ref = refFromUrl();
   const partner = useEmbedPartner(ref);
   const preview = embedPreview();
@@ -3039,7 +3055,10 @@ function EmbedBook({ products = [], productId = null, phoneVerification = false,
   // "" (the lookup, no code yet) or a code. "Manage this booking" used to open
   // sawa.tours in a new tab; it opens this instead, on the partner's page.
   const [managing, setManaging] = useState(bookingCode);
-  useEmbedAutoResize(`${openId}|${managing}`);
+  // A "Confirm my booking" link that came back to the partner's page: the
+  // snippet's script opens the frame here with the link's token.
+  const [confirming, setConfirming] = useState(confirmToken);
+  useEmbedAutoResize(`${openId}|${managing}|${confirming}`);
 
   useEffect(() => { if (productId) setOpenId(productId); }, [productId]);
 
@@ -3054,11 +3073,21 @@ function EmbedBook({ products = [], productId = null, phoneVerification = false,
   const footer = (
     <div className="eb-foot">
       {partner ? <span>Booked through <b>{partner}</b> · operated with <b>Sawa&nbsp;Tours</b></span> : <span>Powered by <b>Sawa&nbsp;Tours</b></span>}
-      {managing == null && <button type="button" className="eb-foot-link" onClick={() => { setManaging(""); scrollTop(); }}>Already booked? Check your booking</button>}
+      {managing == null && !confirming && <button type="button" className="eb-foot-link" onClick={() => { setManaging(""); scrollTop(); }}>Already booked? Check your booking</button>}
     </div>
   );
 
   const ribbon = preview ? <div className="eb-preview">Preview — this is your widget as customers see it. Booking is switched off here.</div> : null;
+
+  if (confirming && managing == null) {
+    return (
+      <div className="eb">
+        <button type="button" className="eb-back" onClick={() => { setConfirming(null); scrollTop(); }}><ArrowLeft size={14} />All tours</button>
+        <ConfirmBookingPage embed token={confirming} onSeeBooking={(code) => { setConfirming(null); setManaging(code); }} />
+        {footer}
+      </div>
+    );
+  }
 
   if (managing != null) {
     const back = () => { setManaging(null); scrollTop(); };
@@ -3200,6 +3229,7 @@ function EmbedBookTour({ product, refCode, phoneVerification, onManage = null })
     phoneToken: phoneToken || undefined, seats: nSeats, turnstileToken: turnstileToken || undefined,
     ...(pkg ? { roomingType, accommodationTier: tierId } : {}),
     refCode: refCode || undefined,
+    pageUrl: embedHostPage() || undefined,
     ...(detailsForm ? travelerDetailsBody(details) : {}),
   });
 
