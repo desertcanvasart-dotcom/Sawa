@@ -86,32 +86,21 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     <div class="rv">
       <span class="eyebrow on-dark" style="margin-bottom:22px">Live preview</span>
       <h2 class="serif" style="font-family:'Fraunces',serif;font-weight:500;color:var(--cream);font-size:clamp(2rem,4vw,2.8rem);line-height:1.06;letter-spacing:-.02em">This is what your<br>visitors <span class="ital" style="font-style:italic;color:var(--gold)">see</span>.</h2>
-      <p style="font-size:1.08rem;color:rgba(247,243,234,.74);margin-top:16px;max-width:32rem">A clean, responsive card with the live shared price. Travelers tap through to the tour on Sawa, pick a date and reserve — free until the group confirms — and the booking is credited to you.</p>
+      <p style="font-size:1.08rem;color:rgba(247,243,234,.74);margin-top:16px;max-width:32rem">The whole tour, inside your page: photos, the itinerary, open dates and the booking form. Travelers read, pick a date and reserve without leaving your site — free until the group confirms — and the booking is credited to you.</p>
       <div class="checks" style="margin-top:24px">
         <div class="it" style="border-color:rgba(247,243,234,.14)"><span class="ck"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span><div><b style="color:var(--cream)">Mobile-responsive out of the box</b></div></div>
         <div class="it" style="border-color:rgba(247,243,234,.14)"><span class="ck"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span><div><b style="color:var(--cream)">One tour, one package, or the whole catalog</b></div></div>
         <div class="it" style="border-color:rgba(247,243,234,.14)"><span class="ck"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span><div><b style="color:var(--cream)">Live shared price that drops as groups grow</b></div></div>
       </div>
     </div>
-    <!-- Preview: a copy of the REAL single-tour widget (EmbedWidget in
-         src/main.jsx, styles .embed-card in src/styles.css) — one card with the
-         live shared price that opens the tour on Sawa. It used to show a list
-         of forming departures with seat counters, which no widget renders. -->
+    <!-- Preview: the REAL booking widget, framed as it is on a partner's site,
+         in its preview mode (nothing is booked, nothing is counted). It used to
+         be a hand-made copy of the link-out card, which is no longer offered:
+         a copy drifts, and that one showed a widget that sent visitors away. -->
     <div class="rv" data-d="1">
-      <div style="max-width:360px;margin:0 auto;background:#fff;border:1px solid var(--line);border-radius:18px;overflow:hidden;box-shadow:0 18px 40px -20px rgba(23,50,58,.45);color:var(--teal)">
-        <div style="position:relative;aspect-ratio:16/10;background:#e9dfc9 url('https://pajwixqdvedscleckxdx.supabase.co/storage/v1/object/public/tour-images/tours/aswan-highlights/04.jpg') center/cover">
-          <span style="position:absolute;top:12px;left:12px;padding:5px 11px;border-radius:999px;background:rgba(255,255,255,.92);font-size:.75rem;font-weight:700;color:var(--teal)">Aswan</span>
-        </div>
-        <div style="padding:15px 16px 14px;display:grid;gap:7px">
-          <span style="font-size:.78rem;font-weight:600;color:var(--muted)">Aswan · Full day</span>
-          <strong style="font-family:'Fraunces',serif;font-weight:600;font-size:1.12rem;line-height:1.25">Aswan Highlights — Unfinished Obelisk, High Dam &amp; Philae</strong>
-          <div style="display:flex;align-items:baseline;gap:6px;margin-top:2px"><span style="font-size:.78rem;font-weight:600;color:var(--muted)">from</span><b class="tnum" style="font-family:'Fraunces',serif;font-weight:600;font-size:1.6rem">€55</b><span style="font-size:.78rem;font-weight:600;color:var(--muted)">EUR / person</span></div>
-          <p style="margin:0;font-size:.75rem;color:var(--muted);line-height:1.45">Shared price — it drops as the group grows, down to €44 EUR/person.</p>
-          <span style="margin-top:6px;display:flex;align-items:center;justify-content:center;min-height:44px;border-radius:12px;background:var(--gold);color:#14242a;font-weight:800;font-size:.9rem">View &amp; book →</span>
-          <span style="text-align:center;font-size:.7rem;color:var(--muted)">Powered by <b>Sawa&nbsp;Tours</b></span>
-        </div>
-      </div>
-      <p class="center" style="font-size:.78rem;color:rgba(247,243,234,.55);margin-top:14px">Illustrative preview of a single-tour widget · it takes your page's colors on install</p>
+      <iframe src="/embed/book?preview=1" title="The Sawa booking widget, in preview" loading="lazy"
+        style="width:100%;height:640px;border:0;border-radius:18px;background:#fbf7f0"></iframe>
+      <p class="center" style="font-size:.78rem;color:rgba(247,243,234,.55);margin-top:14px">The live widget, with booking switched off · on your site it sizes itself to fit and takes your page's colors</p>
     </div>
   </div>
 </section>
@@ -130,7 +119,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       <div class="rv" data-d="1" style="display:flex;flex-direction:column;gap:18px">
         <div class="panel"><div class="panel-in" style="padding:18px">
           <div class="code"><button class="copy" data-copy="#snip2">Copy</button><span id="snip2"><span class="cm">&lt;!-- Sawa widget: paste where it should appear --&gt;</span>
-&lt;iframe src="https://sawa.tours/embed?ref=YOUR-CODE" style="width:100%;border:0;border-radius:18px" loading="lazy" data-sawa-embed&gt;&lt;/iframe&gt;
+&lt;iframe src="https://sawa.tours/embed/book?ref=YOUR-CODE" style="width:100%;border:0;border-radius:18px" loading="lazy" data-sawa-embed&gt;&lt;/iframe&gt;
 <span class="cm">&lt;!-- Sizes it to fit and matches your page's colors --&gt;</span>
 &lt;script&gt;
 (function(){var q=new URLSearchParams(location.search),b=q.get('sawa-booking'),k=q.get('sawa-confirm'),j=q.get('sawa-join');
@@ -143,9 +132,9 @@ addEventListener('load',function(){document.querySelectorAll('iframe[data-sawa-e
         <div class="panel"><div class="panel-in">
           <h3 class="serif" style="font-family:'Fraunces',serif;font-weight:500;font-size:1.15rem;color:var(--teal)">What it can show</h3>
           <table class="cmp" style="margin-top:14px;box-shadow:none">
-            <tr><td><code>/embed?ref=YOUR-CODE</code></td><td style="color:var(--muted)">a Sawa banner leading to the whole catalog</td></tr>
-            <tr><td><code>/embed/tour/TOUR-ID?ref=YOUR-CODE</code></td><td style="color:var(--muted)">one day tour, with its live shared price</td></tr>
-            <tr><td><code>/embed/package/PACKAGE-ID?ref=YOUR-CODE</code></td><td style="color:var(--muted)">one package, with its live shared price</td></tr>
+            <tr><td><code>/embed/book?ref=YOUR-CODE</code></td><td style="color:var(--muted)">every tour, or the ones you choose: read, pick a date and book on your page</td></tr>
+            <tr><td><code>/embed/book/tour/TOUR-ID?ref=YOUR-CODE</code></td><td style="color:var(--muted)">one day tour, booked on your page</td></tr>
+            <tr><td><code>/embed/book/package/PACKAGE-ID?ref=YOUR-CODE</code></td><td style="color:var(--muted)">one package, booked on your page</td></tr>
           </table>
           <p style="color:var(--muted);font-size:.86rem;margin-top:12px">Promote builds each of these for you — pick a tour or package there and copy its snippet.</p>
         </div></div>

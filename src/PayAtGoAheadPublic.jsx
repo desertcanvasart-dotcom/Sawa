@@ -4,7 +4,6 @@
 // page behind a waitlist offer.
 import React, { useEffect, useState } from "react";
 import { API_BASE } from "./supabaseClient";
-import { MAX_GROUP_SIZE } from "../shared/group-size.js";
 import { TravelerDetailsFields, emptyTravelerDetails, travelerDetailsBody, travelerDetailsError } from "./TravelerDetails.jsx";
 
 const eur = (n) => `€${Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
@@ -103,38 +102,11 @@ function BookingVoucher({ voucher: v }) {
   );
 }
 
-// Under a tour's dates, when a date is full.
-export function WaitlistJoin({ dates }) {
-  const full = dates.filter((d) => d.full);
-  const [f, setF] = useState({ depId: "", name: "", email: "", seats: 1 });
-  const [done, setDone] = useState(null);
-  const [err, setErr] = useState("");
-  if (!full.length) return null;
-  if (done) return <div className="bk-ok" style={{ marginTop: 8 }}>You're on the waitlist (number {done.position}). If seats open up we'll email you an offer, held for you for a few hours.</div>;
-  async function join(e) {
-    e.preventDefault();
-    setErr("");
-    try {
-      const j = await post(`/public/departures/${f.depId || full[0].id}/waitlist`, { name: f.name, email: f.email, seats: Number(f.seats) });
-      setDone(j.waitlist);
-    } catch (e2) { setErr(e2.message); }
-  }
-  return (
-    <details className="note" style={{ marginTop: 8 }}>
-      <summary>A date you want is full? Join its waitlist</summary>
-      <form onSubmit={join} style={{ display: "grid", gap: 8, marginTop: 8 }}>
-        <select aria-label="Full date" value={f.depId} onChange={(e) => setF({ ...f, depId: e.target.value })}>
-          {full.map((d) => <option key={d.id} value={d.id}>{d.label}</option>)}
-        </select>
-        <input aria-label="Your name" required placeholder="Your name" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />
-        <input aria-label="Email" required type="email" placeholder="Email" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} />
-        <input aria-label="Seats" type="number" min={1} max={MAX_GROUP_SIZE} value={f.seats} onChange={(e) => setF({ ...f, seats: e.target.value })} />
-        <button className="btn-pill">Join the waitlist</button>
-        {err && <div className="form-error" role="alert">{err}</div>}
-      </form>
-    </details>
-  );
-}
+// The public "join the waitlist" form was removed on 12 Nov 2026. With numbered
+// departures a full departure is never listed: the next departure for the same
+// day is shown instead, so the form (which appeared only for a date marked
+// full) could not be reached, on the tour page or in the widget. The offer
+// page below and the server's waitlist routes are left in place.
 
 // /waitlist/:token — book the seats held for you.
 export function WaitlistOfferPage({ token }) {

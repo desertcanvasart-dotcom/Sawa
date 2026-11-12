@@ -1049,8 +1049,10 @@ function WidgetSection({ tourProducts = [] }) {
   const products = (tourProducts || []).filter((p) => p.active !== false);
   const prod = products.find((p) => p.id === productId);
   const iframe = (src) => `<iframe src="${SITE}${src}" style="width:100%;border:0;border-radius:18px" loading="lazy" data-sawa-embed></iframe>`;
-  const brandSnippet = code ? `${iframe(`/embed?ref=${code}`)}\n${EMBED_SCRIPT}` : "";
-  const prodSnippet = (code && prod) ? `${iframe(`/embed/${isPkg(prod) ? "package" : "tour"}/${prod.id}?ref=${code}`)}\n${EMBED_SCRIPT}` : "";
+  // The banner (/embed) and the compact card (/embed/tour/…) are no longer
+  // offered here (12 Nov 2026): both only linked out to sawa.tours, which is
+  // what the widget exists to avoid. Ones already on a partner's site keep
+  // working — the routes are still served.
   // Booking inside the widget: the visitor books without leaving the agency's
   // site, and the booking carries this agency's code straight from the iframe.
   // Which tours the all-tours widget lists: every one (nothing picked), or the
@@ -1106,15 +1108,6 @@ function WidgetSection({ tourProducts = [] }) {
 
           <div className="dash-card">
             <div className="dash-card-head">
-              <h2>Website banner <span className="field-hint" style={{ fontWeight: 500 }}>· opens sawa.tours</span></h2>
-              <button className="btn-ghost sm" onClick={() => copy(brandSnippet, "brand")}><Copy size={14} />{copied === "brand" ? "Copied!" : "Copy code"}</button>
-            </div>
-            <p className="field-hint">Paste anywhere — your website, a WordPress “Custom HTML” block, or hand it to your designer or an AI website builder. It matches your site's colors automatically.</p>
-            <textarea className="embed-snippet" readOnly rows={5} value={brandSnippet} onFocus={(e) => e.target.select()} />
-          </div>
-
-          <div className="dash-card">
-            <div className="dash-card-head">
               <h2>Promote a specific tour or package</h2>
             </div>
             <select className="embed-select" value={productId} onChange={(e) => setProductId(e.target.value)}>
@@ -1129,11 +1122,6 @@ function WidgetSection({ tourProducts = [] }) {
                 </div>
                 <p className="field-hint">Dates, prices and the booking form for this tour, inside your page.</p>
                 <textarea className="embed-snippet" readOnly rows={5} value={bookProdSnippet} onFocus={(e) => e.target.select()} />
-                <div className="dash-card-head" style={{ marginTop: 14 }}>
-                  <h3 style={{ margin: 0, fontSize: 14 }}>Compact card <span className="field-hint" style={{ fontWeight: 500 }}>· opens sawa.tours</span></h3>
-                  <button className="btn-ghost sm" onClick={() => copy(prodSnippet, "prod")}><Copy size={14} />{copied === "prod" ? "Copied!" : "Copy code"}</button>
-                </div>
-                <textarea className="embed-snippet" readOnly rows={5} value={prodSnippet} onFocus={(e) => e.target.select()} />
               </>
             )}
           </div>
@@ -1150,8 +1138,6 @@ function WidgetSection({ tourProducts = [] }) {
 const PREVIEW_KINDS = [
   { id: "book", label: "Booking widget — all tours" },
   { id: "bookProd", label: "Booking widget — one tour", needsTour: true },
-  { id: "banner", label: "Website banner" },
-  { id: "card", label: "Compact card", needsTour: true },
 ];
 function WidgetPreview({ code, products, productId, setProductId }) {
   const [kind, setKind] = useState("book");
@@ -1162,9 +1148,7 @@ function WidgetPreview({ code, products, productId, setProductId }) {
   const current = PREVIEW_KINDS.find((k) => k.id === kind);
   const type = prod && (isPkg(prod) ? "package" : "tour");
   const q = `?ref=${encodeURIComponent(code)}&preview=1`;
-  const src = current.needsTour
-    ? (prod ? (kind === "bookProd" ? `/embed/book/${type}/${prod.id}${q}` : `/embed/${type}/${prod.id}${q}`) : "")
-    : kind === "book" ? `/embed/book${q}` : `/embed${q}`;
+  const src = current.needsTour ? (prod ? `/embed/book/${type}/${prod.id}${q}` : "") : `/embed/book${q}`;
 
   // The widget reports its height, as it does to the snippet's script on a
   // partner's site; only this frame's messages count.
