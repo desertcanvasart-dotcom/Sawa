@@ -102,10 +102,10 @@ export function defaultSendDeps(env = process.env) {
   };
 }
 
-/** POST one lead to Autoura. Never throws. → { status: sent|failed|skipped, attempts, httpStatus, response } */
+/** POST one lead to Autoura. Never throws. → { outcome: sent|failed|skipped, attempts, httpStatus, response } */
 export async function sendLeadToAutoura(payload, deps = defaultSendDeps()) {
   if (!deps.url || !deps.secret) {
-    return { status: "skipped", attempts: 0, httpStatus: null, response: { reason: "AUTOURA_LEAD_WEBHOOK_URL or AUTOURA_WEBHOOK_SECRET not set" } };
+    return { outcome: "skipped", attempts: 0, httpStatus: null, response: { reason: "AUTOURA_LEAD_WEBHOOK_URL or AUTOURA_WEBHOOK_SECRET not set" } };
   }
   const rawBody = JSON.stringify(payload);
   let last = { httpStatus: null, response: null };
@@ -117,13 +117,13 @@ export async function sendLeadToAutoura(payload, deps = defaultSendDeps()) {
       last = { httpStatus: null, response: { error: err?.message } };
     }
     if (last.httpStatus !== null && last.httpStatus >= 200 && last.httpStatus < 300) {
-      return { status: "sent", attempts: attempt, ...last };
+      return { outcome: "sent", attempts: attempt, ...last };
     }
     // A 4xx (bad signature, unmapped brand, bad body) will not change on retry.
     if (last.httpStatus !== null && last.httpStatus >= 400 && last.httpStatus < 500) {
-      return { status: "failed", attempts: attempt, ...last };
+      return { outcome: "failed", attempts: attempt, ...last };
     }
     if (attempt <= BACKOFF_MS.length) await deps.sleep(BACKOFF_MS[attempt - 1]);
   }
-  return { status: "failed", attempts: BACKOFF_MS.length + 1, ...last };
+  return { outcome: "failed", attempts: BACKOFF_MS.length + 1, ...last };
 }

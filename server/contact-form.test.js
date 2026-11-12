@@ -117,7 +117,7 @@ function deps(statuses, extra = {}) {
 test("sent on a 2xx, signature verifies over the bytes actually posted", async () => {
   const d = deps([200]);
   const r = await sendLeadToAutoura({ brand: "sawa", reference: "SAWA-1" }, d);
-  assert.equal(r.status, "sent");
+  assert.equal(r.outcome, "sent");
   const { headers, body } = d.calls[0];
   assert.equal(headers[SIGNATURE_HEADER], `t=1700000000,v1=${signPayload("s3cret", 1700000000, body)}`);
 });
@@ -125,24 +125,24 @@ test("sent on a 2xx, signature verifies over the bytes actually posted", async (
 test("a 5xx or network error is retried, three tries in all", async () => {
   const d = deps([503, new Error("ECONNRESET"), 502]);
   const r = await sendLeadToAutoura({ a: 1 }, d);
-  assert.equal(r.status, "failed");
+  assert.equal(r.outcome, "failed");
   assert.equal(d.calls.length, 3);
   const d2 = deps([500, 201]);
-  assert.equal((await sendLeadToAutoura({ a: 1 }, d2)).status, "sent");
+  assert.equal((await sendLeadToAutoura({ a: 1 }, d2)).outcome, "sent");
   assert.equal(d2.calls.length, 2);
 });
 
 test("a 4xx is final", async () => {
   const d = deps([401, 200]);
   const r = await sendLeadToAutoura({ a: 1 }, d);
-  assert.equal(r.status, "failed");
+  assert.equal(r.outcome, "failed");
   assert.equal(r.httpStatus, 401);
   assert.equal(d.calls.length, 1);
 });
 
 test("without the URL or secret nothing is posted", async () => {
   const d = deps([200], { secret: null });
-  assert.equal((await sendLeadToAutoura({ a: 1 }, d)).status, "skipped");
+  assert.equal((await sendLeadToAutoura({ a: 1 }, d)).outcome, "skipped");
   assert.equal(d.calls.length, 0);
   const env = defaultSendDeps({ AUTOURA_LEAD_WEBHOOK_URL: " https://x/y ", AUTOURA_WEBHOOK_SECRET: "" });
   assert.equal(env.url, "https://x/y");
@@ -159,7 +159,7 @@ async function withServer({ emailResult = { ok: true }, max = 1000 } = {}, fn) {
   registerContactRoutes(app, {
     sendEmail: async (m) => { emails.push(m); if (emailResult instanceof Error) throw emailResult; return emailResult; },
     limiter: rateLimit({ windowMs: 60_000, max, message: { ok: false, error: "slow down" } }),
-    sendLead: async (p) => { leads.push(p); return { status: "sent" }; },
+    sendLead: async (p) => { leads.push(p); return { outcome: "sent" }; },
     reference: () => "SAWA-TEST2345",
     log: { warn() {}, error() {} },
   });

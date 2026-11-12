@@ -107,8 +107,8 @@ export function registerContactRoutes(app, {
       Promise.resolve()
         .then(() => sendLead(payload))
         .then((r) => {
-          if (r.status === "failed") log.warn?.(`[contact] Autoura lead ${ref} not filed`, r.httpStatus, r.response);
-          else if (r.status === "skipped") log.warn?.(`[contact] Autoura lead ${ref} skipped — ${r.response?.reason}`);
+          if (r.outcome === "failed") log.warn?.(`[contact] Autoura lead ${ref} not filed`, r.httpStatus, r.response);
+          else if (r.outcome === "skipped") log.warn?.(`[contact] Autoura lead ${ref} skipped — ${r.response?.reason}`);
         })
         .catch((e) => log.error?.(`[contact] Autoura lead ${ref} threw`, e?.message));
     };
