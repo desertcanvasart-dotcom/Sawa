@@ -11,7 +11,8 @@
 //   railway config plan            (read-only: what would change)
 //   railway config apply           (writes the settings below to the service)
 //
-// Apply only on a plan with 0 to add and 0 to destroy.
+// Apply only on a plan with 0 to add and 0 to destroy. Applied to production on
+// 12 Nov 2026; `railway config plan` then reported "already up to date".
 //
 // Started from `railway config pull` (12 Nov 2026), which gave the service as it
 // is: source, region, domains, private networking and the names of its
@@ -42,8 +43,10 @@ export default defineRailway(() => {
       startCommand: "npm start",
       healthcheckPath: "/api/health",
       healthcheckTimeout: 100,
-      restartPolicyType: "ON_FAILURE",
-      restartPolicyMaxRetries: 10,
+      // No restart policy here. Railway's default is "on failure, up to 10
+      // restarts", the same as railway.json had. Declared explicitly, it was the
+      // one change `railway config apply` did not store, and every later plan
+      // showed it as pending; left out, the plan is clean (12 Nov 2026).
     },
     replicas: { "asia-southeast1-eqsg3a": 1 },
     domains: ["sawa.tours", "sawatours.org", "www.sawa.tours", "www.sawatours.org"],
