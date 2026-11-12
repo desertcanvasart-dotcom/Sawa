@@ -32,8 +32,7 @@ import { tierVersionById, bookingTerms } from "./cancellation-tiers.js";
 import {
   DEFAULT_WINDOW_HOURS, WINDOW_HOURS_CHOICES, DEFAULT_OFFER_HOURS, payDeadline, reminderDue, releaseWarningDue,
   releaseDue, extensionError, paymentStanding, nextOffer, offerExpiresAt,
-  linkAlertDue, decisionDueAt, tooLateToStart, shortDeadlineError, UNLINKED_DECISIONS, MIN_TRAVELER_HOURS,
-  sellerLine, payeeLine, SELLER_PENDING,
+  linkAlertDue, decisionDueAt, tooLateToStart, shortDeadlineError, UNLINKED_DECISIONS, sellerLine, payeeLine, SELLER_PENDING,
 } from "../shared/pay-at-goahead.js";
 import { tierAt, hoursBeforeStart, refundFor } from "../shared/cancellation-tiers.js";
 import { throughPartner } from "./partner.js";

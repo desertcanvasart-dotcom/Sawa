@@ -13,11 +13,32 @@ if (!process.env.DATABASE_URL) {
 // verification switches on with PGSSL_CA — see ./ssl.js (S07).
 const ssl = sslConfig();
 
+// Review of 12 Nov 2026: with no timeouts, a stalled database left every
+// request waiting for a connection for ever, the healthcheck with them.
+//
+// PG_CONNECT_TIMEOUT_MS (default 10s) bounds the wait for a connection, from
+// the pool or from the server: past it the request fails with an error instead
+// of hanging. It is enforced in this process, so it works behind any pooler.
+//
+// PG_STATEMENT_TIMEOUT_MS is off unless set. It is sent to Postgres as a
+// connection parameter, which a transaction-mode pooler may refuse at connect,
+// so try it against the production connection string before relying on it; and
+// leave it unset for `npm run db:migrate`, whose statements may run long.
+export function poolTimeouts(env = process.env) {
+  const ms = (v, fallback) => { const n = Number(v); return Number.isFinite(n) && n >= 0 && String(v ?? "").trim() !== "" ? n : fallback; };
+  const statement = ms(env.PG_STATEMENT_TIMEOUT_MS, 0);
+  return {
+    connectionTimeoutMillis: ms(env.PG_CONNECT_TIMEOUT_MS, 10_000),
+    ...(statement > 0 ? { statement_timeout: statement } : {}),
+  };
+}
+
 export const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl,
   max: 10,
   idleTimeoutMillis: 30000,
+  ...poolTimeouts(),
 });
 
 pool.on("error", (err) => {
@@ -54,6 +75,10 @@ export function query(text, params) {
 // "all-or-nothing" reliability for bookings.
 export async function withTransaction(fn) {
   const client = await pool.connect();
+  // A client whose ROLLBACK failed is in an unknown state (most often a dead
+  // connection). Released with the error, the pool destroys it instead of
+  // handing it to the next request.
+  let broken;
   try {
     await client.query("BEGIN");
     const result = await fn(client);
@@ -64,10 +89,11 @@ export async function withTransaction(fn) {
       await client.query("ROLLBACK");
     } catch (rollbackError) {
       console.error("Rollback failed", rollbackError);
+      broken = rollbackError;
     }
     throw error;
   } finally {
-    client.release();
+    client.release(broken);
   }
 }
 

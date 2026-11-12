@@ -58,6 +58,7 @@ const ymd = (d) => (d instanceof Date ? d.toISOString().slice(0, 10) : String(d)
 const one = async (sql, args) => (await db.query(sql, args)).rows[0];
 const sent = [];
 const send = async (m) => { sent.push(m); return { ok: true }; };
+const AGENCY_A_OWNER = { id: "00000000-0000-4000-8000-0000000000a1", email: "owner@agency-a.test" };
 
 async function startServer(extraEnv) {
   const port = await new Promise((resolve) => {
@@ -95,7 +96,10 @@ before(async () => {
   const OPS = { id: "00000000-0000-4000-8000-0000000000c1", email: "ops@sawa.test" };
   fakeAuth = createServer((req, res) => {
     res.setHeader("Content-Type", "application/json");
-    if ((req.headers.authorization || "") !== "Bearer ops-token") { res.statusCode = 401; res.end("{}"); return; }
+    const auth = req.headers.authorization || "";
+    // Agency A's owner, for the routes an agency calls itself.
+    if (auth === "Bearer agency-a-token") { res.end(JSON.stringify({ id: AGENCY_A_OWNER.id, email: AGENCY_A_OWNER.email, aud: "authenticated" })); return; }
+    if (auth !== "Bearer ops-token") { res.statusCode = 401; res.end("{}"); return; }
     res.end(JSON.stringify({ id: OPS.id, email: OPS.email, aud: "authenticated" }));
   });
   await new Promise((r) => fakeAuth.listen(0, "127.0.0.1", r));
@@ -149,6 +153,7 @@ before(async () => {
   await operator("A", "Agency A Tours", "ag_a");
   await operator("B", "Agency B Travel", "ag_b");
   await operator("X", "Rostered Nile Ops", null);
+  await db.query("INSERT INTO app_users (id, email, role, agency_id) VALUES ($1, $2, 'agency_owner', 'ag_a')", [AGENCY_A_OWNER.id, AGENCY_A_OWNER.email]);
 
   const r = await db.query(
     `SELECT id, date, legacy_departure_id FROM catalogue_departures
@@ -552,4 +557,78 @@ test("066 routes: an update and a delete are audited with before and after; a de
   assert.equal((await one("SELECT action FROM audit_log WHERE action LIKE 'rates.%' ORDER BY created_at DESC LIMIT 1")).action, "rates.create");
   const ok = await attempt();
   assert.equal(ok.status, 201, await ok.text());
+});
+
+// ---------------------------------------------------------------- canceled before payment
+// Review of 12 Nov 2026. An agency on billing is invoiced when it books; the
+// invoice has no due date until GoAhead. A booking that leaves before then
+// must take its invoice with it, whichever way it leaves.
+test("a booking canceled before GoAhead leaves no agency invoice due: the agency's own cancel, a date below minimum, and the sweep", { skip }, async () => {
+  const free = (await db.query(
+    `SELECT id, date, legacy_departure_id FROM catalogue_departures
+      WHERE product_id = $1 AND legacy_departure_id IS NOT NULL AND status = 'open' AND date >= $2::date + 20
+        AND NOT EXISTS (SELECT 1 FROM pledges p WHERE p.departure_id = legacy_departure_id)
+      ORDER BY date DESC LIMIT 3`, [productId, today()])).rows.map((x) => ({ id: Number(x.id), date: ymd(x.date), legacy: Number(x.legacy_departure_id) }));
+  assert.equal(free.length, 3, "three dates nobody has booked");
+  const billed = async (dep) => {
+    const id = await book(dep, 2);
+    await db.query("UPDATE pledges SET agency_id = 'ag_a', agency = 'Agency A Tours', source = 'agency' WHERE id = $1", [id]);
+    await comm.recordAgencyBooking(db, { pledgeId: id, agency: { id: "ag_a", billing_approved: true, billing_due_days: 14 }, catalogueDepartureId: dep.id });
+    assert.deepEqual(await records(id), ["due", "pending"], "invoiced at booking, nothing due until GoAhead");
+    return id;
+  };
+  const records = async (id) => [
+    (await one("SELECT state FROM agency_invoices WHERE pledge_id = $1", [id])).state,
+    (await one("SELECT state FROM agency_commissions WHERE pledge_id = $1", [id])).state,
+  ];
+  const receivables = async () => (await (await fetch(`${on}/api/admin/finance`, { headers: { Authorization: "Bearer ops-token" } })).json())
+    .items.filter((i) => i.kind === "agency_invoice").map((i) => i.departure.id);
+
+  // 1. The agency cancels its own forming booking, over HTTP.
+  const own = await billed(free[0]);
+  assert.ok((await receivables()).includes(free[0].id));
+  const res = await fetch(`${on}/api/agency/bookings/${own}/cancel`, { method: "POST", headers: { Authorization: "Bearer agency-a-token" } });
+  assert.equal(res.status, 200, await res.text());
+  assert.deepEqual(await records(own), ["void", "void"]);
+  assert.equal((await one("SELECT void_reason FROM agency_invoices WHERE pledge_id = $1", [own])).void_reason, "Booking canceled before payment.");
+  assert.equal((await receivables()).includes(free[0].id), false, "Finance no longer lists it as money owed");
+
+  // 2. The date misses its minimum: the job cancels it and its bookings.
+  const missed = await billed(free[1]);
+  // 3. A booking canceled by a route that only updates pledges (the old behavior).
+  const stray = await billed(free[2]);
+  await db.query("UPDATE pledges SET status = 'cancelled', cancelled_at = now() WHERE id = $1", [stray]);
+  const live = await one("SELECT pledge_id FROM agency_invoices i JOIN pledges p ON p.id = i.pledge_id WHERE i.state = 'due' AND p.status <> 'cancelled' AND p.id <> $1 LIMIT 1", [missed]);
+
+  const swept = await comm.releaseUnpaidAgencyBookings(db);
+  assert.equal(swept.invoicesVoided, 1, "only the stray one: a live booking keeps its invoice");
+  assert.deepEqual(await records(stray), ["void", "void"]);
+  assert.deepEqual(await records(missed), ["due", "pending"]);
+  if (live) assert.equal((await one("SELECT state FROM agency_invoices WHERE pledge_id = $1", [live.pledge_id])).state, "due");
+
+  await cat.runStatusJob({ db, now: zonedDateTimeToUtc(free[1].date, "08:00") });
+  assert.equal((await one("SELECT status FROM catalogue_departures WHERE id = $1", [free[1].id])).status, "cancelled_below_minimum");
+  assert.deepEqual(await records(missed), ["void", "void"]);
+  assert.equal((await one("SELECT void_reason FROM agency_invoices WHERE pledge_id = $1", [missed])).void_reason, "The departure didn't go ahead.");
+});
+
+// ---------------------------------------------------------------- request bodies
+// Review of 12 Nov 2026: the limiter runs before the body parser, and only a
+// caller who could be uploading may send a large body.
+test("an anonymous request may send 1mb of JSON; a signed-in one, and the public review upload, 12mb", { skip }, async () => {
+  const json = { "Content-Type": "application/json" };
+  const big = (bytes) => JSON.stringify({ note: "x".repeat(bytes) });
+  const anon = await fetch(`${on}/api/public/group-requests`, { method: "POST", headers: json, body: big(2_000_000) });
+  assert.equal(anon.status, 413, "2mb from nobody in particular is refused before it is parsed");
+  const form = await fetch(`${on}/api/public/group-requests`, { method: "POST", headers: json, body: big(200_000) });
+  assert.equal(form.status, 422, "an ordinary form is parsed, and judged on its contents");
+  const review = await fetch(`${on}/api/public/reviews/no-such-token/uploads`, { method: "POST", headers: json, body: big(2_000_000) });
+  assert.notEqual(review.status, 413, "the review photo upload is public and takes a photo");
+  // Signed in: a 5mb upload is parsed. It is refused for what it is — bytes
+  // that are not the PNG its data URL claims.
+  const fake = `data:image/png;base64,${Buffer.alloc(5_000_000, 1).toString("base64")}`;
+  const upload = await fetch(`${on}/api/admin/uploads`, { method: "POST", headers: { ...json, Authorization: "Bearer ops-token" },
+    body: JSON.stringify({ filename: "pyramids.png", dataUrl: fake }) });
+  assert.equal(upload.status, 422, await upload.clone().text());
+  assert.match((await upload.json()).error, /isn't a valid PNG, JPG, WEBP or GIF image/);
 });

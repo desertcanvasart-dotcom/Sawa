@@ -6,7 +6,7 @@ import { isGoAheadDeparture, isBookingOpen } from "../shared/departure-state.js"
 import { CURRENCY_SYMBOL } from "../shared/currency.js";
 import {
   LayoutDashboard, Ticket, ClipboardList, Users as UsersIcon, ShieldCheck, ArrowUpRight,
-  Check, ChevronDown, AlertTriangle, CalendarDays, MapPin, Package, Hotel, ArrowLeft, Search, Clock3,
+  Check, ChevronDown, AlertTriangle, CalendarDays, MapPin, Package, ArrowLeft, Search, Clock3,
   Share2, Copy, Settings as SettingsIcon, Wallet, Receipt,
 } from "lucide-react";
 import { DashSidebar } from "./DashSidebar";

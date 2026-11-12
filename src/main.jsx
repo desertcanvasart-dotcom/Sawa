@@ -16,7 +16,6 @@ import {
   MessageCircle,
   Newspaper,
   Package,
-  Phone,
   Plus,
   Search,
   ShieldCheck,
@@ -32,7 +31,7 @@ import { apiFetch, API_BASE } from "./supabaseClient";
 import { GroupRequestForm, GROUP_REQUEST_TITLE, tooManyTravelers } from "./GroupRequest.jsx";
 import { warnOnce } from "./warn-once.js";
 import { tourSlug } from "../server/slug.js";
-import { toDate } from "./dates.js";
+import { toDate, daysAhead } from "./dates.js";
 // The booking conditions, from the one place they are declared. This file used
 // to carry its own `const DEFAULT_GO_AHEAD = 4`, free to drift from the server
 // that enforces it and from the twenty static pages that state it.
@@ -47,7 +46,7 @@ const SUPPORT_AVAILABILITY = INTERIM_COPY["support-availability"];
 // used to carry hand-written copies of seatsTotal and goAheadFor with a comment
 // asking the next person to keep them in sync with domain.js.
 import { seatsTotal, goAheadSeatsFor, isGoAheadDeparture, isBookingOpen } from "../shared/departure-state.js";
-import { livePriceFor, priceFromTiers, clampPrice } from "../shared/pricing.js";
+import { livePriceFor, clampPrice } from "../shared/pricing.js";
 import { cleanRefCode } from "../shared/ref-code.js";
 import { operatingDaysLabel } from "../shared/operating-days.js";
 import { minLeadDaysFor, maxHorizonDaysFor } from "../shared/request-window.js";
@@ -448,11 +447,14 @@ function App() {
   const [scheduleProductId, setScheduleProductId] = useState(
     () => (INLINE_BOOTSTRAP?.tourProducts || []).find((p) => !isPackage(p))?.id || ""
   );
-  const [scheduleDate, setScheduleDate] = useState("2026-05-25");
+  // Defaults a fortnight and a month ahead: the fixed dates that stood here
+  // ("2026-05-25", "2026-06-15") had passed, so the form opened on a date the
+  // server refuses.
+  const [scheduleDate, setScheduleDate] = useState(() => daysAhead(14));
   const [schedulePackageId, setSchedulePackageId] = useState(
     () => (INLINE_BOOTSTRAP?.tourProducts || []).find((p) => isPackage(p))?.id || ""
   );
-  const [schedulePackageDate, setSchedulePackageDate] = useState("2026-06-15");
+  const [schedulePackageDate, setSchedulePackageDate] = useState(() => daysAhead(30));
   // With an inlined payload there is nothing to wait for, so the app renders
   // content on first paint instead of gating the whole tree behind a spinner.
   const [isLoading, setIsLoading] = useState(!INLINE_BOOTSTRAP);
@@ -2202,7 +2204,7 @@ function TourDetailV2({ isSaving, navigate, phoneVerification = false, onBookPub
                         <span>Seats</span>
                         <input type="number" min="1" value={seats} onChange={(e) => setSeats(e.target.value)} required aria-required="true" />
                       </label>
-                      {tooManyTravelers(seats) && <GroupRequestForm size={Number(seats)} product={tour} date={dep?.date} />}
+                      {tooManyTravelers(seats) && <GroupRequestForm size={Number(seats)} product={tour} date={dep?.date} turnstileToken={turnstileToken} />}
                     </div>
                     {/* The glyph is carried by the code as well as the symbol in
                         the booking summary — the one place a visitor commits to
@@ -3502,7 +3504,7 @@ function EmbedBookTour({ product, refCode, phoneVerification, onManage = null, p
             <input value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" placeholder="Full name" />
           </label>
         </div>
-        {tooManyTravelers(nSeats) && <GroupRequestForm size={nSeats} product={product} date={dep?.date} />}
+        {tooManyTravelers(nSeats) && <GroupRequestForm size={nSeats} product={product} date={dep?.date} turnstileToken={turnstileToken} />}
         <div className="eb-row">
           <label>Email
             <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" placeholder="you@email.com" />

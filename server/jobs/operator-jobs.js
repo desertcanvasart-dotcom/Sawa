@@ -37,7 +37,7 @@ export function runOperatorAssignments({ log = console.log, now, env = process.e
   return guarded(async () => {
     const { runAssignmentTick } = await import("../assignments.js");
     const { runSettlementTick } = await import("../operator-settlement.js");
-    const { decideCommissions } = await import("../commissions.js");
+    const { decideCommissions, releaseUnpaidAgencyBookings } = await import("../commissions.js");
     const { sendEmail } = await import("../email.js");
     // Model phase 4 first: payment requests at GoAhead, reminders, warnings
     // and releases at the deadline, so a manifest frozen in the same tick
@@ -53,7 +53,12 @@ export function runOperatorAssignments({ log = console.log, now, env = process.e
     const poolTick = await runPoolTick({ log, now, env });
     const settlement = await runSettlementTick({ log, now });
     const commissions = await decideCommissions({ log, now });
-    return { payAtGoAhead, ...assignments, ...poolTick, ...settlement, ...commissions };
+    // The safety net for a booking canceled before it paid: its invoice and
+    // pool row are voided where it is canceled, and here for any that weren't.
+    const { pool } = await import("../db/index.js");
+    const released = await releaseUnpaidAgencyBookings(pool);
+    if (released.invoicesVoided) log(`invoices: ${released.invoicesVoided} voided (booking canceled before payment)`);
+    return { payAtGoAhead, ...assignments, ...poolTick, ...settlement, ...commissions, ...released };
   }, log, env);
 }
 

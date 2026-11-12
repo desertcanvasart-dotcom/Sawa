@@ -6,7 +6,7 @@
 // ============================================================
 import { publicBlogHtml } from "./blog-publication.js";
 import { pool } from "./db/index.js";
-import { BRAND, ORG_ID, SITE_ID, travelAgencySchema, websiteSchema, DIRECT_BOOKINGS_OPERATOR } from "./brand.js";
+import { BRAND, ORG_ID, travelAgencySchema, websiteSchema, DIRECT_BOOKINGS_OPERATOR } from "./brand.js";
 // tourPath is the one definition of a product's public URL. It already existed
 // and was already tested, but nothing used it: the catalogue markup, the
 // sitemap and (nearly) the page warmer each rebuilt the same expression by
@@ -34,7 +34,7 @@ const esc = (s) => String(s == null ? "" : s)
 // blanks the entire graph. The bootstrap escaper sitting next to it had always
 // handled that. There is one implementation now, shared with static-seo.js.
 // Re-exported because app.js imports inlineScriptJson from this module.
-import { ldScript, inlineScriptJson, dataScript } from "./inline-json.js";
+import { ldScript, dataScript } from "./inline-json.js";
 import { mapPost } from "./blog-post.js";
 import { recordFailure } from "./effect-log.js";
 import { rethrowIfProgrammerError } from "./errors.js";

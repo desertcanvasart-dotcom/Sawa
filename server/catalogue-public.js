@@ -26,7 +26,7 @@ import {
   mapCatalogueProduct, mapSpec, todayIn, departureInstants, isMissingCatalogueTables, goaheadColumns,
 } from "./catalogue.js";
 import { listRateCards } from "./rates.js";
-import { tierEur, tierPriced, tierPriceLine, tierPriceSummary } from "../shared/pool-model.js";
+import { tierEur, tierPriceLine, tierPriceSummary } from "../shared/pool-model.js";
 import { currentTravellerRate } from "./fx.js";
 
 const TTL_MS = 30_000;

@@ -37,6 +37,8 @@ const BASE = arg("base", "http://localhost:8795").replace(/\/$/, "");
 // pointed at — the ones for which "passed" is meaningless without the base.
 export const STEPS = [
   { name: "check:node", script: "scripts/check-node.js" },
+  // Errors only (undefined names, broken hook rules); warnings are counted.
+  { name: "lint", script: "scripts/lint.js" },
   { name: "check:constants", script: "scripts/sync-constants.js", args: ["--check"] },
   { name: "check:status-literals", script: "scripts/check-status-literals.js" },
   { name: "check:catch-handlers", script: "scripts/check-catch-handlers.js" },

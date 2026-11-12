@@ -59,3 +59,12 @@ export function fmtReceived(value, nowMs = Date.now()) {
   if (Number.isNaN(d.getTime())) return "—";
   return `${RECEIVED_FMT.format(d)} Cairo · ${timeAgo(d, nowMs)}`;
 }
+
+// YYYY-MM-DD, `days` after today in Egypt (tour dates are Egyptian dates,
+// whatever the browser's own timezone).
+export function daysAhead(days, nowMs = Date.now()) {
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(new Date(nowMs));
+  const d = new Date(`${today}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + Number(days));
+  return d.toISOString().slice(0, 10);
+}

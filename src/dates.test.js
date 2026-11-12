@@ -89,3 +89,12 @@ test("time ago reads naturally at each scale", () => {
   assert.equal(timeAgo("2026-09-23T14:00:00Z", now), "1 day ago");
   assert.equal(fmtReceived(null, now), "—");
 });
+
+test("daysAhead counts from today in Egypt, not in the browser's timezone", async () => {
+  const { daysAhead } = await import("./dates.js");
+  // 23:30 UTC on 30 Dec is already 31 Dec in Cairo (UTC+2).
+  const lateUtc = Date.UTC(2026, 11, 30, 23, 30);
+  assert.equal(daysAhead(0, lateUtc), "2026-12-31");
+  assert.equal(daysAhead(14, lateUtc), "2027-01-14");
+  assert.equal(daysAhead(30, Date.UTC(2026, 0, 31, 10)), "2026-03-02");
+});

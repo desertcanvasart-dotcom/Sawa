@@ -101,6 +101,41 @@ async function recordPoolBooking(c, { pledgeId, agency, catalogueDepartureId }) 
   return { basis: "pool", invoice };
 }
 
+// A pay-at-GoAhead booking that was canceled before it paid owes nothing, so
+// its agency invoice is void and its pool row earns nothing. The same rule
+// cancelBooking (pay-at-goahead.js) applies when Sawa cancels a booking.
+//
+// Review of 12 Nov 2026: the agency's own cancel route, the traveler's
+// booking-code cancel and the below-minimum cancellation only updated
+// `pledges`, so the invoice stayed `due` and Finance listed a receivable
+// nobody owed. They now call this in their own transaction, with the
+// booking's id. With no ids it is the sweep the operator tick runs: it
+// clears the rows already left behind and covers any other route that
+// cancels a booking.
+export async function releaseUnpaidAgencyBookings(c, { pledgeIds = null, reason = "Booking canceled before payment." } = {}) {
+  const has = (await c.query(
+    `SELECT to_regclass('agency_invoices') IS NOT NULL AND to_regclass('payment_requests') IS NOT NULL AS ok`)).rows[0]?.ok;
+  if (!has) return { invoicesVoided: 0, poolRowsVoided: 0 };
+  const ids = pledgeIds == null ? null : pledgeIds.map(String);
+  if (ids && !ids.length) return { invoicesVoided: 0, poolRowsVoided: 0 };
+  const unpaidAndCancelled = `
+        p.status = 'cancelled' AND p.payment_mode = 'pay_at_goahead'
+    AND NOT EXISTS (SELECT 1 FROM payment_requests r WHERE r.pledge_id = p.id AND r.state = 'paid')
+    AND ($1::text[] IS NULL OR p.id = ANY($1::text[]))`;
+  const invoices = await c.query(
+    `UPDATE agency_invoices i SET state = 'void', void_reason = $2
+       FROM pledges p
+      WHERE p.id = i.pledge_id AND i.state = 'due' AND ${unpaidAndCancelled}`, [ids, reason]);
+  let poolRows = { rowCount: 0 };
+  if (await hasBasis(c)) {
+    poolRows = await c.query(
+      `UPDATE agency_commissions ac SET state = 'void', earned_egp = 0, share_factor = 0, state_reason = $2, decided_at = now()
+         FROM pledges p
+        WHERE p.id = ac.pledge_id AND ac.basis = 'pool' AND ac.state = 'pending' AND ${unpaidAndCancelled}`, [ids, reason]);
+  }
+  return { invoicesVoided: invoices.rowCount, poolRowsVoided: poolRows.rowCount };
+}
+
 // Decide every pending commission whose departure or booking is settled.
 // Pool rows (phase 5) are decided by server/pool-settlement.js.
 export async function decideCommissions({ db = pool, now = Date.now(), log = () => {} } = {}) {
