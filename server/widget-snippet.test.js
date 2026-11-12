@@ -32,7 +32,7 @@ test("the published snippet is the one the dashboard generates", () => {
     "the dashboard's iframe shape changed — update the public pages to match");
   for (const [page, id] of PAGES) {
     const text = snippet(page, id);
-    assert.ok(text.includes('<iframe src="https://sawa.tours/embed?ref=YOUR-CODE" style="width:100%;border:0;border-radius:18px" loading="lazy" data-sawa-embed></iframe>'), `${page}: iframe`);
+    assert.ok(text.includes('<iframe src="https://sawa.tours/embed/book?ref=YOUR-CODE" style="width:100%;border:0;border-radius:18px" loading="lazy" data-sawa-embed></iframe>'), `${page}: iframe`);
     assert.ok(text.includes(EMBED_SCRIPT), `${page}: the resize/theme script differs from the dashboard's`);
   }
 });
@@ -44,4 +44,16 @@ test("no page advertises the loader or options that do not exist", () => {
       assert.ok(!s.includes(bad), `${page} still mentions ${bad}`);
     }
   }
+});
+
+// 12 Nov 2026 — the published snippet was the BANNER (/embed), which only links
+// out to sawa.tours, while the page promised visitors "never leave your brand".
+// It is the booking widget now, and the link-out widgets are not advertised.
+test("the public pages publish the booking widget, not a link-out", () => {
+  for (const [page] of PAGES) {
+    const s = read("site", page);
+    assert.ok(!/embed\?ref=YOUR-CODE/.test(s), `${page} still publishes the banner`);
+    assert.ok(!/\/embed\/(tour|package)\/[A-Z-]+\?ref=/.test(s), `${page} still advertises the link-out card`);
+  }
+  assert.doesNotMatch(dashboard, /brandSnippet|prodSnippet/, "the Promote page still builds a link-out snippet");
 });

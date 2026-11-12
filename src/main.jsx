@@ -68,7 +68,7 @@ const AgencyDashboard = lazy(() => import("./AgencyDashboard").then((m) => ({ de
 const OperatorDashboard = lazy(() => import("./OperatorDashboard.jsx").then((m) => ({ default: m.OperatorDashboard })));
 const ReviewPage = lazy(() => import("./ReviewPage.jsx").then((m) => ({ default: m.ReviewPage })));
 import { TravelerDetailsFields, emptyTravelerDetails, travelerDetailsBody, travelerDetailsError } from "./TravelerDetails.jsx";
-import { BookingPayAtGoAhead, WaitlistJoin, WaitlistOfferPage } from "./PayAtGoAheadPublic.jsx";
+import { BookingPayAtGoAhead, WaitlistOfferPage } from "./PayAtGoAheadPublic.jsx";
 import { JoinGroupLink, JoinGroupPage, partyTokenFromUrl } from "./GroupBooking.jsx";
 import { TurnstileBox } from "./Turnstile.jsx";
 import { ConfirmBookingPage, ResendConfirmation } from "./BookingConfirmation.jsx";
@@ -2070,14 +2070,6 @@ function TourDetailV2({ isSaving, navigate, phoneVerification = false, onBookPub
                         );
                       })}
 
-                      {/* Model phase 4: a full date's waitlist. */}
-                      {!reqMode && catalogueV2() && (
-                        <WaitlistJoin dates={tour.dates.map((d) => ({
-                          id: d.id, full: d.maxSeats - seatsTotal(d.pledges) <= 0,
-                          label: `${formatDate(d.date, { alwaysYear: true })}${d.time ? ` · ${d.time}` : ""}`,
-                        }))} />
-                      )}
-
                       {/* Traveler-initiated date request (Phase A) */}
                       {reqDone ? (
                         <div className="bk-ok" style={{ marginTop: 8 }}>
@@ -3449,13 +3441,6 @@ function EmbedBookTour({ product, refCode, phoneVerification, onManage = null, p
             {partyDate && (Number(depId) === Number(partyDate.id)
               ? <p className="eb-note eb-party"><Check size={14} />You're booking through {party.lead ? `${party.lead}'s` : "a"} group link: your seats join the same group.</p>
               : <p className="eb-note eb-party">This isn't the group's date. <button type="button" className="eb-switch" onClick={() => { setDepId(partyDate.id); setMonth(dateMonth(partyDate)); }}>Back to the group's date</button></p>)}
-            {/* A full date's waitlist (catalogue_v2) — the tour page's own form. */}
-            {catalogueV2() && (
-              <WaitlistJoin dates={(product.dates || []).filter((d) => d.status !== "cancelled" && !departurePast(d)).map((d) => ({
-                id: d.id, full: d.maxSeats - seatsTotal(d.pledges) <= 0,
-                label: `${formatDate(d.date, { alwaysYear: true })}${d.time ? ` · ${d.time}` : ""}`,
-              }))} />
-            )}
           </fieldset>
         )}
 

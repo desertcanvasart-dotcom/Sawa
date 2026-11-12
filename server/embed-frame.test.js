@@ -167,11 +167,13 @@ test("the snippet handles all three return links and sends the page's font", () 
   for (const route of ["booking", "confirm", "join"]) assert.match(main, new RegExp(`embedPath\\.match\\(/\\^\\\\/embed\\\\/${route}`), `/embed/${route} has no route in the widget`);
 });
 
-test("the widget's booking view: group links, the waitlist form, dates by month, and the group's own date", () => {
+test("the widget's booking view: group links, dates by month, and the group's own date", () => {
   const src = readFileSync(join(ROOT, "src", "main.jsx"), "utf8");
   const tour = src.slice(src.indexOf("function EmbedBookTour("), src.indexOf("function SectionHeading("));
   assert.match(tour, /<JoinGroupLink code=\{b\.bookingCode\} \/>/, "the done panel offers the group link");
-  assert.match(tour, /<WaitlistJoin dates=/, "the tour page's waitlist form");
+  // Retired 12 Nov 2026: a full departure is never listed, so the form could
+  // not be reached. It must not come back half-wired.
+  assert.doesNotMatch(src, /WaitlistJoin/, "the public waitlist form was retired");
   assert.match(tour, /const byMonth = dates\.length > 8 && months\.length > 1;/, "a long calendar is shown a month at a time");
   assert.match(tour, /partyToken: party\.token/, "a booking through a group link carries the link");
   assert.match(tour, /Number\(dep\?\.id\) === Number\(partyDate\.id\) \? \{ partyToken/, "…and only on the group's own date");
