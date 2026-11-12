@@ -222,6 +222,13 @@ test("the rate card: saved in place (audited); the tour page shows each tier in 
   assert.equal("eurRate" in withOld.card, false);
   await rates.deleteRateCard(db, productId);
   await assert.rejects(rates.saveRateCard(db, productId, { ...MODEL, costLines: [{ name: "Van", basis: "per_room", amounts: [1, 1] }] }, { by: "it" }), /per group" or "per traveler/);
+  // The card above was saved and deleted straight in the database, behind the
+  // server's back. Its public payload is cached for 30 seconds and is warmed
+  // at boot — sometimes in the instant the card existed, and then this read
+  // said "Exchange rate not set" (a card, no rate) and every test after it
+  // failed with it. Any successful write drops those caches; this one writes
+  // nothing (no code, so no row).
+  await fetch(`${on}/api/track/referral`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
   // No rate card yet: the tour page says it can't be booked, with no price.
   const before = (await (await fetch(`${on}/api/bootstrap`)).json()).tourProducts.find((p) => p.id === GIZA);
   assert.deepEqual([before.catalogue.priceLine, before.catalogue.priceUnavailable], [null, "Not bookable right now"]);

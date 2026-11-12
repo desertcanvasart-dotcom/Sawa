@@ -48,7 +48,12 @@ export async function partnerOf(db, key = {}) {
   const q = db || pool;
   const none = { name: "", pageUrl: null, bookingCode: null };
   try {
-    if (key.refCode != null) {
+    // Named by partner code — including "no code": a direct booking is asked
+    // about with `refCode: undefined`, and must be answered here, with no query.
+    // It used to fall through to the booking-code lookup below (the key carries
+    // `bookingCode` for the link back), which cost every direct booking's email
+    // a database round trip to learn there was no partner.
+    if ("refCode" in key) {
       const code = cleanRefCode(key.refCode);
       if (!code) return none;
       const row = (await with070(q,
