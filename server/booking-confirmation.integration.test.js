@@ -160,6 +160,17 @@ const liveSeats = async (depId) => Number((await one("SELECT COALESCE(SUM(seats)
 const depStatus = async (depId) => (await one("SELECT status FROM departures WHERE id = $1", [depId])).status;
 const publicDep = async (server, depId) => (await get(server, "/api/bootstrap")).body.departures.find((d) => Number(d.id) === depId);
 
+// A background effect (an email logged after the response): poll for it
+// briefly instead of racing it.
+const eventually = async (read, { tries = 50, everyMs = 40 } = {}) => {
+  for (let i = 0; i < tries; i++) {
+    const row = await read();
+    if (row) return row;
+    await new Promise((r) => setTimeout(r, everyMs));
+  }
+  return null;
+};
+
 test("an unconfirmed booking counts towards nothing and isn't shown; the booking page asks for the email confirmation", { skip }, async () => {
   const b = await book(main, DEP.a, 4);
   assert.equal(b.status, 202, JSON.stringify(b.body));
@@ -174,7 +185,7 @@ test("an unconfirmed booking counts towards nothing and isn't shown; the booking
   const held = await one("SELECT * FROM booking_confirmations WHERE booking_code = $1", [b.code]);
   assert.deepEqual([held.status, held.seats, held.email], ["unconfirmed", 4, "t1@example.test"]);
   assert.ok(!JSON.stringify(held).includes("tok-"), "the link's token is stored hashed");
-  const mail = await one("SELECT * FROM email_log WHERE kind = 'booking_confirm' ORDER BY id DESC LIMIT 1");
+  const mail = await eventually(() => one("SELECT * FROM email_log WHERE kind = 'booking_confirm' ORDER BY id DESC LIMIT 1"));
   assert.equal(mail.recipient, "t1@example.test");
   assert.match(mail.subject, /^Confirm your booking/);
   assert.ok(await one("SELECT 1 FROM audit_log WHERE action = 'booking.hold' AND entity_id = $1", [b.code]));
@@ -199,7 +210,10 @@ test("confirming makes the booking, through the same checks: it counts, reaches 
   assert.equal(await depStatus(DEP.a), "minimum_reached", "the confirmed seats reach GoAhead");
   assert.equal((await one("SELECT status, pledge_id FROM booking_confirmations WHERE booking_code = $1", [code])).pledge_id, p.id);
   assert.ok(await one("SELECT 1 FROM audit_log WHERE action = 'booking.email_confirmed' AND entity_id = $1", [p.id]));
-  assert.ok(await one("SELECT 1 FROM email_log WHERE recipient = 't1@example.test' AND kind <> 'booking_confirm'"), "the booking's own confirmation email follows");
+  // Sent in the background after the response (the operator is looked up
+  // first), so it is waited for, not read at once: read at once, this passed or
+  // failed on how quickly the mail was logged.
+  assert.ok(await eventually(() => one("SELECT 1 FROM email_log WHERE recipient = 't1@example.test' AND kind <> 'booking_confirm'")), "the booking's own confirmation email follows");
 
   const again = await post(main, `/api/public/booking-confirmations/${link}`);
   assert.deepEqual([again.status, again.body.state], [200, "already"]);
@@ -334,7 +348,8 @@ test("the booking page resends the link at most 3 times; each resend replaces th
   const fourth = await post(main, `/api/public/bookings/${b.code}/resend-confirmation`);
   assert.equal(fourth.status, 429);
   assert.match(fourth.body.error, /3 times/);
-  assert.equal(Number((await one("SELECT COUNT(*) AS n FROM email_log WHERE kind = 'booking_confirm' AND recipient = $1", [`t${seq}@example.test`])).n), 4);
+  const sentFour = () => one("SELECT 1 FROM email_log WHERE kind = 'booking_confirm' AND recipient = $1 GROUP BY recipient HAVING COUNT(*) = 4", [`t${seq}@example.test`]);
+  assert.ok(await eventually(sentFour), "the first email and three resends, no more");
   assert.equal((await post(main, `/api/public/booking-confirmations/${first}`)).status, 404, "the first link was replaced");
 
   const cancel = await post(main, `/api/public/bookings/${b.code}/cancel`);

@@ -115,3 +115,15 @@ test("a group link made on a partner's page brings friends to that page; otherwi
   assert.equal(await partnerJoinUrl(untouched, "SAWA-ABCD2345", null), null);
   assert.equal(untouched.seen.length, 0, "no link yet, nothing looked up");
 });
+
+test("a direct booking (no partner code) costs no lookup, even though its key carries the booking code", async () => {
+  forget070();
+  const asked = db({ name: "Somebody Else", booking_code: "SAWA-ABCD2345" });
+  for (const refCode of [undefined, null, "", "   "]) {
+    assert.deepEqual(await partnerOf(asked, { refCode, pageUrl: undefined, bookingCode: "SAWA-ABCD2345" }), { name: "", pageUrl: null, bookingCode: null });
+  }
+  assert.equal(asked.seen.length, 0, "no partner code, nothing to look up");
+  // Without the refCode key at all, the booking code IS the question.
+  assert.equal((await partnerOf(asked, { bookingCode: "SAWA-ABCD2345" })).name, "Somebody Else");
+  assert.equal(asked.seen.length, 1);
+});
