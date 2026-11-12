@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import { MAX_GROUP_SIZE, GROUP_MAX_WORD } from "../shared/group-size.js";
 import { capacityError } from "./domain.js";
 import { priceFromTiers } from "../shared/pricing.js";
+import { appSource } from "./app-source.js";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const read = (...p) => readFileSync(join(ROOT, ...p), "utf8");
@@ -19,7 +20,7 @@ test("the maximum group is 8 and 12 is refused", () => {
 });
 
 test("no live path defaults a tour to 12 seats", () => {
-  const app = read("server", "app.js");
+  const app = appSource();
   assert.doesNotMatch(app, /maxSeats \|\| 12/);
   assert.match(app, /Number\(body\.maxSeats \|\| MAX_GROUP_SIZE\)/);
   for (const f of ["src/AdminDashboard.jsx", "src/AgencyDashboard.jsx", "server/seo.js", "server/autoura-sync.js"]) {

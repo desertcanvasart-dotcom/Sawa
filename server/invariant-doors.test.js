@@ -14,6 +14,7 @@ import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { BANNED, scanCatchHandlers } from "../scripts/check-catch-handlers.js";
+import { appSource } from "./app-source.js";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const tracked = (glob) =>
@@ -72,7 +73,7 @@ test("presentDeparture's expectation is documented in a parameter name only", ()
   // whatever it is given. Fixing it is DIR-6's job — move the invariant to the
   // boundary — and this asserts the shape has not silently changed underneath
   // that plan.
-  const app = readFileSync(join(ROOT, "server", "app.js"), "utf8");
+  const app = appSource();
   assert.match(app, /function presentDeparture\(enriched, user\)/,
     "presentDeparture changed shape — re-read the DIR-5 entry before assuming it still applies");
 });

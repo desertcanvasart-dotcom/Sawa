@@ -26,13 +26,10 @@ process.env.PAGE_WARM_INTERVAL_MS = "0";
 
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { join, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
+import { appSource } from "./app-source.js";
 
 const { upsertTourProduct } = await import("./app.js");
 
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
 // A client that records every statement and answers the one SELECT loadProduct
 // issues. No SQL is validated here — insert-arity.test.js owns the text; this
@@ -109,7 +106,7 @@ test("the departures route no longer carries the listing's validation block", ()
   // scope where the first does not exist and the second helps nobody — if
   // either name reappears between the admin-departures route and the next
   // route, the misplacement is back.
-  const src = readFileSync(join(ROOT, "server", "app.js"), "utf8");
+  const src = appSource();
   const start = src.indexOf('app.post("/api/admin/departures"');
   assert.ok(start > -1, "the admin-departures route moved — update this test");
   // The route is followed by upsertTourProduct, which now rightly contains

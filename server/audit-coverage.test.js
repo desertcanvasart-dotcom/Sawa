@@ -13,9 +13,10 @@ import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { scanMutatingRoutes, unaudited, EXEMPT } from "../scripts/audit-coverage.js";
+import { appSource } from "./app-source.js";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
-const app = readFileSync(join(ROOT, "server", "app.js"), "utf8");
+const app = appSource();
 const routes = scanMutatingRoutes();
 
 test("the scanner finds the routes it is meant to judge", () => {
@@ -28,7 +29,7 @@ test("the scanner finds the routes it is meant to judge", () => {
 });
 
 test("every mutating route records who did what", () => {
-  const gaps = unaudited(routes).map((r) => `server/app.js:${r.line} ${r.key}`);
+  const gaps = unaudited(routes).map((r) => `${r.file}:${r.line} ${r.key}`);
   assert.deepEqual(gaps, [], "these change state and leave no record");
 });
 

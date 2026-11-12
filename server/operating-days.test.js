@@ -12,6 +12,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { appSource } from "./app-source.js";
 import {
   operatingDayError, operatingDaysLabel, operatingDaysOf, weekdayOf,
 } from "../shared/operating-days.js";
@@ -70,7 +71,7 @@ test("out-of-range weekdays are dropped rather than printing undefined", () => {
 // ---- both paths, one rule --------------------------------------------------
 
 test("the ADMIN publish route now checks operating days", () => {
-  const app = read("server/app.js");
+  const app = appSource();
   const route = app.slice(app.indexOf('app.post("/api/admin/departures"'));
   const body = route.slice(0, 3000);
   assert.match(body, /operatingDayError\(product, body\.date \|\| body\.startDate\)/,
@@ -79,7 +80,7 @@ test("the ADMIN publish route now checks operating days", () => {
 });
 
 test("the traveller route uses the same rule, not its own copy", () => {
-  const app = read("server/app.js");
+  const app = appSource();
   assert.equal((app.match(/operatingDayError\(/g) || []).length, 2,
     "both paths must call it, and nothing else should");
   // The hand-written table and joiner are gone from the server.

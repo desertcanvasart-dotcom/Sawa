@@ -12,6 +12,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { computePledgePricing } from "./domain.js";
 import { livePriceFor } from "../shared/pricing.js";
+import { appSource } from "./app-source.js";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const read = (...p) => readFileSync(join(ROOT, ...p), "utf8");
@@ -33,7 +34,7 @@ test("F06: the tour page opens on the linked date and keeps the choice in the ad
 });
 
 test("F06: redirects that move a tour URL keep its query", () => {
-  const app = read("server", "app.js");
+  const app = appSource();
   assert.match(app, /return res\.redirect\(301, canonical \+ queryOf\(req\)\);/);
   assert.match(app, /return res\.redirect\(301, target \+ queryOf\(req\)\);/);
 });

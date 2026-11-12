@@ -8,6 +8,7 @@
 // identical failure that looked transient and was not. The mirror never
 // transmitted anything and nothing said so.
 import { test } from "node:test";
+import { appSource } from "./app-source.js";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
@@ -183,7 +184,7 @@ test("no fire-and-forget site in the repository leaves severity to a default", (
   // severity; the helper refuses at run time, and this catches it at commit.
   let found = 0;
   for (const file of ["app.js", "autoura-sync.js", "email.js", "seo.js"]) {
-    const src = readFileSync(join(ROOT, "server", file), "utf8")
+    const src = (file === "app.js" ? appSource() : readFileSync(join(ROOT, "server", file), "utf8"))
       .replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/[^\n]*/gm, "$1");
     for (const call of callsTo(src, "fireAndForget")) {
       found += 1;
@@ -200,7 +201,7 @@ test("nothing in the web process chooses to die on a programmer error", () => {
   // timer inside the web process surface. `crash` is for a job or a CLI, and
   // nothing there needs it yet.
   for (const file of ["app.js", "autoura-sync.js", "email.js", "seo.js"]) {
-    const src = readFileSync(join(ROOT, "server", file), "utf8");
+    const src = (file === "app.js" ? appSource() : readFileSync(join(ROOT, "server", file), "utf8"));
     assert.ok(!/onProgrammerError:\s*"crash"/.test(src),
       `${file} would take the whole web process down; the request it belongs to has already completed`);
   }
@@ -210,7 +211,7 @@ test("every handler written for the world is guarded where it matters", () => {
   // The four modules the sweep ranked as exercised. A new one is not caught by
   // this test, which is what scripts/check-catch-handlers.js is for.
   for (const file of ["app.js", "autoura-sync.js", "email.js", "seo.js"]) {
-    const src = readFileSync(join(ROOT, "server", file), "utf8");
+    const src = (file === "app.js" ? appSource() : readFileSync(join(ROOT, "server", file), "utf8"));
     assert.match(src, /rethrowIfProgrammerError|isProgrammerError|fireAndForget/,
       `${file} catches failures and never distinguishes a broken build from a slow network`);
   }

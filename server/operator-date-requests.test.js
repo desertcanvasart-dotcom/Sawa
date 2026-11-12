@@ -7,14 +7,11 @@
 // operator path now runs through the same createDateRequest as the traveller's.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { join, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
+import { appSource } from "./app-source.js";
 
 process.env.DATABASE_URL ||= "postgres://unused@127.0.0.1:1/never-connected";
 const { opsNewBookingEmail } = await import("./email.js");
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
-const app = readFileSync(join(ROOT, "server", "app.js"), "utf8");
+const app = appSource();
 const route = (sig) => {
   const f = app.indexOf(sig);
   assert.ok(f > 0, `route not found: ${sig}`);

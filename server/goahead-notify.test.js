@@ -12,6 +12,7 @@ import { dateLabelFor } from "./jobs/notify-goahead.js";
 import { goAheadNotifyDryRun } from "./jobs/scheduler.js";
 import { bookingConfirmationEmail } from "./email.js";
 import { bookingLookupView } from "./domain.js";
+import { appSource } from "./app-source.js";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const read = (p) => readFileSync(join(ROOT, p), "utf8");
@@ -139,7 +140,7 @@ test("the send is driven by the milestone record, not by a route", () => {
   // boundaries. A trigger in one route fires for that route and no other.
   const job = read("server/jobs/notify-goahead.js");
   assert.match(job, /pendingGoAheadNotices/);
-  const app = read("server/app.js");
+  const app = appSource();
   assert.ok(!/runGoAheadNotices/.test(app),
     "notices must not be sent from a request handler");
 });
@@ -204,7 +205,7 @@ test("the page asks the server whether cancelling is allowed", () => {
 });
 
 test("cancelling is a POST, so a link prefetch cannot release a seat", () => {
-  const app = read("server/app.js");
+  const app = appSource();
   assert.match(app, /app\.post\("\/api\/public\/bookings\/:code\/cancel"/,
     "a GET here would let a mail client cancel a booking by scanning the message");
   const ui = read("src/main.jsx");
@@ -215,7 +216,7 @@ test("cancelling marks the pledge rather than deleting it", () => {
   // Deleting makes the code stop resolving, so the lookup answers "no booking
   // found" to someone who just cancelled. `booking_cancelled` is a state
   // domain.js already computes and already has copy for.
-  const app = read("server/app.js");
+  const app = appSource();
   assert.match(app, /UPDATE pledges SET status='cancelled' WHERE id=\$1/);
   assert.match(app, /await refreshStatus\(c, dep\.id\)/,
     "releasing a seat must recompute the departure's status");
@@ -224,6 +225,6 @@ test("cancelling marks the pledge rather than deleting it", () => {
 test("the cancel route is idempotent", () => {
   // A traveller clicking twice, or a client retrying, must not get a 404 that
   // reads as though something went wrong.
-  const app = read("server/app.js");
+  const app = appSource();
   assert.match(app, /alreadyDone: true/);
 });

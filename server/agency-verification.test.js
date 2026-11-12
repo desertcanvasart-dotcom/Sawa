@@ -13,6 +13,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { appSource } from "./app-source.js";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const SQL = readFileSync(join(ROOT, "server", "db", "schema_025_agency_verification.sql"), "utf8");
@@ -89,7 +90,7 @@ test("the write path arrived as its own change, and is admin-only", () => {
   //
   // So the assertion inverts rather than being deleted. What it guards now is
   // the thing that actually matters once a write path exists: WHO may write.
-  const app = readFileSync(join(ROOT, "server/app.js"), "utf8");
+  const app = appSource();
   const route = /app\.patch\("\/api\/admin\/agencies\/:id"[^\n]*/.exec(app);
   assert.ok(route, "the operator record has no write path");
   assert.match(route[0], /requireAuth/, "the operator record is writable without a session");
@@ -100,7 +101,7 @@ test("the write path arrived as its own change, and is admin-only", () => {
 test("a verification date is set by the server, never accepted from the caller", () => {
   // A verification date is evidence about when somebody looked. A caller that
   // could choose it could date a check that never happened.
-  const app = readFileSync(join(ROOT, "server/app.js"), "utf8");
+  const app = appSource();
   const schema = /const operatorRecordSchema = z\.object\(\{[\s\S]*?\}\);/.exec(app);
   assert.ok(schema, "the operator record schema is gone");
   assert.ok(!/verifiedAt|verified_at/.test(schema[0]),
@@ -111,7 +112,7 @@ test("a verification date is set by the server, never accepted from the caller",
 test("the licence number never reaches the audit log", () => {
   // /verify promises it is not shared outside Sawa, and an audit row is read by
   // more people than the form that set it.
-  const app = readFileSync(join(ROOT, "server/app.js"), "utf8");
+  const app = appSource();
   const audit = /action: "agency\.verification"[\s\S]{0,400}?\}\);/.exec(app);
   assert.ok(audit, "the verification write is not audited at all");
   assert.ok(!/tourismLicenseNo|tourism_license_no/.test(audit[0]),

@@ -14,6 +14,7 @@ import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { publicOperator } from "./domain.js";
+import { appSource } from "./app-source.js";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const read = (p) => readFileSync(join(ROOT, p), "utf8");
@@ -103,7 +104,7 @@ test("no agency, no operator — never a placeholder", () => {
 // ---- the surfaces ----------------------------------------------------------
 
 test("the public payload sends the whitelist, not the agency rows", () => {
-  const app = read("server/app.js");
+  const app = appSource();
   assert.match(app, /operatorsByProduct: Object\.fromEntries\(/);
   assert.match(app, /\.map\(\(a\) => \[a\.id, publicOperator\(a\)\]\)/,
     "the payload must go through the whitelist");
@@ -125,7 +126,7 @@ test("the product page names an operator only when there is one", () => {
 });
 
 test("the write path is admin-only and rate-limited", () => {
-  const app = read("server/app.js");
+  const app = appSource();
   const route = /app\.patch\("\/api\/admin\/agencies\/:id"[^\n]*/.exec(app);
   assert.ok(route);
   for (const guard of ["requireAuth", "requireAdmin()", "writeLimiter"]) {
@@ -136,7 +137,7 @@ test("the write path is admin-only and rate-limited", () => {
 test("saving an operator record clears the page cache", () => {
   // The catalogue caches an operator's name into every product page; without
   // this the site keeps serving the previous record after a correction.
-  const app = read("server/app.js");
+  const app = appSource();
   const route = app.slice(app.indexOf('app.patch("/api/admin/agencies/:id"'));
   assert.match(route.slice(0, 3000), /clearSeoCaches\(\)/);
 });
@@ -147,7 +148,7 @@ test("an admin can assign the operating company; an agency cannot choose one", (
   // Only the agency self-submission path used to set agency_id, from the
   // session. There was no way for staff to attach an operator to an existing
   // listing at all — which is why 0 of 16 products had one.
-  const app = read("server/app.js");
+  const app = appSource();
   assert.match(app, /agencyId: body\.agencyId \|\| null,/,
     "the admin route must accept an operator");
   // The agency route still takes it from the session, never the body.
@@ -165,7 +166,7 @@ test("an edit that says nothing about the operator does not wipe it", () => {
   // The upsert's COALESCE order is the whole rule. New-value-wins so a product
   // can be reassigned; NULL falls back so an unrelated edit leaves it alone.
   // Clearing ("Not assigned") is a separate, explicit flag, never a NULL.
-  const app = read("server/app.js");
+  const app = appSource();
   assert.match(app, /ELSE COALESCE\(EXCLUDED\.agency_id, tour_products\.agency_id\) END/);
   assert.match(app, /agency_id=CASE WHEN \$43::boolean THEN NULL/);
   assert.ok(!/agency_id=COALESCE\(tour_products\.agency_id, EXCLUDED\.agency_id\)/.test(app),
@@ -193,7 +194,7 @@ test("the form only offers states the database will accept", () => {
   const states = allowed[1].split(",").map((x) => x.trim().replace(/'/g, ""));
   assert.deepEqual(states.sort(), ["lapsed", "rejected", "verified"]);
 
-  const schema = /verificationState: z\.enum\(\[([^\]]*)\]\)/.exec(read("server/app.js"));
+  const schema = /verificationState: z\.enum\(\[([^\]]*)\]\)/.exec(appSource());
   assert.ok(schema, "the route no longer validates the state");
   const accepted = schema[1].split(",").map((x) => x.trim().replace(/"/g, ""));
   assert.deepEqual(accepted.sort(), states.sort(), "the route and the database disagree");

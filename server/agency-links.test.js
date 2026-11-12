@@ -6,6 +6,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { operatorSelectable } from "./domain.js";
 import { mapAgency } from "./db/mappers.js";
+import { appSource } from "./app-source.js";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const read = (...p) => readFileSync(join(ROOT, ...p), "utf8");
@@ -23,7 +24,7 @@ test("an inactive agency's team is not signed in; other agency statuses are unto
 });
 
 test('"Not assigned" clears the operating company; leaving the key out does not', () => {
-  const app = read("server", "app.js");
+  const app = appSource();
   assert.match(app, /agency_id=CASE WHEN \$43::boolean THEN NULL ELSE COALESCE\(EXCLUDED\.agency_id, tour_products\.agency_id\) END/);
   assert.match(app, /clearAgency: Object\.hasOwn\(body, "agencyId"\) && !body\.agencyId/);
   assert.match(app, /review\.clearAgency === true,\n    \]/);
@@ -33,7 +34,7 @@ test('"Not assigned" clears the operating company; leaving the key out does not'
 });
 
 test("the agencies screen lists what's linked and offers Deactivate", () => {
-  const app = read("server", "app.js");
+  const app = appSource();
   for (const route of ['app.get("/api/admin/agencies/:id/links"', 'app.post("/api/admin/agencies/:id/tours/:tourId/unassign"', 'app.post("/api/admin/agencies/:id/status"']) {
     assert.ok(app.includes(route), route);
   }

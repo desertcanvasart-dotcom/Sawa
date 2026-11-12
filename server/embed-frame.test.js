@@ -5,6 +5,7 @@
 // ran on a page that is not Sawa's. And the widget sent the visitor to
 // sawa.tours to read the tour, which is the thing it exists to avoid.
 import { test } from "node:test";
+import { appSource } from "./app-source.js";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
@@ -142,7 +143,7 @@ test("no booking named, no partner, a failed lookup: the email goes without the 
 // customer gets an email from a company they have not heard of.
 test("every traveler email about a booking is sent through the partner lookup", () => {
   const files = ["app.js", "pay-at-goahead.js", "booking-details.js", "catalogue-notices.js", "reviews.js", "jobs/cancel-unconfirmed.js", "jobs/notify-goahead.js"];
-  const src = files.map((f) => readFileSync(join(ROOT, "server", f), "utf8")).join("\n");
+  const src = files.map((f) => (f === "app.js" ? appSource() : readFileSync(join(ROOT, "server", f), "utf8"))).join("\n");
   const templates = ["confirmBookingEmail", "payAtGoAheadBookingEmail", "departureRequestReceivedEmail", "departureRequestApprovedEmail",
     "paymentLinkEmail", "paymentReceivedEmail", "belowMinimumCancellationEmail", "reviewRequestEmail", "bookingDetailsRequestEmail",
     "payAtGoAheadLinkEmail", "payAtGoAheadReminderEmail", "payAtGoAheadReleasedEmail", "payAtGoAheadApologyEmail", "payAtGoAheadReceiptEmail",

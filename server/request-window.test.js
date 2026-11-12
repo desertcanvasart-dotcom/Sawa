@@ -10,6 +10,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { appSource } from "./app-source.js";
 import {
   minLeadDaysFor, maxHorizonDaysFor, requestWindowError,
   DEFAULT_MIN_LEAD_DAYS, DEFAULT_MAX_HORIZON_DAYS,
@@ -82,7 +83,7 @@ test("the code rule and the database constraint agree", () => {
 });
 
 test("the request route reads the product's window, not a constant", () => {
-  const app = read("server/app.js");
+  const app = appSource();
   assert.match(app, /const minLead = minLeadDaysFor\(product\);/);
   assert.match(app, /const maxHorizon = maxHorizonDaysFor\(product\);/);
   // And it must run where the product exists — it used to run before the load.
@@ -95,7 +96,7 @@ test("the request route reads the product's window, not a constant", () => {
 test("the refusal names the tour and the number", () => {
   // "Requested dates can be at most 90 days out" told a traveller nothing about
   // which rule they hit on which trip.
-  const app = read("server/app.js");
+  const app = appSource();
   assert.match(app, /\$\{product\.title\} needs at least \$\{minLead\}/);
   assert.match(app, /\$\{product\.title\} can be requested up to \$\{maxHorizon\} days ahead/);
 });
@@ -111,7 +112,7 @@ test("the editor saves blank as NULL, never as the default", () => {
 });
 
 test("the upsert persists both ends", () => {
-  const app = read("server/app.js");
+  const app = appSource();
   // [,)] not \): 038 appended booking_cutoff_unit after these two, and the pin
   // is that both columns are in the INSERT — not that they end it.
   assert.match(app, /request_min_lead_days, request_max_horizon_days[,)]/);

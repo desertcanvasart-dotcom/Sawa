@@ -11,6 +11,7 @@ import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { recordSuccess, recordFailure, recordProgrammerError, effectReport, __resetEffects } from "./effect-log.js";
+import { appSource } from "./app-source.js";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -116,7 +117,7 @@ test("the two paths that mattered record their effect", () => {
 });
 
 test("/api/modes reports effect, not only configuration", () => {
-  const app = readFileSync(join(ROOT, "server", "app.js"), "utf8");
+  const app = appSource();
   assert.match(app, /effects:\s*effectReport\(\)/,
     "modes answers 'is this switched on' only — which is what misled us about the mirror");
 });

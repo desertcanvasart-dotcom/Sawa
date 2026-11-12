@@ -29,6 +29,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { appSource } from "./app-source.js";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const { sendEmail, sendEmailInBackground, emailMode } = await import("./email.js");
@@ -131,7 +132,7 @@ test("no caller discards a sendEmail result any more", () => {
   // The thirteen are gone. The one remaining direct call is the cancellation
   // loop, which awaits the result because it counts how many travellers were
   // actually reached (PP2.1).
-  const app = readFileSync(join(ROOT, "server", "app.js"), "utf8")
+  const app = appSource()
     .replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/[^\n]*/gm, "$1");
 
   const direct = [...app.matchAll(/(await\s+)?sendEmail\(/g)];

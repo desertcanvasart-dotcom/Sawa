@@ -11,6 +11,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { appSource } from "./app-source.js";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const REGISTER = readFileSync(join(ROOT, "docs", "audit", "latent-defects.md"), "utf8");
@@ -38,7 +39,7 @@ test("L-1's mask is still in the schema", () => {
 });
 
 test("L-3's mask is still in place — every read enriches", () => {
-  const app = readFileSync(join(ROOT, "server", "app.js"), "utf8");
+  const app = appSource();
   assert.match(app, /return enrichDeparture\(mapDeparture\(dep\.rows\[0\], pledges\.rows\), product\)/,
     "L-3 is armed: loadDeparture no longer recomputes status before serving");
 });
@@ -50,7 +51,7 @@ test("L-4: cancelled_reason is written only under catalogue_v2, and its reader a
     const src = readFileSync(join(ROOT, f), "utf8").replace(/\/\/[^\n]*/g, "");
     assert.ok(!/cancelled_reason/.test(src), `${f} now writes cancelled_reason — revisit L-4 in docs/audit/latent-defects.md`);
   }
-  const lines = readFileSync(join(ROOT, "server", "app.js"), "utf8").split("\n");
+  const lines = appSource().split("\n");
   const writes = lines.map((l, i) => [l, i]).filter(([l]) => /cancelled_reason\s*=/.test(l));
   assert.equal(writes.length, 4, "L-4: a new write of cancelled_reason — revisit the register");
   for (const [, i] of writes) {
@@ -86,7 +87,7 @@ test("L-9 is closed, and closed means one implementation", () => {
   // than leave it implying a live defect. That is what happened, so the
   // assertion inverts rather than being deleted: a register entry and the code
   // it describes must not be able to disagree in either direction.
-  const app = readFileSync(join(ROOT, "server", "app.js"), "utf8");
+  const app = appSource();
   const spa = readFileSync(join(ROOT, "src", "main.jsx"), "utf8");
   assert.doesNotMatch(app, /function cleanRefCode\(/, "server/app.js declares it again");
   assert.doesNotMatch(spa, /function cleanRef\w*\(/, "src/main.jsx declares it again");
