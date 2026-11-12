@@ -18,7 +18,7 @@
     "lint": "node scripts/lint.js",
     "test": "node scripts/run-tests.js",
     "build": "node scripts/sync-constants.js && vite build",
-    "start": "node server/db/apply-deploy-data-fixes.js && node server/app.js",
+    "start": "node server/db/migrate.js --pending && node server/db/apply-deploy-data-fixes.js && node server/app.js",
     "preview": "vite preview --host 0.0.0.0",
     "sync:partials": "node scripts/sync-partials.js",
     "sync:constants": "node scripts/sync-constants.js",
