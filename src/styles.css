@@ -7359,3 +7359,22 @@ button:disabled {
 .eb-sum .bk-policy th { text-align: left; font-weight: 700; padding: 0 8px 5px 0; }
 .eb-sum .bk-policy td { padding: 6px 8px 6px 0; border-top: 1px solid var(--line); vertical-align: top; color: var(--ink); }
 .eb-sum .bk-policy a { color: var(--ink); text-decoration: underline; }
+
+/* ---- A booking inside the widget (BookingLookupPage, embed) ---------------
+   The site's own lookup markup, fitted to the frame and to the host's colours:
+   its page styles assume Sawa's palette and a page-wide layout. */
+.eb-foot { display: grid; gap: 6px; justify-items: center; }
+.eb-foot-link, .eb-linkbtn { font: inherit; background: none; border: 0; padding: 0; cursor: pointer; color: var(--ink); }
+.eb-foot-link { font-size: 12px; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
+.eb-booking .eb-head { padding: 18px 18px 10px; }
+.eb-booking .booking-lookup { margin: 0; padding: 0 18px 16px; max-width: 560px; flex-wrap: wrap; }
+.eb-booking .booking-lookup .field { min-width: 200px; }
+.eb-booking .booking-result { max-width: none; padding: 0 18px 18px; }
+.eb-booking .booking-result:empty { display: none; }
+.eb-booking .booking-card { padding: 18px; border-radius: var(--embed-radius, 18px); box-shadow: none; background: transparent; }
+.eb-booking .booking-card h2 { font-weight: 600; font-size: 20px; }
+.eb-booking .field input { background: transparent; color: var(--ink); border-color: var(--line); }
+.eb-booking .btn-pill { background: transparent; color: var(--ink); border-color: var(--line); }
+.eb-booking .btn-pill:hover { background: transparent; filter: brightness(1.06); }
+.eb-booking .btn-pill.primary, .eb-booking .btn-pill.primary:hover { background: var(--gold); color: var(--embed-cta-text, #14242a); border-color: transparent; box-shadow: none; }
+.eb-booking .page-empty { padding: 18px 0; }

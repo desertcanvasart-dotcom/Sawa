@@ -78,7 +78,7 @@ import {
   departureRequestReceivedEmail, departureRequestApprovedEmail, departureRequestDeclinedEmail,
   operatorApplicationEmail, operatorApplicationReceiptEmail, operatorApplicationText,
   opsNewBookingEmail, opsNewListingEmail, opsGroupRequestEmail, opsRecipient,
-  paymentLinkEmail, paymentReceivedEmail, reviewRequestEmail, opsNewReviewEmail,
+  paymentLinkEmail, paymentReceivedEmail, reviewRequestEmail, opsNewReviewEmail, withPartner,
 } from "./email.js";
 import { registerReviewRoutes } from "./reviews.js";
 import {
@@ -1573,6 +1573,26 @@ app.post("/api/public/departures/:id/bookings", writeLimiter, bookingAttemptLimi
   res.status(out.status).json(out.json);
 }));
 
+// The partner whose widget a booking came through, by its code — the same
+// lookup the widget's own footer uses. "" when there is none, and when the
+// lookup fails: the email still goes, without the line.
+async function partnerNameFor(refCode) {
+  const code = cleanRefCode(refCode);
+  if (!code) return "";
+  try {
+    const row = (await pool.query(
+      `SELECT COALESCE(a.name, r.name) AS name
+         FROM referrals r LEFT JOIN agencies a ON a.id = r.agency_id
+        WHERE r.code = $1 AND r.active`, [code])).rows[0];
+    return row?.name || "";
+  } catch (e) {
+    rethrowIfProgrammerError(e);
+    console.warn(`[email] partner name not loaded for "${code}" — ${e.message}`);
+    return "";
+  }
+}
+const forPartner = async (refCode, message) => withPartner(await message, await partnerNameFor(refCode));
+
 async function placePublicBooking(req, { departureId, body, confirmation = null }) {
   const input = confirmation ? { ...confirmation.payload.input } : parse(publicBookingSchema, body);
   const manifest = confirmation ? confirmation.payload.manifest : manifestFields(body);
@@ -1682,7 +1702,7 @@ async function placePublicBooking(req, { departureId, body, confirmation = null 
   if (result.held) {
     const d = result.departure;
     const code = result.held.row.booking_code;
-    sendEmailInBackground(Promise.resolve(confirmBookingEmail({
+    sendEmailInBackground(forPartner(input.refCode, confirmBookingEmail({
       to: input.customerEmail, customerName: input.customerName, route: d.route,
       dateLabel: d.startDate ? `${d.startDate} – ${d.endDate}` : d.date, seats: input.seats, bookingCode: code,
       url: confirmBookingUrl(result.held.token),
@@ -1704,7 +1724,7 @@ async function placePublicBooking(req, { departureId, body, confirmation = null 
       to: input.customerEmail, customerName: input.customerName, route: d.route,
       dateLabel: d.startDate ? `${d.startDate} – ${d.endDate}` : d.date, seats: input.seats,
       total: result.booking.bookingTotal, bookingCode: result.booking.bookingCode, terms: view?.terms || null,
-    })));
+    })).then((m) => forPartner(input.refCode, m)));
   } else if (input.customerEmail) {
     const d = result.departure;
     sendEmailInBackground(operatorFor(d.id).then((operator) => bookingConfirmationEmail({
@@ -1713,7 +1733,7 @@ async function placePublicBooking(req, { departureId, body, confirmation = null 
       depositDue: result.booking.depositDue, balanceDue: result.booking.balanceDue,
       balanceDueDate: result.booking.balanceDueDate, bookingCode: result.booking.bookingCode,
       product: d, operator,
-    })));
+    })).then((m) => forPartner(input.refCode, m)));
   }
   notifyOps(result.departure, result.booking, input, { isRequest: false });
   // The direct traveller gets their own booking receipt back in full.
@@ -2056,7 +2076,7 @@ app.post("/api/public/bookings/:code/resend-confirmation", writeLimiter, h(async
     ? (await pool.query("SELECT route, date, start_date, end_date FROM departures WHERE id = $1", [r.row.departure_id])).rows[0] || {}
     : { route: (await pool.query("SELECT title FROM tour_products WHERE id = $1", [r.row.tour_product_id])).rows[0]?.title, date: r.row.request_date };
   const input = r.row.payload?.input || {};
-  sendEmailInBackground(Promise.resolve(confirmBookingEmail({
+  sendEmailInBackground(forPartner(input.refCode, confirmBookingEmail({
     to: r.row.email, customerName: input.customerName, route: d.route,
     dateLabel: d.start_date ? `${isoDate(d.start_date)} – ${isoDate(d.end_date)}` : isoDate(d.date), seats: Number(r.row.seats),
     bookingCode: r.row.booking_code, url: confirmBookingUrl(r.token), dateRequest: r.row.kind === "date_request",
@@ -2573,7 +2593,7 @@ app.post("/api/public/departure-requests", writeLimiter, bookingAttemptLimiter, 
   if (result.held) {
     // Held until the traveler confirms their email (060): not a request yet.
     const code = result.held.row.booking_code;
-    sendEmailInBackground(Promise.resolve(confirmBookingEmail({
+    sendEmailInBackground(forPartner(input.refCode, confirmBookingEmail({
       to: input.customerEmail, customerName: input.customerName, route: result.product.title,
       dateLabel: input.date, seats: input.seats, bookingCode: code, url: confirmBookingUrl(result.held.token), dateRequest: true,
     })));
@@ -2593,11 +2613,11 @@ async function announceDateRequest(req, input, result, { confirmedEmail = false 
     detail: { tourProductId: input.tourProductId, date: input.date, seats: input.seats, source: "public", joinedExisting: !!result.joinedRequest, ...(confirmedEmail ? { confirmedEmail: true } : {}) },
   });
   const d = result.departure;
-  sendEmailInBackground(departureRequestReceivedEmail({
+  sendEmailInBackground(forPartner(input.refCode, departureRequestReceivedEmail({
     to: input.customerEmail, customerName: input.customerName, route: d.route,
     dateLabel: d.startDate ? `${d.startDate} – ${d.endDate}` : d.date,
     seats: input.seats, bookingCode: result.booking.bookingCode,
-  }));
+  })));
   notifyOps(d, result.booking, input, { isRequest: true });
 }
 

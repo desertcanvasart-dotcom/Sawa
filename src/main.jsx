@@ -974,6 +974,12 @@ function App() {
     const bookId = embedBookMatch[2] ? decodeURIComponent(embedBookMatch[2]) : null;
     return <EmbedBook products={customerCalendars} productId={bookId} phoneVerification={phoneVerification} />;
   }
+  // A booking, looked up inside the widget (also reachable from its footer).
+  const embedBookingMatch = embedPath.match(/^\/embed\/booking(?:\/([^/?#]+))?$/);
+  if (embedBookingMatch) {
+    if (isLoading) return null;
+    return <EmbedBook products={customerCalendars} phoneVerification={phoneVerification} bookingCode={decodeURIComponent(embedBookingMatch[1] || "")} />;
+  }
   const embedMatch = path.match(/^\/embed\/(tour|package)\/([^/?#]+)/);
   if (embedMatch) {
     if (isLoading) return null;
@@ -3023,13 +3029,17 @@ function useEmbedPartner(code) {
   return name;
 }
 
-function EmbedBook({ products = [], productId = null, phoneVerification = false }) {
+function EmbedBook({ products = [], productId = null, phoneVerification = false, bookingCode = null }) {
   const ref = refFromUrl();
   const partner = useEmbedPartner(ref);
   const preview = embedPreview();
   const [openId, setOpenId] = useState(productId);
   const product = openId ? products.find((p) => p.id === openId) : null;
-  useEmbedAutoResize(openId);
+  // The booking a visitor is looking at, inside the frame: null (not looking),
+  // "" (the lookup, no code yet) or a code. "Manage this booking" used to open
+  // sawa.tours in a new tab; it opens this instead, on the partner's page.
+  const [managing, setManaging] = useState(bookingCode);
+  useEmbedAutoResize(`${openId}|${managing}`);
 
   useEffect(() => { if (productId) setOpenId(productId); }, [productId]);
 
@@ -3044,10 +3054,22 @@ function EmbedBook({ products = [], productId = null, phoneVerification = false 
   const footer = (
     <div className="eb-foot">
       {partner ? <span>Booked through <b>{partner}</b> · operated with <b>Sawa&nbsp;Tours</b></span> : <span>Powered by <b>Sawa&nbsp;Tours</b></span>}
+      {managing == null && <button type="button" className="eb-foot-link" onClick={() => { setManaging(""); scrollTop(); }}>Already booked? Check your booking</button>}
     </div>
   );
 
   const ribbon = preview ? <div className="eb-preview">Preview — this is your widget as customers see it. Booking is switched off here.</div> : null;
+
+  if (managing != null) {
+    const back = () => { setManaging(null); scrollTop(); };
+    return (
+      <div className="eb">
+        <button type="button" className="eb-back" onClick={back}><ArrowLeft size={14} />{productId || openId ? "Back to the tour" : "All tours"}</button>
+        <BookingLookupPage key={managing} embed initialCode={managing} onBrowse={back} />
+        {footer}
+      </div>
+    );
+  }
 
   if (productId && !product) {
     return <div className="eb"><div className="embed-card embed-empty">This tour is no longer available.</div>{footer}</div>;
@@ -3062,7 +3084,7 @@ function EmbedBook({ products = [], productId = null, phoneVerification = false 
             <ArrowLeft size={14} />All tours
           </button>
         )}
-        <EmbedBookTour key={product.id} product={product} refCode={ref} phoneVerification={phoneVerification} />
+        <EmbedBookTour key={product.id} product={product} refCode={ref} phoneVerification={phoneVerification} onManage={(code) => { setManaging(code); scrollTop(); }} />
         {footer}
       </div>
     );
@@ -3101,7 +3123,7 @@ function EmbedBook({ products = [], productId = null, phoneVerification = false 
   );
 }
 
-function EmbedBookTour({ product, refCode, phoneVerification }) {
+function EmbedBookTour({ product, refCode, phoneVerification, onManage = null }) {
   const pkg = isPackage(product);
   // Phase 3: a catalog booking carries every traveler's details.
   const [details, setDetails] = useState(emptyTravelerDetails);
@@ -3238,7 +3260,9 @@ function EmbedBookTour({ product, refCode, phoneVerification }) {
             ? `Nothing is charged now. Sawa reviews the date and emails ${email || "you"} once it opens for other travelers to join.`
             : `Nothing is charged now. We've emailed the details to ${email || "you"}; the deposit link follows once this date reaches GoAhead.`}
         </p>
-        {b.bookingCode && <a className="eb-link" href={`${SITE_URL}/booking/${encodeURIComponent(b.bookingCode)}`} target="_blank" rel="noopener noreferrer">Manage this booking <ArrowRight size={14} /></a>}
+        {b.bookingCode && (onManage
+          ? <button type="button" className="eb-link eb-linkbtn" onClick={() => onManage(b.bookingCode)}>See or cancel this booking <ArrowRight size={14} /></button>
+          : <a className="eb-link" href={`${SITE_URL}/booking/${encodeURIComponent(b.bookingCode)}`} target="_blank" rel="noopener noreferrer">Manage this booking <ArrowRight size={14} /></a>)}
       </div>
     );
   }
@@ -3849,8 +3873,12 @@ function BookingPayment({ payment }) {
   );
 }
 
-function BookingLookupPage({ navigate, path }) {
-  const initial = decodeURIComponent((path.match(/^\/booking\/([^/]+)/) || [])[1] || "");
+// `embed`: the same lookup inside the partner widget (EmbedBooking below) —
+// same state from the server, same cancel, drawn in the widget's frame with no
+// navigation out of it. One component on purpose: a second copy of "what a
+// traveller may do with a booking" is how the two would come to disagree.
+function BookingLookupPage({ navigate, path = "", embed = false, initialCode = "", onBrowse = null }) {
+  const initial = embed ? initialCode : decodeURIComponent((path.match(/^\/booking\/([^/]+)/) || [])[1] || "");
   const [code, setCode] = useState(initial);
   const [state, setState] = useState({ status: "idle", data: null, error: "" });
   // Two steps on purpose. This is the one destructive control a traveller can
@@ -3901,8 +3929,10 @@ function BookingLookupPage({ navigate, path }) {
 
   const b = state.data;
   return (
-    <div className="page-wrap">
-      <PageHead eyebrow="Your booking" title="Check your departure." lead="Enter the booking code from your confirmation to see whether your date has reached GoAhead." />
+    <div className={embed ? "eb-panel eb-booking" : "page-wrap"} onClickCapture={embed ? keepLinksOutOfFrame : undefined}>
+      {embed
+        ? <div className="eb-head"><strong className="eb-title">Your booking</strong><span className="eb-facts">Enter the booking code from your confirmation email to see your date, or to cancel.</span></div>
+        : <PageHead eyebrow="Your booking" title="Check your departure." lead="Enter the booking code from your confirmation to see whether your date has reached GoAhead." />}
       <form className="booking-lookup reveal in" onSubmit={lookup}>
         <label className="field">
           <span>Booking code</span>
@@ -3915,7 +3945,9 @@ function BookingLookupPage({ navigate, path }) {
 
       <div className="booking-result reveal in">
         {state.status === "notfound" && (
-          <div className="page-empty"><Ticket size={26} /><strong>No booking found with that code.</strong><p>Double-check the code in your confirmation email, or contact us.</p><SpaLink navigate={navigate} to="/contact" className="btn-pill">Contact us</SpaLink></div>
+          embed
+            ? <div className="page-empty"><Ticket size={26} /><strong>No booking found with that code.</strong><p>Double-check the code in your confirmation email.</p></div>
+            : <div className="page-empty"><Ticket size={26} /><strong>No booking found with that code.</strong><p>Double-check the code in your confirmation email, or contact us.</p><SpaLink navigate={navigate} to="/contact" className="btn-pill">Contact us</SpaLink></div>
         )}
         {state.status === "error" && <div className="form-error">{state.error}</div>}
         {state.status === "found" && b && (
@@ -3977,11 +4009,13 @@ function BookingLookupPage({ navigate, path }) {
                 {cancelState.error && <div className="form-error" role="alert">{cancelState.error}</div>}
               </div>
             )}
-            {b.state === "date_cancelled" && b.routePath && (
-              <SpaLink navigate={navigate} to={b.routePath} className="btn-pill primary">
-                See other dates on this route <ArrowRight size={16} />
-              </SpaLink>
-            )}
+            {b.state === "date_cancelled" && b.routePath && (embed
+              ? onBrowse && <button type="button" className="btn-pill primary" onClick={onBrowse}>See other dates <ArrowRight size={16} /></button>
+              : (
+                <SpaLink navigate={navigate} to={b.routePath} className="btn-pill primary">
+                  See other dates on this route <ArrowRight size={16} />
+                </SpaLink>
+              ))}
           </article>
         )}
       </div>

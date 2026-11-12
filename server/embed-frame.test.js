@@ -61,3 +61,48 @@ test("the booking view shows the tour and its terms, and no link to sawa.tours f
   }
   assert.doesNotMatch(view, /Full itinerary/, "the itinerary is in the widget; a link out for it has come back");
 });
+
+// ---- After the booking: managed in the frame, and emails that name the partner
+const { withPartner, confirmBookingEmail, bookingConfirmationEmail, departureRequestReceivedEmail, payAtGoAheadBookingEmail } = await import("./email.js");
+
+test("a booking made through a partner names the partner, in the text and the HTML of every traveler email", () => {
+  const base = { to: "ana@example.test", customerName: "Ana", route: "Giza Pyramids", dateLabel: "2026-12-08", seats: 2, bookingCode: "SAWA-TESTCODE" };
+  const emails = [
+    confirmBookingEmail({ ...base, url: "https://sawa.tours/confirm-booking/t" }),
+    bookingConfirmationEmail({ ...base, depositDue: 15, balanceDue: 135, balanceDueDate: "2026-12-06" }),
+    payAtGoAheadBookingEmail({ ...base, total: 150 }),
+    departureRequestReceivedEmail(base),
+  ];
+  for (const plain of emails) {
+    const m = withPartner(plain, "Nile Gate Travel");
+    assert.match(m.text, /Booked through Nile Gate Travel\./, `${plain.kind}: text part`);
+    assert.match(m.html, /Booked through Nile Gate Travel\./, `${plain.kind}: HTML part`);
+    assert.equal(m.subject, plain.subject);
+    assert.equal(m.kind, plain.kind);
+    assert.ok(m.html.length > plain.html.length && m.html.includes(plain.html.slice(-200)), `${plain.kind}: the rest of the email is unchanged`);
+  }
+});
+
+test("no partner, no line; and a partner's name cannot carry markup into the email", () => {
+  const plain = confirmBookingEmail({ to: "a@b.c", customerName: "Ana", route: "Giza", dateLabel: "2026-12-08", seats: 1, bookingCode: "SAWA-X", url: "https://sawa.tours/c/t" });
+  assert.deepEqual(withPartner(plain, ""), plain);
+  assert.deepEqual(withPartner(plain, null), plain);
+  const m = withPartner(plain, '<img src=x onerror="alert(1)"> Tours');
+  assert.doesNotMatch(m.html, /<img src=x/);
+  assert.match(m.html, /&lt;img src=x/);
+});
+
+test("the widget manages a booking in the frame: its own route, the shared lookup, and no link to sawa.tours when it can", () => {
+  const src = readFileSync(join(ROOT, "src", "main.jsx"), "utf8");
+  assert.match(src, /embedPath\.match\(\/\^\\\/embed\\\/booking/, "the /embed/booking route is gone");
+  const book = src.slice(src.indexOf("function EmbedBook("), src.indexOf("function EmbedBookTour("));
+  assert.match(book, /<BookingLookupPage key=\{managing\} embed /, "the widget's booking view must be the site's own lookup, not a copy");
+  const tour = src.slice(src.indexOf("function EmbedBookTour("), src.indexOf("function SectionHeading("));
+  assert.match(tour, /onManage\s*\? </, "the done panel opens the booking in the frame when the widget can show it");
+});
+
+test("the server names the partner from its own record of the code, on each traveler email a public booking sends", () => {
+  const app = readFileSync(join(ROOT, "server", "app.js"), "utf8");
+  assert.match(app, /async function partnerNameFor\(refCode\)[\s\S]{0,400}FROM referrals r LEFT JOIN agencies a/);
+  assert.equal((app.match(/forPartner\(input\.refCode,/g) || []).length, 6, "six traveler emails are sent for a public booking or date request");
+});
