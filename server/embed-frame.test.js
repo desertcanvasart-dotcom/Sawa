@@ -155,3 +155,27 @@ test("every traveler email about a booking is sent through the partner lookup", 
   }
   assert.deepEqual(bare, []);
 });
+
+// ---- The new catalogue in the widget, the agency's choice of tours, the font
+test("the snippet handles all three return links and sends the page's font", () => {
+  const dash = readFileSync(join(ROOT, "src", "AgencyDashboard.jsx"), "utf8");
+  const script = /const EMBED_SCRIPT = `([\s\S]*?)`;/.exec(dash)[1];
+  for (const part of ["q.get('sawa-booking')", "q.get('sawa-confirm')", "q.get('sawa-join')", "'/embed/booking/'", "'/embed/confirm/'", "'/embed/join/'", "font:c.fontFamily", "page:location.href"]) {
+    assert.ok(script.includes(part), `the snippet lost ${part}`);
+  }
+  const main = readFileSync(join(ROOT, "src", "main.jsx"), "utf8");
+  for (const route of ["booking", "confirm", "join"]) assert.match(main, new RegExp(`embedPath\\.match\\(/\\^\\\\/embed\\\\/${route}`), `/embed/${route} has no route in the widget`);
+});
+
+test("the widget's booking view: group links, the waitlist form, dates by month, and the group's own date", () => {
+  const src = readFileSync(join(ROOT, "src", "main.jsx"), "utf8");
+  const tour = src.slice(src.indexOf("function EmbedBookTour("), src.indexOf("function SectionHeading("));
+  assert.match(tour, /<JoinGroupLink code=\{b\.bookingCode\} \/>/, "the done panel offers the group link");
+  assert.match(tour, /<WaitlistJoin dates=/, "the tour page's waitlist form");
+  assert.match(tour, /const byMonth = dates\.length > 8 && months\.length > 1;/, "a long calendar is shown a month at a time");
+  assert.match(tour, /partyToken: party\.token/, "a booking through a group link carries the link");
+  assert.match(tour, /Number\(dep\?\.id\) === Number\(partyDate\.id\) \? \{ partyToken/, "…and only on the group's own date");
+  const book = src.slice(src.indexOf("function EmbedBook("), src.indexOf("function EmbedBookTour("));
+  assert.match(book, /const chosen = embedToursFromUrl\(\);/, "the partner's choice of tours");
+  assert.match(book, /!chosen\.length \|\| chosen\.includes\(String\(p\.id\)\)/, "no choice lists every tour");
+});

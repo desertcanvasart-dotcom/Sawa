@@ -1019,13 +1019,14 @@ function MyDateRequests({ onChange }) {
 // The widget's companion script. It (1) sizes the frame to its content,
 // (2) sends the page's colours and its address to the frame, and (3) when the
 // page was opened from a Sawa email — ?sawa-booking=CODE or ?sawa-confirm=TOKEN
-// — opens the booking widget on that booking, so the customer lands back on
-// the agency's own page. Old snippets (without 3) keep working; their emails
+// (or a friend's group link, ?sawa-join=TOKEN) — opens the booking widget on
+// that booking, so the customer lands back on the agency's own page. It also
+// sends the page's font, so the widget's text matches the site's. Old snippets (without 3) keep working; their emails
 // link to sawa.tours.
 const EMBED_SCRIPT = `<script>
-(function(){var q=new URLSearchParams(location.search),b=q.get('sawa-booking'),k=q.get('sawa-confirm');
-function s(f){try{var c=getComputedStyle(document.body),a=document.querySelector('a');f.contentWindow.postMessage({type:'sawa-embed-theme',bg:c.backgroundColor,text:c.color,accent:a?getComputedStyle(a).color:'',page:location.href},'*');}catch(e){}}
-if(b||k){var w=document.querySelector('iframe[data-sawa-embed][src*="/embed/book"]');if(w){try{var u=new URL(w.src);u.pathname=b?'/embed/booking/'+encodeURIComponent(b):'/embed/confirm/'+encodeURIComponent(k);w.loading='eager';w.src=u.toString();w.scrollIntoView({block:'start'});}catch(e){}}}
+(function(){var q=new URLSearchParams(location.search),b=q.get('sawa-booking'),k=q.get('sawa-confirm'),j=q.get('sawa-join');
+function s(f){try{var c=getComputedStyle(document.body),a=document.querySelector('a');f.contentWindow.postMessage({type:'sawa-embed-theme',bg:c.backgroundColor,text:c.color,accent:a?getComputedStyle(a).color:'',font:c.fontFamily,page:location.href},'*');}catch(e){}}
+if(b||k||j){var w=document.querySelector('iframe[data-sawa-embed][src*="/embed/book"]');if(w){try{var u=new URL(w.src);u.pathname=b?'/embed/booking/'+encodeURIComponent(b):k?'/embed/confirm/'+encodeURIComponent(k):'/embed/join/'+encodeURIComponent(j);w.loading='eager';w.src=u.toString();w.scrollIntoView({block:'start'});}catch(e){}}}
 addEventListener('message',function(e){if(!e.data)return;document.querySelectorAll('iframe[data-sawa-embed]').forEach(function(f){if(f.contentWindow!==e.source)return;if(e.data.type==='sawa-embed-height')f.style.height=e.data.height+'px';if(e.data.type==='sawa-embed-ready')s(f);if(e.data.type==='sawa-embed-top'&&f.getBoundingClientRect().top<0)f.scrollIntoView({behavior:'smooth',block:'start'});});});
 addEventListener('load',function(){document.querySelectorAll('iframe[data-sawa-embed]').forEach(s);});})();
 <\/script>`;
@@ -1052,7 +1053,12 @@ function WidgetSection({ tourProducts = [] }) {
   const prodSnippet = (code && prod) ? `${iframe(`/embed/${isPkg(prod) ? "package" : "tour"}/${prod.id}?ref=${code}`)}\n${EMBED_SCRIPT}` : "";
   // Booking inside the widget: the visitor books without leaving the agency's
   // site, and the booking carries this agency's code straight from the iframe.
-  const bookAllSnippet = code ? `${iframe(`/embed/book?ref=${code}`)}\n${EMBED_SCRIPT}` : "";
+  // Which tours the all-tours widget lists: every one (nothing picked), or the
+  // agency's own choice, carried in the snippet itself (&tours=id,id).
+  const [picked, setPicked] = useState([]);
+  const pickedIds = picked.filter((id) => products.some((p) => p.id === id));
+  const toursParam = pickedIds.length ? `&tours=${pickedIds.map(encodeURIComponent).join(",")}` : "";
+  const bookAllSnippet = code ? `${iframe(`/embed/book?ref=${code}${toursParam}`)}\n${EMBED_SCRIPT}` : "";
   const bookProdSnippet = (code && prod) ? `${iframe(`/embed/book/${isPkg(prod) ? "package" : "tour"}/${prod.id}?ref=${code}`)}\n${EMBED_SCRIPT}` : "";
 
   const copy = async (text, key) => {
@@ -1082,6 +1088,19 @@ function WidgetSection({ tourProducts = [] }) {
             </div>
             <p className="field-hint">Your customers browse every Sawa tour and book it <b>on your website</b> — they never leave your page. Each booking is credited to {info.name || "your agency"}, and the widget shows “Booked through {info.name || "your agency"}”.</p>
             <p className="field-hint">Emails about a booking can bring your customer back to <b>this page on your site</b> instead of sawa.tours. For that, add your website under Settings → Agency details{info.website ? <> (saved: <b>{info.website}</b>)</> : ""} and use the snippet below — if you pasted an older one, replace it.</p>
+            <details className="embed-pick">
+              <summary>{pickedIds.length ? `Showing ${pickedIds.length} of ${products.length} tours — change` : "Showing every tour — choose which ones"}</summary>
+              <div className="embed-pick-list">
+                {products.map((p) => (
+                  <label key={p.id}>
+                    <input type="checkbox" checked={pickedIds.includes(p.id)}
+                      onChange={(e) => setPicked(e.target.checked ? [...pickedIds, p.id] : pickedIds.filter((id) => id !== p.id))} />
+                    {p.title} <span className="field-hint">· {isPkg(p) ? "package" : p.city}</span>
+                  </label>
+                ))}
+              </div>
+              <p className="field-hint">Tick the tours you want and copy the code again. With none ticked, the widget lists them all, including tours Sawa adds later.</p>
+            </details>
             <textarea className="embed-snippet" readOnly rows={5} value={bookAllSnippet} onFocus={(e) => e.target.select()} />
           </div>
 

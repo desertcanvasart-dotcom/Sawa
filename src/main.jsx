@@ -76,6 +76,7 @@ import { TourReviews, useReviewSummary } from "./TourReviews.jsx";
 import { deviceHint } from "./deviceHint.js";
 import { EmbedGallery, EmbedOverview, EmbedTourDetails } from "./EmbedTourDetails.jsx";
 import { keepLinksOutOfFrame } from "./embed-links.js";
+import { monthOf } from "../shared/operators.js";
 
 
 // Three named traveler quotes lived here — Valencia, Munich, Abu Dhabi, each
@@ -979,6 +980,12 @@ function App() {
   if (embedBookingMatch) {
     if (isLoading) return null;
     return <EmbedBook products={customerCalendars} phoneVerification={phoneVerification} bookingCode={decodeURIComponent(embedBookingMatch[1] || "")} />;
+  }
+  // A friend's "Join my group" link, opened on the partner's page.
+  const embedJoinMatch = embedPath.match(/^\/embed\/join\/([^/?#]+)$/);
+  if (embedJoinMatch) {
+    if (isLoading) return null;
+    return <EmbedBook products={customerCalendars} phoneVerification={phoneVerification} joinToken={decodeURIComponent(embedJoinMatch[1])} />;
   }
   // "Confirm my booking", returned to the partner's page from the email.
   const embedConfirmMatch = embedPath.match(/^\/embed\/confirm\/([^/?#]+)$/);
@@ -3045,7 +3052,38 @@ function useEmbedPartner(code) {
   return name;
 }
 
-function EmbedBook({ products = [], productId = null, phoneVerification = false, bookingCode = null, confirmToken = null }) {
+// ?tours=id,id on the frame's address: the tours this partner chose to list
+// (the Promote page writes it into the snippet). Absent: every tour.
+function embedToursFromUrl() {
+  try { return String(new URLSearchParams(window.location.search).get("tours") || "").split(",").map((t) => t.trim()).filter(Boolean).slice(0, 200); }
+  catch (e) { return []; }
+}
+
+// A "Join my group" link opened in the widget: which date the group is on.
+// { status: "loading" | "ready" | "closed" | "invalid", ... }
+function useEmbedGroup(token, products) {
+  const [group, setGroup] = useState(token ? { status: "loading" } : null);
+  useEffect(() => {
+    if (!token) return undefined;
+    let live = true;
+    fetch(`${API_BASE}/public/parties/${encodeURIComponent(token)}`)
+      .then(async (r) => ({ ok: r.ok, j: await r.json().catch(() => ({})) }))
+      .then(({ ok, j }) => {
+        if (!live) return;
+        if (!ok || !j.departure) return setGroup({ status: "invalid", error: j.error || "This group link isn't valid." });
+        setGroup({ status: j.bookable ? "ready" : "closed", token, departureId: j.departure.id, title: j.departure.title,
+          lead: j.group?.leadFirstName || "", seats: j.group?.seats || 0, seatsLeft: j.seatsLeft });
+      })
+      .catch(() => { if (live) setGroup({ status: "invalid", error: "We couldn't open this group link. Check your connection and try again." }); });
+    return () => { live = false; };
+  }, [token]);
+  if (!group || group.status !== "ready") return group;
+  // The tour whose calendar holds the group's date.
+  const product = products.find((p) => (p.dates || []).some((d) => Number(d.id) === Number(group.departureId)));
+  return product ? { ...group, productId: product.id } : { ...group, status: "closed" };
+}
+
+function EmbedBook({ products = [], productId = null, phoneVerification = false, bookingCode = null, confirmToken = null, joinToken = null }) {
   const ref = refFromUrl();
   const partner = useEmbedPartner(ref);
   const preview = embedPreview();
@@ -3058,7 +3096,10 @@ function EmbedBook({ products = [], productId = null, phoneVerification = false,
   // A "Confirm my booking" link that came back to the partner's page: the
   // snippet's script opens the frame here with the link's token.
   const [confirming, setConfirming] = useState(confirmToken);
-  useEmbedAutoResize(`${openId}|${managing}|${confirming}`);
+  const group = useEmbedGroup(joinToken, products);
+  const [city, setCity] = useState("");
+  useEmbedAutoResize(`${openId}|${managing}|${confirming}|${group?.status}|${city}`);
+  useEffect(() => { if (group?.status === "ready" && group.productId) setOpenId(group.productId); }, [group?.status, group?.productId]);
 
   useEffect(() => { if (productId) setOpenId(productId); }, [productId]);
 
@@ -3100,6 +3141,19 @@ function EmbedBook({ products = [], productId = null, phoneVerification = false,
     );
   }
 
+  if (group && group.status !== "ready" && !openId) {
+    return (
+      <div className="eb">
+        <div className="embed-card embed-empty" role="status">
+          {group.status === "loading" ? "Opening your group's date…"
+            : group.status === "closed" ? "This group's date isn't taking more bookings. Ask whoever sent you the link about another date."
+            : group.error}
+        </div>
+        {footer}
+      </div>
+    );
+  }
+
   if (productId && !product) {
     return <div className="eb"><div className="embed-card embed-empty">This tour is no longer available.</div>{footer}</div>;
   }
@@ -3113,16 +3167,31 @@ function EmbedBook({ products = [], productId = null, phoneVerification = false,
             <ArrowLeft size={14} />All tours
           </button>
         )}
-        <EmbedBookTour key={product.id} product={product} refCode={ref} phoneVerification={phoneVerification} onManage={(code) => { setManaging(code); scrollTop(); }} />
+        <EmbedBookTour key={product.id} product={product} refCode={ref} phoneVerification={phoneVerification} onManage={(code) => { setManaging(code); scrollTop(); }}
+          party={group?.status === "ready" && group.productId === product.id ? group : null} />
         {footer}
       </div>
     );
   }
 
-  const list = products.filter((p) => p.active !== false);
+  const chosen = embedToursFromUrl();
+  const all = products.filter((p) => p.active !== false).filter((p) => !chosen.length || chosen.includes(String(p.id)));
+  // A city filter, once the list spans more than one city and is long enough
+  // to need it. A package is listed under each city it visits.
+  const citiesOf = (p) => (isPackage(p) ? (p.cities || [p.city]) : [p.city]).filter(Boolean);
+  const cities = [...new Set(all.flatMap(citiesOf))].sort();
+  const showCities = cities.length > 1 && all.length > 3;
+  const list = showCities && city ? all.filter((p) => citiesOf(p).includes(city)) : all;
   return (
     <div className="eb">
       {ribbon}
+      {showCities && (
+        <div className="eb-cities" role="group" aria-label="Filter by city">
+          {["", ...cities].map((c) => (
+            <button type="button" key={c || "all"} className={c === city ? "eb-city on" : "eb-city"} aria-pressed={c === city} onClick={() => setCity(c)}>{c || "All"}</button>
+          ))}
+        </div>
+      )}
       <div className="eb-grid">
         {list.map((p) => {
           const pkg = isPackage(p);
@@ -3152,7 +3221,7 @@ function EmbedBook({ products = [], productId = null, phoneVerification = false,
   );
 }
 
-function EmbedBookTour({ product, refCode, phoneVerification, onManage = null }) {
+function EmbedBookTour({ product, refCode, phoneVerification, onManage = null, party = null }) {
   const pkg = isPackage(product);
   // Phase 3: a catalog booking carries every traveler's details.
   const [details, setDetails] = useState(emptyTravelerDetails);
@@ -3162,7 +3231,18 @@ function EmbedBookTour({ product, refCode, phoneVerification, onManage = null })
   // starts on the request: sending the visitor to sawa.tours for it was the one
   // step that still left the partner's site.
   const [mode, setMode] = useState(dates.length || catalogueV2() ? "join" : "request");
-  const [depId, setDepId] = useState(dates[0]?.id ?? "");
+  // Through a "Join my group" link the date is the group's.
+  const partyDate = party ? dates.find((d) => Number(d.id) === Number(party.departureId)) : null;
+  const [depId, setDepId] = useState(partyDate?.id ?? dates[0]?.id ?? "");
+  // A catalogue tour can have a date every day for a year. Listed whole, that
+  // was 83 buttons and a frame 6,500px tall, with the form below them. Past a
+  // handful, the dates are shown a month at a time.
+  const dateMonth = (d) => (d?.date ? monthOf(d.date) : "");
+  const months = [...new Set(dates.map(dateMonth))].filter(Boolean);
+  const byMonth = dates.length > 8 && months.length > 1;
+  const [month, setMonth] = useState(dateMonth(partyDate || dates[0]));
+  const shownDates = byMonth ? dates.filter((d) => dateMonth(d) === month) : dates;
+  const monthLabel = (m) => new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(`${m}-15T12:00:00Z`));
   const [reqDate, setReqDate] = useState("");
   const [matches, setMatches] = useState(null);
   const [seats, setSeats] = useState(1);
@@ -3230,6 +3310,8 @@ function EmbedBookTour({ product, refCode, phoneVerification, onManage = null })
     ...(pkg ? { roomingType, accommodationTier: tierId } : {}),
     refCode: refCode || undefined,
     pageUrl: embedHostPage() || undefined,
+    // Sent only for the group's own date: pick another and it is an ordinary booking.
+    ...(catalogueV2() && partyDate && Number(dep?.id) === Number(partyDate.id) ? { partyToken: party.token } : {}),
     ...(detailsForm ? travelerDetailsBody(details) : {}),
   });
 
@@ -3290,6 +3372,8 @@ function EmbedBookTour({ product, refCode, phoneVerification, onManage = null })
             ? `Nothing is charged now. Sawa reviews the date and emails ${email || "you"} once it opens for other travelers to join.`
             : `Nothing is charged now. We've emailed the details to ${email || "you"}; the deposit link follows once this date reaches GoAhead.`}
         </p>
+        {/* Group bookings (catalogue_v2): share the date, from the partner's page. */}
+        {done.kind === "booked" && b.bookingCode && catalogueV2() && product.catalogue && !preview && <JoinGroupLink code={b.bookingCode} />}
         {b.bookingCode && (onManage
           ? <button type="button" className="eb-link eb-linkbtn" onClick={() => onManage(b.bookingCode)}>See or cancel this booking <ArrowRight size={14} /></button>
           : <a className="eb-link" href={`${SITE_URL}/booking/${encodeURIComponent(b.bookingCode)}`} target="_blank" rel="noopener noreferrer">Manage this booking <ArrowRight size={14} /></a>)}
@@ -3337,7 +3421,16 @@ function EmbedBookTour({ product, refCode, phoneVerification, onManage = null })
         ) : (
           <fieldset className="eb-dates">
             <legend>{pkg ? "Start date" : "Date"}</legend>
-            {dates.map((d) => {
+            {byMonth && (
+              <div className="eb-months" role="group" aria-label="Month">
+                {months.map((m) => (
+                  <button type="button" key={m} className={m === month ? "eb-city on" : "eb-city"} aria-pressed={m === month}
+                    onClick={() => { setMonth(m); const first = dates.find((d) => dateMonth(d) === m); if (first) setDepId(first.id); setErr(""); }}>{monthLabel(m)}</button>
+                ))}
+              </div>
+            )}
+            <div className={byMonth ? "eb-date-list many" : "eb-date-list"}>
+            {shownDates.map((d) => {
               const n = seatsTotal(d.pledges);
               const need = Math.max(0, goAheadSeatsFor(d) - n);
               const go = isGoAheadDeparture(d);
@@ -3350,8 +3443,19 @@ function EmbedBookTour({ product, refCode, phoneVerification, onManage = null })
                 </button>
               );
             })}
+            </div>
             {!catalogueV2() && <button type="button" className="eb-switch" onClick={() => pickMode("request")}>None of these work? Request your own date</button>}
-            {catalogueV2() && !dates.length && <p className="eb-note">No dates are open for booking right now.</p>}
+            {catalogueV2() && !dates.length && <p className="eb-note">No dates are open for booking right now. New dates are added to the calendar regularly.</p>}
+            {partyDate && (Number(depId) === Number(partyDate.id)
+              ? <p className="eb-note eb-party"><Check size={14} />You're booking through {party.lead ? `${party.lead}'s` : "a"} group link: your seats join the same group.</p>
+              : <p className="eb-note eb-party">This isn't the group's date. <button type="button" className="eb-switch" onClick={() => { setDepId(partyDate.id); setMonth(dateMonth(partyDate)); }}>Back to the group's date</button></p>)}
+            {/* A full date's waitlist (catalogue_v2) — the tour page's own form. */}
+            {catalogueV2() && (
+              <WaitlistJoin dates={(product.dates || []).filter((d) => d.status !== "cancelled" && !departurePast(d)).map((d) => ({
+                id: d.id, full: d.maxSeats - seatsTotal(d.pledges) <= 0,
+                label: `${formatDate(d.date, { alwaysYear: true })}${d.time ? ` · ${d.time}` : ""}`,
+              }))} />
+            )}
           </fieldset>
         )}
 
