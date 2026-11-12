@@ -91,39 +91,60 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     <div class="rv" data-d="1">
       <div class="panel" style="position:sticky;top:108px"><div class="panel-in">
         <h3 class="serif" style="font-family:'Fraunces',serif;font-weight:500;font-size:1.5rem;color:var(--teal)">Send us a message</h3>
-        <!-- U04 — said BEFORE the visitor types: this form opens their own email
-             app with the message ready; it does not send anything by itself.
-             Visitors without a mail app configured learned that only afterwards. -->
-        <p class="cf-how" style="color:var(--muted);font-size:.9rem;margin-top:8px">This opens your email app with your message ready to send to <a href="mailto:hello@sawa.tours" style="color:var(--gold-ink);font-weight:600">hello@sawa.tours</a>. No email app? Write to that address from any inbox, or message us on <a href="https://wa.me/201092847613" rel="noopener" style="color:var(--gold-ink);font-weight:600">WhatsApp</a>.</p>
-        <!-- Named fields + a mailto action: with JS the handler below composes a
-             tidy message, and without it the native submit still reaches an
-             inbox. Previously the fields were nameless and the form defaulted to
-             GET against this page, so a JS failure silently discarded the enquiry. -->
+        <p class="cf-how" style="color:var(--muted);font-size:.9rem;margin-top:8px">We read every message and reply by email. In a hurry? Message us on <a href="https://wa.me/201092847613" rel="noopener" style="color:var(--gold-ink);font-weight:600">WhatsApp</a>.</p>
+        <!-- Sent by our server (POST /api/public/contact → hello@sawa.tours and
+             the team's CRM). Until Nov 2026 this was a mailto: form that only
+             opened the visitor's own email app, so anyone without one sent
+             nothing. Without JavaScript the plain POST still works: the server
+             redirects back here with ?sent=1 or ?sent=0. -->
         <form class="form" id="contact-form" style="margin-top:22px"
-              action="mailto:hello@sawa.tours" method="post" enctype="text/plain">
+              action="/api/public/contact" method="post">
           <div class="f-row">
-            <div class="field"><label for="cf-name">Name <span class="req">*</span></label><input id="cf-name" name="name" required autocomplete="name" placeholder="Your name" /></div>
-            <div class="field"><label for="cf-email">Email <span class="req">*</span></label><input id="cf-email" name="email" type="email" required autocomplete="email" placeholder="you@email.com" /></div>
+            <div class="field"><label for="cf-name">Name <span class="req">*</span></label><input id="cf-name" name="name" required maxlength="100" autocomplete="name" placeholder="Your name" /></div>
+            <div class="field"><label for="cf-email">Email <span class="req">*</span></label><input id="cf-email" name="email" type="email" required maxlength="254" autocomplete="email" placeholder="you@email.com" /></div>
           </div>
           <div class="field"><label for="cf-role">I'm a…</label><select id="cf-role" name="role"><option>Traveler</option><option>Operator / agency</option><option>Press</option><option>Something else</option></select></div>
-          <div class="field"><label for="cf-subject">Subject</label><input id="cf-subject" name="subject" placeholder="How can we help?" /></div>
-          <div class="field"><label for="cf-message">Message <span class="req">*</span></label><textarea id="cf-message" name="message" required placeholder="Tell us what you need."></textarea></div>
+          <div class="field"><label for="cf-subject">Subject</label><input id="cf-subject" name="subject" maxlength="150" placeholder="How can we help?" /></div>
+          <div class="field"><label for="cf-message">Message <span class="req">*</span></label><textarea id="cf-message" name="message" required maxlength="5000" placeholder="Tell us what you need."></textarea></div>
+          <!-- Honeypot: hidden from people and screen readers; a bot that fills it is ignored. -->
+          <div aria-hidden="true" style="position:absolute;left:-10000px;width:1px;height:1px;overflow:hidden"><label for="cf-website">Website</label><input id="cf-website" name="website" tabindex="-1" autocomplete="off" /></div>
           <label class="consent"><input type="checkbox" name="consent" value="yes" required /><span>I agree to be contacted about my enquiry.</span></label>
-          <button class="btn gold block" type="submit">Open in my email app <span class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></button>
-          <div class="done" role="status" style="display:none;align-items:center;gap:10px;background:rgba(244,201,93,.14);border:1px solid rgba(217,171,69,.4);border-radius:14px;padding:14px;color:var(--teal);font-size:.9rem"><span style="color:var(--gold-ink)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>Opening your email app… if nothing happens, write to <a href="mailto:hello@sawa.tours" style="color:var(--gold-ink);font-weight:600">hello@sawa.tours</a>.</div>
+          <button class="btn gold block" type="submit">Send message <span class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></button>
+          <div class="done" role="status" style="display:none;align-items:center;gap:10px;background:rgba(244,201,93,.14);border:1px solid rgba(217,171,69,.4);border-radius:14px;padding:14px;color:var(--teal);font-size:.9rem"><span style="color:var(--gold-ink)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span><span>Thank you — your message has been sent. We'll reply by email, usually within one working day.</span></div>
+          <div class="fail" role="alert" style="display:none;background:rgba(190,60,50,.08);border:1px solid rgba(190,60,50,.35);border-radius:14px;padding:14px;color:#8a2a22;font-size:.9rem"><span class="fail-msg">Sorry — your message didn't send.</span> Please try again, or message us on <a href="https://wa.me/201092847613" rel="noopener" style="color:var(--gold-ink);font-weight:600">WhatsApp (+20 109 284 7613)</a>.</div>
         </form>
         <script>
         (function () {
           var f = document.getElementById('contact-form');
           if (!f) return;
-          var v = function (id) { var el = document.getElementById(id); return el ? el.value.trim() : ''; };
+          var done = f.querySelector('.done'), fail = f.querySelector('.fail'), msg = f.querySelector('.fail-msg');
+          var btn = f.querySelector('button[type=submit]');
+          var show = function (ok, text) {
+            done.style.display = ok ? 'flex' : 'none';
+            fail.style.display = ok ? 'none' : 'block';
+            // The server's message ends by pointing at WhatsApp; the box below
+            // already does that, with a link, so that sentence is dropped here.
+            if (!ok) msg.textContent = (text || '').replace(/\s*[^.]*WhatsApp[^.]*\.?\s*$/, '') || "Sorry — your message didn't send.";
+          };
+          // Coming back from a no-JavaScript submit.
+          var sent = new URLSearchParams(window.location.search).get('sent');
+          if (sent === '1') show(true);
+          else if (sent === '0') show(false);
           f.addEventListener('submit', function (e) {
             e.preventDefault();
-            var name = v('cf-name'), email = v('cf-email'), role = v('cf-role'), msg = v('cf-message');
-            var subject = v('cf-subject') || ('Sawa enquiry from ' + name);
-            var body = 'Name: ' + name + '\nEmail: ' + email + '\nI am a: ' + role + '\n\n' + msg;
-            f.querySelector('.done').style.display = 'flex';
-            window.location.href = 'mailto:hello@sawa.tours?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body);
+            var data = {};
+            new FormData(f).forEach(function (val, key) { data[key] = val; });
+            data.consent = f.elements.consent.checked;
+            btn.disabled = true;
+            done.style.display = 'none'; fail.style.display = 'none';
+            fetch(f.action, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) })
+              .then(function (r) { return r.json().catch(function () { return {}; }).then(function (b) { return { ok: r.ok && b.ok, b: b }; }); })
+              .then(function (x) {
+                if (x.ok) { show(true); f.reset(); }
+                else show(false, x.b && x.b.error);
+              })
+              .catch(function () { show(false, "Sorry — we couldn't reach our server."); })
+              .then(function () { btn.disabled = false; });
           });
         })();
         </script>

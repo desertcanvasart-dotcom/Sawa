@@ -36,6 +36,7 @@ import {
   opsNewReviewEmail,
 } from "./email.js";
 import { registerReviewRoutes } from "./reviews.js";
+import { registerContactRoutes } from "./contact-form.js";
 import { randomBytes, randomInt } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -1101,6 +1102,17 @@ registerReviewRoutes(app, {
   requireAuth, requireRole, h, logAudit, writeLimiter, uploadLimiter, supabaseAdmin,
   sendEmail, sendEmailInBackground, reviewRequestEmail, opsNewReviewEmail, opsRecipient, portalLink,
 });
+
+// The /contact form (13 Nov 2026). Its own limiter: a person sends one or two
+// messages, so 5 in 15 minutes from one address is plenty and keeps the team
+// inbox from being flooded. CONTACT_RATE_LIMIT overrides; tests default high.
+const contactLimiter = rateLimit({
+  windowMs: 15 * 60_000,
+  max: Number(process.env.CONTACT_RATE_LIMIT) || (process.env.NODE_ENV === "test" ? 1000 : 5),
+  standardHeaders: true, legacyHeaders: false,
+  message: { ok: false, error: "You've sent several messages in the last few minutes. Please wait a little, or message us on WhatsApp (+20 109 284 7613).", whatsapp: "https://wa.me/201092847613" },
+});
+registerContactRoutes(app, { sendEmail, limiter: contactLimiter });
 
 app.use("/api", (_req, res) => res.status(404).json({ error: "Not found." }));
 

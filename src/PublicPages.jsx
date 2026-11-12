@@ -289,14 +289,33 @@ function AboutPage({ navigate, customerSummary }) {
 
 // ---- /contact ----
 function ContactPage({ navigate }) {
-  const [form, setForm] = useState({ name: "", email: "", message: "" });
+  const [form, setForm] = useState({ name: "", email: "", message: "", consent: false, website: "" });
   const [sent, setSent] = useState(false);
-  const set = (k) => (e) => setForm((s) => ({ ...s, [k]: e.target.value }));
-  const submit = (e) => {
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState("");
+  const set = (k) => (e) => setForm((s) => ({ ...s, [k]: e.target.type === "checkbox" ? e.target.checked : e.target.value }));
+  // Sent by the server (POST /api/public/contact → hello@sawa.tours and the
+  // team's CRM), the same route as site/contact.html. It used to be a mailto:
+  // link, which did nothing for a visitor without an email app — and said
+  // "on its way" regardless.
+  const submit = async (e) => {
     e.preventDefault();
-    const body = encodeURIComponent(`From: ${form.name} (${form.email})\n\n${form.message}`);
-    window.location.href = `mailto:hello@sawa.tours?subject=${encodeURIComponent("Sawa enquiry")}&body=${body}`;
-    setSent(true);
+    setSending(true);
+    setError("");
+    try {
+      const r = await fetch("/api/public/contact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...form, role: "Traveler" }),
+      });
+      const b = await r.json().catch(() => ({}));
+      if (r.ok && b.ok) setSent(true);
+      else setError(b.error || "Sorry — your message didn't send.");
+    } catch {
+      setError("Sorry — we couldn't reach our server.");
+    } finally {
+      setSending(false);
+    }
   };
   return (
     <div className="page-wrap">
@@ -329,15 +348,25 @@ function ContactPage({ navigate }) {
           {sent ? (
             <div className="contact-sent">
               <BadgeCheck size={28} />
-              <strong>Thanks — your message is on its way.</strong>
+              <strong>Thank you — your message has been sent.</strong>
               <p>{SUPPORT_AVAILABILITY} — for anything urgent that is the fastest route. Email replies follow as soon as we can.</p>
             </div>
           ) : (
             <>
               <label className="field"><span>Your name</span><input value={form.name} onChange={set("name")} required autoComplete="name" placeholder="Full name" /></label>
               <label className="field"><span>Email</span><input type="email" value={form.email} onChange={set("email")} required autoComplete="email" placeholder="you@email.com" /></label>
-              <label className="field"><span>Message</span><textarea value={form.message} onChange={set("message")} required rows={5} placeholder="Which tour or date are you asking about?" /></label>
-              <button className="btn-pill primary" type="submit">Send message <ArrowRight size={16} /></button>
+              <label className="field"><span>Message</span><textarea value={form.message} onChange={set("message")} required maxLength={5000} rows={5} placeholder="Which tour or date are you asking about?" /></label>
+              <div aria-hidden="true" style={{ position: "absolute", left: -10000, width: 1, height: 1, overflow: "hidden" }}>
+                <label>Website<input value={form.website} onChange={set("website")} tabIndex={-1} autoComplete="off" /></label>
+              </div>
+              <label className="consent"><input type="checkbox" checked={form.consent} onChange={set("consent")} required /><span>I agree to be contacted about my enquiry.</span></label>
+              {error && (
+                <p className="contact-error" role="alert">
+                  {error.replace(/\s*[^.]*WhatsApp[^.]*\.?\s*$/, "") || "Sorry — your message didn't send."}{" "}
+                  Please try again, or message us on <a href="https://wa.me/201092847613" target="_blank" rel="noreferrer">WhatsApp (+20 109 284 7613)</a>.
+                </p>
+              )}
+              <button className="btn-pill primary" type="submit" disabled={sending}>{sending ? "Sending…" : "Send message"} <ArrowRight size={16} /></button>
             </>
           )}
         </form>
