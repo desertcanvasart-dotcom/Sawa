@@ -1,4 +1,4 @@
-// Lint, as a gate step (scripts/lint.js). Added after the review of 12 Nov 2026.
+// Lint, as a gate step (scripts/lint.js), which passes this file to ESLint. Added after the review of 12 Nov 2026.
 //
 // Errors fail the gate: an undefined name, a hook called conditionally, a
 // duplicate key — things that are wrong whatever the author meant. Warnings

@@ -1,4 +1,4 @@
-// The lint step of the gate: ESLint over the code that runs (eslint.config.js).
+// The lint step of the gate: ESLint over the code that runs (scripts/eslint.config.js).
 // Fails on errors only. Warnings are counted and shown per rule, so the number
 // is visible in every run without burying the verdict under 100 lines.
 //
@@ -9,14 +9,17 @@ import { join, dirname, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
+// The config lives beside this script, not at the repo root: every JavaScript
+// file must sit inside a checker's roots (server/invariant-doors.test.js).
+const CONFIG = join(ROOT, "scripts", "eslint.config.js");
+const engine = () => new ESLint({ cwd: ROOT, overrideConfigFile: CONFIG });
 export const LINT_ROOTS = ["server", "src", "shared", "scripts"];
 
 // One source text under the project's own config, as if it were the file at
 // `filePath` (relative to the repo). What the test of this check plants its
 // defects with.
 export async function lintSource(code, filePath) {
-  const eslint = new ESLint({ cwd: ROOT });
-  const [result] = await eslint.lintText(code, { filePath: join(ROOT, filePath) });
+  const [result] = await engine().lintText(code, { filePath: join(ROOT, filePath) });
   return result ? result.messages : [];
 }
 
@@ -39,7 +42,7 @@ export function verdict(results, { root = ROOT } = {}) {
 const isCli = process.argv[1] && process.argv[1].endsWith("lint.js");
 if (isCli) {
   const showAll = process.argv.includes("--all");
-  const v = verdict(await new ESLint({ cwd: ROOT }).lintFiles(LINT_ROOTS));
+  const v = verdict(await engine().lintFiles(LINT_ROOTS));
   for (const e of v.errors) console.error(`ERROR ${e.where}  ${e.rule}  ${e.message}`);
   if (showAll) for (const w of v.warnings) console.log(`warn  ${w.where}  ${w.rule}  ${w.message}`);
   console.log(v.line);
