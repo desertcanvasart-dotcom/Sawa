@@ -1,0 +1,9 @@
+{
+  "name": "sawa-railway-config",
+  "private": true,
+  "type": "module",
+  "description": "The Railway SDK that `railway config plan` / `apply` evaluate railway.ts with. Kept apart from the app's own dependencies.",
+  "devDependencies": {
+    "railway": "3.16.0"
+  }
+}
