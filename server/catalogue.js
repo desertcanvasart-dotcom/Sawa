@@ -463,6 +463,10 @@ function transition(db, dep, next, product) {
           "SELECT id FROM pledges WHERE departure_id = $1 AND status <> 'cancelled' ORDER BY created_at, id",
           [dep.legacyDepartureId])).rows.map((r) => r.id);
         released = (await cancelDepartureAndPledges(client, dep.legacyDepartureId)).pledgesCancelled;
+        // Nobody had paid (payment is asked for at GoAhead), so no agency owes
+        // anything for these seats. Imported here: commissions.js imports this file.
+        const { releaseUnpaidAgencyBookings } = await import("./commissions.js");
+        await releaseUnpaidAgencyBookings(client, { pledgeIds: releasedPledgeIds, reason: "The departure didn't go ahead." });
       }
       const nextDate = await client.query(
         `SELECT cd.date FROM catalogue_departures cd

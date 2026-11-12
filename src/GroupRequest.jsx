@@ -8,7 +8,9 @@ import { MAX_GROUP_SIZE } from "../shared/group-size.js";
 export const GROUP_REQUEST_TITLE = `Groups of more than ${MAX_GROUP_SIZE}: request a special arrangement`;
 export const tooManyTravelers = (n) => Number(n) > MAX_GROUP_SIZE;
 
-export function GroupRequestForm({ size, product, date, className = "" }) {
+// `turnstileToken`: the token of the booking form this sits in. The group
+// request replaces that booking, so it is spent here instead.
+export function GroupRequestForm({ size, product, date, className = "", turnstileToken = "" }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [groupSize, setGroupSize] = useState(String(size || MAX_GROUP_SIZE + 1));
@@ -32,7 +34,7 @@ export function GroupRequestForm({ size, product, date, className = "" }) {
         body: JSON.stringify({
           name: name.trim(), email: email.trim(), groupSize: Number(groupSize),
           date: wanted || undefined, productId: product?.id, productTitle: product?.title,
-          note: note.trim() || undefined, website,
+          note: note.trim() || undefined, website, turnstileToken: turnstileToken || undefined,
         }),
       });
       if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `The request did not go through (${r.status}).`);

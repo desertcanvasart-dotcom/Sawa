@@ -19,7 +19,7 @@ import { pool, withTransaction } from "./db/index.js";
 import { readXlsx } from "./xlsx.js";
 import { getProduct, CatalogueError } from "./catalogue.js";
 import {
-  poolRateError, DEFAULT_COMMISSION_PCT, poolRateTable, tierPriced, rateCardError, rateCardWarnings,
+  DEFAULT_COMMISSION_PCT, poolRateTable, rateCardError, rateCardWarnings,
 } from "../shared/pool-model.js";
 
 const inTx = (db, fn) => (db === pool ? withTransaction(fn) : fn(db));

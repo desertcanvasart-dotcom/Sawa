@@ -30,13 +30,10 @@ import {
   validatePriceTiers,
   capacityError,
   MAX_GROUP_SIZE,
-  MIN_GROUP_SIZE,
-  DEFAULT_GO_AHEAD,
   bookingLookupView,
-  statusFor,
   departureActionBuckets,
 } from "./domain.js";
-import { attachUser, requireAuth, requireRole, isPlatform, isAgency, AuthError } from "./auth.js";
+import { attachUser, requireAuth, requireRole, isPlatform, isAgency } from "./auth.js";
 import { requestTiming } from "./request-timing.js";
 import { supabaseAdmin, clearAuthCache } from "./supabase.js";
 import helmet from "helmet";
@@ -48,7 +45,7 @@ import { registerFinanceRoutes } from "./finance-routes.js";
 import { onTravellerRateChange } from "./fx.js";
 import { assertRateCardBookable } from "./rates.js";
 import { catalogueContextFor, assertBookingComplete } from "./booking-details.js";
-import { recordAgencyBooking } from "./commissions.js";
+import { recordAgencyBooking, releaseUnpaidAgencyBookings } from "./commissions.js";
 import { fixBookingTerms } from "./cancellation-tiers.js";
 import { stampBookingPrice } from "./pool-settlement.js";
 import { recordTermsVersion } from "./terms-versions.js";
@@ -91,7 +88,7 @@ import {
 } from "./receipts.js";
 import {
   settleDeparture, payoutBlocker, payoutLines, BLOCKER_LABEL, endedBy, runWindow, payDateOnOrAfter, cairoDay,
-  COST_CATEGORIES, INCOME_CATEGORIES, COST_LABEL, LINE_CATEGORIES, lineKind, isMissingSettlementTables,
+  COST_CATEGORIES, INCOME_CATEGORIES, LINE_CATEGORIES, lineKind, isMissingSettlementTables,
 } from "./settlement.js";
 import { randomBytes, randomInt } from "node:crypto";
 import { existsSync, readFileSync, statSync } from "node:fs";
@@ -120,6 +117,7 @@ import { operatorFor, loadOperatorInputs, withDepositTimes } from "./operator-lo
 import { startJobScheduler, jobSchedulerEnabled, cancelJobDryRun, goAheadNotifyDryRun, goAheadAlertDryRun } from "./jobs/scheduler.js";
 import { TOUR_TIMEZONE } from "./tz.js";
 import { cleanHtml, cleanBlogHtml, cleanItinerary } from "./sanitize.js";
+import { sniffImageType } from "./image-type.js";
 import { canonicalRedirect } from "./canonical.js";
 import { canonicalPathRedirect } from "./path-canonical.js";
 import { injectStaticSchema } from "./static-seo.js";
@@ -188,12 +186,11 @@ app.post("/api/csp-report",
     res.status(204).end();
   });
 
-// 12mb allows base64-encoded image uploads (~9mb raw) through /api/admin/uploads.
-// (The route-level json parser ran too late because this global one parses first.)
 // Where each API request's time goes: a Server-Timing header, and a log line
 // for a slow one (server/request-timing.js).
 app.use(requestTiming());
-app.use(express.json({ limit: "12mb" }));
+// The JSON body parser is registered further down, after the rate limiter and
+// attachUser — see "Body parsing" below.
 
 // --- CORS: restrict to known origins (configurable via CORS_ORIGINS) ---
 const allowedOrigins = (process.env.CORS_ORIGINS || "http://localhost:5173")
@@ -243,6 +240,21 @@ app.use("/api/", generalLimiter);
 
 // Attach req.user from the Supabase JWT (if present) on every request.
 app.use(attachUser);
+
+// --- Body parsing: after the limiter, and sized by who is asking ---
+// Review of 12 Nov 2026: this parser used to run first, at 12mb, on every
+// route. An anonymous client could make the server buffer and parse 12mb of
+// JSON on any endpoint, and that work was done before the limiter had counted
+// the request. Now the limiter refuses first, and only a caller who could be
+// uploading gets the large limit: a signed-in user (tour images, receipts and
+// operator documents are base64 data URLs, ~9mb raw) and the one public upload,
+// a review photo behind its emailed token. Everyone else sends forms; 1mb is
+// generous for those.
+const uploadJson = express.json({ limit: "12mb" });
+const formJson = express.json({ limit: "1mb" });
+const PUBLIC_UPLOAD_PATH = /^\/api\/public\/reviews\/[^/]+\/uploads\/?$/;
+const jsonParserFor = (req) => (req.user || PUBLIC_UPLOAD_PATH.test(req.path) ? uploadJson : formJson);
+app.use((req, res, next) => jsonParserFor(req)(req, res, next));
 
 // Any successful API write can change the public catalogue (new booking seats,
 // approved listing, published date, price edit…), so drop the cached public
@@ -1515,6 +1527,9 @@ const groupRequestSchema = z.object({
 app.post("/api/public/group-requests", writeLimiter, h(async (req, res) => {
   const input = groupRequestSchema.parse(req.body || {});
   if (input.website) return res.status(202).json({ ok: true }); // a bot: answer as if it worked
+  // The same bot check as the booking forms this one sits in: every request
+  // here emails the operations inbox.
+  await requireTurnstile(req);
   const wanted = /^\d{4}-\d{2}-\d{2}$/.test(input.date || "") ? input.date : null;
   const product = input.productId
     ? (await pool.query(`SELECT id, title FROM tour_products WHERE id=$1`, [input.productId])).rows[0]
@@ -1797,7 +1812,11 @@ app.post("/api/agency/bookings/:pledgeId/cancel", requireAuth, requireRole("agen
 
     await c.query(`UPDATE pledges SET status='cancelled' WHERE id=$1`, [pledge.id]);
     // Model phase 3: a traveler's own cancellation (before GoAhead: no fee).
-    if (catalogueV2Enabled()) await c.query(`UPDATE pledges SET cancelled_at = now(), cancelled_reason = 'traveler' WHERE id = $1`, [pledge.id]);
+    if (catalogueV2Enabled()) {
+      await c.query(`UPDATE pledges SET cancelled_at = now(), cancelled_reason = 'traveler' WHERE id = $1`, [pledge.id]);
+      // Canceled before GoAhead, so before any payment: nothing is owed for it.
+      await releaseUnpaidAgencyBookings(c, { pledgeIds: [pledge.id] });
+    }
     await refreshStatus(c, dep.id);
     return { alreadyDone: false, departureId: dep.id };
   });
@@ -2259,7 +2278,11 @@ app.post("/api/public/bookings/:code/cancel", writeLimiter, h(async (req, res) =
     }
 
     await c.query(`UPDATE pledges SET status='cancelled' WHERE id=$1`, [pledge.id]);
-    if (catalogueV2Enabled()) await c.query(`UPDATE pledges SET cancelled_at = now(), cancelled_reason = 'traveler' WHERE id = $1`, [pledge.id]);
+    if (catalogueV2Enabled()) {
+      await c.query(`UPDATE pledges SET cancelled_at = now(), cancelled_reason = 'traveler' WHERE id = $1`, [pledge.id]);
+      // A widget booking belongs to an agency: canceled before payment, nothing is owed for it.
+      await releaseUnpaidAgencyBookings(c, { pledgeIds: [pledge.id] });
+    }
     // The seat is released, so the departure may fall back below its minimum —
     // the same recomputation the pledge-id route does.
     await refreshStatus(c, dep.id);
@@ -4802,7 +4825,7 @@ app.post("/api/admin/departures/:id/cancel", requireAuth, requireRole("super_adm
 // upload photos for their own tour listings via the shared product editor.
 // Accepts JSON { filename, dataUrl } where dataUrl is a base64 data URI and
 // returns the public URL.
-app.post("/api/admin/uploads", requireAuth, requireRole("super_admin", "ops_staff", "agency_owner", "agency_agent"), uploadLimiter, express.json({ limit: "8mb" }), h(async (req, res) => {
+app.post("/api/admin/uploads", requireAuth, requireRole("super_admin", "ops_staff", "agency_owner", "agency_agent"), uploadLimiter, h(async (req, res) => {
   if (!supabaseAdmin) throw new AppError(500, "Storage is not configured.");
   const { filename, dataUrl } = req.body || {};
   if (!dataUrl || typeof dataUrl !== "string") throw new AppError(422, "No image provided.");
@@ -4812,6 +4835,11 @@ app.post("/api/admin/uploads", requireAuth, requireRole("super_admin", "ops_staf
   const ext = contentType.split("/")[1].replace("jpeg", "jpg");
   const buffer = Buffer.from(m[3], "base64");
   if (buffer.length > 6 * 1024 * 1024) throw new AppError(422, "Image is larger than 6MB.");
+  // The type in a data URL is whatever the sender wrote. This bucket is
+  // public, so the bytes must be the image they are stored as.
+  if (sniffImageType(buffer) !== contentType.replace("image/jpg", "image/jpeg")) {
+    throw new AppError(422, "That file isn't a valid PNG, JPG, WEBP or GIF image.");
+  }
 
   const safe = String(filename || "image").toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 40);
   const key = `tours/${Date.now()}-${Math.random().toString(36).slice(2, 7)}-${safe}.${ext}`;
