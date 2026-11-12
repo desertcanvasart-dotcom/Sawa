@@ -180,7 +180,8 @@ export async function runCancelUnconfirmed({
           reason: LAPSED_REQUEST_REASON,
         })
         : cancellationEmail({ to, route: result.departure.route, dateLabel: dateLabel(result.departure) });
-      const sent = await deps.send(mail).catch(() => ({ ok: false }));
+      const { throughPartner } = await import("../partner.js");
+      const sent = await deps.send(await throughPartner(null, { departureId: dep.id, email: to }, mail)).catch(() => ({ ok: false }));
       if (sent?.ok) { reached += 1; notified += 1; }
     }
     log(line + `  [canceled, ${result.pledgesCancelled} booking(s) released]`);

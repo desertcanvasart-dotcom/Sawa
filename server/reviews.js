@@ -206,9 +206,10 @@ export function registerReviewRoutes(app, {
     const url = reviewUrl(token);
     let emailed = false;
     if (send) {
-      const r = await sendEmail(reviewRequestEmail({
+      const { throughPartner } = await import("./partner.js");
+      const r = await sendEmail(await throughPartner(pool, { pledgeId: b.id }, reviewRequestEmail({
         to: b.customer_email, customerName: firstName(b.customers), route: b.route, dateLabel: tourDate, url,
-      }));
+      })));
       emailed = !!r?.ok || r?.mode === "log";
       if (emailed) await pool.query(`UPDATE customer_reviews SET emailed_at = now() WHERE id = $1`, [row.id]);
     }

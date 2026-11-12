@@ -48,6 +48,7 @@
 //   DRY_RUN=0 node server/jobs/notify-goahead.js  # live
 import { pool } from "../db/index.js";
 import { sendEmail, goAheadEmail } from "../email.js";
+import { throughPartner } from "../partner.js";
 import { operatorFor } from "../operator-lookup.js";
 import { pendingGoAheadNotices, markNotified, reportNotices } from "../goahead-alert.js";
 
@@ -117,7 +118,7 @@ export async function runGoAheadNotices({ dryRun = DRY_RUN } = {}) {
       // confirmed" is a far smaller harm than a traveller never hearing.
       const operator = await operatorFor(departure.id);
       for (const address of to) {
-        await sendEmail(goAheadEmail({ to: address, route: departure.route, dateLabel, operator }));
+        await sendEmail(await throughPartner(pool, { departureId: departure.id, email: address }, goAheadEmail({ to: address, route: departure.route, dateLabel, operator })));
       }
       await markNotified(pool, departure.id, { recipients: to.length });
       sent += 1;

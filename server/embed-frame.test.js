@@ -101,8 +101,57 @@ test("the widget manages a booking in the frame: its own route, the shared looku
   assert.match(tour, /onManage\s*\? </, "the done panel opens the booking in the frame when the widget can show it");
 });
 
-test("the server names the partner from its own record of the code, on each traveler email a public booking sends", () => {
-  const app = readFileSync(join(ROOT, "server", "app.js"), "utf8");
-  assert.match(app, /async function partnerNameFor\(refCode\)[\s\S]{0,400}FROM referrals r LEFT JOIN agencies a/);
-  assert.equal((app.match(/forPartner\(input\.refCode,/g) || []).length, 6, "six traveler emails are sent for a public booking or date request");
+// ---- Which partner: server/partner.js
+const { partnerName, throughPartner } = await import("./partner.js");
+const fakeDb = (name = "Nile Gate Travel") => {
+  const seen = [];
+  return { seen, query: async (sql, args) => { seen.push([sql.replace(/\s+/g, " "), args]); return { rows: name ? [{ name }] : [] }; } };
+};
+
+test("the partner is read from the booking's own code, whichever way the caller names the booking", async () => {
+  for (const [key, where, args] of [
+    [{ refCode: "Nile-Gate" }, /WHERE r\.code = \$1 AND r\.active/, ["nile-gate"]],
+    [{ pledgeId: "pl_1" }, /p\.id = \$1 AND p\.ref_code IS NOT NULL/, ["pl_1"]],
+    [{ bookingCode: "sawa-abc" }, /UPPER\(p\.booking_code\) = UPPER\(\$1\)/, ["sawa-abc"]],
+    [{ departureId: 7, email: "Ana@Example.test" }, /p\.departure_id = \$1 AND LOWER\(p\.customer_email\) = LOWER\(\$2\)/, [7, "Ana@Example.test"]],
+  ]) {
+    const db = fakeDb();
+    assert.equal(await partnerName(db, key), "Nile Gate Travel");
+    assert.match(db.seen[0][0], where);
+    assert.deepEqual(db.seen[0][1], args);
+    assert.match(db.seen[0][0], /r\.active/, "a switched-off partner code names nobody");
+  }
+});
+
+test("no booking named, no partner, a failed lookup: the email goes without the line, never fails", async () => {
+  const plain = confirmBookingEmail({ to: "a@b.c", customerName: "Ana", route: "Giza", dateLabel: "2026-12-08", seats: 1, bookingCode: "SAWA-X", url: "https://sawa.tours/c/t" });
+  const none = fakeDb();
+  assert.equal(await partnerName(none, {}), "");
+  assert.equal(none.seen.length, 0, "nothing to look up, nothing asked");
+  assert.equal(await partnerName(fakeDb(null), { pledgeId: "pl_1" }), "");
+  const down = { query: async () => { throw Object.assign(new Error("connection refused"), { code: "ECONNREFUSED" }); } };
+  assert.deepEqual(await throughPartner(down, { pledgeId: "pl_1" }, plain), plain);
+  assert.match((await throughPartner(fakeDb(), { pledgeId: "pl_1" }, Promise.resolve(plain))).text, /Booked through Nile Gate Travel\./, "a promised message is awaited");
+  const skipped = fakeDb();
+  assert.deepEqual(await throughPartner(skipped, { pledgeId: "pl_1" }, plain, { skip: true }), plain);
+  assert.equal(skipped.seen.length, 0, "a copy addressed to the agency itself is not looked up");
+});
+
+// The templates a traveler receives about a booking. Each must be sent through
+// throughPartner (or forPartner, its shorthand in app.js), or a partner's
+// customer gets an email from a company they have not heard of.
+test("every traveler email about a booking is sent through the partner lookup", () => {
+  const files = ["app.js", "pay-at-goahead.js", "booking-details.js", "catalogue-notices.js", "reviews.js", "jobs/cancel-unconfirmed.js", "jobs/notify-goahead.js"];
+  const src = files.map((f) => readFileSync(join(ROOT, "server", f), "utf8")).join("\n");
+  const templates = ["confirmBookingEmail", "payAtGoAheadBookingEmail", "departureRequestReceivedEmail", "departureRequestApprovedEmail",
+    "paymentLinkEmail", "paymentReceivedEmail", "belowMinimumCancellationEmail", "reviewRequestEmail", "bookingDetailsRequestEmail",
+    "payAtGoAheadLinkEmail", "payAtGoAheadReminderEmail", "payAtGoAheadReleasedEmail", "payAtGoAheadApologyEmail", "payAtGoAheadReceiptEmail",
+    "payAtGoAheadSellerChangedEmail"];
+  const bare = [];
+  for (const t of templates) {
+    const calls = [...src.matchAll(new RegExp(`(.{0,90})\\b${t}\\(\\{`, "g"))];
+    assert.ok(calls.length > 0, `${t} is not sent from anywhere this test reads`);
+    for (const c of calls) if (!/(throughPartner|forPartner)\([^()]*(\{[^{}]*\})?[^()]*,\s*$/.test(c[1]) && !/\.then\(\(view\) => $/.test(c[1])) bare.push(`${t}: …${c[1].trim().slice(-60)}`);
+  }
+  assert.deepEqual(bare, []);
 });

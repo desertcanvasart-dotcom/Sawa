@@ -142,11 +142,12 @@ async function buildNotice(db, n, cat) {
     }
   }
   const paid = await hasUnrefundedPayment(db, n.pledge_id);
-  return belowMinimumCancellationEmail({
+  const { throughPartner } = await import("./partner.js");
+  return throughPartner(db, { pledgeId: n.pledge_id }, belowMinimumCancellationEmail({
     to: n.recipient, travelerName: row.customers || "", title: row.title, dateLabel: readableDate(row.date),
     paid, nextDates, alternative,
     agencyCopy: n.kind === "agency_copy" ? { agencyName: row.agency || "" } : null,
-  });
+  }), { skip: n.kind === "agency_copy" });
 }
 
 // Before the GoAhead nothing is normally taken, but ops can send a payment
