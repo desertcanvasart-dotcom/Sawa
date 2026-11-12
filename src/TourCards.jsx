@@ -18,6 +18,7 @@ import {
   pluralize,
 } from "./tour-helpers.jsx";
 import { CardLink } from "./SiteChrome.jsx";
+import { sizedImage } from "../shared/image-size.js";
 
 function RichBlock({ html, fallback }) {
   if (html && html.replace(/<[^>]*>/g, "").trim()) {
@@ -85,7 +86,7 @@ function TourCard({ navigate, product }) {
 
   return (
     <article className={`tour-card ${full ? "is-full" : ""}`}>
-      <div className="tour-card-media" style={{ backgroundImage: `url(${coverImage(product)})` }}>
+      <div className="tour-card-media" style={{ backgroundImage: `url(${sizedImage(coverImage(product), 800)})` }}>
         <span className="tour-card-city">{product.city}</span>
         {full
           ? <span className="tour-card-flag full">Fully booked</span>
@@ -149,7 +150,7 @@ function PackageCard({ navigate, product }) {
 
   return (
     <article className={`tour-card package-card ${full ? "is-full" : ""}`}>
-      <div className="tour-card-media" style={{ backgroundImage: `url(${coverImage(product)})` }}>
+      <div className="tour-card-media" style={{ backgroundImage: `url(${sizedImage(coverImage(product), 800)})` }}>
         <span className="tour-card-city"><Package size={12} />{product.nights}-night package</span>
         {full
           ? <span className="tour-card-flag full">Fully booked</span>

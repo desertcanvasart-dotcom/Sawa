@@ -1,4 +1,4 @@
-import React, { Fragment, useEffect, useState } from "react";
+import React, { Fragment, lazy, Suspense, useEffect, useState } from "react";
 import {
   LayoutDashboard, Package, CalendarDays, Users, ClipboardList, ScrollText,
   Plus, Check, X, Search, Archive, ArchiveRestore, Euro, ShieldCheck,
@@ -9,7 +9,17 @@ import { apiFetch, uploadImage } from "./supabaseClient";
 import { DashSidebar } from "./DashSidebar";
 import { usePortalSection } from "./portal-section.js";
 import { useBackToClose, useUnsavedGuard } from "./back-to-close.js";
-import { RichText } from "./RichText";
+// The article and tour editor (TipTap, the largest part of the admin desk's
+// code) loads only when an editor is opened, not with the desk. Until it
+// arrives each field shows the editor's own empty shell, at the same height.
+const RichTextEditor = lazy(() => import("./RichText").then((m) => ({ default: m.RichText })));
+function RichText(props) {
+  return (
+    <Suspense fallback={<div className="rt-shell rt-loading" />}>
+      <RichTextEditor {...props} />
+    </Suspense>
+  );
+}
 import { PaymentsSection } from "./AdminPayments.jsx";
 import { SettlementsSection } from "./AdminSettlements.jsx";
 import { CatalogueSection, CalendarSection } from "./AdminCatalogue.jsx";

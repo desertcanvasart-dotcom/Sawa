@@ -39,6 +39,7 @@ import { TourReviews } from "./TourReviews.jsx";
 import { RequestCalendar } from "./RequestCalendar.jsx";
 import { TurnstileBox } from "./Turnstile.jsx";
 import { JoinGroupLink, partyTokenFromUrl } from "./GroupBooking.jsx";
+import { sizedImage, imageSrcSet } from "../shared/image-size.js";
 
 // S04 — "send me a code", then "here it is". Twilio sends and checks the code;
 // the server hands back a token for this number, which the booking carries.
@@ -452,11 +453,11 @@ function TourDetailV2({ isSaving, navigate, phoneVerification = false, onBookPub
                 rather than converted to a link to itself. */}
             <div className="gcell big">
               {confirmed && <span className="go-badge"><span className="d" />GoAhead · confirmed</span>}
-              <img src={gallery[0].url} alt={tour.title} />
+              <img src={gallery[0].url} srcSet={imageSrcSet(gallery[0].url)} sizes="(max-width: 760px) 100vw, 60vw" alt={tour.title} />
             </div>
             {[1, 2, 3, 4].map((i) => gallery[i] ? (
               <div className={`gcell${i >= 3 ? " hide-sm" : ""}`} key={i}>
-                <img src={gallery[i].url} alt={`${tour.title} ${i + 1}`} />
+                <img src={sizedImage(gallery[i].url, 800)} alt={`${tour.title} ${i + 1}`} />
                 {i === 4 && imgs.length > 5 && <button className="view-all"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></svg>All {imgs.length} photos</button>}
               </div>
             ) : <div className={`gcell${i >= 3 ? " hide-sm" : ""}`} key={i} style={{ background: "var(--paper-2)" }} />)}
@@ -881,7 +882,7 @@ function TourDetailV2({ isSaving, navigate, phoneVerification = false, onBookPub
                   return (
                     <article className="rcard" key={p.id}>
                       <div className="core">
-                        <div className="media"><img src={coverImage(p)} alt={p.title} />{cf ? <span className="badge go"><span className="d" />GoAhead</span> : <span className="badge form">Forming</span>}</div>
+                        <div className="media"><img src={sizedImage(coverImage(p), 800)} alt={p.title} loading="lazy" />{cf ? <span className="badge go"><span className="d" />GoAhead</span> : <span className="badge form">Forming</span>}</div>
                         <div className="body"><span className="rt">{(isPackage(p) ? (p.cities || [p.city]) : [p.city]).join(" · ")}{p.duration ? ` · ${p.duration}` : ""}</span>
                           <h3>
                             <SpaLink

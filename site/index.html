@@ -603,7 +603,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       <div class="cascade">
         <div class="shell ph-1">
           <div class="core">
-            <img src="/images/hero-pyramids.jpg" alt="The Pyramids of Giza and the Sphinx across the desert at sunset" />
+            <img src="/images/hero-pyramids.jpg" srcset="/images/hero-pyramids.jpg?w=480 480w, /images/hero-pyramids.jpg?w=800 800w, /images/hero-pyramids.jpg?w=1200 1200w" sizes="(max-width: 760px) 50vw, 360px" alt="The Pyramids of Giza and the Sphinx across the desert at sunset" />
             <div class="cap"><p class="rt">Cairo · Giza</p><h3>The Great Pyramids at dawn</h3></div>
           </div>
         </div>
@@ -1015,6 +1015,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
          preferring tours with real photography. */
       var hasPhoto=!!(p.images&&p.images[0]&&p.images[0].url);
       var img=hasPhoto?p.images[0].url:'/images/hero-pyramids.jpg';
+      /* Card photos at the width a card shows them (server/image-variants.js; the widths are shared/image-size.js's). */ if(/^\/images\/[\w.\/-]+\.(jpe?g|png)$/i.test(img))img+='?w=800';
       var alt=(hasPhoto&&p.images[0].alt)||p.title;
       var price=d.livePrice||p.publishedRate||p.breakPrice||'';
       var max=Number(d.maxSeats||p.maxSeats)||min;

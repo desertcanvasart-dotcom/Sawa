@@ -11,6 +11,7 @@
 // already holds. What needs the app's own rules (reviews, catalogue facts) is
 // passed in as children by main.jsx, so no rule is restated here.
 import React, { useState } from "react";
+import { sizedImage, imageSrcSet } from "../shared/image-size.js";
 
 const text = (s) => String(s || "").replace(/<[^>]*>/g, "").trim();
 const hasHtml = (s) => /<\w/.test(String(s || "")) && text(s).length > 0;
@@ -24,14 +25,14 @@ export function EmbedGallery({ images = [], fallback, title }) {
   const current = shown[Math.min(at, shown.length - 1)];
   return (
     <div className="eb-gallery">
-      <img className="eb-gallery-main" src={current.url} alt={current.alt || title} />
+      <img className="eb-gallery-main" src={current.url} srcSet={imageSrcSet(current.url)} sizes="(max-width: 760px) 100vw, 760px" alt={current.alt || title} />
       {current.caption && <span className="eb-gallery-cap">{current.caption}</span>}
       {shown.length > 1 && (
         <div className="eb-thumbs" role="group" aria-label="Photos">
           {shown.slice(0, 8).map((img, i) => (
             <button type="button" key={img.url} className={i === at ? "eb-thumb on" : "eb-thumb"} aria-pressed={i === at}
               aria-label={`Photo ${i + 1} of ${Math.min(shown.length, 8)}`} onClick={() => setAt(i)}>
-              <img src={img.url} alt="" loading="lazy" />
+              <img src={sizedImage(img.url, 480)} alt="" loading="lazy" />
             </button>
           ))}
         </div>

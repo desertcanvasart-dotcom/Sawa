@@ -40,6 +40,7 @@ import { tooManyTravelers, GROUP_REQUEST_TITLE, GroupRequestForm } from "./Group
 import { JoinGroupLink } from "./GroupBooking.jsx";
 import { keepLinksOutOfFrame } from "./embed-links.js";
 import { EmbedGallery, EmbedOverview, EmbedTourDetails } from "./EmbedTourDetails.jsx";
+import { sizedImage } from "../shared/image-size.js";
 import { CatalogueFacts, PhoneCodeStep } from "./TourDetail.jsx";
 import { TurnstileBox } from "./Turnstile.jsx";
 
@@ -55,7 +56,7 @@ function BrandEmbed() {
         <p className="embed-banner-text">Shared day tours and Nile cruises across Cairo, Luxor &amp; Aswan — your date is confirmed before you pay, and the price drops as the group grows.</p>
         <span className="embed-cta">Explore Egypt tours<ArrowRight size={16} /></span>
       </div>
-      <div className="embed-banner-media" style={{ backgroundImage: "url(/images/hero.jpg)" }} aria-hidden="true" />
+      <div className="embed-banner-media" style={{ backgroundImage: `url(${sizedImage("/images/hero.jpg", 1200)})` }} aria-hidden="true" />
     </a>
   );
 }
@@ -85,7 +86,7 @@ function EmbedWidget({ type, product }) {
 
   return (
     <a className="embed-card" href={url} target="_blank" rel="noopener noreferrer">
-      <div className="embed-media" style={{ backgroundImage: `url(${coverImage(product)})` }}>
+      <div className="embed-media" style={{ backgroundImage: `url(${sizedImage(coverImage(product), 800)})` }}>
         <span className="embed-badge">
           {pkg ? <><Package size={12} />{product.nights}-night package</> : product.city}
         </span>
@@ -352,7 +353,7 @@ function EmbedBook({ products = [], productId = null, phoneVerification = false,
           const from = lead ? livePriceFor({ ...p, ...lead }, seatsTotal(lead.pledges)) : livePriceFor(p, goAheadSeatsFor(p));
           return (
             <button type="button" key={p.id} className="eb-card" onClick={() => { setOpenId(p.id); trackEmbedVisit(ref); scrollTop(); }}>
-              <span className="eb-card-media" style={{ backgroundImage: `url(${coverImage(p)})` }}>
+              <span className="eb-card-media" style={{ backgroundImage: `url(${sizedImage(coverImage(p), 800)})` }}>
                 <span className="embed-badge">{pkg ? <><Package size={12} />{p.nights ? `${p.nights}-night package` : "Package"}</> : p.city}</span>
               </span>
               <span className="eb-card-body">
