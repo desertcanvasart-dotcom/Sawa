@@ -13,11 +13,11 @@ import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { bookingLookupView } from "./domain.js";
-import { appSource } from "./app-source.js";
+import { appSource, mainSource } from "./app-source.js";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const app = appSource();
-const main = readFileSync(join(ROOT, "src", "main.jsx"), "utf8");
+const main = mainSource();
 
 test("S02: the id-only public cancel route is gone", () => {
   assert.doesNotMatch(app, /app\.delete\("\/api\/public\/departures\/:id\/bookings\/:pledgeId"/);

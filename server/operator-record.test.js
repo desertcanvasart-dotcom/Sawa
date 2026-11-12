@@ -14,7 +14,7 @@ import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { publicOperator } from "./domain.js";
-import { appSource } from "./app-source.js";
+import { appSource, mainSource } from "./app-source.js";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const read = (p) => readFileSync(join(ROOT, p), "utf8");
@@ -113,7 +113,7 @@ test("the public payload sends the whitelist, not the agency rows", () => {
 });
 
 test("the product page names an operator only when there is one", () => {
-  const src = read("src/main.jsx");
+  const src = mainSource();
   assert.match(src, /\{operator \? \(/, "the card must be conditional on the record");
   assert.match(src, /\{operator\.verified && \(/, "the badge must be conditional on the verification");
   // and it must not fall back to the guide field, which is a job description

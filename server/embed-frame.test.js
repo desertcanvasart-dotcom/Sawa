@@ -5,7 +5,7 @@
 // ran on a page that is not Sawa's. And the widget sent the visitor to
 // sawa.tours to read the tour, which is the thing it exists to avoid.
 import { test } from "node:test";
-import { appSource } from "./app-source.js";
+import { appSource, mainSource } from "./app-source.js";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
@@ -54,7 +54,7 @@ test("a link clicked inside the widget opens a new tab and never navigates the f
 });
 
 test("the booking view shows the tour and its terms, and no link to sawa.tours for the itinerary", () => {
-  const src = readFileSync(join(ROOT, "src", "main.jsx"), "utf8");
+  const src = mainSource();
   const view = src.slice(src.indexOf("function EmbedBookTour("), src.indexOf("function SectionHeading("));
   assert.ok(view.length > 2000, "EmbedBookTour not found");
   for (const part of ["<EmbedGallery", "<EmbedOverview", "<EmbedTourDetails", "<TourReviews", "<PaymentTimeline", "<CancellationSchedule", "onClickCapture={keepLinksOutOfFrame}"]) {
@@ -94,7 +94,7 @@ test("no partner, no line; and a partner's name cannot carry markup into the ema
 });
 
 test("the widget manages a booking in the frame: its own route, the shared lookup, and no link to sawa.tours when it can", () => {
-  const src = readFileSync(join(ROOT, "src", "main.jsx"), "utf8");
+  const src = mainSource();
   assert.match(src, /embedPath\.match\(\/\^\\\/embed\\\/booking/, "the /embed/booking route is gone");
   const book = src.slice(src.indexOf("function EmbedBook("), src.indexOf("function EmbedBookTour("));
   assert.match(book, /<BookingLookupPage key=\{managing\} embed /, "the widget's booking view must be the site's own lookup, not a copy");
@@ -164,12 +164,12 @@ test("the snippet handles all three return links and sends the page's font", () 
   for (const part of ["q.get('sawa-booking')", "q.get('sawa-confirm')", "q.get('sawa-join')", "'/embed/booking/'", "'/embed/confirm/'", "'/embed/join/'", "font:c.fontFamily", "page:location.href"]) {
     assert.ok(script.includes(part), `the snippet lost ${part}`);
   }
-  const main = readFileSync(join(ROOT, "src", "main.jsx"), "utf8");
+  const main = mainSource();
   for (const route of ["booking", "confirm", "join"]) assert.match(main, new RegExp(`embedPath\\.match\\(/\\^\\\\/embed\\\\/${route}`), `/embed/${route} has no route in the widget`);
 });
 
 test("the widget's booking view: group links, dates by month, and the group's own date", () => {
-  const src = readFileSync(join(ROOT, "src", "main.jsx"), "utf8");
+  const src = mainSource();
   const tour = src.slice(src.indexOf("function EmbedBookTour("), src.indexOf("function SectionHeading("));
   assert.match(tour, /<JoinGroupLink code=\{b\.bookingCode\} \/>/, "the done panel offers the group link");
   // Retired 12 Nov 2026: a full departure is never listed, so the form could

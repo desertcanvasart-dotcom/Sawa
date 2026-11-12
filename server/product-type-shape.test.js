@@ -16,7 +16,7 @@ import {
   durationShapeError, DAY_TOUR_DURATION, PACKAGE_DURATION, EXTENDED_DAY_HOURS,
 } from "../shared/booking-policy.js";
 import { tourPath } from "./slug.js";
-import { appSource } from "./app-source.js";
+import { appSource, mainSource } from "./app-source.js";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const read = (p) => readFileSync(join(ROOT, p), "utf8");
@@ -120,7 +120,7 @@ test("the canonical path comes from tourPath, not a second expression", () => {
 // ---- 3. sold out vs never offered ------------------------------------------
 
 test("a tour with no published date is not described as full", () => {
-  const src = read("src/main.jsx");
+  const src = mainSource();
   assert.match(src, /!dep \? "No open dates" : remaining <= 0 \? "Date full"/,
     "with no departure the figures fall to zero and the CTA read 'Date full'");
 });
@@ -128,7 +128,7 @@ test("a tour with no published date is not described as full", () => {
 test("the seats meter is not rendered without a departure", () => {
   // It read "0 of 4 joined · 0 seats left" on a tour that had never opened a
   // date. Sold out and never offered are opposite states.
-  const src = read("src/main.jsx");
+  const src = mainSource();
   assert.match(src, /\{!reqMode && dep && <div className="seats-block">/);
 });
 

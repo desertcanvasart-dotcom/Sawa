@@ -20,6 +20,7 @@ import { fileURLToPath } from "node:url";
 import { CURRENCY, CURRENCY_SYMBOL, CURRENCY_PROSE } from "../shared/currency.js";
 import { BRAND } from "./brand.js";
 import { pages } from "../scripts/sync-partials.js";
+import { mainSource } from "./app-source.js";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const read = (f) => readFileSync(f, "utf8");
@@ -123,7 +124,7 @@ const RENDERS_MONEY = [
 
 test("everything that renders money reads the currency from shared/", () => {
   const missing = RENDERS_MONEY.filter(
-    (f) => !/from "\.\.?\/(?:\.\.\/)?shared\/currency\.js"/.test(read(join(ROOT, f))));
+    (f) => !/from "\.\.?\/(?:\.\.\/)?shared\/currency\.js"/.test(f === "src/main.jsx" ? mainSource() : read(join(ROOT, f))));
   assert.deepEqual(missing, [],
     `these render prices and must import shared/currency.js: ${missing.join(", ")}`);
 });
@@ -150,7 +151,7 @@ const COMPONENTS = ["src/main.jsx", "src/AdminDashboard.jsx", "src/AgencyDashboa
 test("no component renders a dollar sign as JSX text", () => {
   const problems = [];
   for (const f of COMPONENTS) {
-    const body = stripComments(read(join(ROOT, f)));
+    const body = stripComments(f === "src/main.jsx" ? mainSource() : read(join(ROOT, f)));
     for (const m of body.matchAll(JSX_TEXT_DOLLAR)) {
       problems.push(`${f}: "${body.slice(m.index, m.index + 60).replace(/\n/g, " ")}"`);
     }
@@ -174,7 +175,7 @@ const TEMPLATE_DOLLAR = /\$\$\{/g;
 test("no component puts a dollar sign against an interpolated price", () => {
   const problems = [];
   for (const f of COMPONENTS) {
-    const body = stripComments(read(join(ROOT, f)));
+    const body = stripComments(f === "src/main.jsx" ? mainSource() : read(join(ROOT, f)));
     for (const m of body.matchAll(TEMPLATE_DOLLAR)) {
       problems.push(`${f}: "${body.slice(m.index - 20, m.index + 40).replace(/\n/g, " ")}"`);
     }
@@ -210,7 +211,7 @@ test("it fires — every shape that was live in the components", () => {
 test("no money surface still names the dollar", () => {
   const problems = [];
   for (const f of RENDERS_MONEY) {
-    const body = stripComments(read(join(ROOT, f)));
+    const body = stripComments(f === "src/main.jsx" ? mainSource() : read(join(ROOT, f)));
     for (const re of DEAD_CURRENCY) {
       const hits = body.match(re);
       if (hits) problems.push(`${f}: ${hits.length}× "${hits[0]}"`);

@@ -14,6 +14,7 @@ import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import { bookingClosed, enrichDeparture } from "./domain.js";
 import { isBookingOpen } from "../shared/departure-state.js";
+import { mainSource } from "./app-source.js";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const read = (...p) => readFileSync(join(ROOT, ...p), "utf8");
@@ -54,14 +55,14 @@ test("F05: the browser copy of the rule is the shared one", () => {
 });
 
 test("F05: every public list filters on it", () => {
-  assert.match(read("src", "main.jsx"), /\.filter\(\(departure\) => isBookingOpen\(departure\)\)/);
+  assert.match(mainSource(), /\.filter\(\(departure\) => isBookingOpen\(departure\)\)/);
   for (const page of ["index.html", "departures.html", "goahead.html"]) {
     assert.match(read("site", page), /R\.isBookingOpen\(d\)/, `site/${page}`);
   }
 });
 
 test("F01: the form waits for the server and clears only on a confirmed booking", () => {
-  const main = read("src", "main.jsx");
+  const main = mainSource();
   const reserve = main.slice(main.indexOf("async function reserve(e)"), main.indexOf("const reqIso"));
   assert.match(reserve, /const result = await onBookPublicDeparture\(/);
   const bail = reserve.indexOf("if (!result?.ok)");

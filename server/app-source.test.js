@@ -6,7 +6,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { basename } from "node:path";
-import { appSource, routeLoads, routeModuleFiles } from "./app-source.js";
+import { appSource, routeLoads, routeModuleFiles, mainPartFiles, mainSource } from "./app-source.js";
 import { routeSourceFiles, scanMutatingRoutes } from "../scripts/audit-coverage.js";
 import { provideRouteContext, routeContext } from "./route-context.js";
 
@@ -64,4 +64,30 @@ test("the audit scan reads the route modules too", () => {
   // The same routes, whether counted file by file or in the combined text.
   const combined = (appSource().match(/^app\.(post|patch|put|delete)\(\s*"/gm) || []).length;
   assert.equal(routes.length, combined);
+});
+
+// ---- src/main.jsx, split the same way -------------------------------------
+
+test("every part of main.jsx is still part of the app, and none reaches back into it", () => {
+  const parts = mainPartFiles();
+  assert.ok(parts.length >= 10, `only ${parts.length} parts found — the header marker is not matching`);
+  const all = [...parts.map((f) => readFileSync(f, "utf8")), readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8")];
+  for (const file of parts) {
+    const name = basename(file);
+    // A part nothing imports is not in the bundle: the page it held is gone
+    // while every check that reads the combined source still sees its code.
+    assert.ok(all.some((src) => src.includes(`from "./${name}"`)), `${name} is imported by nothing`);
+    // main.jsx is the entry and renders on load; importing it back would run
+    // the whole app from inside one of its own parts.
+    assert.doesNotMatch(readFileSync(file, "utf8"), /from "\.\/main(\.jsx)?"/, `${name} imports main.jsx`);
+  }
+});
+
+test("the combined app source holds main.jsx and every part", () => {
+  const src = mainSource();
+  assert.match(src, /^function App\(\) \{/m);
+  assert.match(src, /^createRoot\(/m);
+  for (const marker of ["function TourDetailV2(", "function EmbedBook(", "function BookingLookupPage(", "function PublicSite(", "function Portal("]) {
+    assert.ok(src.includes(marker), `${marker} is missing from the combined source`);
+  }
 });

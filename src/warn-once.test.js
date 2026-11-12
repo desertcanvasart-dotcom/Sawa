@@ -13,6 +13,7 @@ import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { warnOnce, __resetWarnOnce } from "./warn-once.js";
+import { mainSource } from "../server/app-source.js";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -61,7 +62,7 @@ test("every browser handler that used to be empty now uses it", () => {
   // The five sites in main.jsx: the tour detail fetch, the referral beacon, the
   // referral store, and the two embed postMessage calls. Comments stripped, so
   // this counts calls rather than the paragraphs explaining them.
-  const main = readFileSync(join(ROOT, "src", "main.jsx"), "utf8")
+  const main = mainSource()
     .replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/[^\n]*/gm, "$1");
   const calls = main.split("warnOnce(").length - 1;
   assert.ok(calls >= 5, `expected the five converted handlers to call warnOnce; found ${calls}`);

@@ -9,7 +9,7 @@
 // traveller owes by four times, and one quoting 20% where the system charges 25%
 // understates what they are about to pay.
 import test from "node:test";
-import { appSource } from "./app-source.js";
+import { appSource, mainSource } from "./app-source.js";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join, dirname, relative } from "node:path";
@@ -127,7 +127,7 @@ test("it is declared once — the two old copies are gone", () => {
   // derived from shared/, and they lived in server/. Moving them here is what
   // puts them under that check.
   for (const f of ["server/domain.js", "src/main.jsx"]) {
-    const src = read(f);
+    const src = f === "src/main.jsx" ? mainSource() : read(f);
     assert.ok(!/^(export )?function isPackage\(/m.test(src), `${f} still declares isPackage`);
     assert.ok(!/^(export )?function balanceDueDate\(/m.test(src), `${f} still declares balanceDueDate`);
   }
@@ -198,7 +198,7 @@ test("no page still states the superseded rate or an uncapped charge", () => {
   const problems = [];
   for (const f of ["site/terms.html", "site/goahead-promise.html", "site/how-it-works.html",
                    "site/faq.html", "src/main.jsx", "server/seo.js", "server/email.js"]) {
-    const body = read(f).replace(/<!--[\s\S]*?-->/g, " ").replace(/^\s*\/\/.*$/gm, " ");
+    const body = (f === "src/main.jsx" ? mainSource() : read(f)).replace(/<!--[\s\S]*?-->/g, " ").replace(/^\s*\/\/.*$/gm, " ");
     for (const re of dead) if (re.test(body)) problems.push(`${f}: ${re}`);
   }
   assert.deepEqual(problems, [], problems.join("\n  "));
@@ -262,7 +262,7 @@ test("the email says the bands are a default, not necessarily what binds", () =>
 // ---- the booking rail ------------------------------------------------------
 
 test("the booking rail displays the schedule for the tour being booked", () => {
-  const src = read("src/main.jsx");
+  const src = mainSource();
   assert.match(src, /function CancellationSchedule\(\{ tour, depositPct \}\)/,
     "the component must take the product, or it can only print one schedule");
   assert.match(src, /<CancellationSchedule tour=\{tour\} depositPct=\{depositPct\} \/>/);
@@ -280,7 +280,7 @@ test("the booking rail displays the schedule for the tour being booked", () => {
 
 test("no surface hand-writes a band or a rate", () => {
   for (const f of ["src/main.jsx", "server/email.js"]) {
-    const src = read(f);
+    const src = f === "src/main.jsx" ? mainSource() : read(f);
     for (const b of [...CANCELLATION_SCHEDULE.day_tour, ...CANCELLATION_SCHEDULE.package]) {
       assert.ok(!src.includes(b.when), `${f} hand-writes "${b.when}"`);
     }
@@ -293,7 +293,7 @@ test("the class does not collide with the cancel button", () => {
   // `bk-cancel` is the cancel BUTTON in the "seat held" notice, whose rule sets
   // border:0. Naming the schedule that cost it its top rule and pushed this
   // block's font-size onto that button.
-  const src = read("src/main.jsx");
+  const src = mainSource();
   assert.match(src, /<details className="bk-policy">/);
   const css = read("src/redesign.css");
   assert.match(css, /\.sx \.bk-cancel\{background:none/, "the cancel button lost its own rule");

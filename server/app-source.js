@@ -39,3 +39,20 @@ export function appSource() {
   const app = readFileSync(join(SERVER, "app.js"), "utf8");
   return app.replace(LOAD, (_all, _names, name) => readFileSync(join(SERVER, "routes", `${name}.js`), "utf8"));
 }
+
+// The same for the public app. src/main.jsx was one 4,900-line file and is now
+// the App component plus the modules it was split into; every one of those
+// carries the line below in its header, which is how they are found.
+const MOVED_FROM_MAIN = "// Moved out of src/main.jsx verbatim";
+
+export function mainPartFiles() {
+  const SRC = join(SERVER, "..", "src");
+  return readdirSync(SRC).filter((f) => /\.jsx?$/.test(f) && !f.endsWith(".test.js")).sort()
+    .map((f) => join(SRC, f))
+    .filter((f) => readFileSync(f, "utf8").includes(MOVED_FROM_MAIN));
+}
+
+export function mainSource() {
+  const main = join(SERVER, "..", "src", "main.jsx");
+  return [main, ...mainPartFiles()].map((f) => readFileSync(f, "utf8")).join("\n");
+}

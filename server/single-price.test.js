@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { mainSource } from "./app-source.js";
 import {
   departureEconomics, operatorEntitlement, poolRateGaps, poolRateTable, DEFAULT_POOL_TIERS, RATE_TABLE_FROM, RATE_TABLE_TO,
   withFeeOverride, tierPriceSummary, tierPriceLine, tierPriceEur, rateCardError,
@@ -71,7 +72,7 @@ test("tour pages and the widget say \"€X per person\" for one price; the from-
   // A product that still has tiers keeps the per-size wording (tier support stays in the code).
   const three = [{ from: 4, to: 6, priceEgp: 5192 }, { from: 7, to: 9, priceEgp: 4307 }, { from: 10, to: 12, priceEgp: 4071 }];
   assert.equal(tierPriceSummary(three, 97), "4–6 travelers €54 · 7–9 travelers €45 · 10–12 travelers €42");
-  const main = read("src", "main.jsx");
+  const main = mainSource();
   assert.match(main, /priceTierCount \|\| 0\) > 1 \?/, "the refund promise is only said for a product with several tiers");
   assert.doesNotMatch(main, /from 7 travel|from 10 travel/i);
 });
