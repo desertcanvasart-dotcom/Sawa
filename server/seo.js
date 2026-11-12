@@ -354,7 +354,9 @@ export async function buildHead(pathname) {
     // A traveler's private link to review a tour they took (069).
     m = { ...m, noindex: true, title: `Leave a review | ${BRAND.name}`, description: "Tell other travelers how your tour went." };
   } else if (/^\/embed(\/|$)/.test(path)) {
-    m = { ...m, noindex: true, title: `Shared departures | ${BRAND.name}` };
+    // `framed`: the widget runs inside another company's page. See the
+    // scripts at the end of the head.
+    m = { ...m, noindex: true, framed: true, title: `Shared departures | ${BRAND.name}` };
   } else if (path === "/packages" || path === "/tours") {
     // Legacy catalogue URLs. app.js 301s them to /itineraries; this fallback
     // only matters if a request slips past the redirect (e.g. in tests).
@@ -390,12 +392,20 @@ export async function buildHead(pathname) {
     // Analytics. The same file the 18 static pages load, so the measurement ID
     // lives in exactly one place (site/assets/analytics.js) rather than being
     // pasted into every head on the site.
-    `<script defer src="/assets/consent.js"></script>`,
-    `<script defer src="/assets/analytics.js"></script>`,
-    // Google Tag Manager, same reasoning: the container ID lives in
-    // site/assets/gtm.js alone. Its <noscript> half is in index.html, which is
-    // the shell every one of these routes renders into.
-    `<script defer src="/assets/gtm.js"></script>`,
+    //
+    // Not in the partner widget (/embed/*). Loaded there, Sawa's cookie banner
+    // opened inside the agency's page, over the booking form — most of the
+    // frame on a phone — and Sawa's analytics ran on a site that is not
+    // Sawa's. The widget needs neither: it stores nothing (the partner code
+    // travels in the frame's own address) and sets no optional cookie.
+    ...(m.framed ? [] : [
+      `<script defer src="/assets/consent.js"></script>`,
+      `<script defer src="/assets/analytics.js"></script>`,
+      // Google Tag Manager, same reasoning: the container ID lives in
+      // site/assets/gtm.js alone. Its <noscript> half is in index.html, which is
+      // the shell every one of these routes renders into.
+      `<script defer src="/assets/gtm.js"></script>`,
+    ]),
   ].join("\n");
 
   // E01 — the same facts, unrendered, for the SPA: moving between routes in the

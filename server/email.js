@@ -481,6 +481,26 @@ export function inviteEmail({ to, fullName, agencyName, tempPassword, role }) {
 // `product` carries the type, and nothing else is read off it. Without it this
 // mail could only print one schedule, and would have printed the day-tour one
 // to everyone who booked a package.
+// A booking made through a partner's widget names the partner. The traveler
+// booked on the agency's website and may never have heard of Sawa; without
+// this line the first email they get is from a company they don't recognise.
+// Applied to a built message, so every traveler email takes it the same way.
+// The name comes from the server's own record of the partner code (see
+// partnerNameFor in app.js), never from the request.
+export function withPartner(message, partner) {
+  const name = String(partner || "").replace(/\s+/g, " ").trim().slice(0, 120);
+  if (!message || !name) return message;
+  const line = `Booked through ${name}. ${BRAND.name} runs the booking for ${name} and will email you about this departure.`;
+  const para = `<p style="margin:0 0 20px;font-family:${SANS};font-size:14px;color:${C.muted}">${esc(line)}</p>`;
+  // After the email's opening paragraph; an email without one keeps its HTML
+  // and still carries the line in its text part.
+  const open = '<p style="margin:0 0 20px">';
+  const at = message.html ? message.html.indexOf(open) : -1;
+  const end = at === -1 ? -1 : message.html.indexOf("</p>", at);
+  const html = end === -1 ? message.html : `${message.html.slice(0, end + 4)}${para}${message.html.slice(end + 4)}`;
+  return { ...message, html, text: `${message.text}\n\n${line}` };
+}
+
 export function bookingConfirmationEmail({ to, customerName, route, dateLabel, seats, depositDue, balanceDue, balanceDueDate, bookingCode, product = null, operator = null }) {
   const subject = `Booking received — ${route}`;
   // The one durable handle on this booking. Before this link existed, the only

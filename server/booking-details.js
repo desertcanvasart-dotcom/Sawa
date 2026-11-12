@@ -123,11 +123,12 @@ export async function runCompletionRequests({ db = pool, now = Date.now(), send 
     if (!send) continue;
     const { bookingDetailsRequestEmail } = await import("./email.js");
     try {
-      const res = await send(bookingDetailsRequestEmail({
+      const { throughPartner } = await import("./partner.js");
+      const res = await send(await throughPartner(db, { pledgeId: p.id }, bookingDetailsRequestEmail({
         to: who.to, travelerName: who.agencyClient ? null : p.customers, agencyClient: who.agencyClient,
         title: p.title, dateLabel: dateLabel(date), missing: missing.map((k) => BOOKING_FIELD_LABELS[k]),
         link: `${site()}/booking-details/${token}`, reminder: kind === "reminder",
-      }));
+      }), { skip: !!who.agencyClient }));
       if (!res?.ok) throw new Error(res?.error || "not accepted");
       await db.query("UPDATE booking_completion_requests SET status = 'sent', sent_at = now(), attempts = attempts + 1 WHERE id = $1", [id]);
       out[kind === "request" ? "requested" : "reminded"] += 1;

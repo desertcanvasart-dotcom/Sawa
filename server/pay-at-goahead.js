@@ -36,6 +36,7 @@ import {
   sellerLine, payeeLine, SELLER_PENDING,
 } from "../shared/pay-at-goahead.js";
 import { tierAt, hoursBeforeStart, refundFor } from "../shared/cancellation-tiers.js";
+import { throughPartner } from "./partner.js";
 
 const inTx = (db, fn) => (db === pool ? withTransaction(fn) : fn(db));
 const ymd = (v) => (v instanceof Date ? v.toISOString().slice(0, 10) : v ? String(v).slice(0, 10) : null);
@@ -319,12 +320,12 @@ async function sendLink(c, { requestId, linkUrl, by, now, send, decided = null }
     const { payAtGoAheadLinkEmail } = await import("./email.js");
     const parties = sellerAndPayee(await sellerOf(c, departure.id));
     const agencyTraveller = who.payer === "traveller" && pledge.terms_fixed_by === "agency" && !pledge.traveller_terms_accepted_at;
-    await send(payAtGoAheadLinkEmail({
+    await send(await throughPartner(c, { pledgeId: pledge.id }, payAtGoAheadLinkEmail({
       to: who.to, name: who.name, title: departure.product.title, dateLabel: dateLabel(departure.date), amount: request.amountEur,
       dueAt: request.dueAt, url: linkUrl, bookingCode: request.reference, agencyBilled: who.payer === "agency",
       termsLink: agencyTraveller ? `${site()}/booking/${encodeURIComponent(request.reference)}` : null,
       ...parties,
-    })).catch(() => ({ ok: false }));
+    }), { skip: who.payer === "agency" })).catch(() => ({ ok: false }));
   }
   return { ...request, shortWindow: deadline.shortWindow };
 }
@@ -392,10 +393,10 @@ export async function decideUnlinkedSeat(db, { requestId, decision, reason, link
       const who = await payerFor(c, pledge);
       if (who.to) {
         const { payAtGoAheadApologyEmail } = await import("./email.js");
-        await send(payAtGoAheadApologyEmail({
+        await send(await throughPartner(c, { pledgeId: r.pledge_id }, payAtGoAheadApologyEmail({
           to: who.to, name: who.payer === "traveller" ? pledge.customers : null, title: departure.product.title,
           dateLabel: dateLabel(departure.date), bookingCode: r.reference,
-        })).catch(() => ({ ok: false }));
+        }), { skip: who.payer === "agency" })).catch(() => ({ ok: false }));
       }
     }
     return mapPayRequest((await c.query("SELECT * FROM payment_requests WHERE id = $1", [requestId])).rows[0]);
@@ -493,11 +494,11 @@ async function issueReceipt(c, { request, now, send }) {
     const pledge = (await c.query("SELECT customers FROM pledges WHERE id = $1", [request.pledge_id])).rows[0];
     const departure = await departureFor(c, { id: Number(request.departure_id) });
     const { payAtGoAheadReceiptEmail } = await import("./email.js");
-    await send(payAtGoAheadReceiptEmail({
+    await send(await throughPartner(c, { pledgeId: request.pledge_id }, payAtGoAheadReceiptEmail({
       to: request.emailed_to, name: request.payer === "traveller" ? pledge?.customers : null, title: departure.product.title,
       dateLabel: dateLabel(departure.date), amount: out.amountEur, bookingCode: request.reference, receiptNo,
       paidAt: out.issuedAt, issuer: out.issuer, onBehalfOf: out.onBehalfOf,
-    })).catch(() => ({ ok: false }));
+    }), { skip: request.payer === "agency" })).catch(() => ({ ok: false }));
   }
   return out;
 }
@@ -575,13 +576,13 @@ async function reissueForSellerChange(c, { departure, seller, by, now, send }) {
       const pledge = (await c.query("SELECT customers FROM pledges WHERE id = $1", [r.pledge_id])).rows[0];
       const parties = receiptParties(seller);
       const { payAtGoAheadSellerChangedEmail } = await import("./email.js");
-      await send(payAtGoAheadSellerChangedEmail({
+      await send(await throughPartner(c, { pledgeId: r.pledge_id }, payAtGoAheadSellerChangedEmail({
         to: r.emailed_to, name: r.payer === "traveller" ? pledge?.customers : null, title: departure.product.title,
         dateLabel: dateLabel(departure.date), bookingCode: r.reference, amount: Number(r.amount_eur),
         previousSeller: r.seller_legal_name, seller: seller.legalName, receiptNo, supersededReceiptNo: previous.receipt_no,
         issuedAt: new Date(now).toISOString(), issuer: parties.issuer, onBehalfOf: parties.onBehalfOf,
         cancelBy: new Date(expiresAt).toISOString(), url: `${site()}/booking/${encodeURIComponent(r.reference)}`,
-      })).catch(() => ({ ok: false }));
+      }), { skip: r.payer === "agency" })).catch(() => ({ ok: false }));
     }
     out.push(change);
   }
@@ -659,10 +660,10 @@ async function releaseSeat(c, { requestId, now, send }) {
   const departure = await departureFor(c, { id: Number(r.departure_id) });
   if (send && r.emailed_to) {
     const { payAtGoAheadReleasedEmail } = await import("./email.js");
-    await send(payAtGoAheadReleasedEmail({
+    await send(await throughPartner(c, { pledgeId: pledge.id }, payAtGoAheadReleasedEmail({
       to: r.emailed_to, name: r.payer === "traveller" ? pledge.customers : null, title: departure.product.title,
       dateLabel: dateLabel(departure.date), bookingCode: r.reference,
-    })).catch(() => ({ ok: false }));
+    }), { skip: r.payer === "agency" })).catch(() => ({ ok: false }));
   }
   await offerFreedSeats(c, { departure, sourcePledgeId: pledge.id, now, send });
   return pledge.id;
@@ -1153,11 +1154,11 @@ export async function runPayAtGoAheadTick({ db = pool, now = Date.now(), send = 
         out.reminded += 1;
         if (send && r.emailedTo) {
           const { payAtGoAheadReminderEmail } = await import("./email.js");
-          await send(payAtGoAheadReminderEmail({
+          await send(await throughPartner(db, { pledgeId: r.pledgeId }, payAtGoAheadReminderEmail({
             to: r.emailedTo, name: r.payer === "traveller" ? row.customers : null, title: row.title, dateLabel: dateLabel(row.date),
             amount: r.amountEur, dueAt: r.dueAt, url: r.linkUrl, bookingCode: r.reference,
             ...sellerAndPayee(await sellerOf(db, r.departureId)),
-          })).catch(() => ({ ok: false }));
+          }), { skip: r.payer === "agency" })).catch(() => ({ ok: false }));
         }
       }
     }

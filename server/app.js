@@ -111,6 +111,7 @@ import { watchdogReport, lastWatchRunAt } from "./watchdog.js";
 // to be written differently.
 import { rethrowIfProgrammerError, surfaceProgrammerError } from "./errors.js";
 import { tourSlug, tourPath } from "./slug.js";
+import { throughPartner } from "./partner.js";
 import { blogSlug } from "../shared/blog-slug.js";
 import { mapPost } from "./blog-post.js";
 import { cancelDepartureAndPledges, reportNotifications, CANCEL_REASONS } from "./departure-cancel.js";
@@ -1353,7 +1354,8 @@ app.post("/api/admin/departures/:id/confirm", requireAuth, requireRole("super_ad
   // Looked up once for all of them, after the response (U01).
   const operator = recips.rows.length ? operatorFor(departure.id) : null;
   for (const row of recips.rows) {
-    sendEmailInBackground(operator.then((op) => goAheadEmail({ to: row.customer_email, route: departure.route, dateLabel, operator: op })));
+    sendEmailInBackground(throughPartner(pool, { departureId: departure.id, email: row.customer_email },
+      operator.then((op) => goAheadEmail({ to: row.customer_email, route: departure.route, dateLabel, operator: op }))));
   }
   emitDepartureSync(departure.id);
   res.json({ departure: presentDeparture(departure, req.user) });
@@ -1573,6 +1575,10 @@ app.post("/api/public/departures/:id/bookings", writeLimiter, bookingAttemptLimi
   res.status(out.status).json(out.json);
 }));
 
+// The partner whose widget a booking came through (server/partner.js): the
+// line "Booked through <agency>" on the emails about it.
+const forPartner = (refCode, message) => throughPartner(pool, { refCode }, message);
+
 async function placePublicBooking(req, { departureId, body, confirmation = null }) {
   const input = confirmation ? { ...confirmation.payload.input } : parse(publicBookingSchema, body);
   const manifest = confirmation ? confirmation.payload.manifest : manifestFields(body);
@@ -1682,7 +1688,7 @@ async function placePublicBooking(req, { departureId, body, confirmation = null 
   if (result.held) {
     const d = result.departure;
     const code = result.held.row.booking_code;
-    sendEmailInBackground(Promise.resolve(confirmBookingEmail({
+    sendEmailInBackground(forPartner(input.refCode, confirmBookingEmail({
       to: input.customerEmail, customerName: input.customerName, route: d.route,
       dateLabel: d.startDate ? `${d.startDate} – ${d.endDate}` : d.date, seats: input.seats, bookingCode: code,
       url: confirmBookingUrl(result.held.token),
@@ -1704,7 +1710,7 @@ async function placePublicBooking(req, { departureId, body, confirmation = null 
       to: input.customerEmail, customerName: input.customerName, route: d.route,
       dateLabel: d.startDate ? `${d.startDate} – ${d.endDate}` : d.date, seats: input.seats,
       total: result.booking.bookingTotal, bookingCode: result.booking.bookingCode, terms: view?.terms || null,
-    })));
+    })).then((m) => forPartner(input.refCode, m)));
   } else if (input.customerEmail) {
     const d = result.departure;
     sendEmailInBackground(operatorFor(d.id).then((operator) => bookingConfirmationEmail({
@@ -1713,7 +1719,7 @@ async function placePublicBooking(req, { departureId, body, confirmation = null 
       depositDue: result.booking.depositDue, balanceDue: result.booking.balanceDue,
       balanceDueDate: result.booking.balanceDueDate, bookingCode: result.booking.bookingCode,
       product: d, operator,
-    })));
+    })).then((m) => forPartner(input.refCode, m)));
   }
   notifyOps(result.departure, result.booking, input, { isRequest: false });
   // The direct traveller gets their own booking receipt back in full.
@@ -2056,7 +2062,7 @@ app.post("/api/public/bookings/:code/resend-confirmation", writeLimiter, h(async
     ? (await pool.query("SELECT route, date, start_date, end_date FROM departures WHERE id = $1", [r.row.departure_id])).rows[0] || {}
     : { route: (await pool.query("SELECT title FROM tour_products WHERE id = $1", [r.row.tour_product_id])).rows[0]?.title, date: r.row.request_date };
   const input = r.row.payload?.input || {};
-  sendEmailInBackground(Promise.resolve(confirmBookingEmail({
+  sendEmailInBackground(forPartner(input.refCode, confirmBookingEmail({
     to: r.row.email, customerName: input.customerName, route: d.route,
     dateLabel: d.start_date ? `${isoDate(d.start_date)} – ${isoDate(d.end_date)}` : isoDate(d.date), seats: Number(r.row.seats),
     bookingCode: r.row.booking_code, url: confirmBookingUrl(r.token), dateRequest: r.row.kind === "date_request",
@@ -2573,7 +2579,7 @@ app.post("/api/public/departure-requests", writeLimiter, bookingAttemptLimiter, 
   if (result.held) {
     // Held until the traveler confirms their email (060): not a request yet.
     const code = result.held.row.booking_code;
-    sendEmailInBackground(Promise.resolve(confirmBookingEmail({
+    sendEmailInBackground(forPartner(input.refCode, confirmBookingEmail({
       to: input.customerEmail, customerName: input.customerName, route: result.product.title,
       dateLabel: input.date, seats: input.seats, bookingCode: code, url: confirmBookingUrl(result.held.token), dateRequest: true,
     })));
@@ -2593,11 +2599,11 @@ async function announceDateRequest(req, input, result, { confirmedEmail = false 
     detail: { tourProductId: input.tourProductId, date: input.date, seats: input.seats, source: "public", joinedExisting: !!result.joinedRequest, ...(confirmedEmail ? { confirmedEmail: true } : {}) },
   });
   const d = result.departure;
-  sendEmailInBackground(departureRequestReceivedEmail({
+  sendEmailInBackground(forPartner(input.refCode, departureRequestReceivedEmail({
     to: input.customerEmail, customerName: input.customerName, route: d.route,
     dateLabel: d.startDate ? `${d.startDate} – ${d.endDate}` : d.date,
     seats: input.seats, bookingCode: result.booking.bookingCode,
-  }));
+  })));
   notifyOps(d, result.booking, input, { isRequest: true });
 }
 
@@ -2686,11 +2692,11 @@ app.post("/api/admin/departure-requests/:id/approve", requireAuth, requireRole("
   const seed = departure.pledges.find((p) => p.source === "public_request");
   // A traveller who withdrew their request is not told their date is live.
   if (seed?.customerEmail && seed.status !== "cancelled") {
-    sendEmailInBackground(departureRequestApprovedEmail({
+    sendEmailInBackground(throughPartner(pool, { pledgeId: seed.id }, departureRequestApprovedEmail({
       to: seed.customerEmail, customerName: seed.customers, route: departure.route,
       dateLabel: departure.startDate ? `${departure.startDate} – ${departure.endDate}` : departure.date,
       bookingCode: seed.bookingCode,
-    }));
+    })));
   }
   emitDepartureSync(departure.id);
   res.json({ departure: presentDeparture(departure, req.user) });
@@ -2738,11 +2744,11 @@ app.post("/api/admin/departure-requests/:id/decline", requireAuth, requireRole("
   await logAudit(req, { action: "departure_request.decline", entity: "departure", entityId: String(departure.id), detail: { reason: reason || null } });
   const seed = departure.pledges.find((p) => p.source === "public_request");
   if (seed?.customerEmail) {
-    sendEmailInBackground(departureRequestDeclinedEmail({
+    sendEmailInBackground(throughPartner(pool, { pledgeId: seed.id }, departureRequestDeclinedEmail({
       to: seed.customerEmail, customerName: seed.customers, route: departure.route,
       dateLabel: departure.startDate ? `${departure.startDate} – ${departure.endDate}` : departure.date,
       reason: reason || undefined,
-    }));
+    })));
   }
   res.json({ departure: presentDeparture(departure, req.user) });
 }));
@@ -3997,11 +4003,11 @@ app.post("/api/admin/bookings/:pledgeId/payment-links", requireAuth, requireRole
     detail: { paymentId: payment.id, kind: payment.kind, amount: payment.amount, dueAt: payment.dueAt, dueBoundBy: payment.dueBoundBy, emailedTo: payment.emailedTo },
   });
   if (pledge.customerEmail) {
-    sendEmailInBackground(paymentLinkEmail({
+    sendEmailInBackground(throughPartner(pool, { pledgeId: pledge.id }, paymentLinkEmail({
       to: pledge.customerEmail, customerName: pledge.customers, route: departure?.route || "your tour",
       dateLabel: departure ? depDateLabel(departure) : "", kind: payment.kind, amount: payment.amount,
       dueAt: payment.dueAt, url: payment.linkUrl, bookingCode: pledge.bookingCode,
-    }));
+    })));
   }
   res.status(201).json({ payment, emailed: !!pledge.customerEmail });
 }));
@@ -4041,11 +4047,11 @@ app.post("/api/admin/payments/:id/paid", requireAuth, requireRole("super_admin",
     detail: { paymentId: r.payment.id, kind: r.payment.kind, amount: r.payment.amount, reference },
   });
   if (r.pledge.customerEmail) {
-    sendEmailInBackground(paymentReceivedEmail({
+    sendEmailInBackground(throughPartner(pool, { pledgeId: r.pledge.id }, paymentReceivedEmail({
       to: r.pledge.customerEmail, customerName: r.pledge.customers, route: r.departure?.route || "your tour",
       dateLabel: r.departure ? depDateLabel(r.departure) : "", amount: r.payment.amount, reference,
       outstanding: Math.max(0, (Number(r.pledge.bookingTotal) || 0) - paidTotal(r.payments)), bookingCode: r.pledge.bookingCode,
-    }));
+    })));
   }
   res.json({ payment: r.payment });
 }));
@@ -4778,7 +4784,7 @@ app.post("/api/admin/departures/:id/cancel", requireAuth, requireRole("super_adm
     // template would be counted as a traveller not reached, and PP2.1's
     // "cancelled, nobody notified" would send an operator chasing a mail
     // outage that is not happening.
-    const sent = await sendEmail(cancellationEmail({ to, route: departure.route, dateLabel }))
+    const sent = await sendEmail(await throughPartner(pool, { departureId: departure.id, email: to }, cancellationEmail({ to, route: departure.route, dateLabel })))
       .catch((e) => { rethrowIfProgrammerError(e); return { ok: false }; });
     if (sent?.ok) reached += 1;
   }
