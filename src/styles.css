@@ -7378,3 +7378,5 @@ button:disabled {
 .eb-booking .btn-pill:hover { background: transparent; filter: brightness(1.06); }
 .eb-booking .btn-pill.primary, .eb-booking .btn-pill.primary:hover { background: var(--gold); color: var(--embed-cta-text, #14242a); border-color: transparent; box-shadow: none; }
 .eb-booking .page-empty { padding: 18px 0; }
+.eb-confirm-body { padding: 0 18px 18px; font-size: 14.5px; line-height: 1.6; }
+.eb-confirm-body p { margin: 0 0 8px; }

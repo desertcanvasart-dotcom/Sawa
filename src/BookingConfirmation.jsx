@@ -4,7 +4,10 @@
 import React, { useEffect, useState } from "react";
 import { API_BASE } from "./supabaseClient";
 
-export function ConfirmBookingPage({ token }) {
+// `embed`: the same confirmation inside the partner widget, when the email's
+// link returned to the partner's page. `onSeeBooking` opens the booking in the
+// frame instead of linking to sawa.tours.
+export function ConfirmBookingPage({ token, embed = false, onSeeBooking = null }) {
   const [state, setState] = useState({ status: "working", code: "", error: "" });
   useEffect(() => {
     fetch(`${API_BASE}/public/booking-confirmations/${encodeURIComponent(token)}`, { method: "POST" })
@@ -15,7 +18,9 @@ export function ConfirmBookingPage({ token }) {
       })
       .catch((e) => setState({ status: "error", code: "", error: e.message }));
   }, [token]);
-  const booking = state.code ? <a href={`/booking/${encodeURIComponent(state.code)}`}>See your booking</a> : null;
+  const booking = !state.code ? null : embed && onSeeBooking
+    ? <button type="button" className="eb-link eb-linkbtn" onClick={() => onSeeBooking(state.code)}>See your booking</button>
+    : <a href={`/booking/${encodeURIComponent(state.code)}`}>See your booking</a>;
   const text = {
     working: "Confirming your booking…",
     confirmed: "Thank you, your booking is confirmed. We've emailed the details.",
@@ -23,11 +28,19 @@ export function ConfirmBookingPage({ token }) {
     expired: "This booking wasn't confirmed within 24 hours, so it lapsed. Nothing was charged. You can book again while places remain.",
     cancelled: "This booking was canceled before it was confirmed. Nothing was charged.",
   }[state.status];
+  const body = (
+    <>
+      {text && <p>{text} {state.status !== "working" && booking}</p>}
+      {(state.status === "refused" || state.status === "error") && <div className="auth-error" role="alert">{state.error}</div>}
+    </>
+  );
+  if (embed) {
+    return <div className="eb-panel eb-booking eb-confirm" role="status"><div className="eb-head"><strong className="eb-title">Confirm my booking</strong></div><div className="eb-confirm-body">{body}</div></div>;
+  }
   return (
     <main style={{ maxWidth: 560, margin: "40px auto", padding: "0 16px" }}>
       <h1>Confirm my booking</h1>
-      {text && <p>{text} {state.status !== "working" && booking}</p>}
-      {(state.status === "refused" || state.status === "error") && <div className="auth-error" role="alert">{state.error}</div>}
+      {body}
     </main>
   );
 }

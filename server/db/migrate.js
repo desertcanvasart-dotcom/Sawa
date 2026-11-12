@@ -78,6 +78,7 @@ const MIGRATIONS = [
   { name: "067_agency_status", file: "schema_067_agency_status.sql" },
   { name: "068_agency_documents", file: "schema_068_agency_documents.sql" },
   { name: "069_customer_reviews", file: "schema_069_customer_reviews.sql" },
+  { name: "070_partner_site", file: "schema_070_partner_site.sql" },
 ];
 
 async function main() {

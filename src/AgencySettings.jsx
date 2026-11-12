@@ -9,6 +9,7 @@ import React, { useState } from "react";
 import { Check, KeyRound, UserRound, Building2 } from "lucide-react";
 import { apiFetch } from "./supabaseClient";
 import { supabase } from "./supabaseAuth.js";
+import { normalizeWebsite } from "../shared/partner-page.js";
 
 const ROLE_LABEL = { agency_owner: "Owner", agency_agent: "Agent" };
 
@@ -132,18 +133,22 @@ function PasswordCard({ email }) {
 function AgencyCard({ agency, isOwner, onSaved }) {
   const [contactName, setContactName] = useState(agency?.contactName || "");
   const [phone, setPhone] = useState(agency?.phone || "");
+  const [website, setWebsite] = useState(agency?.website || "");
   const [busy, setBusy] = useState(false);
   const [ok, setOk] = useState("");
   const [err, setErr] = useState("");
-  const changed = contactName.trim() !== (agency?.contactName || "") || phone.trim() !== (agency?.phone || "");
+  const changed = contactName.trim() !== (agency?.contactName || "") || phone.trim() !== (agency?.phone || "") || website.trim() !== (agency?.website || "");
   const verified = agency?.verificationState === "verified" || !!agency?.verifiedAt;
 
   async function save(e) {
     e.preventDefault();
     setOk(""); setErr("");
+    // The same rule the server stores it by (shared/partner-page.js).
+    if (website.trim() && !normalizeWebsite(website)) return setErr("Enter your website's address, like https://www.youragency.com. It must be a public https site.");
     setBusy(true);
     try {
-      await patch("/agency/profile", { contactName: contactName.trim(), phone: phone.trim() });
+      const j = await patch("/agency/profile", { contactName: contactName.trim(), phone: phone.trim(), website: website.trim() });
+      setWebsite(j.agency?.website || "");
       setOk("Saved.");
       await onSaved?.();
     } catch (e2) { setErr(e2.message); } finally { setBusy(false); }
@@ -164,6 +169,10 @@ function AgencyCard({ agency, isOwner, onSaved }) {
         </label>
         <label className="set-field">Contact phone
           <input type="tel" value={phone} onChange={(e) => { setPhone(e.target.value); setOk(""); }} readOnly={!isOwner} disabled={!isOwner} autoComplete="off" />
+        </label>
+        <label className="set-field">Your website
+          <input type="url" inputMode="url" placeholder="https://www.youragency.com" value={website} onChange={(e) => { setWebsite(e.target.value); setOk(""); }} readOnly={!isOwner} disabled={!isOwner} autoComplete="off" />
+          <span className="field-hint">Where your Sawa widget lives. Emails about a widget booking then bring your customer back to your page, not to sawa.tours. Links are only ever made to this site.</span>
         </label>
       </div>
       <p className="field-hint">

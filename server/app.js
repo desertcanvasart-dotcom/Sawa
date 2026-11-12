@@ -111,7 +111,8 @@ import { watchdogReport, lastWatchRunAt } from "./watchdog.js";
 // to be written differently.
 import { rethrowIfProgrammerError, surfaceProgrammerError } from "./errors.js";
 import { tourSlug, tourPath } from "./slug.js";
-import { throughPartner } from "./partner.js";
+import { throughPartner, partnerPageFor, rememberPartnerPage, confirmLink } from "./partner.js";
+import { normalizeWebsite } from "../shared/partner-page.js";
 import { blogSlug } from "../shared/blog-slug.js";
 import { mapPost } from "./blog-post.js";
 import { cancelDepartureAndPledges, reportNotifications, CANCEL_REASONS } from "./departure-cancel.js";
@@ -405,6 +406,9 @@ const publicBookingSchema = z.object({
   roomingType: z.enum(["single", "double", "triple"]).optional(),
   accommodationTier: z.string().optional(),
   refCode: z.string().trim().max(60).optional(),
+  // The page the partner's widget sits on (070). Checked against the website
+  // the partner registered before it is kept or linked to — partner.js.
+  pageUrl: z.string().trim().max(600).optional(),
   // Group bookings (catalogue_v2): the "Join my group" link the booking came
   // through. Ignored with the flag off.
   partyToken: z.string().trim().max(80).optional(),
@@ -523,6 +527,7 @@ const publicDepartureRequestSchema = z.object({
   ignoreMatches: z.coerce.boolean().optional(),
   // The partner whose widget the request came from, as on a booking.
   refCode: z.string().trim().max(60).optional(),
+  pageUrl: z.string().trim().max(600).optional(),
 });
 
 // Eligibility fences for traveler-picked dates. The addendum specified these
@@ -668,6 +673,9 @@ app.patch("/api/me", requireAuth, writeLimiter, h(async (req, res) => {
 const agencyProfileSchema = z.object({
   contactName: z.string().trim().max(120).optional(),
   phone: z.string().trim().max(40).optional(),
+  // 070: the agency's own website. The widget's email links may return to
+  // pages on it, and to nowhere else (shared/partner-page.js). "" clears it.
+  website: z.string().trim().max(200).optional(),
 });
 app.patch("/api/agency/profile", requireAuth, requireRole("agency_owner"), writeLimiter, h(async (req, res) => {
   if (!req.user.agencyId) throw new AppError(403, "This account is not linked to an agency.");
@@ -676,13 +684,20 @@ app.patch("/api/agency/profile", requireAuth, requireRole("agency_owner"), write
   if (!before) throw new AppError(404, "Agency not found.");
   const contactName = input.contactName === undefined ? before.contact_name : (input.contactName || null);
   const phone = input.phone === undefined ? before.phone : (input.phone || null);
-  const row = (await pool.query(
+  let row = (await pool.query(
     `UPDATE agencies SET contact_name = $1, phone = $2 WHERE id = $3 RETURNING *`,
     [contactName, phone, req.user.agencyId])).rows[0];
-  await logAudit(req, {
-    action: "agency.profile.update", entity: "agency", entityId: req.user.agencyId,
-    detail: { from: { contactName: before.contact_name, phone: before.phone }, to: { contactName, phone } },
-  });
+  const detail = { from: { contactName: before.contact_name, phone: before.phone }, to: { contactName, phone } };
+  if (input.website !== undefined && (input.website || null) !== (before.website || null)) {
+    const website = input.website ? normalizeWebsite(input.website) : null;
+    if (input.website && !website) throw new AppError(422, "Enter your website's address, like https://www.youragency.com. It must be a public https site.");
+    // The column arrives with migration 070, applied by hand.
+    if (!("website" in before)) throw new AppError(409, "Saving a website isn't switched on yet. Sawa needs to apply an update first (migration 070).");
+    row = (await pool.query(`UPDATE agencies SET website = $1 WHERE id = $2 RETURNING *`, [website, req.user.agencyId])).rows[0];
+    detail.from.website = before.website || null;
+    detail.to.website = website;
+  }
+  await logAudit(req, { action: "agency.profile.update", entity: "agency", entityId: req.user.agencyId, detail });
   res.json({ agency: mapAgency(row) });
 }));
 
@@ -1577,12 +1592,17 @@ app.post("/api/public/departures/:id/bookings", writeLimiter, bookingAttemptLimi
 
 // The partner whose widget a booking came through (server/partner.js): the
 // line "Booked through <agency>" on the emails about it.
-const forPartner = (refCode, message) => throughPartner(pool, { refCode }, message);
+// `page`: the checked page on the partner's site the booking was made on, so
+// "check your booking" in this email opens it there.
+const forPartner = (refCode, message, { pageUrl = null, bookingCode = null } = {}) => throughPartner(pool, { refCode, pageUrl, bookingCode }, message);
 
 async function placePublicBooking(req, { departureId, body, confirmation = null }) {
   const input = confirmation ? { ...confirmation.payload.input } : parse(publicBookingSchema, body);
   const manifest = confirmation ? confirmation.payload.manifest : manifestFields(body);
   if (!confirmation) input.customerPhone = verifiedPhoneFor(input);
+  // Only a page on the partner's registered website survives this; what is
+  // kept with a held booking is the checked address, never the browser's.
+  if (!confirmation) input.pageUrl = (await partnerPageFor(pool, input.refCode, input.pageUrl)) || undefined;
   // Reservation integrity (catalogue_v2): the form's signals, reduced at once
   // (a hash, a /24, a country code) and kept with a held booking.
   const signals = confirmation ? (confirmation.payload.signals || null) : reduceSignals({
@@ -1691,8 +1711,8 @@ async function placePublicBooking(req, { departureId, body, confirmation = null 
     sendEmailInBackground(forPartner(input.refCode, confirmBookingEmail({
       to: input.customerEmail, customerName: input.customerName, route: d.route,
       dateLabel: d.startDate ? `${d.startDate} – ${d.endDate}` : d.date, seats: input.seats, bookingCode: code,
-      url: confirmBookingUrl(result.held.token),
-    })));
+      url: confirmLink(confirmBookingUrl(result.held.token), result.held.token, input.pageUrl),
+    }), { pageUrl: input.pageUrl, bookingCode: code }));
     return { status: 202, audit: { action: "booking.hold", entity: "booking", entityId: code, detail: { departureId, seats: input.seats, source: "public" } }, json: {
       departure: presentDeparture(d, req.user), confirmationRequired: true,
       booking: { bookingCode: code, seats: input.seats, customers: input.customerName, status: "unconfirmed" },
@@ -1701,6 +1721,8 @@ async function placePublicBooking(req, { departureId, body, confirmation = null 
   const audit = { action: "booking.create", entity: "pledge", entityId: result.booking.id,
     detail: { departureId: result.departure.id, ...(result.routedTo && result.routedTo.departureId !== departureId ? { requestedDepartureId: departureId, departureNo: result.routedTo.no, opened: result.routedTo.opened } : {}), seats: input.seats, source: "public", ...(result.partyId ? { partyId: result.partyId } : {}),
       ...(confirmation ? { confirmedEmail: true } : {}), ...(result.flagId ? { flagId: result.flagId } : {}) } };
+  await rememberPartnerPage(pool, result.booking.bookingCode, input.pageUrl);
+  const partnerLinks = { pageUrl: input.pageUrl, bookingCode: result.booking.bookingCode };
   const flagAudit = result.flagId ? { action: "booking_flag.raise", entity: "booking_flag", entityId: result.flagId, detail: { pledgeId: result.booking.id } } : null;
   if (input.customerEmail && result.payAtGoAhead) {
     // Model phase 4: nothing is paid until GoAhead, then the full price; the
@@ -1710,7 +1732,7 @@ async function placePublicBooking(req, { departureId, body, confirmation = null 
       to: input.customerEmail, customerName: input.customerName, route: d.route,
       dateLabel: d.startDate ? `${d.startDate} – ${d.endDate}` : d.date, seats: input.seats,
       total: result.booking.bookingTotal, bookingCode: result.booking.bookingCode, terms: view?.terms || null,
-    })).then((m) => forPartner(input.refCode, m)));
+    })).then((m) => forPartner(input.refCode, m, partnerLinks)));
   } else if (input.customerEmail) {
     const d = result.departure;
     sendEmailInBackground(operatorFor(d.id).then((operator) => bookingConfirmationEmail({
@@ -1719,7 +1741,7 @@ async function placePublicBooking(req, { departureId, body, confirmation = null 
       depositDue: result.booking.depositDue, balanceDue: result.booking.balanceDue,
       balanceDueDate: result.booking.balanceDueDate, bookingCode: result.booking.bookingCode,
       product: d, operator,
-    })).then((m) => forPartner(input.refCode, m)));
+    })).then((m) => forPartner(input.refCode, m, partnerLinks)));
   }
   notifyOps(result.departure, result.booking, input, { isRequest: false });
   // The direct traveller gets their own booking receipt back in full.
@@ -2065,8 +2087,8 @@ app.post("/api/public/bookings/:code/resend-confirmation", writeLimiter, h(async
   sendEmailInBackground(forPartner(input.refCode, confirmBookingEmail({
     to: r.row.email, customerName: input.customerName, route: d.route,
     dateLabel: d.start_date ? `${isoDate(d.start_date)} – ${isoDate(d.end_date)}` : isoDate(d.date), seats: Number(r.row.seats),
-    bookingCode: r.row.booking_code, url: confirmBookingUrl(r.token), dateRequest: r.row.kind === "date_request",
-  })));
+    bookingCode: r.row.booking_code, url: confirmLink(confirmBookingUrl(r.token), r.token, input.pageUrl), dateRequest: r.row.kind === "date_request",
+  }), { pageUrl: input.pageUrl, bookingCode: r.row.booking_code }));
   await logAudit(req, { action: "booking.hold_resend", entity: "booking", entityId: r.row.booking_code, detail: { resends: r.row.resends } });
   res.json({ sent: true, resendsLeft: Math.max(0, MAX_RESENDS - r.row.resends) });
 }));
@@ -2554,6 +2576,7 @@ async function createDateRequest(input, req, requester = {}, { hold = false, con
 app.post("/api/public/departure-requests", writeLimiter, bookingAttemptLimiter, h(async (req, res) => {
   await requireTurnstile(req);
   const input = parse(publicDepartureRequestSchema, req.body);
+  input.pageUrl = (await partnerPageFor(pool, input.refCode, input.pageUrl)) || undefined;
   input.customerPhone = verifiedPhoneFor(input);
   delete input.turnstileToken;
   delete input.phoneToken;
@@ -2581,8 +2604,9 @@ app.post("/api/public/departure-requests", writeLimiter, bookingAttemptLimiter, 
     const code = result.held.row.booking_code;
     sendEmailInBackground(forPartner(input.refCode, confirmBookingEmail({
       to: input.customerEmail, customerName: input.customerName, route: result.product.title,
-      dateLabel: input.date, seats: input.seats, bookingCode: code, url: confirmBookingUrl(result.held.token), dateRequest: true,
-    })));
+      dateLabel: input.date, seats: input.seats, bookingCode: code,
+      url: confirmLink(confirmBookingUrl(result.held.token), result.held.token, input.pageUrl), dateRequest: true,
+    }), { pageUrl: input.pageUrl, bookingCode: code }));
     await logAudit(req, { action: "departure_request.hold", entity: "booking", entityId: code,
       detail: { tourProductId: input.tourProductId, date: input.date, seats: input.seats, source: "public", joins: result.held.row.departure_id ?? null } });
     return res.status(202).json({ confirmationRequired: true, booking: { bookingCode: code, seats: input.seats, customers: input.customerName, status: "unconfirmed" } });
@@ -2603,7 +2627,8 @@ async function announceDateRequest(req, input, result, { confirmedEmail = false 
     to: input.customerEmail, customerName: input.customerName, route: d.route,
     dateLabel: d.startDate ? `${d.startDate} – ${d.endDate}` : d.date,
     seats: input.seats, bookingCode: result.booking.bookingCode,
-  })));
+  }), { pageUrl: input.pageUrl, bookingCode: result.booking.bookingCode }));
+  await rememberPartnerPage(pool, result.booking.bookingCode, input.pageUrl);
   notifyOps(d, result.booking, input, { isRequest: true });
 }
 
@@ -2824,7 +2849,10 @@ app.get("/api/agency/widget", requireAuth, requireRole("agency_owner", "agency_a
     `SELECT COUNT(*) FILTER (WHERE status <> 'cancelled') AS bookings,
             COALESCE(SUM(booking_total) FILTER (WHERE status <> 'cancelled'), 0) AS revenue
        FROM pledges WHERE ref_code = $1`, [row.code])).rows[0];
+  // 070: shown on the Promote page, beside the snippet that uses it.
+  const website = (await pool.query("SELECT * FROM agencies WHERE id = $1", [agencyId])).rows[0]?.website || null;
   res.json({
+    website,
     code: row.code, name: row.name || "", visits: row.visits || 0,
     bookings: Number(agg.bookings) || 0, revenue: Number(agg.revenue) || 0,
     commissionPercent: Number(row.commission_percent) || 0,

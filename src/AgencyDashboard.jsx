@@ -1016,8 +1016,16 @@ function MyDateRequests({ onChange }) {
 }
 
 /* ---------------- Promote: self-serve tracked widget ---------------- */
+// The widget's companion script. It (1) sizes the frame to its content,
+// (2) sends the page's colours and its address to the frame, and (3) when the
+// page was opened from a Sawa email — ?sawa-booking=CODE or ?sawa-confirm=TOKEN
+// — opens the booking widget on that booking, so the customer lands back on
+// the agency's own page. Old snippets (without 3) keep working; their emails
+// link to sawa.tours.
 const EMBED_SCRIPT = `<script>
-(function(){function s(f){try{var c=getComputedStyle(document.body),a=document.querySelector('a');f.contentWindow.postMessage({type:'sawa-embed-theme',bg:c.backgroundColor,text:c.color,accent:a?getComputedStyle(a).color:''},'*');}catch(e){}}
+(function(){var q=new URLSearchParams(location.search),b=q.get('sawa-booking'),k=q.get('sawa-confirm');
+function s(f){try{var c=getComputedStyle(document.body),a=document.querySelector('a');f.contentWindow.postMessage({type:'sawa-embed-theme',bg:c.backgroundColor,text:c.color,accent:a?getComputedStyle(a).color:'',page:location.href},'*');}catch(e){}}
+if(b||k){var w=document.querySelector('iframe[data-sawa-embed][src*="/embed/book"]');if(w){try{var u=new URL(w.src);u.pathname=b?'/embed/booking/'+encodeURIComponent(b):'/embed/confirm/'+encodeURIComponent(k);w.loading='eager';w.src=u.toString();w.scrollIntoView({block:'start'});}catch(e){}}}
 addEventListener('message',function(e){if(!e.data)return;document.querySelectorAll('iframe[data-sawa-embed]').forEach(function(f){if(f.contentWindow!==e.source)return;if(e.data.type==='sawa-embed-height')f.style.height=e.data.height+'px';if(e.data.type==='sawa-embed-ready')s(f);if(e.data.type==='sawa-embed-top'&&f.getBoundingClientRect().top<0)f.scrollIntoView({behavior:'smooth',block:'start'});});});
 addEventListener('load',function(){document.querySelectorAll('iframe[data-sawa-embed]').forEach(s);});})();
 <\/script>`;
@@ -1073,6 +1081,7 @@ function WidgetSection({ tourProducts = [] }) {
               <button className="btn-ghost sm" onClick={() => copy(bookAllSnippet, "bookAll")}><Copy size={14} />{copied === "bookAll" ? "Copied!" : "Copy code"}</button>
             </div>
             <p className="field-hint">Your customers browse every Sawa tour and book it <b>on your website</b> — they never leave your page. Each booking is credited to {info.name || "your agency"}, and the widget shows “Booked through {info.name || "your agency"}”.</p>
+            <p className="field-hint">Emails about a booking can bring your customer back to <b>this page on your site</b> instead of sawa.tours. For that, add your website under Settings → Agency details{info.website ? <> (saved: <b>{info.website}</b>)</> : ""} and use the snippet below — if you pasted an older one, replace it.</p>
             <textarea className="embed-snippet" readOnly rows={5} value={bookAllSnippet} onFocus={(e) => e.target.select()} />
           </div>
 
