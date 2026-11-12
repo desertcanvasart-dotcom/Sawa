@@ -12,7 +12,7 @@ import { dateLabelFor } from "./jobs/notify-goahead.js";
 import { goAheadNotifyDryRun } from "./jobs/scheduler.js";
 import { bookingConfirmationEmail } from "./email.js";
 import { bookingLookupView } from "./domain.js";
-import { appSource } from "./app-source.js";
+import { appSource, mainSource } from "./app-source.js";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const read = (p) => readFileSync(join(ROOT, p), "utf8");
@@ -200,7 +200,7 @@ test("nothing already cancelled offers a cancel button", () => {
 test("the page asks the server whether cancelling is allowed", () => {
   // Same argument as showProgress and note, both of which moved into domain.js
   // after the page chose them from `confirmed` alone.
-  const src = read("src/main.jsx");
+  const src = mainSource();
   assert.match(src, /b\.canCancel &&/, "the button must be gated on the server's answer");
 });
 
@@ -208,7 +208,7 @@ test("cancelling is a POST, so a link prefetch cannot release a seat", () => {
   const app = appSource();
   assert.match(app, /app\.post\("\/api\/public\/bookings\/:code\/cancel"/,
     "a GET here would let a mail client cancel a booking by scanning the message");
-  const ui = read("src/main.jsx");
+  const ui = mainSource();
   assert.match(ui, /setConfirming\(true\)/, "the destructive action needs a confirm step");
 });
 

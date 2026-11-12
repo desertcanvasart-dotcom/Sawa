@@ -11,7 +11,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { appSource } from "./app-source.js";
+import { appSource, mainSource } from "./app-source.js";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const REGISTER = readFileSync(join(ROOT, "docs", "audit", "latent-defects.md"), "utf8");
@@ -88,7 +88,7 @@ test("L-9 is closed, and closed means one implementation", () => {
   // assertion inverts rather than being deleted: a register entry and the code
   // it describes must not be able to disagree in either direction.
   const app = appSource();
-  const spa = readFileSync(join(ROOT, "src", "main.jsx"), "utf8");
+  const spa = mainSource();
   assert.doesNotMatch(app, /function cleanRefCode\(/, "server/app.js declares it again");
   assert.doesNotMatch(spa, /function cleanRef\w*\(/, "src/main.jsx declares it again");
   for (const src of [app, spa]) {

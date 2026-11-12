@@ -8,6 +8,7 @@ import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { tierPriceEur, tierPriceSummary } from "../shared/pool-model.js";
+import { mainSource } from "./app-source.js";
 const tierPriceEurCheck = tierPriceEur;
 import { catalogueTourView, isCatalogueTour, NO_RATE_CARD, NO_EXCHANGE_RATE } from "../shared/catalogue-tour-editor.js";
 
@@ -115,6 +116,6 @@ test("catalogue products hide the legacy fields; legacy tours and flag-off show 
 test("the public tour page and the widget read the same summary", () => {
   assert.match(read("server", "catalogue-public.js"), /summary: tierPriceSummary\(rate\.tiers, eurRate\)/);
   assert.match(read("server", "catalogue-public.js"), /priceSummary: entry\.pricing\?\.summary/);
-  const main = read("src", "main.jsx");
+  const main = mainSource();
   assert.equal((main.match(/catalogue\?\.priceSummary/g) || []).length >= 3, true, "tour page, widget card, widget booking panel");
 });

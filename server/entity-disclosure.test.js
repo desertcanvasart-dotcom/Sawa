@@ -23,6 +23,7 @@ import assert from "node:assert/strict";
 import { readdirSync, statSync, readFileSync } from "node:fs";
 import { join, dirname, relative } from "node:path";
 import { fileURLToPath } from "node:url";
+import { mainSource } from "./app-source.js";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 // DIR-19 executed 10 Aug 2026. The sweep this file was built from IS the
@@ -39,7 +40,7 @@ const FORMER = "Capital Travel Service";
 // arrives, these are the edits, and there are no others.
 const AUTHORED = {
   "site/_partials/footer.html": { n: 1, surface: "footer — applyFooter writes it into 21 static pages" },
-  "src/main.jsx":               { n: 1, surface: "footer — the SPA's own copy of the same sentence" },
+  "src/SiteChrome.jsx":         { n: 1, surface: "footer — the SPA's own copy of the same sentence" },
   // Was 2. The second was a COMMENT beside an empty `accreditations`, saying the
   // entity's own tourism registration was a fact the client had not supplied.
   // The client confirmed both credentials on 14 Aug 2026, so that sentence
@@ -147,7 +148,7 @@ test("the former entity is never presented as the operator of the platform", () 
   // one company's licence as another's is the class this project removes.
   for (const f of ["site/_partials/footer.html", "src/main.jsx", "server/email.js",
                    "site/privacy.html", "site/cookies.html", "site/terms.html"]) {
-    const src = readFileSync(join(ROOT, f), "utf8").replace(/<!--[\s\S]*?-->/g, " ").replace(/^\s*\/\/.*$/gm, " ");
+    const src = (f === "src/main.jsx" ? mainSource() : readFileSync(join(ROOT, f), "utf8")).replace(/<!--[\s\S]*?-->/g, " ").replace(/^\s*\/\/.*$/gm, " ");
     assert.doesNotMatch(src, new RegExp(`[Oo]perated by ${FORMER}`), `${f} still says the platform is operated by ${FORMER}`);
     assert.doesNotMatch(src, new RegExp(`${FORMER}, trading as`), `${f} still names ${FORMER} as the trading entity`);
     assert.doesNotMatch(src, ETAA_2179, `${f} presents Capital Travel Service's ETAA licence as the platform's`);
@@ -171,7 +172,7 @@ test("no public page presents ETAA 2179, in any wording", () => {
     .filter((f) => String(f).endsWith(".html")).map((f) => join("site", String(f)));
   assert.ok(pages.length > 20, "the walker found the site pages");
   for (const f of pages) {
-    const src = readFileSync(join(ROOT, f), "utf8").replace(/<!--[\s\S]*?-->/g, " ");
+    const src = (f === "src/main.jsx" ? mainSource() : readFileSync(join(ROOT, f), "utf8")).replace(/<!--[\s\S]*?-->/g, " ");
     assert.doesNotMatch(src, ETAA_2179, `${f} presents Capital Travel Service's ETAA licence`);
   }
 });

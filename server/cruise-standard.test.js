@@ -11,6 +11,7 @@ import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { hasNileCruise, CRUISE_STANDARD_NOTE, CANCELLATION_SCHEDULE } from "../shared/booking-policy.js";
+import { mainSource } from "./app-source.js";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const read = (p) => readFileSync(join(ROOT, p), "utf8");
@@ -71,7 +72,7 @@ test("the note says both things the client said", () => {
 });
 
 test("the note renders under the hotel tier selector, gated on the detector", () => {
-  const src = read("src/main.jsx");
+  const src = mainSource();
   assert.match(src, /\{hasNileCruise\(tour\) && <small className="bk-tier-note">\{CRUISE_STANDARD_NOTE\}<\/small>\}/);
   // Inside the Hotel tier label, not the Room one below it.
   const block = /<span>Hotel tier<\/span>[\s\S]*?<\/label>/.exec(src);
@@ -84,10 +85,12 @@ test("everything the component uses is imported", () => {
   // defined" and EVERY SPA route rendered a blank page. The build succeeded —
   // Vite does not resolve a bare identifier at build time — and only loading a
   // page showed it.
-  const src = read("src/main.jsx");
+  // The tour page is its own file now (src/TourDetail.jsx); the import that
+  // matters is that file's, not whichever one comes first in the combined source.
+  const src = read("src/TourDetail.jsx");
   const imported = (/import \{([\s\S]*?)\} from "\.\.\/shared\/booking-policy\.js";/.exec(src) || [])[1] || "";
   const names = imported.split(",").map((n) => n.trim().split(" as ").pop()).filter(Boolean);
-  assert.ok(names.length > 4, "the import block was not parsed");
+  assert.ok(names.length >= 2, "the import block was not parsed");
   for (const used of ["hasNileCruise", "CRUISE_STANDARD_NOTE"]) {
     assert.ok(src.includes(used), `${used} should be used by the component`);
     assert.ok(names.includes(used), `${used} is used but never imported — the bundle throws at load`);

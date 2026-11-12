@@ -8,7 +8,7 @@
 // had closed the previous evening — the exact claim-vs-code drift this repo
 // exists to hunt, aimed at its own staff instead of a traveller.
 import test from "node:test";
-import { appSource } from "./app-source.js";
+import { appSource, mainSource } from "./app-source.js";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
@@ -33,7 +33,7 @@ test("nothing writes or accepts the decorative label any more", () => {
 });
 
 test("the agency desk pill renders the enforced rule", () => {
-  const src = read("src/main.jsx");
+  const src = mainSource();
   assert.ok(!src.includes("{selected.cutoff}"), "the pill reads the dropped column again");
   assert.match(src, /Cutoff \{cutoffLabel\(info\.bookingCutoffHours \?\? 24, info\.bookingCutoffUnit\)\}/,
     "the pill must phrase the cutoff via cutoffLabel from the enforced hours");

@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 import { MAX_GROUP_SIZE, GROUP_MAX_WORD } from "../shared/group-size.js";
 import { capacityError } from "./domain.js";
 import { priceFromTiers } from "../shared/pricing.js";
-import { appSource } from "./app-source.js";
+import { appSource, mainSource } from "./app-source.js";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const read = (...p) => readFileSync(join(ROOT, ...p), "utf8");
@@ -49,7 +49,7 @@ test("migration 062 changes only what it says, guarded so a second run changes n
 });
 
 test("a party above 8 gets the special-arrangement form, not a booking, on the tour page and the widget", () => {
-  const main = read("src", "main.jsx");
+  const main = mainSource();
   assert.match(main, /tooManyTravelers\(seats\) && <GroupRequestForm/);
   assert.match(main, /tooManyTravelers\(nSeats\) && <GroupRequestForm/);
   assert.match(main, /if \(tooManyTravelers\(seats\)\) return setErr\(GROUP_REQUEST_TITLE\)/, "the tour page stops before it books");

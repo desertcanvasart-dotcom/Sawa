@@ -12,7 +12,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { appSource } from "./app-source.js";
+import { appSource, mainSource } from "./app-source.js";
 import {
   operatingDayError, operatingDaysLabel, operatingDaysOf, weekdayOf,
 } from "../shared/operating-days.js";
@@ -89,7 +89,7 @@ test("the traveller route uses the same rule, not its own copy", () => {
 });
 
 test("the date picker shares the label, so the two cannot disagree", () => {
-  const ui = read("src/main.jsx");
+  const ui = mainSource();
   assert.match(ui, /operatingDaysLabel\(opDays\)/);
   assert.ok(!/\["Sundays", "Mondays", "Tuesdays"/.test(ui),
     "src/main.jsx still carries its own day table");

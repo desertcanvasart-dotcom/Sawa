@@ -7,16 +7,17 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { mainSource } from "../server/app-source.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const read = (f) => readFileSync(join(here, f), "utf8");
 
 test("nothing on the public path imports the Supabase library up front", () => {
   assert.doesNotMatch(read("supabaseClient.js"), /^import .*@supabase\/supabase-js/m);
-  assert.doesNotMatch(read("main.jsx"), /^import .*supabaseAuth/m);
-  assert.doesNotMatch(read("main.jsx"), /import \{[^}]*\bsupabase\b[^}]*\} from "\.\/supabaseClient"/);
+  assert.doesNotMatch(mainSource(), /^import .*supabaseAuth/m);
+  assert.doesNotMatch(mainSource(), /import \{[^}]*\bsupabase\b[^}]*\} from "\.\/supabaseClient"/);
   assert.match(read("supabaseClient.js"), /await import\("\.\/supabaseAuth\.js"\)/, "loaded on demand");
-  assert.match(read("main.jsx"), /const LoginGate = lazy\(/, "the one static importer stays lazy");
+  assert.match(mainSource(), /const LoginGate = lazy\(/, "the one static importer stays lazy");
 });
 
 test("a saved session is detected from Supabase's own storage key", async () => {

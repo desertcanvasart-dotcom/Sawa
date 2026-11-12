@@ -12,11 +12,11 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { computePledgePricing } from "./domain.js";
 import { livePriceFor } from "../shared/pricing.js";
-import { appSource } from "./app-source.js";
+import { appSource, mainSource } from "./app-source.js";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const read = (...p) => readFileSync(join(ROOT, ...p), "utf8");
-const main = read("src", "main.jsx");
+const main = mainSource();
 
 test("F06: every date card links to its own date", () => {
   for (const page of ["departures.html", "goahead.html", "index.html"]) {

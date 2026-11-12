@@ -8,7 +8,7 @@ import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { operatorForDeparture, directOperatorId } from "./domain.js";
-import { appSource } from "./app-source.js";
+import { appSource, mainSource } from "./app-source.js";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const read = (...p) => readFileSync(join(ROOT, ...p), "utf8");
@@ -124,7 +124,7 @@ test("every date and listing carries its operator, computed before pledges are s
   const at = app.indexOf("enriched.operatorAgencyId = operatorForDeparture(");
   assert.ok(at > 0 && at < app.indexOf("return presentDeparture(enriched, user);", at));
   assert.match(app, /operatorAgencyId: p\.agencyId \|\| directAgencyId \|\| null/);
-  assert.match(read("src", "main.jsx"),
+  assert.match(mainSource(),
     /operatorsByProduct\[dep\?\.operatorAgencyId \|\| tour\.operatorAgencyId \|\| tour\.agencyId\]/,
     "the tour page names the selected date's operator");
 });
