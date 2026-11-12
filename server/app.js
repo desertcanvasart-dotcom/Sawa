@@ -57,6 +57,7 @@ import { watchdogReport, lastWatchRunAt } from "./watchdog.js";
 // to be written differently.
 import { rethrowIfProgrammerError, surfaceProgrammerError } from "./errors.js";
 import { provideRouteContext } from "./route-context.js";
+import { imageVariants } from "./image-variants.js";
 import { normalizeWebsite } from "../shared/partner-page.js";
 
 import { DIRECT_BOOKINGS_OPERATOR } from "./brand.js";
@@ -1102,6 +1103,13 @@ registerReviewRoutes(app, {
 });
 
 app.use("/api", (_req, res) => res.status(404).json({ error: "Not found." }));
+
+// Photos under /images in WebP and smaller widths, for the same URLs; anything
+// it doesn't handle falls through to the static files below, unchanged.
+// Same order of roots as the static handlers: site/ first, then the build.
+app.use("/images", imageVariants({
+  roots: [join(__dirname, "..", "site", "images"), join(distDir, "images"), join(__dirname, "..", "public", "images")],
+}));
 
 // The public site outside the app: robots, llms and sitemap files, the editorial pages, and old tour URLs: server/routes/site.js.
 provideRouteContext({

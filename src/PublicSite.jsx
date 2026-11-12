@@ -13,6 +13,7 @@ import { TourDetailV2 } from "./TourDetail.jsx";
 import { PublicRoute } from "./PublicPages.jsx";
 import { routeStopsFor, destinationCopy, formingLabel } from "./tour-helpers.jsx";
 import { PackageCard, TourCard } from "./TourCards.jsx";
+import { sizedImage, imageSrcSet } from "../shared/image-size.js";
 
 function PublicSite({
   path,
@@ -166,6 +167,8 @@ function PublicSite({
             <div className="hero-soft-media">
               <img
                 src="/images/hero.jpg"
+                srcSet={imageSrcSet("/images/hero.jpg")}
+                sizes="(max-width: 760px) 100vw, 50vw"
                 alt="Pyramid of Giza at golden hour"
                 loading="eager"
               />
@@ -267,7 +270,7 @@ function PublicSite({
                     className={selectedCity === city.name ? "destination-chip active" : "destination-chip"}
                     key={city.name}
                     onClick={() => { setSelectedCity(city.name); document.getElementById("live-departures")?.scrollIntoView({ behavior: "smooth" }); }}
-                    style={{ backgroundImage: `linear-gradient(180deg, rgba(20,17,12,.10), rgba(20,17,12,.82)), url(${destinationCopy[city.name]?.image})` }}
+                    style={{ backgroundImage: `linear-gradient(180deg, rgba(20,17,12,.10), rgba(20,17,12,.82)), url(${sizedImage(destinationCopy[city.name]?.image, 800)})` }}
                   >
                     <strong>{city.name}</strong>
                     <span>{destinationCopy[city.name]?.tags}</span>

@@ -318,6 +318,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       /* No-photo listings fall back to the site hero rather than a broken img. */
       var hasPhoto=!!(p.images&&p.images[0]&&p.images[0].url);
       var img=hasPhoto?p.images[0].url:'/images/hero-pyramids.jpg';
+      /* Card photos at the width a card shows them (server/image-variants.js; the widths are shared/image-size.js's). */ if(/^\/images\/[\w.\/-]+\.(jpe?g|png)$/i.test(img))img+='?w=800';
       var alt=(hasPhoto&&p.images[0].alt)||p.title;
       var price=d.livePrice||p.publishedRate||p.breakPrice||'';
       var min=minOf(d,p);

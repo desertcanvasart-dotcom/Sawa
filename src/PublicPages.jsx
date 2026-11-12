@@ -36,6 +36,7 @@ import { JoinGroupLink } from "./GroupBooking.jsx";
 import { ResendConfirmation } from "./BookingConfirmation.jsx";
 import { toDate } from "./dates.js";
 import { readInlineData } from "./inline-data.js";
+import { sizedImage } from "../shared/image-size.js";
 
 function PublicRoute({ page, path, navigate, customerCalendars, customerSummary, cityStats, selectedCity, setSelectedCity, operatorsByProduct }) {
   switch (page) {
@@ -746,7 +747,7 @@ function BlogIndexPage({ navigate }) {
             // that carries the semantics — stretched over the whole card, so
             // the card-level onClick is no longer needed to keep it clickable.
             <article className="blog-card" key={p.id}>
-              <div className="blog-card-media" style={p.coverImage ? { backgroundImage: `url(${p.coverImage})` } : undefined}>
+              <div className="blog-card-media" style={p.coverImage ? { backgroundImage: `url(${sizedImage(p.coverImage, 800)})` } : undefined}>
                 {!p.coverImage && <Newspaper size={26} />}
               </div>
               <div className="blog-card-body">
