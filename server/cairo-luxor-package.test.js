@@ -30,6 +30,8 @@ test("Cairo-Luxor package repair never overwrites a live record", () => {
 
 test("the repair is registered and runs before the web process", () => {
   assert.match(runner, /041_restore_cairo_luxor_package/);
+  // Pending migrations first (server/db/migrate.js --pending), so the repair
+  // never runs against a schema older than the code that wrote it.
   assert.equal(pkg.scripts.start,
-    "node server/db/apply-deploy-data-fixes.js && node server/app.js");
+    "node server/db/migrate.js --pending && node server/db/apply-deploy-data-fixes.js && node server/app.js");
 });

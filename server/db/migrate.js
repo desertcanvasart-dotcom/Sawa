@@ -1,14 +1,26 @@
-// Applies all schema migrations in order. Each schema file is idempotent
-// (IF NOT EXISTS guards), so this is safe to run repeatedly.
-// Run: npm run db:migrate
+// Applies the schema migrations in order.
+//
+//   npm run db:migrate             every migration, again. Each file is written to
+//                                  be idempotent (IF NOT EXISTS guards), so this is
+//                                  safe on a database that already has them; it is
+//                                  what local set-up and the test databases use.
+//   node server/db/migrate.js --pending
+//                                  only those schema_migrations has no row for, in
+//                                  one transaction. This is what every deploy runs
+//                                  before the server starts (package.json "start").
+//
+// Why deploys run it (12 Nov 2026). Migrations used to be applied by hand in the
+// Supabase SQL editor. 042 (the email outbox) never was: the code fell back to
+// its pre-042 path without a word, and for weeks an email that failed was gone
+// rather than retried. A merged migration now reaches the database the moment its
+// code does, or the new version does not start.
 import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { pool } from "./index.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-const MIGRATIONS = [
+export const MIGRATIONS = [
   { name: "001_initial_schema", file: "schema.sql" },
   { name: "002_auth", file: "schema_002_auth.sql" },
   { name: "003_ops", file: "schema_003_ops.sql" },
@@ -81,7 +93,8 @@ const MIGRATIONS = [
   { name: "070_partner_site", file: "schema_070_partner_site.sql" },
 ];
 
-async function main() {
+// The full run: every migration, each file on its own, as before.
+async function migrateAll(pool) {
   for (const m of MIGRATIONS) {
     const sql = await readFile(join(__dirname, m.file), "utf8");
     await pool.query(sql);
@@ -92,10 +105,76 @@ async function main() {
     console.log(`Applied: ${m.name}`);
   }
   console.log("All migrations up to date.");
-  await pool.end();
 }
 
-main().catch((error) => {
-  console.error("Migration failed:", error.message);
-  process.exit(1);
-});
+// A file that wraps itself in BEGIN; … COMMIT; (050) runs inside the deploy's
+// one transaction; its own COMMIT would end that transaction half-way.
+export function withoutOwnTransaction(sql) {
+  return sql.replace(/^BEGIN;[ \t]*$/m, "").replace(/^COMMIT;[ \t]*$/m, "");
+}
+
+// The deploy run. All-or-nothing: the pending migrations and their rows in
+// schema_migrations commit together, or none of them do and the deploy stops
+// with the old version still serving.
+//
+// - A transaction-scoped advisory lock, so two deploys starting together run
+//   the migrations once; the second waits, then finds nothing pending. (A
+//   session lock would not survive a transaction-mode connection pooler.)
+// - lock_timeout: an ALTER waiting behind the live site's queries gives up
+//   after 15 s instead of queueing every request behind it.
+// - statement_timeout: a migration that hangs fails the deploy in 10 minutes.
+export async function migratePending({ client, migrations = MIGRATIONS, read = (f) => readFile(join(__dirname, f), "utf8"), log = console.log } = {}) {
+  await client.query("BEGIN");
+  try {
+    await client.query("SELECT pg_advisory_xact_lock(hashtext('sawa:migrate'))");
+    await client.query("SET LOCAL lock_timeout = '15s'");
+    await client.query("SET LOCAL statement_timeout = '10min'");
+    const exists = (await client.query("SELECT to_regclass('schema_migrations') IS NOT NULL AS ok")).rows[0].ok;
+    const done = new Set(exists
+      ? (await client.query("SELECT name FROM schema_migrations")).rows.map((r) => r.name)
+      : []);
+    const pending = migrations.filter((m) => !done.has(m.name));
+    for (const m of pending) {
+      try {
+        await client.query(withoutOwnTransaction(await read(m.file)));
+      } catch (e) {
+        e.migration = m.name;
+        throw e;
+      }
+      await client.query("INSERT INTO schema_migrations (name) VALUES ($1) ON CONFLICT (name) DO NOTHING", [m.name]);
+      log(`Applied: ${m.name}`);
+    }
+    await client.query("COMMIT");
+    log(pending.length ? `${pending.length} migration(s) applied.` : "No pending migrations.");
+    return pending.map((m) => m.name);
+  } catch (e) {
+    // The migration's own error is the one to report; a failed ROLLBACK is
+    // printed beside it (the connection is then broken and Postgres discards
+    // the transaction when it closes).
+    await client.query("ROLLBACK").catch((rb) => console.error(`ROLLBACK also failed: ${rb.message}`));
+    throw e;
+  }
+}
+
+const isCli = process.argv[1] && process.argv[1].endsWith("migrate.js");
+if (isCli) {
+  // Loaded here, not at the top: the tests import migratePending without a
+  // DATABASE_URL, and db/index.js refuses to load without one.
+  const { pool } = await import("./index.js");
+  const pendingOnly = process.argv.includes("--pending");
+  const run = pendingOnly
+    ? async () => {
+      const client = await pool.connect();
+      try { await migratePending({ client }); } finally { client.release(); }
+    }
+    : () => migrateAll(pool);
+  run()
+    .then(() => pool.end())
+    .catch(async (error) => {
+      const which = error.migration ? ` in ${error.migration}` : "";
+      console.error(`Migration failed${which}: ${error.message}`);
+      if (pendingOnly) console.error("Nothing was applied: the deploy's migrations are all-or-nothing.");
+      await pool.end().catch((pe) => console.error(`Closing the pool also failed: ${pe.message}`));
+      process.exit(1);
+    });
+}

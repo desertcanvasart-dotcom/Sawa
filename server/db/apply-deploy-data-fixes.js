@@ -1,6 +1,6 @@
 // Apply the explicitly scoped catalogue repair and one requested blog import.
-// Full schema migrations remain a manual production action:
-// this is not a replacement for `npm run db:migrate`.
+// Runs after `migrate.js --pending` in the start command, so the schema is
+// already current; it is not a migration runner itself.
 //
 // The migration is create-only and recorded under the same name used by the
 // normal runner. A transaction-scoped advisory lock makes overlapping Railway
