@@ -113,13 +113,13 @@ async function outboxAbort(db, id, e) {
 
 // One call to Resend. Operational failures come back as { ok: false, error };
 // a programmer error is rethrown (see sendEmail).
-async function deliver({ to, subject, html, text }, idempotencyKey, fetchImpl = fetch) {
+async function deliver({ to, subject, html, text, replyTo }, idempotencyKey, fetchImpl = fetch) {
   try {
     const headers = { Authorization: `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" };
     if (idempotencyKey) headers["Idempotency-Key"] = idempotencyKey;
     const res = await fetchImpl("https://api.resend.com/emails", {
       method: "POST", headers,
-      body: JSON.stringify({ from: EMAIL_FROM, to, subject, html, text, reply_to: REPLY_TO }),
+      body: JSON.stringify({ from: EMAIL_FROM, to, subject, html, text, reply_to: replyTo || REPLY_TO }),
     });
     if (!res.ok) {
       const body = await res.text();
@@ -133,7 +133,12 @@ async function deliver({ to, subject, html, text }, idempotencyKey, fetchImpl = 
 }
 
 // Core send. Returns { ok, mode }. Never throws — email must not break bookings.
-export async function sendEmail({ to, subject, html, text, kind = "generic" }) {
+// `replyTo` overrides the default Reply-To for this one message (the contact
+// form: a reply goes to the visitor, and Autoura files a website-relayed
+// email under its Reply-To person). The outbox does not store it, so a RETRY
+// of such a message falls back to the default; the visitor's address is in
+// the message body too.
+export async function sendEmail({ to, subject, html, text, kind = "generic", replyTo }) {
   if (!to) return { ok: false, mode: emailMode };
   if (emailMode === "log") {
     console.log(`\n[email:log] to=${to} | ${subject}\n${text || "(html only)"}\n`);
@@ -148,7 +153,7 @@ export async function sendEmail({ to, subject, html, text, kind = "generic" }) {
   const id = await outboxStart(pool, { to, subject, kind, html, text });
   let r;
   try {
-    r = await deliver({ to, subject, html, text }, id ? `sawa-email-${id}` : undefined);
+    r = await deliver({ to, subject, html, text, replyTo }, id ? `sawa-email-${id}` : undefined);
   } catch (e) {
     // A programmer error: not a delivery failure, and not something a retry
     // can fix. The queued row is set aside ('aborted') so the job leaves it,
