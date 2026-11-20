@@ -1,12 +1,12 @@
 import test from "node:test";
-import { appSource } from "./app-source.js";
+import { appSource, routeModuleFiles } from "./app-source.js";
 import assert from "node:assert/strict";
 import { readFileSync, existsSync } from "node:fs";
 import { blogSchedule, isBlogPublished, publicBlogHtml, stripBlogSources, mergedBlogSlugs } from "./blog-publication.js";
 import { cleanBlogHtml } from "./sanitize.js";
 import { importScheduledBlogs, BLOG_BATCH_MARKER, REVIEWED_DRAFT } from "./db/import-scheduled-blogs.js";
 
-test("67 daily releases use Cairo time and stay hidden until the boundary", () => {
+test("67 releases use Cairo time, with remaining posts every three days", () => {
   assert.equal(blogSchedule.length, 67);
   assert.equal(new Set(blogSchedule.map(p => p.slug)).size, 67);
   for (const [i, entry] of blogSchedule.entries()) {
@@ -16,7 +16,8 @@ test("67 daily releases use Cairo time and stay hidden until the boundary", () =
     assert.equal(isBlogPublished(row, at), true);
     assert.equal(isBlogPublished({ ...row, status: "draft" }, at + 1), false);
     if (i) assert.equal(new Intl.DateTimeFormat("en-GB", { timeZone: "Africa/Cairo", hour: "2-digit", minute: "2-digit" }).format(at), "09:00");
-    if (i > 1) assert.equal(at - Date.parse(blogSchedule[i - 1].publishAt), 86400000);
+    if (i > 1 && i < 12) assert.equal(at - Date.parse(blogSchedule[i - 1].publishAt), 86400000);
+    if (i > 12) assert.equal(Date.parse(entry.publishAt.slice(0, 10)) - Date.parse(blogSchedule[i - 1].publishAt.slice(0, 10)), 3 * 86400000);
   }
   for (const target of Object.values(mergedBlogSlugs)) assert.ok(blogSchedule.some(p => p.slug === target));
 });
@@ -105,7 +106,7 @@ test("only the backed-up matching draft is replaced, preserving its ID; later ed
 
 test("all public blog SQL reads enforce publication time", () => {
   for (const file of ["app.js", "seo.js"]) {
-    const code = file === "app.js" ? appSource() : readFileSync(new URL(file, import.meta.url), "utf8");
+    const code = file === "app.js" ? appSource() + routeModuleFiles().map(p => readFileSync(p, "utf8")).join("\n") : readFileSync(new URL(file, import.meta.url), "utf8");
     const reads = code.match(/SELECT [^"`\n]*FROM blog_posts[^"`\n]*status='published'[^"`\n]*/g) || [];
     assert.ok(reads.length > 0);
     for (const read of reads) assert.match(read, /published_at <= now\(\)/);

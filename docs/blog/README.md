@@ -7,11 +7,20 @@ Their old URLs redirect only after the destination article becomes public.
 
 ## Publication
 
-The first article, Small-Group Tours in Egypt, releases on deployment after
-21:00 Cairo on 8 November 2026. The other 66 release at 09:00 Cairo daily,
-9 November 2026 through 13 January 2027. All dates use the correct winter
-UTC+02:00 offset. See `daily-publication-schedule.csv` and
-`content/blog-schedule.json` for the complete order.
+Updated 20 November 2026: 12 articles from this series have already published.
+There are 55 remaining. They now publish every three calendar days at 09:00
+Africa/Cairo, from 1 December 2026 through 12 May 2027. There are no more
+November releases: the live site already published 14 articles in November,
+including two outside this series. Existing publication dates stay unchanged.
+The remaining monthly counts are December 11, January 10, February 9, March 11,
+April 10 and May 4, all below the requested maximum of 12. Timestamps switch
+from UTC+02:00 to UTC+03:00 for Cairo summer time while keeping 09:00 locally.
+See `daily-publication-schedule.csv` (retained filename) for the updated schedule.
+
+`content/blog-reschedule-20261120.json` records the reviewed previous and new
+timestamps. The one-time deploy transaction updates only those still-future
+posts, checking their IDs, slugs, status and dates. Unexpected edits abort the
+transaction; existing published posts, drafts and content are untouched.
 
 The deploy importer inserts the batch once, in the existing deploy transaction,
 with a migration marker and advisory lock. It refuses unreviewed collisions.

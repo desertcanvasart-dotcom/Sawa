@@ -11,6 +11,7 @@ import { fileURLToPath } from "node:url";
 import { pool } from "./index.js";
 import { publishPrivateTourArticle, addPrivateTourHero } from "./publish-private-tour-article.js";
 import { importScheduledBlogs } from "./import-scheduled-blogs.js";
+import { rescheduleBlogs } from "./reschedule-blogs-20261120.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const NAME = "041_restore_cairo_luxor_package";
@@ -37,9 +38,11 @@ try {
   const articleResult = await publishPrivateTourArticle(client);
   await addPrivateTourHero(client);
   const batchResult = await importScheduledBlogs(client);
+  const scheduleResult = await rescheduleBlogs(client);
   await client.query("COMMIT");
   console.log(`Private/group/DIY article: ${articleResult}`);
   console.log(`Blog series: ${batchResult}`);
+  console.log(`Blog schedule: ${scheduleResult}`);
 } catch (error) {
   await client.query("ROLLBACK");
   console.error("Deploy data fix failed:", error.message);
