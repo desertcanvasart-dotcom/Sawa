@@ -91,6 +91,7 @@ export const MIGRATIONS = [
   { name: "068_agency_documents", file: "schema_068_agency_documents.sql" },
   { name: "069_customer_reviews", file: "schema_069_customer_reviews.sql" },
   { name: "070_partner_site", file: "schema_070_partner_site.sql" },
+  { name: "071_campaign_attribution", file: "schema_071_campaign_attribution.sql" },
 ];
 
 // The full run: every migration, each file on its own, as before.

@@ -25,6 +25,7 @@ import { sendEmailInBackground, opsNewBookingEmail, opsRecipient, opsGroupReques
 import { catalogueV2Enabled } from "../features.js";
 import { operatorFor } from "../operator-lookup.js";
 import { throughPartner, partnerPageFor, confirmLink, rememberPartnerPage } from "../partner.js";
+import { takeCampaign, rememberCampaign } from "../campaign.js";
 import { bookingPayView } from "../pay-at-goahead.js";
 import { phoneVerificationEnabled, normalizePhone, phoneTokenValid, startVerification, checkVerification, issuePhoneToken } from "../phone-verify.js";
 import { stampBookingPrice } from "../pool-settlement.js";
@@ -264,6 +265,9 @@ export async function placePublicBooking(req, { departureId, body, confirmation 
   if (!confirmation) input.customerPhone = verifiedPhoneFor(input);
   // Only a page on the partner's registered website survives this; what is
   // kept with a held booking is the checked address, never the browser's.
+  // The campaign is read first, from the address as the browser sent it; a
+  // held booking keeps the three clean labels in its payload, not the address.
+  if (!confirmation) takeCampaign(input);
   if (!confirmation) input.pageUrl = (await partnerPageFor(pool, input.refCode, input.pageUrl)) || undefined;
   // Reservation integrity (catalogue_v2): the form's signals, reduced at once
   // (a hash, a /24, a country code) and kept with a held booking.
@@ -384,6 +388,7 @@ export async function placePublicBooking(req, { departureId, body, confirmation 
     detail: { departureId: result.departure.id, ...(result.routedTo && result.routedTo.departureId !== departureId ? { requestedDepartureId: departureId, departureNo: result.routedTo.no, opened: result.routedTo.opened } : {}), seats: input.seats, source: "public", ...(result.partyId ? { partyId: result.partyId } : {}),
       ...(confirmation ? { confirmedEmail: true } : {}), ...(result.flagId ? { flagId: result.flagId } : {}) } };
   await rememberPartnerPage(pool, result.booking.bookingCode, input.pageUrl);
+  await rememberCampaign(pool, result.booking.bookingCode, input);
   const partnerLinks = { pageUrl: input.pageUrl, bookingCode: result.booking.bookingCode };
   const flagAudit = result.flagId ? { action: "booking_flag.raise", entity: "booking_flag", entityId: result.flagId, detail: { pledgeId: result.booking.id } } : null;
   if (input.customerEmail && result.payAtGoAhead) {

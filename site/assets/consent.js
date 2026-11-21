@@ -106,6 +106,7 @@
     if (!state.functional) {
       try {
         localStorage.removeItem("sawa_ref");
+        localStorage.removeItem("sawa_utm");
         for (var i = sessionStorage.length - 1; i >= 0; i--) {
           var k = sessionStorage.key(i);
           if (k && k.indexOf("sawa_ref_hit_") === 0) sessionStorage.removeItem(k);

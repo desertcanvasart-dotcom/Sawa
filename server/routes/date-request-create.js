@@ -16,6 +16,7 @@ import { mapPledge } from "../db/mappers.js";
 import { seatsTotal, computePledgePricing, defaultDepositFor } from "../domain.js";
 import { sendEmailInBackground, departureRequestReceivedEmail } from "../email.js";
 import { rememberPartnerPage } from "../partner.js";
+import { rememberCampaign } from "../campaign.js";
 import { routeContext } from "../route-context.js";
 
 const {
@@ -258,5 +259,6 @@ export async function announceDateRequest(req, input, result, { confirmedEmail =
     seats: input.seats, bookingCode: result.booking.bookingCode,
   }), { pageUrl: input.pageUrl, bookingCode: result.booking.bookingCode }));
   await rememberPartnerPage(pool, result.booking.bookingCode, input.pageUrl);
+  await rememberCampaign(pool, result.booking.bookingCode, input);
   notifyOps(d, result.booking, input, { isRequest: true });
 }

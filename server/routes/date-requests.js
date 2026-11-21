@@ -16,6 +16,7 @@ import { departureStarted, seatsTotal } from "../domain.js";
 import { sendEmailInBackground, confirmBookingEmail, departureRequestApprovedEmail, departureRequestDeclinedEmail } from "../email.js";
 import { pendingGoAheads, alertPayload } from "../goahead-alert.js";
 import { partnerPageFor, confirmLink, throughPartner } from "../partner.js";
+import { takeCampaign } from "../campaign.js";
 import { routeContext } from "../route-context.js";
 
 const {
@@ -32,6 +33,8 @@ const {
 app.post("/api/public/departure-requests", writeLimiter, bookingAttemptLimiter, h(async (req, res) => {
   await requireTurnstile(req);
   const input = parse(publicDepartureRequestSchema, req.body);
+  // Before pageUrl is narrowed: the campaign is read from the address (071).
+  takeCampaign(input);
   input.pageUrl = (await partnerPageFor(pool, input.refCode, input.pageUrl)) || undefined;
   input.customerPhone = verifiedPhoneFor(input);
   delete input.turnstileToken;

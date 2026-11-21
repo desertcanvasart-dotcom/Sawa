@@ -5,6 +5,7 @@
 // the bottom.
 import { useEffect } from "react";
 import { cleanRefCode } from "../shared/ref-code.js";
+import { campaignFromUrl, cleanCampaign } from "../shared/campaign.js";
 import { API_BASE } from "./supabaseClient";
 import { warnOnce } from "./warn-once.js";
 
@@ -56,6 +57,38 @@ function getStoredRef() {
     const { code, ts } = JSON.parse(raw);
     return code && Date.now() - ts <= REF_TTL ? code : "";
   } catch (e) { return ""; }
+}
+// ---- Campaign attribution (?utm_source=…&utm_medium=…&utm_campaign=…) ----
+// Which link brought the visitor, sent with the booking so it is kept with it
+// (shared/campaign.js, migration 071). Read once from the landing address and
+// held in memory, which is enough for the usual case: a link straight to a
+// tour page, booked in the same visit. It is also remembered across pages and
+// visits, on the same terms as the partner code: a functional item under
+// site/cookies.html, stored only after consent, for 30 days.
+const UTM_KEY = "sawa_utm";
+let landedCampaign = null;
+function captureCampaign() {
+  let campaign = null;
+  try { campaign = campaignFromUrl(window.location.href); } catch (e) { warnOnce("campaign-read", "[campaign] landing address not read —", e.message); }
+  if (!campaign) return;
+  landedCampaign = campaign;
+  const consent = window.sawaConsent;
+  if (!consent) return; // no consent module loaded — treat as no consent
+  consent.onChange((choice) => {
+    if (!choice.functional) return;
+    try { localStorage.setItem(UTM_KEY, JSON.stringify({ ...campaign, ts: Date.now() })); }
+    catch (e) { warnOnce("campaign-store", "[campaign] storage blocked — the campaign will not persist past this page:", e.message); }
+  });
+}
+// { utmSource, utmMedium, utmCampaign } for the booking body, or {}.
+function getCampaign() {
+  if (landedCampaign) return landedCampaign;
+  try {
+    const raw = localStorage.getItem(UTM_KEY);
+    if (!raw) return {};
+    const { ts, ...saved } = JSON.parse(raw);
+    return Date.now() - ts <= REF_TTL ? (cleanCampaign(saved) || {}) : {};
+  } catch (e) { return {}; }
 }
 // ?preview=1 — the Promote page showing an agency its own widget. Everything
 // renders and reacts as on a partner's site, but nothing is counted, no code
@@ -144,7 +177,7 @@ function useEmbedAutoResize(dep) {
 }
 
 export {
-  REF_KEY, REF_TTL, refFromUrl, captureReferral, getStoredRef, embedPreview, withEmbedRef, parseColor,
+  REF_KEY, REF_TTL, refFromUrl, captureReferral, getStoredRef, UTM_KEY, captureCampaign, getCampaign, embedPreview, withEmbedRef, parseColor,
   rgbaStr, readableOn, applyEmbedTheme, embedThemeFromUrl, EMBED_HOST_PAGE, embedHostPage,
   useEmbedAutoResize,
 };
