@@ -40,7 +40,7 @@ import { RequestCalendar } from "./RequestCalendar.jsx";
 import { TurnstileBox } from "./Turnstile.jsx";
 import { JoinGroupLink, partyTokenFromUrl } from "./GroupBooking.jsx";
 import { track, tourParams, sourceParams } from "./analytics.js";
-import { getStoredRef } from "./referral.js";
+import { getStoredRef, getCampaign } from "./referral.js";
 import { sizedImage, imageSrcSet } from "../shared/image-size.js";
 
 // S04 — "send me a code", then "here it is". Twilio sends and checks the code;
@@ -405,6 +405,7 @@ function TourDetailV2({ isSaving, navigate, phoneVerification = false, onBookPub
           tourProductId: tour.id, date: reqDate, customerName: name.trim(),
           customerEmail: email.trim(), customerPhone: phone.trim(), phoneToken: phoneToken || undefined, seats: nSeats, ignoreMatches,
           turnstileToken: turnstileToken || undefined,
+          ...getCampaign(),
           // The seed pledge is priced on submission, so a traveler starting
           // their own package date needs the same tier/room choice as one
           // joining an existing date — otherwise it silently seeds at the

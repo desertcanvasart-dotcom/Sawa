@@ -364,6 +364,11 @@ const publicBookingSchema = z.object({
   // The page the partner's widget sits on (070). Checked against the website
   // the partner registered before it is kept or linked to — partner.js.
   pageUrl: z.string().trim().max(600).optional(),
+  // The campaign link the traveller arrived on (071). Reduced to short labels
+  // before anything is kept: shared/campaign.js.
+  utmSource: z.string().trim().max(200).optional(),
+  utmMedium: z.string().trim().max(200).optional(),
+  utmCampaign: z.string().trim().max(200).optional(),
   // Group bookings (catalogue_v2): the "Join my group" link the booking came
   // through. Ignored with the flag off.
   partyToken: z.string().trim().max(80).optional(),
@@ -483,6 +488,11 @@ const publicDepartureRequestSchema = z.object({
   // The partner whose widget the request came from, as on a booking.
   refCode: z.string().trim().max(60).optional(),
   pageUrl: z.string().trim().max(600).optional(),
+  // The campaign link the traveller arrived on (071). Reduced to short labels
+  // before anything is kept: shared/campaign.js.
+  utmSource: z.string().trim().max(200).optional(),
+  utmMedium: z.string().trim().max(200).optional(),
+  utmCampaign: z.string().trim().max(200).optional(),
 });
 
 // Eligibility fences for traveler-picked dates. The addendum specified these

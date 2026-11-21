@@ -26,7 +26,7 @@ import { deviceHint } from "./deviceHint.js";
 import { INLINE_BOOTSTRAP, setCatalogueV2, setTurnstileSiteKey, catalogueV2 } from "./site-flags.js";
 import { BOOTSTRAP_TIMEOUT_MS, packagePriceFor, rateFor, departurePast } from "./tour-helpers.jsx";
 import { LoadingScreen, LoadErrorScreen, CatalogueSkeleton } from "./SiteChrome.jsx";
-import { captureReferral, getStoredRef } from "./referral.js";
+import { captureReferral, getStoredRef, captureCampaign, getCampaign } from "./referral.js";
 import { trackPageView } from "./analytics.js";
 import { applyRouteHead } from "./PublicPages.jsx";
 import { BrandEmbed, EmbedBook, EmbedWidget, BookingDetailsPage } from "./EmbedBook.jsx";
@@ -185,7 +185,7 @@ function App() {
   // Remember the referring partner on landing (skip the embed page itself —
   // that's an impression, we only count real click-throughs).
   useEffect(() => {
-    if (!window.location.pathname.startsWith("/embed")) captureReferral();
+    if (!window.location.pathname.startsWith("/embed")) { captureReferral(); captureCampaign(); }
   }, []);
 
   // Refetch the catalogue when the tab regains focus, so admin edits (new
@@ -516,7 +516,7 @@ function App() {
       const response = await fetch(`${API_BASE}/public/departures/${departureId}/bookings`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ customerName, customerEmail, customerPhone, phoneToken, turnstileToken: turnstileToken || undefined, seats: Number(seats), roomingType, accommodationTier, refCode: getStoredRef(), ...(catalogueV2() && partyTokenFromUrl() ? { partyToken: partyTokenFromUrl() } : {}), ...(catalogueV2() ? { deviceHint: deviceHint() } : {}), ...(manifest || {}) }),
+        body: JSON.stringify({ customerName, customerEmail, customerPhone, phoneToken, turnstileToken: turnstileToken || undefined, seats: Number(seats), roomingType, accommodationTier, refCode: getStoredRef(), ...getCampaign(), ...(catalogueV2() && partyTokenFromUrl() ? { partyToken: partyTokenFromUrl() } : {}), ...(catalogueV2() ? { deviceHint: deviceHint() } : {}), ...(manifest || {}) }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Could not request seats.");
