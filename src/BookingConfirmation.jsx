@@ -3,6 +3,7 @@
 // link doesn't confirm anyone), and the booking page can send the link again.
 import React, { useEffect, useState } from "react";
 import { API_BASE } from "./supabaseClient";
+import { track } from "./analytics.js";
 
 // `embed`: the same confirmation inside the partner widget, when the email's
 // link returned to the partner's page. `onSeeBooking` opens the booking in the
@@ -15,6 +16,10 @@ export function ConfirmBookingPage({ token, embed = false, onSeeBooking = null }
         const j = await r.json().catch(() => ({}));
         if (!r.ok && j.state !== "refused") throw new Error(j.error || "This link isn't valid.");
         setState({ status: j.state, code: j.code || "", error: j.error || "" });
+        // The email click that turns a held reservation into a booking. Only
+        // the first click: "already" is the same booking seen again.
+        // Not in the partner widget, which loads no analytics at all.
+        if (j.state === "confirmed" && !embed) track("confirm_reservation", {});
       })
       .catch((e) => setState({ status: "error", code: "", error: e.message }));
   }, [token]);

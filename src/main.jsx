@@ -27,6 +27,7 @@ import { INLINE_BOOTSTRAP, setCatalogueV2, setTurnstileSiteKey, catalogueV2 } fr
 import { BOOTSTRAP_TIMEOUT_MS, packagePriceFor, rateFor, departurePast } from "./tour-helpers.jsx";
 import { LoadingScreen, LoadErrorScreen, CatalogueSkeleton } from "./SiteChrome.jsx";
 import { captureReferral, getStoredRef } from "./referral.js";
+import { trackPageView } from "./analytics.js";
 import { applyRouteHead } from "./PublicPages.jsx";
 import { BrandEmbed, EmbedBook, EmbedWidget, BookingDetailsPage } from "./EmbedBook.jsx";
 import { Portal } from "./Portal.jsx";
@@ -84,12 +85,20 @@ function App() {
   const headRendered = useRef(false);
   useEffect(() => {
     if (!headRendered.current) { headRendered.current = true; return undefined; }
-    if (/^\/(blog|admin|agency|portal|embed)(\/|$)/.test(path)) return undefined;
+    // GA4 counts one page_view when the tag loads. Client-side routing never
+    // reloads, so every route after the first is reported here: from this
+    // effect rather than from navigate(), so that Back and Forward are counted
+    // too, and after the head is applied, so the view carries the new page's
+    // title and not the title of the page the visitor just left.
+    if (/^\/(blog|admin|agency|portal|embed)(\/|$)/.test(path)) { trackPageView(path); return undefined; }
     const ctl = new AbortController();
     fetch(`${API_BASE}/public/route-head?path=${encodeURIComponent(path)}`, { signal: ctl.signal })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`route-head ${r.status}`))))
       .then(applyRouteHead)
-      .catch((e) => { if (e.name !== "AbortError") warnOnce("route-head", "[head] couldn't update the page title —", e.message); });
+      .catch((e) => { if (e.name !== "AbortError") warnOnce("route-head", "[head] couldn't update the page title —", e.message); })
+      // Whether or not the title arrived, the page was seen. Not after an
+      // abort: the visitor has already moved on and that route reports itself.
+      .then(() => { if (!ctl.signal.aborted) trackPageView(path); });
     return () => ctl.abort();
   }, [path]);
 
@@ -195,15 +204,8 @@ function App() {
     window.history.pushState({}, "", to);
     setPath(to);
     window.scrollTo({ top: 0, behavior: "smooth" });
-    // GA4 counts one page_view on load. Client-side routing never reloads, so
-    // without this every tour page a visitor opens after landing goes
-    // unrecorded and the whole SPA reads as a single-page session.
-    if (typeof window.gtag === "function") {
-      window.gtag("event", "page_view", {
-        page_path: to,
-        page_location: window.location.href,
-      });
-    }
+    // The page_view for this navigation is sent by the route effect above,
+    // once the new page's title is in place (src/analytics.js).
   }
 
   const dayTourProducts = useMemo(() => tourProducts.filter((p) => !isPackage(p)), [tourProducts]);
@@ -523,7 +525,7 @@ function App() {
       if (data.confirmationRequired) {
         setPublicBooking({ departureId: data.departure.id, code: data.booking.bookingCode, seats: data.booking.seats, unconfirmed: true, email: customerEmail });
         setNotice("Check your email to confirm your booking.");
-        return { ok: true };
+        return { ok: true, pending: true };
       }
       setPublicBooking({
         departureId: data.departure.id,
@@ -540,7 +542,7 @@ function App() {
         tierName: data.booking.accommodationTierName,
       });
       setNotice("Seat request added. Price and availability updated live.");
-      return { ok: true };
+      return { ok: true, pending: false, total: Number(data.booking.bookingTotal) || undefined };
     } catch (error) {
       // A dropped connection surfaces as a TypeError with a browser-specific
       // message; say what it means instead.

@@ -37,6 +37,7 @@ import { ResendConfirmation } from "./BookingConfirmation.jsx";
 import { toDate } from "./dates.js";
 import { readInlineData } from "./inline-data.js";
 import { sizedImage } from "../shared/image-size.js";
+import { track } from "./analytics.js";
 
 function PublicRoute({ page, path, navigate, customerCalendars, customerSummary, cityStats, selectedCity, setSelectedCity, operatorsByProduct }) {
   switch (page) {
@@ -309,7 +310,7 @@ function ContactPage({ navigate }) {
         body: JSON.stringify({ ...form, role: "Traveler" }),
       });
       const b = await r.json().catch(() => ({}));
-      if (r.ok && b.ok) setSent(true);
+      if (r.ok && b.ok) { setSent(true); track("contact_submit", { role: "Traveler" }); }
       else setError(b.error || "Sorry — your message didn't send.");
     } catch {
       setError("Sorry — we couldn't reach our server.");

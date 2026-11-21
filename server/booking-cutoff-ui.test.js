@@ -70,6 +70,9 @@ test("F01: the form waits for the server and clears only on a confirmed booking"
   assert.ok(bail > 0 && clear > bail, "the fields are cleared only after a successful result");
   assert.match(reserve, /setErr\(result\.error\)/, "the server's reason is shown on the form");
   const book = main.slice(main.indexOf("async function bookPublicDeparture("), main.indexOf("async function cancelPublicBooking("));
-  assert.match(book, /return \{ ok: true \};/);
+  // The success result also says whether the booking still waits for the email
+  // click (`pending`), which the analytics event reports (src/analytics.js).
+  assert.match(book, /return \{ ok: true, pending: true \};/);
+  assert.match(book, /return \{ ok: true, pending: false, /);
   assert.match(book, /return \{ ok: false, error: message \};/);
 });
