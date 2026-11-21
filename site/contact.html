@@ -140,7 +140,13 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             fetch(f.action, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) })
               .then(function (r) { return r.json().catch(function () { return {}; }).then(function (b) { return { ok: r.ok && b.ok, b: b }; }); })
               .then(function (x) {
-                if (x.ok) { show(true); f.reset(); }
+                if (x.ok) {
+                  // Which kind of visitor wrote in (traveller, agency, press). The
+                  // role only: no name, address or message. Queued by gtag and sent
+                  // only if analytics was accepted (assets/analytics.js).
+                  if (typeof window.gtag === 'function') window.gtag('event', 'contact_submit', { role: data.role });
+                  show(true); f.reset();
+                }
                 else show(false, x.b && x.b.error);
               })
               .catch(function () { show(false, "Sorry — we couldn't reach our server."); })

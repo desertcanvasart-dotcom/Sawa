@@ -39,6 +39,8 @@ import { TourReviews } from "./TourReviews.jsx";
 import { RequestCalendar } from "./RequestCalendar.jsx";
 import { TurnstileBox } from "./Turnstile.jsx";
 import { JoinGroupLink, partyTokenFromUrl } from "./GroupBooking.jsx";
+import { track, tourParams, sourceParams } from "./analytics.js";
+import { getStoredRef } from "./referral.js";
 import { sizedImage, imageSrcSet } from "../shared/image-size.js";
 
 // S04 — "send me a code", then "here it is". Twilio sends and checks the code;
@@ -256,6 +258,8 @@ function TourDetailV2({ isSaving, navigate, phoneVerification = false, onBookPub
   // Back returns to the same date.
   function pickDate(id) {
     setDepId(id);
+    const picked = tour.dates.find((d) => Number(d.id) === Number(id));
+    if (picked) track("select_date", { ...tourParams(tour), departure_date: picked.date, seats_taken: seatsTotal(picked.pledges) });
     try {
       const u = new URL(window.location.href);
       u.searchParams.set("date", String(id));
@@ -273,6 +277,20 @@ function TourDetailV2({ isSaving, navigate, phoneVerification = false, onBookPub
     const t = setTimeout(() => root.querySelectorAll(".book [data-fill]").forEach((b) => { b.style.width = b.dataset.fill; }), 400);
     return () => { stop(); clearTimeout(t); };
   }, [tour.id]);
+
+  // Analytics (src/analytics.js): the tour was opened; and, once per tour, the
+  // visitor started on the form. Tour and date facts only.
+  const checkoutStarted = useRef(false);
+  useEffect(() => {
+    track("view_item", { ...tourParams(tour), currency: "EUR", has_open_date: tour.dates.length > 0 });
+    checkoutStarted.current = false;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tour.id]);
+  function startCheckout() {
+    if (checkoutStarted.current) return;
+    checkoutStarted.current = true;
+    track("begin_checkout", { ...tourParams(tour), departure_date: reqMode ? reqDate : dep?.date, checkout_type: reqMode ? "date_request" : "reservation" });
+  }
 
   async function reserve(e) {
     e.preventDefault();
@@ -303,6 +321,12 @@ function TourDetailV2({ isSaving, navigate, phoneVerification = false, onBookPub
       if (result?.error) setErr(result.error);
       return;
     }
+    // The reservation is in. `confirmation` says whether it still waits for the
+    // traveller's email click (confirm_reservation reports that step).
+    track("generate_lead", {
+      ...tourParams(tour), ...sourceParams(getStoredRef()), departure_date: dep.date, seats: nSeats,
+      currency: "EUR", value: result.total ?? total, confirmation: result.pending ? "pending" : "confirmed",
+    });
     setName(""); setEmail(""); setPhone(""); setSeats(1); setDetails(emptyTravelerDetails());
   }
 
@@ -399,6 +423,10 @@ function TourDetailV2({ isSaving, navigate, phoneVerification = false, onBookPub
       if (!response.ok) throw new Error(data.error || "Could not request this date.");
       // Held until the traveler confirms their email (202): not a request yet.
       setReqDone({ code: data.booking?.bookingCode, date: reqDate, unconfirmed: !!data.confirmationRequired });
+      track("request_date", {
+        ...tourParams(tour), ...sourceParams(getStoredRef()), requested_date: reqDate, seats: nSeats,
+        currency: "EUR", value: total, confirmation: data.confirmationRequired ? "pending" : "confirmed",
+      });
       setReqMode(false);
     } catch (error) {
       setReqErr(error.message);
@@ -645,7 +673,7 @@ function TourDetailV2({ isSaving, navigate, phoneVerification = false, onBookPub
                         a cancellation risk beside a progress bar invents one. */}
                     {confirmed && <p className="confirmed-note">We don&rsquo;t cancel a confirmed date for low numbers. If someone drops out, your trip still runs.</p>}
                   </div>}
-                  <form onSubmit={reserve}>
+                  <form onSubmit={reserve} onFocusCapture={startCheckout}>
                     <div className="dates">
                       <div className="lbl">{reqMode ? "Start your own date" : "Live dates for this tour"}</div>
                       {!reqMode && tour.dates.map((d) => {

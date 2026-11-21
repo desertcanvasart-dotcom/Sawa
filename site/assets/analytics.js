@@ -22,12 +22,33 @@
   window.dataLayer = window.dataLayer || [];
   window.gtag = window.gtag || function () { window.dataLayer.push(arguments); };
 
+  // A browser signed in to the dashboard (staff, an agency, an operator) is not
+  // a visitor. Supabase keeps that session in localStorage under
+  // "sb-<project>-auth-token" (the same test as src/session-hint.js, restated
+  // because this is a plain script and cannot import it). Marked with GA4's own
+  // traffic_type parameter, which the property's "Internal Traffic" data filter
+  // excludes. Nothing new is stored: this only reads a key sign-in already set.
+  // Unreadable storage answers no: better to count a colleague than to hide a
+  // visitor.
+  function signedIn() {
+    try {
+      for (var i = 0; i < localStorage.length; i++) {
+        var k = localStorage.key(i);
+        if (k && k.indexOf("sb-") === 0 && /-auth-token$/.test(k)) return true;
+      }
+    } catch (e) {
+      return false;
+    }
+    return false;
+  }
+
   function start() {
     if (started) return;
     started = true;
 
     window.gtag("js", new Date());
-    window.gtag("config", ID);
+    if (signedIn()) window.gtag("config", ID, { traffic_type: "internal" });
+    else window.gtag("config", ID);
 
     var s = document.createElement("script");
     s.async = true;
