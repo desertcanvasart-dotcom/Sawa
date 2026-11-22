@@ -109,6 +109,9 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
           <!-- Honeypot: hidden from people and screen readers; a bot that fills it is ignored. -->
           <div aria-hidden="true" style="position:absolute;left:-10000px;width:1px;height:1px;overflow:hidden"><label for="cf-website">Website</label><input id="cf-website" name="website" tabindex="-1" autocomplete="off" /></div>
           <label class="consent"><input type="checkbox" name="consent" value="yes" required /><span>I agree to be contacted about my enquiry.</span></label>
+          <!-- Cloudflare Turnstile, shown only when the server has a site key. -->
+          <div class="cf-turnstile-box" style="margin:6px 0 12px"></div>
+          <noscript><p style="color:#8a2a22;font-size:.9rem;margin:0 0 12px">This form needs JavaScript to send (it keeps spam out). Please turn it on, or email <a href="mailto:hello@sawa.tours">hello@sawa.tours</a> or message us on <a href="https://wa.me/201092847613" rel="noopener">WhatsApp</a>.</p></noscript>
           <button class="btn gold block" type="submit">Send message <span class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></button>
           <div class="done" role="status" style="display:none;align-items:center;gap:10px;background:rgba(244,201,93,.14);border:1px solid rgba(217,171,69,.4);border-radius:14px;padding:14px;color:var(--teal);font-size:.9rem"><span style="color:var(--gold-ink)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span><span>Thank you — your message has been sent. We'll reply by email, usually within one working day.</span></div>
           <div class="fail" role="alert" style="display:none;background:rgba(190,60,50,.08);border:1px solid rgba(190,60,50,.35);border-radius:14px;padding:14px;color:#8a2a22;font-size:.9rem"><span class="fail-msg">Sorry — your message didn't send.</span> Please try again, or message us on <a href="https://wa.me/201092847613" rel="noopener" style="color:var(--gold-ink);font-weight:600">WhatsApp (+20 109 284 7613)</a>.</div>
@@ -126,6 +129,43 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             // already does that, with a link, so that sentence is dropped here.
             if (!ok) msg.textContent = (text || '').replace(/\s*[^.]*WhatsApp[^.]*\.?\s*$/, '') || "Sorry — your message didn't send.";
           };
+          // A message is only taken from this page: the server gives the page a
+          // form token (and the Turnstile site key, when it has one), and the
+          // message goes back with them. Bots that post straight to the server
+          // have neither.
+          var formToken = '', tokenAt = 0, turnstileToken = '', widget = null;
+          var box = f.querySelector('.cf-turnstile-box');
+          var getToken = function () {
+            return fetch('/api/public/contact/form', { cache: 'no-store' })
+              .then(function (r) { return r.ok ? r.json() : {}; })
+              .then(function (j) {
+                formToken = j.formToken || '';
+                tokenAt = Date.now();
+                if (j.turnstileSiteKey && widget === null) renderTurnstile(j.turnstileSiteKey);
+                return formToken;
+              })
+              .catch(function () { return ''; });
+          };
+          var renderTurnstile = function (siteKey) {
+            widget = 'loading';
+            var draw = function () {
+              widget = window.turnstile.render(box, {
+                sitekey: siteKey,
+                callback: function (t) { turnstileToken = t; },
+                'expired-callback': function () { turnstileToken = ''; },
+                'error-callback': function () { turnstileToken = ''; }
+              });
+            };
+            if (window.turnstile) return draw();
+            var s = document.createElement('script');
+            s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+            s.async = true;
+            s.onload = draw;
+            s.onerror = function () { widget = null; };
+            document.head.appendChild(s);
+          };
+          getToken();
+
           // Coming back from a no-JavaScript submit.
           var sent = new URLSearchParams(window.location.search).get('sent');
           if (sent === '1') show(true);
@@ -137,7 +177,19 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             data.consent = f.elements.consent.checked;
             btn.disabled = true;
             done.style.display = 'none'; fail.style.display = 'none';
-            fetch(f.action, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) })
+            (formToken ? Promise.resolve(formToken) : getToken())
+              .then(function (t) {
+                if (!t) throw new Error('no token');
+                data.formToken = t;
+                if (turnstileToken) data.turnstileToken = turnstileToken;
+                // The server ignores a message sent within 3 seconds of its
+                // token (a bot's speed); a token fetched just now waits that out.
+                var wait = Math.max(0, 3300 - (Date.now() - tokenAt));
+                return new Promise(function (ok) { setTimeout(ok, wait); });
+              })
+              .then(function () {
+                return fetch(f.action, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+              })
               .then(function (r) { return r.json().catch(function () { return {}; }).then(function (b) { return { ok: r.ok && b.ok, b: b }; }); })
               .then(function (x) {
                 if (x.ok) {
@@ -146,11 +198,17 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                   // only if analytics was accepted (assets/analytics.js).
                   if (typeof window.gtag === 'function') window.gtag('event', 'contact_submit', { role: data.role });
                   show(true); f.reset();
+                  getToken();
                 }
                 else show(false, x.b && x.b.error);
               })
               .catch(function () { show(false, "Sorry — we couldn't reach our server."); })
-              .then(function () { btn.disabled = false; });
+              .then(function () {
+                btn.disabled = false;
+                // A Turnstile token is good for one message.
+                turnstileToken = '';
+                if (widget && widget !== 'loading' && window.turnstile) window.turnstile.reset(widget);
+              });
           });
         })();
         </script>
