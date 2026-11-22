@@ -53,6 +53,9 @@
   transition:padding .5s var(--ease),box-shadow .5s var(--ease)}
 .sx .nav.tight{box-shadow:0 1px 0 rgba(255,255,255,.7) inset, 0 22px 46px -24px rgba(23,50,58,.6)}
 .sx .nav-links{display:flex;align-items:center;gap:6px}
+/* Six links (Contact added 22 Nov 2026): one line each, and tighter between 961px and 1100px, where "How it works" used to wrap. */
+.sx .nav-links a{white-space:nowrap}
+@media(max-width:1100px){.sx .nav-links{gap:2px}.sx .nav-links a{padding-left:10px;padding-right:10px}}
 .sx .nav-links a{font-size:.92rem;font-weight:500;color:var(--teal-700);padding:9px 15px;border-radius:999px;transition:background .4s var(--ease),color .4s var(--ease)}
 .sx .nav-links a:hover{background:rgba(23,50,58,.06);color:var(--teal)}
 .sx .nav-right{display:flex;align-items:center;gap:10px}

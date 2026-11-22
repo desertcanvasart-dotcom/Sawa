@@ -27,7 +27,7 @@ const SxLogoMark = () => (
 // Plain <a> on purpose: /departures, /goahead and /destinations are static
 // server pages, not SPA routes — SpaLink would client-route them into the 404.
 // Mirrors the nav on the static pages; keep the two in sync.
-const SX_NAV_LINKS = [["Itineraries", "/itineraries"], ["Departures", "/departures"], ["GoAhead", "/goahead"], ["How it works", "/how-it-works"], ["Blog", "/blog"]];
+const SX_NAV_LINKS = [["Itineraries", "/itineraries"], ["Departures", "/departures"], ["GoAhead", "/goahead"], ["How it works", "/how-it-works"], ["Blog", "/blog"], ["Contact", "/contact"]];
 
 // The skip link the static pages all carry. It only becomes visible on focus,
 // and it targets the #main that SxChrome/TourDetailV2 put on their <main>.
@@ -113,7 +113,7 @@ function SxFooter() {
           <div><a className="logo" href="/"><SxLogoMark /><span className="nm"><b>Sawa</b><i>Tours · Egypt</i></span></a><p className="fblurb">Shared departures, confirmed together. Sawa pools travelers across Ministry-licensed Egyptian operators so the tours you want actually run.</p></div>
           <div className="fcol"><h4>Travel</h4><a href="/itineraries">All itineraries</a><a href="/departures">Open departures</a><a href="/goahead">GoAhead departures</a><a href="/destinations">Destinations</a><a href="/how-it-works">How it works</a><a href="/trust">The GoAhead promise</a><a href="/faq">FAQ</a></div>
           <div className="fcol"><h4>Operators</h4><a href="/partners">Operating partners</a><a href="/operators">List a tour</a><a href="/verify">List with Sawa</a><a href="/widget">Get the widget</a></div>
-          <div className="fcol"><h4>Company</h4><a href="/about">About Sawa</a><a href="/contact">Support</a><a href="/privacy">Privacy Policy</a><a href="/cookies">Cookies</a><a href="/terms">Terms and Conditions</a>
+          <div className="fcol"><h4>Company</h4><a href="/about">About Sawa</a><a href="/contact">Contact us</a><a href="/privacy">Privacy Policy</a><a href="/cookies">Cookies</a><a href="/terms">Terms and Conditions</a>
             {/* U05 — the static pages get this link from consent.js, which adds it
                 on load and on Back/Forward only; the SPA's own navigation never
                 re-added it, so it went missing on tour pages. Rendered here, with

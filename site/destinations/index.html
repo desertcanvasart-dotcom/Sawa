@@ -54,6 +54,9 @@ button{font-family:inherit}
 .nav-shell{position:fixed;top:0;left:0;right:0;z-index:60;display:flex;justify-content:center;padding:18px 16px}
 .nav{width:100%;max-width:1180px;display:flex;align-items:center;justify-content:space-between;padding:11px 12px 11px 22px;border-radius:999px;background:rgba(251,248,241,.72);backdrop-filter:saturate(170%) blur(20px);border:1px solid rgba(255,255,255,.6);box-shadow:0 1px 0 rgba(255,255,255,.7) inset, 0 18px 40px -26px rgba(23,50,58,.5)}
 .nav-links{display:flex;align-items:center;gap:6px}
+/* Six links (Contact added 22 Nov 2026): one line each, and tighter between 961px and 1100px, where "How it works" used to wrap. */
+.nav-links a{white-space:nowrap}
+@media(max-width:1100px){.nav-links{gap:2px}.nav-links a{padding-left:10px;padding-right:10px}}
 .nav-links a{font-size:.92rem;font-weight:500;color:var(--teal-700);padding:9px 15px;border-radius:999px;transition:background .4s var(--ease),color .4s var(--ease)}
 .nav-links a:hover,.nav-links a.active{background:rgba(23,50,58,.06);color:var(--teal)}
 .nav-right{display:flex;align-items:center;gap:10px}
@@ -183,7 +186,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 <div class="nav-shell">
   <nav class="nav" id="nav" aria-label="Primary">
     <a href="/" class="logo" aria-label="Sawa Tours home"><svg class="mark" viewBox="0 0 100 100" aria-hidden="true"><circle class="ring" cx="50" cy="50" r="36"/><path class="s" d="M62 34 C44 34 44 50 52 50 C60 50 60 66 38 66"/><circle class="dot" cx="23" cy="40" r="5.5"/><circle class="dot" cx="31" cy="74" r="5.5"/><circle class="dot" cx="70" cy="62" r="5.5"/><circle class="go" cx="74" cy="30" r="6.5"/></svg><span class="nm"><b>Sawa</b><i>Tours &#183; Egypt</i></span></a>
-    <div class="nav-links"><a href="/itineraries">Itineraries</a><a href="/departures">Departures</a><a href="/goahead">GoAhead</a><a href="/how-it-works">How it works</a><a href="/blog">Blog</a></div>
+    <div class="nav-links"><a href="/itineraries">Itineraries</a><a href="/departures">Departures</a><a href="/goahead">GoAhead</a><a href="/how-it-works">How it works</a><a href="/blog">Blog</a><a href="/contact">Contact</a></div>
     <div class="nav-right">
       <a href="/departures" class="btn gold sm">Find a departure <span class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></a>
       <button class="menu-btn" id="open" aria-label="Open menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
@@ -192,7 +195,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 </div>
 <div class="overlay" id="overlay">
   <button class="close" id="close" aria-label="Close menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
-  <a href="/itineraries">Itineraries</a><a href="/departures">Departures</a><a href="/goahead">GoAhead</a><a href="/how-it-works">How it works</a><a href="/blog">Blog</a>
+  <a href="/itineraries">Itineraries</a><a href="/departures">Departures</a><a href="/goahead">GoAhead</a><a href="/how-it-works">How it works</a><a href="/blog">Blog</a><a href="/contact">Contact</a>
 </div>
 
 <main id="main">
@@ -275,7 +278,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       <div class="fcol">
         <h4>Company</h4>
         <a href="/about">About Sawa</a>
-        <a href="/contact">Support</a>
+        <a href="/contact">Contact us</a>
         <a href="/privacy">Privacy Policy</a>
         <a href="/cookies">Cookies</a>
         <a href="/terms">Terms and Conditions</a>
