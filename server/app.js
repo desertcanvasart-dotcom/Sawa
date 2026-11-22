@@ -1112,7 +1112,7 @@ const contactLimiter = rateLimit({
   standardHeaders: true, legacyHeaders: false,
   message: { ok: false, error: "You've sent several messages in the last few minutes. Please wait a little, or message us on WhatsApp (+20 109 284 7613).", whatsapp: "https://wa.me/201092847613" },
 });
-registerContactRoutes(app, { sendEmail, limiter: contactLimiter });
+registerContactRoutes(app, { sendEmail, limiter: contactLimiter, verifyTurnstile, turnstileSiteKey });
 
 app.use("/api", (_req, res) => res.status(404).json({ error: "Not found." }));
 

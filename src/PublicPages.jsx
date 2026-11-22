@@ -38,6 +38,7 @@ import { toDate } from "./dates.js";
 import { readInlineData } from "./inline-data.js";
 import { sizedImage } from "../shared/image-size.js";
 import { track } from "./analytics.js";
+import { TurnstileBox } from "./Turnstile.jsx";
 
 function PublicRoute({ page, path, navigate, customerCalendars, customerSummary, cityStats, selectedCity, setSelectedCity, operatorsByProduct }) {
   switch (page) {
@@ -295,6 +296,17 @@ function ContactPage({ navigate }) {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
   const set = (k) => (e) => setForm((s) => ({ ...s, [k]: e.target.type === "checkbox" ? e.target.checked : e.target.value }));
+  // The server only takes a message written on a page (22 Nov 2026, a bot
+  // spam run): a form token from GET /api/public/contact/form, sent back with
+  // the message, and Turnstile when the server has a site key.
+  const [guard, setGuard] = useState({ token: "", at: 0, siteKey: null });
+  const [turnstileToken, setTurnstileToken] = useState("");
+  const [turnstileReset, setTurnstileReset] = useState(0);
+  const fetchGuard = () => fetch("/api/public/contact/form", { cache: "no-store" })
+    .then((r) => (r.ok ? r.json() : {}))
+    .then((j) => { const g = { token: j.formToken || "", at: Date.now(), siteKey: j.turnstileSiteKey || null }; setGuard(g); return g; })
+    .catch(() => ({ token: "", at: 0, siteKey: null }));
+  useEffect(() => { fetchGuard(); }, []);
   // Sent by the server (POST /api/public/contact → hello@sawa.tours and the
   // team's CRM), the same route as site/contact.html. It used to be a mailto:
   // link, which did nothing for a visitor without an email app — and said
@@ -304,10 +316,16 @@ function ContactPage({ navigate }) {
     setSending(true);
     setError("");
     try {
+      const g = guard.token ? guard : await fetchGuard();
+      if (!g.token) throw new Error("no form token");
+      // A message within 3 seconds of its token is ignored as a bot's; a token
+      // fetched just now waits that out.
+      const wait = 3300 - (Date.now() - g.at);
+      if (wait > 0) await new Promise((ok) => setTimeout(ok, wait));
       const r = await fetch("/api/public/contact", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, role: "Traveler" }),
+        body: JSON.stringify({ ...form, role: "Traveler", formToken: g.token, ...(turnstileToken ? { turnstileToken } : {}) }),
       });
       const b = await r.json().catch(() => ({}));
       if (r.ok && b.ok) { setSent(true); track("contact_submit", { role: "Traveler" }); }
@@ -316,6 +334,9 @@ function ContactPage({ navigate }) {
       setError("Sorry — we couldn't reach our server.");
     } finally {
       setSending(false);
+      // A Turnstile token is good for one message.
+      setTurnstileToken("");
+      setTurnstileReset((n) => n + 1);
     }
   };
   return (
@@ -361,6 +382,7 @@ function ContactPage({ navigate }) {
                 <label>Website<input value={form.website} onChange={set("website")} tabIndex={-1} autoComplete="off" /></label>
               </div>
               <label className="consent"><input type="checkbox" checked={form.consent} onChange={set("consent")} required /><span>I agree to be contacted about my enquiry.</span></label>
+              <TurnstileBox siteKey={guard.siteKey} onToken={setTurnstileToken} resetKey={turnstileReset} />
               {error && (
                 <p className="contact-error" role="alert">
                   {error.replace(/\s*[^.]*WhatsApp[^.]*\.?\s*$/, "") || "Sorry — your message didn't send."}{" "}

@@ -8,14 +8,20 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import express from "express";
 import rateLimit from "express-rate-limit";
-import { validateContact, contactEmail, registerContactRoutes, CONTACT_PATH } from "./contact-form.js";
+import {
+  validateContact, contactEmail, registerContactRoutes, CONTACT_PATH, CONTACT_FORM_PATH,
+  issueFormToken, checkFormToken, MIN_FILL_MS,
+} from "./contact-form.js";
 import {
   signPayload, buildSignedHeaders, sendLeadToAutoura, toAutouraLead, newReference, defaultSendDeps,
   SIGNATURE_HEADER,
 } from "./autoura-lead.js";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
-const good = { name: "Ada Lovelace", email: "ada@example.com", role: "Traveler", subject: "Dates", message: "Hello there", consent: "yes" };
+// A message written on the page: its form token was issued 10 seconds earlier.
+const SECRET = "test-contact-secret";
+const formToken = issueFormToken({ secret: SECRET, now: Date.now() - 10_000 });
+const good = { name: "Ada Lovelace", email: "ada@example.com", role: "Traveler", subject: "Dates", message: "Hello there", consent: "yes", formToken };
 
 // ---- validation -------------------------------------------------------------
 
@@ -151,8 +157,8 @@ test("without the URL or secret nothing is posted", async () => {
 
 // ---- the route --------------------------------------------------------------
 
-async function withServer({ emailResult = { ok: true }, max = 1000 } = {}, fn) {
-  const emails = [], leads = [];
+async function withServer({ emailResult = { ok: true }, max = 1000, turnstile = { ok: true, skipped: true }, siteKey = null } = {}, fn) {
+  const emails = [], leads = [], turnstileCalls = [];
   const app = express();
   app.set("trust proxy", false);
   app.use(express.json());
@@ -161,13 +167,16 @@ async function withServer({ emailResult = { ok: true }, max = 1000 } = {}, fn) {
     limiter: rateLimit({ windowMs: 60_000, max, message: { ok: false, error: "slow down" } }),
     sendLead: async (p) => { leads.push(p); return { outcome: "sent" }; },
     reference: () => "SAWA-TEST2345",
-    log: { warn() {}, error() {} },
+    log: { warn() {}, error() {}, info() {} },
+    secret: SECRET,
+    verifyTurnstile: async (a) => { turnstileCalls.push(a); return turnstile; },
+    turnstileSiteKey: () => siteKey,
   });
   const server = app.listen(0);
   await new Promise((r) => server.once("listening", r));
   const base = `http://127.0.0.1:${server.address().port}`;
   try {
-    await fn({ base, emails, leads });
+    await fn({ base, emails, leads, turnstileCalls });
   } finally {
     server.close();
   }
@@ -243,6 +252,96 @@ test("route: rate-limited", async () => {
   });
 });
 
+// ---- bots (22 Nov 2026): only a message written on the page is taken -------
+
+test("the form token: a page's token verifies after the minimum; anything else does not", () => {
+  const now = 1_800_000_000_000;
+  const t = issueFormToken({ secret: "s", now });
+  assert.deepEqual(checkFormToken(t, { secret: "s", now: now + MIN_FILL_MS }), { ok: true });
+  assert.equal(checkFormToken(t, { secret: "s", now: now + 500 }).reason, "too_fast");
+  assert.equal(checkFormToken(t, { secret: "s", now: now + 13 * 3600 * 1000 }).reason, "expired");
+  assert.equal(checkFormToken(t, { secret: "other", now: now + 5000 }).reason, "invalid", "signed with another secret (a restart)");
+  assert.equal(checkFormToken(`${now - 60_000}.${t.split(".")[1]}`, { secret: "s", now }).reason, "invalid", "a forged time");
+  assert.equal(checkFormToken(undefined).reason, "missing");
+  assert.equal(checkFormToken("").reason, "missing");
+  assert.equal(checkFormToken("garbage").reason, "invalid");
+});
+
+test("route: the page's GET gives a working token and the Turnstile site key, never cached", async () => {
+  await withServer({ siteKey: "0x4AAA-site" }, async ({ base }) => {
+    const r = await fetch(base + CONTACT_FORM_PATH);
+    assert.equal(r.status, 200);
+    assert.equal(r.headers.get("cache-control"), "no-store");
+    const j = await r.json();
+    assert.equal(j.turnstileSiteKey, "0x4AAA-site");
+    assert.equal(checkFormToken(j.formToken, { secret: SECRET, now: Date.now() + MIN_FILL_MS }).ok, true);
+  });
+});
+
+test("route: no token (a script posting straight to the server) is answered OK and nothing is sent", async () => {
+  await withServer({}, async ({ base, emails, leads }) => {
+    const { formToken: _, ...noToken } = good;
+    const r = await postJson(base, noToken);
+    assert.equal(r.status, 200);
+    assert.deepEqual(await r.json(), { ok: true });
+    // The run of 22 Nov 2026, as it arrived.
+    const spam = { name: "RobertAxosy", email: "guido-wiebke@gmx.de", role: "Something else", subject: "Hallo wrote about price", message: "Ողջույն, ես ուզում էի իմանալ ձեր գինը.", consent: "on" };
+    assert.equal((await postJson(base, spam)).status, 200);
+    await settle();
+    assert.equal(emails.length + leads.length, 0, "no email, no Autoura lead");
+  });
+});
+
+test("route: a plain form post without a token is sent back as not sent (it may be a person without JavaScript)", async () => {
+  await withServer({}, async ({ base, emails }) => {
+    const { formToken: _, ...noToken } = good;
+    const r = await fetch(base + CONTACT_PATH, { method: "POST", redirect: "manual", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams(noToken).toString() });
+    assert.equal(r.status, 303);
+    assert.equal(r.headers.get("location"), "/contact?sent=0#contact-form");
+    await settle();
+    assert.equal(emails.length, 0);
+  });
+});
+
+test("route: sent within seconds of the token is a bot: answered OK, nothing sent", async () => {
+  await withServer({}, async ({ base, emails, leads }) => {
+    const r = await postJson(base, { ...good, formToken: issueFormToken({ secret: SECRET, now: Date.now() - 500 }) });
+    assert.equal(r.status, 200);
+    await settle();
+    assert.equal(emails.length + leads.length, 0);
+  });
+});
+
+test("route: a token that doesn't verify asks a person to reload, plainly", async () => {
+  await withServer({}, async ({ base, emails }) => {
+    for (const bad of [issueFormToken({ secret: "before-a-restart", now: Date.now() - 10_000 }), issueFormToken({ secret: SECRET, now: Date.now() - 13 * 3600 * 1000 })]) {
+      const r = await postJson(base, { ...good, formToken: bad });
+      assert.equal(r.status, 400);
+      const b = await r.json();
+      assert.equal(b.ok, false);
+      assert.match(b.error, /reload/);
+    }
+    await settle();
+    assert.equal(emails.length, 0);
+  });
+});
+
+test("route: Turnstile, when configured, is checked with the page's token; a refusal sends nothing", async () => {
+  await withServer({ turnstile: { ok: false, reason: "invalid-input-response" } }, async ({ base, emails, leads, turnstileCalls }) => {
+    const r = await postJson(base, { ...good, turnstileToken: "cf-token" });
+    assert.equal(r.status, 403);
+    assert.match((await r.json()).error, /came from a person/);
+    assert.equal(turnstileCalls[0].token, "cf-token");
+    await settle();
+    assert.equal(emails.length + leads.length, 0);
+  });
+  await withServer({ turnstile: { ok: true } }, async ({ base, emails }) => {
+    assert.equal((await postJson(base, { ...good, turnstileToken: "cf-token" })).status, 200);
+    await settle();
+    assert.equal(emails.length, 1);
+  });
+});
+
 // ---- the page ---------------------------------------------------------------
 
 test("/contact's form posts to the server, not to an email app", () => {
@@ -251,10 +350,15 @@ test("/contact's form posts to the server, not to an email app", () => {
   assert.match(form, /action="\/api\/public\/contact" method="post"/);
   assert.doesNotMatch(form, /action="mailto:/);
   assert.match(form, /name="website"/, "honeypot");
+  assert.match(page, /fetch\('\/api\/public\/contact\/form'/, "the page asks for its form token");
+  assert.match(page, /data\.formToken = t;/, "and sends it with the message");
+  assert.match(form, /class="cf-turnstile-box"/);
   assert.match(form, /type="submit">Send message/);
   assert.match(form, /class="fail" role="alert"[\s\S]*wa\.me\/201092847613/, "WhatsApp on failure");
   assert.doesNotMatch(page, /window\.location\.href = 'mailto:/);
   const app = readFileSync(join(ROOT, "src", "PublicPages.jsx"), "utf8");
   assert.doesNotMatch(app, /window\.location\.href = `mailto:/, "the in-app contact page posts too");
   assert.match(app, /fetch\("\/api\/public\/contact"/);
+  assert.match(app, /fetch\("\/api\/public\/contact\/form"/, "the in-app page gets a form token too");
+  assert.match(app, /formToken: g\.token/);
 });
